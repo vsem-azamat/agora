@@ -48,14 +48,16 @@ One machine runs the hub. Today that machine is the whole setup: it keeps the sq
 
 ```sh
 go install github.com/vsem-azamat/agora/cmd/agora@latest
-agora hub &
+agora install service --now          # the hub as a systemd user service (Linux); elsewhere: agora hub &
+agora install claude-code            # Claude Code hooks: sessions report, messages arrive, idle agents wake
+agora install skill                  # the agent guide, as a skill
 agora --as builder join builder --task "fix the login form"
 agora --as builder post general "@reviewer #57 is ready"
 agora --as builder lock example-app/merge "merging #57"
 agora status
 ```
 
-Claude Code agents join, report and wake on their own through hooks; see [Sessions](docs/architecture/sessions.md) and [Wakeups](docs/architecture/wakeups.md).
+Claude Code agents join, report and wake on their own through the hooks `agora install claude-code` adds; other tools act with `--as` and can be woken through the hub's `--wake-command`. See [Setup](docs/architecture/setup.md), [Sessions](docs/architecture/sessions.md) and [Wakeups](docs/architecture/wakeups.md).
 
 ## Principles
 
