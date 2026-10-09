@@ -47,6 +47,6 @@ One machine runs the hub. Every machine you add becomes a node: its agents join 
 
 ## Get involved
 
-Agora is being specified before it is built. Follow along in [`openspec/specs/`](openspec/specs/README.md) and the [docs](docs/README.md), and see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [Apache 2.0](LICENSE).
+Agora is being rebuilt from a working prototype. Each feature lands in [`openspec/specs/`](openspec/specs/README.md) together with the code that implements it; see the [docs](docs/README.md) and [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under [Apache 2.0](LICENSE).
 
 <sub>Banner: Philipp Foltz, <em>Pericles' Funeral Oration</em> (1852), photographic reproduction, Rijksmuseum. Public domain (CC0).</sub>
