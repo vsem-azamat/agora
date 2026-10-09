@@ -10,9 +10,10 @@ import (
 
 // Head describes what is checked out in the checkout that contains dir.
 type Head struct {
-	GitDir   string // the checkout's git directory; "" outside any checkout
-	Branch   string // the branch, or the first 12 characters of the commit when detached
-	Detached bool
+	GitDir    string // the checkout's git directory; "" outside any checkout
+	CommonDir string // the git directory shared by every worktree of the repository
+	Branch    string // the branch, or the first 12 characters of the commit when detached
+	Detached  bool
 }
 
 // Read returns the head of the checkout that contains dir.
@@ -21,18 +22,57 @@ func Read(dir string) Head {
 	if gitDir == "" {
 		return Head{}
 	}
+	out := Head{GitDir: gitDir, CommonDir: commonDir(gitDir)}
 	head, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
 	if err != nil {
-		return Head{GitDir: gitDir}
+		return out
 	}
 	h := strings.TrimSpace(string(head))
 	if ref, ok := strings.CutPrefix(h, "ref: "); ok {
-		return Head{GitDir: gitDir, Branch: strings.TrimPrefix(ref, "refs/heads/")}
+		out.Branch = strings.TrimPrefix(ref, "refs/heads/")
+		return out
 	}
 	if len(h) > 12 {
 		h = h[:12]
 	}
-	return Head{GitDir: gitDir, Branch: h, Detached: true}
+	out.Branch, out.Detached = h, true
+	return out
+}
+
+// commonDir returns the git directory shared by all worktrees: the one a worktree's
+// `commondir` file names, or gitDir itself.
+func commonDir(gitDir string) string {
+	b, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
+	if err != nil {
+		return gitDir
+	}
+	dir := strings.TrimSpace(string(b))
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(gitDir, dir)
+	}
+	return filepath.Clean(dir)
+}
+
+// Origin returns the URL of the `origin` remote from the config in a repository's common git
+// directory, or "" when there is none.
+func Origin(commonDir string) string {
+	b, err := os.ReadFile(filepath.Join(commonDir, "config"))
+	if err != nil {
+		return ""
+	}
+	inOrigin := false
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			inOrigin = strings.ReplaceAll(line, " ", "") == `[remote"origin"]`
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if inOrigin && ok && strings.TrimSpace(key) == "url" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // Branch returns the branch checked out in the checkout that contains dir, the first 12
@@ -47,13 +87,7 @@ func Repo(dir string) string {
 	if gitDir == "" {
 		return ""
 	}
-	if b, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
-		common := strings.TrimSpace(string(b))
-		if !filepath.IsAbs(common) {
-			common = filepath.Join(gitDir, common)
-		}
-		gitDir = filepath.Clean(common)
-	}
+	gitDir = commonDir(gitDir)
 	if filepath.Base(gitDir) == ".git" {
 		gitDir = filepath.Dir(gitDir)
 	}

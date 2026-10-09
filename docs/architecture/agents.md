@@ -6,7 +6,7 @@ How `internal/agents` implements [`openspec/specs/agents/profile/`](../../opensp
 
 ## Storage
 
-Profiles are columns of the `agents` table: `joined_at` from the start, and from migration `0003_profiles.sql` `kind`, `project`, `task`, `status`, `cwd` (absolute, symlinks resolved), `branch`, `prs` (declared pull requests, space-separated, ascending), `about`, `updated_at`. The migration marks names without a live session as `left`. The status `left` is set only by leaving, never by `agora set`. `agora join` registers the name through `SessionService.JoinName`, then sets the profile through `AgentService.UpdateProfile`: status `working` unless given, the current directory, and kind `claude-code` inside a Claude Code session.
+Profiles are columns of the `agents` table: `joined_at` from the start, and from migration `0003_profiles.sql` `kind`, `project`, `task`, `status`, `cwd` (absolute, symlinks resolved), `branch`, `prs` (declared pull requests, space-separated, ascending), `about`, `updated_at`. Pull requests found from the branch are rows of `pull_requests` (see [Pull requests and CI](pull-requests.md)). The migration marks names without a live session as `left`. The status `left` is set only by leaving, never by `agora set`. `agora join` registers the name through `SessionService.JoinName`, then sets the profile through `AgentService.UpdateProfile`: status `working` unless given, the current directory, and kind `claude-code` inside a Claude Code session.
 
 ## Branches
 
@@ -31,5 +31,5 @@ An agent is active unless its status is `left`, while it has a session that has 
 | Query | Matches |
 | --- | --- |
 | path | agents whose directory is it, lies inside it, or contains it (the owner of a file or folder) |
-| `57` or `#57` | agents with that declared pull request |
+| `57` or `#57` | agents with that pull request, declared or found |
 | anything else | the agent's name, its exact branch, or a part of its branch longer than two characters |

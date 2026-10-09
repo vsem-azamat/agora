@@ -10,7 +10,7 @@ Finding out who works on what: the board overview, and finding the owner of a pu
 
 ### Requirement: Board Overview
 
-The system SHALL show an overview of active agents with name, status, session state (`busy`, `idle` or `offline`), project, pull requests, time since the last update and task, followed by every resource that someone holds or waits for.
+The system SHALL show an overview of active agents with name, status, session state (`busy`, `idle` or `offline`), project, pull requests (declared and found), time since the last update and task, followed by every resource that someone holds or waits for.
 
 #### Scenario: Overview
 - **WHEN** an agent asks for the board status while `builder` works and holds `example-app/merge`
@@ -22,11 +22,11 @@ The system SHALL show an overview of active agents with name, status, session st
 
 ### Requirement: Finding The Owner Of Work
 
-The system SHALL find active agents by a pull request number (`123` or `#123`), by a path (the agent works in it, in a directory inside it, or in a directory that contains it, so the owner of a file or folder is found), by an agent name, by an exact branch name, or by a part of a branch name longer than two characters, and SHALL show each match with its session state.
+The system SHALL find active agents by a pull request number (`123` or `#123`) the agent declared or that was found for it, by a path (the agent works in it, in a directory inside it, or in a directory that contains it, so the owner of a file or folder is found), by an agent name, by an exact branch name, or by a part of a branch name longer than two characters, and SHALL show each match with its session state.
 
 #### Scenario: By pull request
 - **WHEN** an agent looks up `#57`
-- **THEN** every active agent with pull request 57 is listed
+- **THEN** every active agent with pull request 57, declared or found, is listed
 
 #### Scenario: By directory
 - **WHEN** an agent looks up `~/src/example-app` while `builder` works in `~/src/example-app/.worktrees/login-fix`

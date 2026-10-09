@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -25,6 +28,7 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
+	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
@@ -187,11 +191,20 @@ func (o *options) governance() agorav1connect.GovernanceServiceClient {
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 	var dbPath, wakeCommand string
+	watchPRs, watchErr := true, error(nil)
+	if env := os.Getenv("AGORA_WATCH_PRS"); env != "" {
+		if watchPRs, watchErr = strconv.ParseBool(env); watchErr != nil {
+			watchErr = fmt.Errorf("AGORA_WATCH_PRS=%q: use true or false", env)
+		}
+	}
 	cmd := &cobra.Command{
 		Use:   "hub",
 		Short: "Run the hub",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if watchErr != nil && !cmd.Flags().Changed("watch-prs") {
+				return watchErr
+			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			log := slog.New(slog.NewTextHandler(stderr, nil))
@@ -204,15 +217,26 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			log.Info("hub listening", "socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "")
+			forges := forge.Forges{}
+			if watchPRs {
+				if _, err := exec.LookPath("gh"); err == nil {
+					forges["github.com"] = &forge.GitHub{}
+				} else {
+					log.Info("gh is not installed: pull requests on GitHub are not followed")
+				}
+			}
+			log.Info("hub listening", "socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "", "watch_prs", slices.Sorted(maps.Keys(forges)))
 			h := hub.Open(db, nil, log)
 			h.WakeCommand = wakeCommand
+			h.Forges = forges
 			return h.Serve(ctx, l)
 		},
 	}
 	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
 	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"),
 		"shell command that wakes an idle session without a waiting connector; gets $AGORA_TERMINAL and $AGORA_WAKE_TEXT (default $AGORA_WAKE_COMMAND)")
+	cmd.Flags().BoolVar(&watchPRs, "watch-prs", watchPRs,
+		"follow agents' pull requests and report when CI turns green or red; GitHub needs gh; --watch-prs=false turns it off (default $AGORA_WATCH_PRS)")
 	return cmd
 }
 
@@ -401,7 +425,7 @@ func statusCmd(o *options) *cobra.Command {
 			fmt.Fprintf(o.out, "AGENTS (%d%s)\n", len(agents.Msg.GetAgents()), which)
 			for _, p := range agents.Msg.GetAgents() {
 				fmt.Fprintf(o.out, "  %-16s %-9s %-7s %-14s %-12s %4s  %s\n", p.GetName(), p.GetStatus(), p.GetSessionState(),
-					p.GetProject(), prList(p.GetPrs()), age(p.GetUpdatedAt().AsTime()), p.GetTask())
+					p.GetProject(), prList(allPRs(p)), age(p.GetUpdatedAt().AsTime()), p.GetTask())
 			}
 			if err := o.printRooms(cmd.Context()); err != nil {
 				return err
@@ -495,8 +519,8 @@ func printProfile(w io.Writer, p *agorav1.Profile) {
 	if p.GetBranch() != "" {
 		where = append(where, "["+p.GetBranch()+"]")
 	}
-	if len(p.GetPrs()) > 0 {
-		where = append(where, "PR "+prList(p.GetPrs()))
+	if prs := allPRs(p); len(prs) > 0 {
+		where = append(where, "PR "+prList(prs))
 	}
 	if p.GetCwd() != "" {
 		where = append(where, "in "+p.GetCwd())
@@ -504,6 +528,13 @@ func printProfile(w io.Writer, p *agorav1.Profile) {
 	if len(where) > 0 {
 		fmt.Fprintf(w, "    %s\n", strings.Join(where, " "))
 	}
+}
+
+// allPRs returns the declared and found pull requests of a profile, ascending.
+func allPRs(p *agorav1.Profile) []int32 {
+	all := append(slices.Clone(p.GetPrs()), p.GetFoundPrs()...)
+	slices.Sort(all)
+	return slices.Compact(all)
 }
 
 func prList(prs []int32) string {

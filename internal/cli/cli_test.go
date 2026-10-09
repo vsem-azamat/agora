@@ -13,12 +13,16 @@ import (
 	"time"
 
 	"github.com/vsem-azamat/agora/internal/cli"
+	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
 // startHub runs a hub on a temporary socket and returns the socket path.
-func startHub(t *testing.T) string {
+func startHub(t *testing.T) string { return startHubWith(t, nil) }
+
+// startHubWith is startHub with the hub configured by configure before it serves.
+func startHubWith(t *testing.T, configure func(*hub.Hub)) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "agora-test-") // short path: unix sockets have a length limit
 	if err != nil {
@@ -43,8 +47,12 @@ func runHub(t *testing.T, dir string) (stop func()) {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
+	h := hub.Open(db, nil, nil)
+	if configure != nil {
+		configure(h)
+	}
 	go func() {
-		hub.Open(db, nil, nil).Serve(ctx, l)
+		h.Serve(ctx, l)
 		close(done)
 	}()
 	var once sync.Once
@@ -537,5 +545,44 @@ func TestProposalsAndCharter(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "x", "read", "general"); !strings.Contains(r.stdout, "Charter updated by builder") {
 		t.Fatalf("announcement: %s", r.stdout)
+	}
+}
+
+// prForge reports pull request 57 open from feat/export.
+type prForge struct{}
+
+func (prForge) Lookup(context.Context, forge.Repo, forge.Query) (forge.Result, error) {
+	return forge.Result{DefaultBranch: "main", PRs: []forge.PR{{Number: 57, Branch: "feat/export", Head: "a1", Open: true}}}, nil
+}
+
+func TestFoundPullRequestsShowInStatusAndWho(t *testing.T) {
+	socket := startHubWith(t, func(h *hub.Hub) {
+		h.Forges = forge.Forges{"github.com": prForge{}}
+		h.WatchFirst, h.WatchEvery = 10*time.Millisecond, 10*time.Millisecond
+	})
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/feat/export\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = https://github.com/example-org/example-app.git\n"), 0o644)
+	ctx := context.Background()
+	if r := agora(ctx, socket, "builder", "join", "builder", "--cwd", dir, "--pr", "61"); r.code != 0 {
+		t.Fatalf("join: %+v", r)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		r := agora(ctx, socket, "builder", "who", "#57")
+		if strings.Contains(r.stdout, "builder") {
+			if !strings.Contains(r.stdout, "PR #57,#61") {
+				t.Fatalf("who: %s", r.stdout)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pull request never found: %+v", r)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if r := agora(ctx, socket, "builder", "status"); !strings.Contains(r.stdout, "#57,#61") {
+		t.Fatalf("status: %s", r.stdout)
 	}
 }

@@ -17,3 +17,4 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 | [Resources](resources/README.md) | Fair queues for resources with a limited number of slots; locks are one-slot queues. |
 | [Governance](governance/README.md) | Proposals, votes and the charter. |
 | [Setup](setup/README.md) | Installing and removing the Claude Code hooks, the hub service and the agent skill. |
+| [Pull Requests](pull-requests/README.md) | Following agents' pull requests and reporting when CI turns green or red. |

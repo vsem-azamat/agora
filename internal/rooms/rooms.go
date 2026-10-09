@@ -192,6 +192,11 @@ func (r *Rooms) Followed(ctx context.Context, agent string) ([]string, error) {
 	return out, err
 }
 
+// FollowedTx is Followed inside the caller's transaction.
+func (r *Rooms) FollowedTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
+	return followed(ctx, tx, agent)
+}
+
 // Post stores a message from author (a joined agent, or the board itself) and returns its
 // identifier.
 func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
