@@ -98,7 +98,7 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.AddCommand(hubCmd(o, stderr), joinCmd(o), setCmd(o), leaveCmd(o), statusCmd(o), whoCmd(o),
 		proposeCmd(o), voteCmd(o), closeCmd(o), proposalsCmd(o), charterCmd(o),
 		roomsCmd(o), roomCreateCmd(o), subscribeCmd(o, true), subscribeCmd(o, false), postCmd(o), readCmd(o), unreadCmd(o),
-		whoamiCmd(o), sessionsCmd(o), hookCmd(o),
+		whoamiCmd(o), sessionsCmd(o), hookCmd(o), installCmd(o), uninstallCmd(o),
 		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o))
 	return root
 }
