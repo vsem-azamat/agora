@@ -1,0 +1,15 @@
+ALTER TABLE agents ADD COLUMN kind TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN project TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN task TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN status TEXT NOT NULL DEFAULT 'working';
+ALTER TABLE agents ADD COLUMN cwd TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN branch TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN prs TEXT NOT NULL DEFAULT ''; -- declared pull requests, space-separated, ascending
+ALTER TABLE agents ADD COLUMN about TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
+
+UPDATE agents SET updated_at = joined_at;
+
+-- names whose sessions have all ended had left before profiles existed
+UPDATE agents SET status = 'left'
+WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.agent = agents.name AND sessions.state != 'ended');

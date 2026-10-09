@@ -26,7 +26,6 @@ import (
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/queue"
-	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -94,7 +93,8 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&o.as, "as", os.Getenv("AGORA_NAME"), "agent name to act as (default $AGORA_NAME)")
 	root.PersistentFlags().StringVar(&o.socket, "socket", defaultSocket(), "hub socket (default $AGORA_SOCKET)")
 
-	root.AddCommand(hubCmd(o, stderr), joinCmd(o), whoamiCmd(o), sessionsCmd(o), hookCmd(o),
+	root.AddCommand(hubCmd(o, stderr), joinCmd(o), setCmd(o), leaveCmd(o), statusCmd(o), whoCmd(o),
+		whoamiCmd(o), sessionsCmd(o), hookCmd(o),
 		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o))
 	return root
 }
@@ -167,6 +167,10 @@ func (o *options) sessions() agorav1connect.SessionServiceClient {
 	return agorav1connect.NewSessionServiceClient(o.httpClient(), "http://agora")
 }
 
+func (o *options) agents() agorav1connect.AgentServiceClient {
+	return agorav1connect.NewAgentServiceClient(o.httpClient(), "http://agora")
+}
+
 // --- hub ------------------------------------------------------------------------
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
@@ -189,8 +193,7 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				return err
 			}
 			log.Info("hub listening", "socket", o.socket, "db", dbPath)
-			q := queue.New(db, nil)
-			return hub.New(q, sessions.New(db, q, nil), log).Serve(ctx, l)
+			return hub.Open(db, nil, log).Serve(ctx, l)
 		},
 	}
 	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
@@ -199,28 +202,296 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 
 // --- identity and sessions ----------------------------------------------------------
 
+// profileFlags are the profile fields that join and set accept.
+type profileFlags struct {
+	kind, project, task, status, cwd, about string
+	addPRs, dropPRs                         []string
+}
+
+func (f *profileFlags) register(cmd *cobra.Command, withDrop bool) {
+	cmd.Flags().StringVar(&f.kind, "kind", "", "agent tool: claude-code, codex, ...")
+	cmd.Flags().StringVar(&f.project, "project", "", "project you work on")
+	cmd.Flags().StringVar(&f.task, "task", "", "what you are doing right now")
+	cmd.Flags().StringVar(&f.status, "status", "", "your status (joining sets working)")
+	cmd.Flags().StringVar(&f.cwd, "cwd", "", "directory you work in, e.g. a worktree")
+	cmd.Flags().StringVar(&f.about, "about", "", "free text about you")
+	cmd.Flags().StringArrayVar(&f.addPRs, "pr", nil, "pull request you work on (repeatable)")
+	if withDrop {
+		cmd.Flags().StringArrayVar(&f.dropPRs, "drop-pr", nil, "pull request you no longer work on (repeatable)")
+	}
+}
+
+// request builds a profile update from the flags the user set.
+func (f *profileFlags) request(cmd *cobra.Command, name string) (*agorav1.UpdateProfileRequest, error) {
+	req := &agorav1.UpdateProfileRequest{Name: name}
+	str := func(flag string, v string) *string {
+		if !cmd.Flags().Changed(flag) {
+			return nil
+		}
+		return &v
+	}
+	req.Kind, req.Project, req.Task, req.Status, req.About = str("kind", f.kind), str("project", f.project), str("task", f.task), str("status", f.status), str("about", f.about)
+	if cmd.Flags().Changed("cwd") {
+		abs, err := filepath.Abs(f.cwd)
+		if err != nil {
+			return nil, err
+		}
+		req.Cwd = &abs
+	}
+	var err error
+	if req.AddPrs, err = prNumbers(f.addPRs); err != nil {
+		return nil, err
+	}
+	if req.DropPrs, err = prNumbers(f.dropPRs); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func prNumbers(in []string) ([]int32, error) {
+	var out []int32
+	for _, s := range in {
+		n, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(s), "#"), 10, 32)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("pull request %q: use a number like 57 or #57", s)
+		}
+		out = append(out, int32(n))
+	}
+	return out, nil
+}
+
 func joinCmd(o *options) *cobra.Command {
 	var force bool
+	var f profileFlags
 	cmd := &cobra.Command{
 		Use:   "join <name>",
-		Short: "Take a name and bind it to this session",
+		Short: "Take a name, bind it to this session and publish what you work on",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id := sessionID()
-			resp, err := o.sessions().JoinName(cmd.Context(), connect.NewRequest(&agorav1.JoinNameRequest{Name: args[0], SessionId: id, Force: force}))
+			name := args[0]
+			req, err := f.request(cmd, name) // validate the flags before taking the name
 			if err != nil {
 				return err
 			}
+			if req.Status == nil {
+				working := "working"
+				req.Status = &working
+			}
+			if strings.TrimSpace(*req.Status) == "" || *req.Status == "left" {
+				return fmt.Errorf("--status: give a status like working or reviewing; to leave, use `agora leave`")
+			}
+			if req.Cwd == nil {
+				if wd, err := os.Getwd(); err == nil {
+					req.Cwd = &wd
+				}
+			}
+			if req.Kind == nil && os.Getenv("CLAUDE_CODE_SESSION_ID") != "" {
+				kind := "claude-code"
+				req.Kind = &kind
+			}
+			resp, err := o.sessions().JoinName(cmd.Context(), connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: sessionID(), Force: force}))
+			if err != nil {
+				return err
+			}
+			if _, err := o.agents().UpdateProfile(cmd.Context(), connect.NewRequest(req)); err != nil {
+				return err
+			}
 			if resp.Msg.GetBound() {
-				fmt.Fprintf(o.out, "joined as %s; commands from this session now act as %s\n", args[0], args[0])
+				fmt.Fprintf(o.out, "joined as %s; commands from this session now act as %s\n", name, name)
 			} else {
-				fmt.Fprintf(o.out, "joined as %s; no session found, so pass --as %s or set AGORA_NAME=%s\n", args[0], args[0], args[0])
+				fmt.Fprintf(o.out, "joined as %s; no session found, so pass --as %s or set AGORA_NAME=%s\n", name, name, name)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "take the name from another live session")
+	f.register(cmd, false)
 	return cmd
+}
+
+func setCmd(o *options) *cobra.Command {
+	var f profileFlags
+	cmd := &cobra.Command{
+		Use:   "set",
+		Short: "Update your task, status, directory, pull requests or description",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if cmd.Flags().NFlag() == 0 {
+				return fmt.Errorf("nothing to change; pass at least one flag, e.g. --task")
+			}
+			req, err := f.request(cmd, name)
+			if err != nil {
+				return err
+			}
+			resp, err := o.agents().UpdateProfile(cmd.Context(), connect.NewRequest(req))
+			if err != nil {
+				return err
+			}
+			printProfile(o.out, resp.Msg.GetProfile())
+			return nil
+		},
+	}
+	f.register(cmd, true)
+	return cmd
+}
+
+func leaveCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "leave",
+		Short: "Mark yourself as left and give up every queue place and lock",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			resp, err := o.agents().Leave(cmd.Context(), connect.NewRequest(&agorav1.LeaveRequest{Name: name}))
+			if err != nil {
+				return err
+			}
+			for _, k := range resp.Msg.GetReleased() {
+				fmt.Fprintf(o.out, "released %s\n", k)
+			}
+			fmt.Fprintf(o.out, "%s marked as left\n", name)
+			return nil
+		},
+	}
+}
+
+func statusCmd(o *options) *cobra.Command {
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show active agents and busy resources",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			agents, err := o.agents().ListAgents(cmd.Context(), connect.NewRequest(&agorav1.ListAgentsRequest{All: all}))
+			if err != nil {
+				return err
+			}
+			which := " active"
+			if all {
+				which = ""
+			}
+			fmt.Fprintf(o.out, "AGENTS (%d%s)\n", len(agents.Msg.GetAgents()), which)
+			for _, p := range agents.Msg.GetAgents() {
+				fmt.Fprintf(o.out, "  %-16s %-9s %-7s %-14s %-12s %4s  %s\n", p.GetName(), p.GetStatus(), p.GetSessionState(),
+					p.GetProject(), prList(p.GetPrs()), age(p.GetUpdatedAt().AsTime()), p.GetTask())
+			}
+			res, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{}))
+			if err != nil {
+				return err
+			}
+			if len(res.Msg.GetResources()) > 0 {
+				fmt.Fprintln(o.out, "RESOURCES")
+				for _, r := range res.Msg.GetResources() {
+					printResource(o.out, r)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "include inactive and left agents")
+	return cmd
+}
+
+func whoCmd(o *options) *cobra.Command {
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "who <pr|branch|directory|name>",
+		Short: "Find who works on a pull request (#57), branch, directory or name",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := &agorav1.WhoRequest{Query: args[0], All: all}
+			if looksLikePath(args[0]) {
+				abs, err := filepath.Abs(expandHome(args[0]))
+				if err != nil {
+					return err
+				}
+				req.Query, req.Path = abs, true
+			}
+			resp, err := o.agents().Who(cmd.Context(), connect.NewRequest(req))
+			if err != nil {
+				return err
+			}
+			if len(resp.Msg.GetAgents()) == 0 {
+				hint := " (try --all)"
+				if all {
+					hint = ""
+				}
+				fmt.Fprintf(o.out, "nobody active matches %q%s\n", args[0], hint)
+			}
+			for _, p := range resp.Msg.GetAgents() {
+				printProfile(o.out, p)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "include inactive and left agents")
+	return cmd
+}
+
+// looksLikePath treats a query as a directory only when it is written like a path, so a name,
+// branch or number never turns into a path because a directory happens to have that name.
+func looksLikePath(q string) bool {
+	return q == "~" || q == "." || q == ".." ||
+		strings.HasPrefix(q, "/") || strings.HasPrefix(q, "~/") || strings.HasPrefix(q, "./") || strings.HasPrefix(q, "../")
+}
+
+func expandHome(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+	}
+	return p
+}
+
+func printProfile(w io.Writer, p *agorav1.Profile) {
+	fmt.Fprintf(w, "%s · %s · %s · %s · %s\n", p.GetName(), p.GetStatus(), p.GetSessionState(), orDash(p.GetProject()), p.GetTask())
+	var where []string
+	if p.GetBranch() != "" {
+		where = append(where, "["+p.GetBranch()+"]")
+	}
+	if len(p.GetPrs()) > 0 {
+		where = append(where, "PR "+prList(p.GetPrs()))
+	}
+	if p.GetCwd() != "" {
+		where = append(where, "in "+p.GetCwd())
+	}
+	if len(where) > 0 {
+		fmt.Fprintf(w, "    %s\n", strings.Join(where, " "))
+	}
+}
+
+func prList(prs []int32) string {
+	parts := make([]string, len(prs))
+	for i, n := range prs {
+		parts[i] = fmt.Sprintf("#%d", n)
+	}
+	return strings.Join(parts, ",")
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+func age(t time.Time) string {
+	m := int(time.Since(t).Minutes())
+	switch {
+	case m < 60:
+		return fmt.Sprintf("%dm", max(m, 0))
+	case m < 48*60:
+		return fmt.Sprintf("%dh", m/60)
+	}
+	return fmt.Sprintf("%dd", m/1440)
 }
 
 func whoamiCmd(o *options) *cobra.Command {

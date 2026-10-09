@@ -10,6 +10,6 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 
 | Capability | Covers |
 | --- | --- |
-| [Agents](agents/README.md) | Agent names and how the agent behind a command is recognised. |
+| [Agents](agents/README.md) | Agent names, profiles, activity and finding who works on what. |
 | [Connectors](connectors/README.md) | Agent tool integrations: sessions and the Claude Code connector. |
 | [Resources](resources/README.md) | Fair queues for resources with a limited number of slots; locks are one-slot queues. |

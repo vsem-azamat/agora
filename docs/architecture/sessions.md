@@ -23,7 +23,7 @@ The connector reports the process of the agent tool: it walks up from the hook's
 
 Each sweep (`internal/proc`) ends sessions whose process is gone: on Linux the pid must exist with the same start time, so a reused pid does not keep a session alive; without `/proc` it falls back to `kill(pid, 0)`. Sessions with an unknown process (`pid = 0`, e.g. registered only by `agora join`) end after 6 hours without events. The hub must run in the same pid namespace as the agents.
 
-Ending a session and giving back its agent's places happen in one transaction: the agent leaves every resource queue unless the name is bound to another live session. The hub finishes a session end even if the connector's request is cut short.
+Ending a session and giving back its agent's places happen in one transaction: unless the name is bound to another live session, the agent is marked `left` and leaves every resource queue. While a session runs, every event moves the bound agent's profile to the session's directory (see [Agent profiles](agents.md)). The hub finishes a session end even if the connector's request is cut short.
 
 When Claude Code clears a conversation it ends the session with reason `clear` and starts a new one in the same process. The end is ignored, and the new session's start takes over the name of any live session with the same pid and start time, which then ends without giving back places.
 

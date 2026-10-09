@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package agora.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
+
+// AgentService keeps agent profiles and finds who works on what.
+service AgentService {
+  // UpdateProfile changes the fields that are set.
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+  // Leave marks the agent as left and removes it from every resource queue.
+  rpc Leave(LeaveRequest) returns (LeaveResponse);
+  // ListAgents returns active agents, or all of them.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  // Who finds agents by pull request, directory, name or branch.
+  rpc Who(WhoRequest) returns (WhoResponse);
+}
+
+message Profile {
+  string name = 1;
+  string kind = 2;
+  string project = 3;
+  string task = 4;
+  string status = 5;
+  string cwd = 6;
+  string branch = 7;
+  repeated int32 prs = 8;
+  string about = 9;
+  google.protobuf.Timestamp joined_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  // busy, idle or offline
+  string session_state = 12;
+  bool active = 13;
+}
+
+message UpdateProfileRequest {
+  string name = 1;
+  optional string kind = 2;
+  optional string project = 3;
+  optional string task = 4;
+  optional string status = 5;
+  optional string cwd = 6;
+  optional string about = 7;
+  repeated int32 add_prs = 8;
+  repeated int32 drop_prs = 9;
+}
+
+message UpdateProfileResponse {
+  Profile profile = 1;
+}
+
+message LeaveRequest {
+  string name = 1;
+}
+
+message LeaveResponse {
+  // Resources the agent left.
+  repeated string released = 1;
+}
+
+message ListAgentsRequest {
+  bool all = 1;
+}
+
+message ListAgentsResponse {
+  repeated Profile agents = 1;
+}
+
+message WhoRequest {
+  string query = 1;
+  // The query is an absolute directory.
+  bool path = 2;
+  bool all = 3;
+}
+
+message WhoResponse {
+  repeated Profile agents = 1;
+}

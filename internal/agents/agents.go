@@ -1,0 +1,348 @@
+// Package agents keeps agent profiles: what each agent works on and where, whether it is
+// active, and finding the owner of a pull request, branch or directory.
+package agents
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/vsem-azamat/agora/internal/gitinfo"
+	"github.com/vsem-azamat/agora/internal/queue"
+)
+
+const (
+	// StaleAfter is how long an agent without a live session stays active after its last update.
+	StaleAfter = 6 * time.Hour
+	// Working is the status of an agent that just joined.
+	Working = "working"
+	// Left is the status of an agent that left.
+	Left = "left"
+)
+
+// ErrUnknown means the name never joined.
+var ErrUnknown = errors.New("unknown agent")
+
+// ErrInvalid marks an invalid value.
+var ErrInvalid = errors.New("invalid request")
+
+// Profile is what an agent publishes about its work.
+type Profile struct {
+	Name         string
+	Kind         string
+	Project      string
+	Task         string
+	Status       string
+	CWD          string
+	Branch       string
+	PRs          []int
+	About        string
+	JoinedAt     time.Time
+	UpdatedAt    time.Time
+	SessionState string // busy, idle or offline
+	Active       bool
+}
+
+// Update changes the fields that are not nil; AddPRs and DropPRs edit the pull requests.
+type Update struct {
+	Kind, Project, Task, Status, CWD, About *string
+	AddPRs, DropPRs                         []int
+}
+
+// Agents keeps profiles in the hub database.
+type Agents struct {
+	db    *sql.DB
+	queue *queue.Queue
+	now   func() time.Time
+}
+
+// New returns Agents over db; q is used when an agent leaves; now is the clock (time.Now when nil).
+func New(db *sql.DB, q *queue.Queue, now func() time.Time) *Agents {
+	if now == nil {
+		now = time.Now
+	}
+	return &Agents{db: db, queue: q, now: now}
+}
+
+// Update applies u to the profile of name and returns the result.
+func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, error) {
+	if u.Status != nil && (strings.TrimSpace(*u.Status) == "" || len(*u.Status) > 32) {
+		return Profile{}, fmt.Errorf("%w: status must be 1-32 characters", ErrInvalid)
+	}
+	if u.Status != nil && strings.TrimSpace(*u.Status) == Left {
+		return Profile{}, fmt.Errorf("%w: to leave, use `agora leave`, which also gives up your queue places", ErrInvalid)
+	}
+	if u.CWD != nil && !filepath.IsAbs(*u.CWD) {
+		return Profile{}, fmt.Errorf("%w: directory must be an absolute path", ErrInvalid)
+	}
+	for _, n := range append(slices.Clone(u.AddPRs), u.DropPRs...) {
+		if n <= 0 {
+			return Profile{}, fmt.Errorf("%w: pull request numbers are positive", ErrInvalid)
+		}
+	}
+	now := a.now()
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		p, err := load(ctx, tx, name)
+		if err != nil {
+			return err
+		}
+		set := func(dst *string, v *string) {
+			if v != nil {
+				*dst = strings.TrimSpace(*v)
+			}
+		}
+		set(&p.Kind, u.Kind)
+		set(&p.Project, u.Project)
+		set(&p.Task, u.Task)
+		set(&p.Status, u.Status)
+		set(&p.About, u.About)
+		if u.CWD != nil {
+			dir := resolve(*u.CWD)
+			p.Branch = nextBranch(p.Branch, p.CWD, dir)
+			p.CWD = dir
+		}
+		prs := map[int]bool{}
+		for _, n := range p.PRs {
+			prs[n] = true
+		}
+		for _, n := range u.AddPRs {
+			prs[n] = true
+		}
+		for _, n := range u.DropPRs {
+			delete(prs, n)
+		}
+		p.PRs = sortedKeys(prs)
+		_, err = tx.ExecContext(ctx, `UPDATE agents SET kind = ?, project = ?, task = ?, status = ?, cwd = ?, branch = ?, prs = ?, about = ?, updated_at = ?
+			WHERE name = ?`, p.Kind, p.Project, p.Task, p.Status, p.CWD, p.Branch, joinPRs(p.PRs), p.About, now.UnixMilli(), name)
+		return err
+	})
+	if err != nil {
+		return Profile{}, err
+	}
+	return a.Get(ctx, name)
+}
+
+// Leave marks name as left and removes it from every resource queue, in one step. It returns
+// the resources it left.
+func (a *Agents) Leave(ctx context.Context, name string) ([]string, error) {
+	var left []string
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := load(ctx, tx, name); err != nil {
+			return err
+		}
+		if err := MarkLeftTx(ctx, tx, name, a.now()); err != nil {
+			return err
+		}
+		var err error
+		left, err = a.queue.ReleaseAgentTx(ctx, tx, name)
+		return err
+	})
+	return left, err
+}
+
+// MarkLeftTx marks name as left inside the caller's transaction.
+func MarkLeftTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `UPDATE agents SET status = ?, updated_at = ? WHERE name = ?`, Left, now.UnixMilli(), name)
+	return err
+}
+
+// ReturnTx marks a left agent as working again, inside the caller's transaction: its session
+// is active once more, as after a resume.
+func ReturnTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `UPDATE agents SET status = ?, updated_at = ? WHERE name = ? AND status = ?`, Working, now.UnixMilli(), name, Left)
+	return err
+}
+
+// FollowTx moves the profile of name to the directory its session reports, inside the
+// caller's transaction, unless the profile's directory lies inside it (a worktree the agent
+// set). The update time changes only when the directory or branch changed.
+func FollowTx(ctx context.Context, tx *sql.Tx, name, sessionDir string, now time.Time) error {
+	if sessionDir == "" || !filepath.IsAbs(sessionDir) {
+		return nil
+	}
+	var cwd, branch string
+	if err := tx.QueryRowContext(ctx, `SELECT cwd, branch FROM agents WHERE name = ?`, name).Scan(&cwd, &branch); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	dir := resolve(sessionDir)
+	if cwd != "" && cwd != dir && within(cwd, dir) {
+		dir = cwd
+	}
+	next := nextBranch(branch, cwd, dir)
+	if dir == cwd && next == branch {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE agents SET cwd = ?, branch = ?, updated_at = ? WHERE name = ?`, dir, next, now.UnixMilli(), name)
+	return err
+}
+
+// Get returns the profile of name.
+func (a *Agents) Get(ctx context.Context, name string) (Profile, error) {
+	var p Profile
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		p, err = load(ctx, tx, name)
+		return err
+	})
+	if err != nil {
+		return p, err
+	}
+	all, err := a.List(ctx, true)
+	for _, x := range all {
+		if x.Name == name {
+			return x, err
+		}
+	}
+	return p, err
+}
+
+// List returns profiles in name order: active agents, or all agents when all is true.
+func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
+	rows, err := a.db.QueryContext(ctx, `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
+		COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
+			ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), 'offline')
+		FROM agents AS a ORDER BY a.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	now := a.now()
+	var out []Profile
+	for rows.Next() {
+		p, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		p.Active = p.Status != Left && (p.SessionState != "offline" || now.Sub(p.UpdatedAt) < StaleAfter)
+		if all || p.Active {
+			out = append(out, p)
+		}
+	}
+	return out, rows.Err()
+}
+
+// Who finds agents by pull request (`57` or `#57`), name, exact branch or a part of a branch
+// longer than two characters; with path set, query is a path and matches agents working in it,
+// in a directory inside it, or in a directory that contains it (the owner of a file or folder).
+func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profile, error) {
+	list, err := a.List(ctx, all)
+	if err != nil {
+		return nil, err
+	}
+	q := strings.TrimSpace(query)
+	pr, prErr := strconv.Atoi(strings.TrimPrefix(q, "#"))
+	var out []Profile
+	for _, p := range list {
+		var hit bool
+		switch {
+		case path:
+			dir := resolve(q)
+			hit = p.CWD != "" && (within(p.CWD, dir) || within(dir, p.CWD))
+		case prErr == nil:
+			hit = slices.Contains(p.PRs, pr)
+		default:
+			hit = q == p.Name || (q != "" && q == p.Branch) || (len(q) > 2 && strings.Contains(p.Branch, q))
+		}
+		if hit {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// --- internals ---------------------------------------------------------------------
+
+func (a *Agents) tx(ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+type scanner interface{ Scan(...any) error }
+
+func scan(r scanner) (Profile, error) {
+	var p Profile
+	var prs string
+	var joined, updated int64
+	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &joined, &updated, &p.SessionState)
+	p.PRs = parsePRs(prs)
+	p.JoinedAt, p.UpdatedAt = time.UnixMilli(joined), time.UnixMilli(updated)
+	return p, err
+}
+
+func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
+	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, 'offline'
+		FROM agents WHERE name = ?`, name))
+	if errors.Is(err, sql.ErrNoRows) {
+		return p, fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)
+	}
+	return p, err
+}
+
+// nextBranch returns the branch for an agent moving from prevDir to dir: the branch checked out
+// in dir, except that a detached commit in the same checkout keeps the previous branch.
+func nextBranch(prevBranch, prevDir, dir string) string {
+	h := gitinfo.Read(dir)
+	if h.Detached && prevBranch != "" && prevDir != "" && h.GitDir == gitinfo.Read(prevDir).GitDir {
+		return prevBranch
+	}
+	return h.Branch
+}
+
+// resolve cleans dir and follows symlinks when it exists, so the same directory always has the
+// same name.
+func resolve(dir string) string {
+	d := filepath.Clean(dir)
+	if r, err := filepath.EvalSymlinks(d); err == nil {
+		return r
+	}
+	return d
+}
+
+// within reports whether path is dir or lies inside it.
+func within(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../") && !filepath.IsAbs(rel)
+}
+
+func parsePRs(s string) []int {
+	var out []int
+	for _, f := range strings.Fields(s) {
+		if n, err := strconv.Atoi(f); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func joinPRs(prs []int) string {
+	parts := make([]string, len(prs))
+	for i, n := range prs {
+		parts[i] = strconv.Itoa(n)
+	}
+	return strings.Join(parts, " ")
+}
+
+func sortedKeys(m map[int]bool) []int {
+	out := make([]int, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
+}
