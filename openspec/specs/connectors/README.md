@@ -26,6 +26,6 @@ Integrations with agent tools: the sessions they report and the Claude Code conn
 - [The Connector Never Disturbs A Session](claude-code/spec.md#requirement-the-connector-never-disturbs-a-session)
 - [Session Start Introduces The Board](claude-code/spec.md#requirement-session-start-introduces-the-board)
 - [Messages Arrive During The Turn](claude-code/spec.md#requirement-messages-arrive-during-the-turn)
-- [Unanswered Mentions Keep The Turn Going](claude-code/spec.md#requirement-unanswered-mentions-keep-the-turn-going)
+- [Unread Mentions Keep The Turn Going](claude-code/spec.md#requirement-unread-mentions-keep-the-turn-going)
 - [The Profile Follows The Session's Directory](claude-code/spec.md#requirement-the-profile-follows-the-sessions-directory)
 - [Session End](claude-code/spec.md#requirement-session-end)

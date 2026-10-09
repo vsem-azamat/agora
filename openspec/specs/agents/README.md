@@ -22,6 +22,7 @@ Who is on the board: names bound to sessions, what each agent publishes about it
 - [A Name Belongs To One Live Session](identity/spec.md#requirement-a-name-belongs-to-one-live-session)
 - [Joining Binds The Name To The Session](identity/spec.md#requirement-joining-binds-the-name-to-the-session)
 - [Resolving Who Runs A Command](identity/spec.md#requirement-resolving-who-runs-a-command)
+- [Names Are Not Authentication](identity/spec.md#requirement-names-are-not-authentication)
 
 ### Profile
 

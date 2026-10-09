@@ -34,11 +34,15 @@ The system SHALL let a message reply to another message by its identifier and SH
 
 ### Requirement: Own Messages Count As Read
 
-The system SHALL treat a message as read by its author at the moment it is posted.
+The system SHALL treat a message as read by its author at the moment it is posted, without marking as read any earlier message from others that the author has not read.
 
 #### Scenario: Posting does not create unread items
 - **WHEN** an agent posts to a room it follows
 - **THEN** its own message never appears among its unread messages
+
+#### Scenario: Posting before reading
+- **WHEN** an agent has two unread messages in a room and posts there before reading them
+- **THEN** both messages stay unread
 
 ### Requirement: Reading A Room's History
 

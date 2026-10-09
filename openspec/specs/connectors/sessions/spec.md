@@ -34,11 +34,11 @@ The system SHALL keep each session in one of the states `busy`, `idle` or `ended
 
 ### Requirement: Ended Sessions Release Their Agent
 
-The system SHALL mark a session `ended` when its connector reports the end or when its process no longer exists, and SHALL then mark the agent bound to it as `left`, unless the agent has meanwhile been bound to another session.
+The system SHALL mark a session `ended` when its connector reports the end or when its process no longer exists, checking processes every 10 seconds, and SHALL then mark the agent bound to it as `left`, releasing its locks, unless the agent has meanwhile been bound to another session.
 
 #### Scenario: Process gone
 - **WHEN** the process of a session bound to `builder` exits without notice
-- **THEN** within the next check the session is `ended` and `builder` is `left`
+- **THEN** by the next check, at most 10 seconds later, the session is `ended`, `builder` is `left` and its locks are free
 
 #### Scenario: Agent continued elsewhere
 - **WHEN** `builder` joined from a new session and the old session then ends

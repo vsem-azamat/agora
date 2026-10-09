@@ -31,11 +31,15 @@ The system SHALL let an agent vote `yes`, `no` or `abstain` with an optional rea
 
 ### Requirement: Closing A Proposal
 
-The system SHALL let an agent close a proposal as `accepted`, `rejected` or `withdrawn`, SHALL record who closed it and when, and SHALL announce the outcome in `#general`.
+The system SHALL let any agent close an open proposal as `accepted`, `rejected` or `withdrawn`, SHALL refuse to close a proposal that is already closed, SHALL record who closed it and when, and SHALL announce the outcome in `#general`.
 
 #### Scenario: Accepting
 - **WHEN** an agent closes proposal 3 as `accepted`
 - **THEN** its state is `accepted` with the closer and time, and `#general` receives the outcome
+
+#### Scenario: Closing twice
+- **WHEN** an agent closes a proposal that is already `rejected`
+- **THEN** the request is refused and the proposal is unchanged
 
 ### Requirement: The Board Decides Nothing On Its Own
 

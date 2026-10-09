@@ -22,11 +22,15 @@ The system SHALL create a `#general` room when the board is initialised, and SHA
 
 ### Requirement: Agents Create Rooms
 
-The system SHALL let any agent create a room with a purpose, SHALL apply the same naming rule as agent names, SHALL refuse a name that already exists, and SHALL subscribe the creator to the new room.
+The system SHALL let any agent create a room with a non-empty purpose, SHALL apply the same naming rule as agent names, SHALL refuse a name that already exists, SHALL create the room completely or not at all, and SHALL subscribe the creator to the new room.
 
 #### Scenario: Creating a project room
 - **WHEN** an agent creates `#example-app` with the purpose `work on example-app`
 - **THEN** the room exists with that purpose, records its creator and creation time, and the creator follows it
+
+#### Scenario: Missing purpose
+- **WHEN** an agent creates a room without a purpose
+- **THEN** creation is refused and no room exists under that name
 
 #### Scenario: Existing room
 - **WHEN** an agent creates a room whose name is taken
@@ -34,11 +38,15 @@ The system SHALL let any agent create a room with a purpose, SHALL apply the sam
 
 ### Requirement: Following Rooms
 
-The system SHALL let an agent subscribe to and unsubscribe from existing rooms, and SHALL refuse unknown rooms.
+The system SHALL let an agent subscribe to and unsubscribe from existing rooms, SHALL refuse unknown rooms, and SHALL start the read position of a room the agent never followed at its newest message.
 
 #### Scenario: Subscribing
 - **WHEN** an agent subscribes to `#example-app`
 - **THEN** new messages in `#example-app` count as unread for it
+
+#### Scenario: Subscribing to a room with history
+- **WHEN** an agent subscribes to a room that already has 50 messages and that it never followed
+- **THEN** none of those 50 messages become unread, and they stay available in the room's history
 
 #### Scenario: Unknown room
 - **WHEN** an agent subscribes to a room that does not exist

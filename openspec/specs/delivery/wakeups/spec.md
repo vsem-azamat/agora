@@ -10,11 +10,11 @@ Waking an idle agent when a message is addressed to it, without flooding it.
 
 ### Requirement: Idle Agents Are Woken By Mentions
 
-The system SHALL wake an agent whose session is idle and has unread messages addressed to it, by typing a short prompt into the terminal the session runs in, when the session has a known terminal.
+The system SHALL check sessions every 10 seconds and SHALL wake an agent whose session is idle and has unread messages addressed to it, by typing a short prompt into the terminal the session runs in, when the session has a known terminal.
 
 #### Scenario: Mention while idle
 - **WHEN** an agent's session is idle and another agent mentions it
-- **THEN** within the next check, its terminal receives a prompt naming how many messages are addressed to it, who sent them and in which rooms, and telling it to read its unread messages
+- **THEN** by the next check, at most 10 seconds later, its terminal receives a prompt naming how many messages are addressed to it, who sent them and in which rooms, and telling it to read its unread messages
 
 #### Scenario: Busy agent
 - **WHEN** the mentioned agent's session is busy

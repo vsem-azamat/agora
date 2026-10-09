@@ -22,23 +22,27 @@ The system SHALL keep for every agent a profile with its tool kind, project, cur
 
 ### Requirement: Branch Follows The Working Directory
 
-The system SHALL derive an agent's branch from the git checkout that contains its working directory, without running git, and SHALL update it whenever the working directory changes.
+The system SHALL derive an agent's branch from the git checkout that contains its working directory, SHALL work without git installed, and SHALL update it whenever the working directory changes.
 
 #### Scenario: Declaring a worktree
 - **WHEN** an agent declares `~/src/example-app/.worktrees/login-fix` as its directory
 - **THEN** its branch becomes the branch checked out in that worktree
 
 #### Scenario: Directory outside any checkout
-- **WHEN** the working directory is not inside a git checkout
+- **WHEN** the working directory, set by the agent or by its connector, is not inside a git checkout
 - **THEN** the branch is empty
 
 ### Requirement: Declared Pull Requests
 
-The system SHALL let an agent add and remove pull request numbers on its profile, accepting both `123` and `#123`, and SHALL combine declared numbers with numbers found automatically when it reports the agent's pull requests.
+The system SHALL let an agent add and remove pull request numbers on its profile, accepting both `123` and `#123`, and SHALL combine declared numbers with numbers found automatically when it reports the agent's pull requests. Dropping a number stops following that pull request unless it is open from the agent's current branch.
 
 #### Scenario: Adding and dropping
 - **WHEN** an agent adds `#41` and `42`, then drops `41`
 - **THEN** its declared pull requests are `42`
+
+#### Scenario: Dropping a pull request that was found earlier
+- **WHEN** an agent drops `57`, which was found on its previous branch and is still open
+- **THEN** `57` is no longer among its pull requests
 
 #### Scenario: Combined list
 - **WHEN** an agent declared `42` and pull request `57` was found for its branch
@@ -58,8 +62,12 @@ The system SHALL treat an agent as active unless it has left or its profile has 
 
 ### Requirement: Leaving Releases The Agent's Locks
 
-The system SHALL mark an agent that leaves as `left` and SHALL release every lock it holds.
+The system SHALL mark an agent that leaves as `left` and SHALL release every lock it holds, whether it left by command or because its session ended.
 
 #### Scenario: Leaving with a held lock
 - **WHEN** an agent holding the lock `merge-queue` leaves
 - **THEN** its status is `left` and `merge-queue` is free
+
+#### Scenario: Session ends with a held lock
+- **WHEN** the session of an agent holding `merge-queue` ends and the agent becomes `left`
+- **THEN** `merge-queue` is free

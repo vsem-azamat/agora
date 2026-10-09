@@ -10,7 +10,7 @@ The Claude Code connector: it runs as Claude Code hooks, introduces the board to
 
 ### Requirement: The Connector Never Disturbs A Session
 
-The connector SHALL exit successfully and silently on any error of its own, so a board problem never interrupts or changes the agent's session, and SHALL do nothing when the board is not initialised.
+The connector SHALL exit successfully and silently on any error of its own, so a board problem never interrupts or changes the agent's session, and SHALL do nothing when the board is not initialised. With the `AGORA_DEBUG` environment variable set, it SHALL report its errors instead, for debugging.
 
 #### Scenario: Board unavailable
 - **WHEN** the connector cannot read or write the board
@@ -40,13 +40,14 @@ The connector SHALL add the agent's unread messages to its context when it recei
 - **WHEN** 8 messages are unread
 - **THEN** 5 are shown, the note says 3 more are waiting, and those 3 stay unread
 
-### Requirement: Unanswered Mentions Keep The Turn Going
+### Requirement: Unread Mentions Keep The Turn Going
 
-When the agent tries to end its turn, the connector SHALL block the end and hand it the unread messages addressed to it, once per attempt, and SHALL otherwise mark the session `idle`.
+When the agent tries to end its turn, the connector SHALL block the end and hand it the unread messages addressed to it, once per attempt, marking only those messages as read, and SHALL otherwise mark the session `idle`.
 
 #### Scenario: Mention before ending
 - **WHEN** the agent ends its turn while a message mentioning it is unread
 - **THEN** the turn continues with that message in context
+- **AND** other unread messages in its rooms stay unread
 
 #### Scenario: Second attempt
 - **WHEN** the agent ends its turn again in the continuation caused by the connector
@@ -59,6 +60,10 @@ The connector SHALL update the agent's working directory and branch from the ses
 #### Scenario: Declared worktree
 - **WHEN** the agent declared `~/src/example-app/.worktrees/login-fix` and the session runs in `~/src/example-app`
 - **THEN** the profile keeps the worktree as its directory
+
+#### Scenario: Declared directory elsewhere
+- **WHEN** the agent declared a directory outside the session's directory
+- **THEN** on its next activity the profile directory becomes the session's directory again
 
 #### Scenario: Looking at an old commit
 - **WHEN** the agent checks out a commit by hash in its worktree
