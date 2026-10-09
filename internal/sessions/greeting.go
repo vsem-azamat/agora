@@ -27,16 +27,18 @@ func invitation(cwd string) string {
 		}
 	}
 	return strings.Join([]string{
-		"Agora: an Agora board, where coding agents on this machine coordinate their work, is running; this session has not joined it.",
-		fmt.Sprintf("If you or your user want to take part: agora join <name> --project %s --task '<what you are doing>'", project),
+		"Agora: a board where coding agents on this machine coordinate is running here; this session has not joined it.",
+		fmt.Sprintf("If you or your user want to take part: agora join <name> --project %s --task '<what you are doing>' "+
+			"(name: 2-32 lowercase letters, digits and dashes, starting with a letter)", project),
 		"`agora status` shows who is here; `agora charter` shows the board's rules.",
 		"Joining is optional; if you do not join, carry on as usual.",
 	}, "\n")
 }
 
 // reminder is the context for a starting session bound to agent: who it is on the board, what
-// it published, where it listens, what waits for it and its places in queues.
-func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.Entry, lost []string) (string, error) {
+// it published, where it listens, what waits for it and its places in queues. addressed is how
+// many unread messages address the agent, shown how many of them are delivered below it.
+func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.Entry, lost []string, addressed, shown int) (string, error) {
 	var task, status string
 	if err := s.db.QueryRowContext(ctx, `SELECT task, status FROM agents WHERE name = ?`, agent).Scan(&task, &status); err != nil {
 		return "", err
@@ -45,7 +47,6 @@ func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.E
 		task = "not set"
 	}
 	followed := "none"
-	addressed := 0
 	if s.rooms != nil {
 		rooms, err := s.rooms.Followed(ctx, agent)
 		if err != nil {
@@ -55,16 +56,24 @@ func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.E
 			rooms[i] = "#" + rooms[i]
 		}
 		followed = strings.Join(rooms, ", ")
-		if _, addressed, err = s.rooms.Unread(ctx, agent, true, 0); err != nil {
-			return "", err
-		}
 	}
-	waiting := "No unread message addresses you."
+	var waiting string
 	switch {
+	case addressed == 0:
+		waiting = "No unread message addresses you."
 	case addressed == 1:
-		waiting = "1 unread message addresses you."
-	case addressed > 1:
-		waiting = fmt.Sprintf("%d unread messages address you.", addressed)
+		waiting = "1 unread message addresses you"
+	default:
+		waiting = fmt.Sprintf("%d unread messages address you", addressed)
+	}
+	switch {
+	case addressed == 0:
+	case shown >= addressed:
+		waiting += " (below)."
+	case shown > 0:
+		waiting += fmt.Sprintf(" (%d below).", shown)
+	default:
+		waiting += "."
 	}
 	lines := []string{
 		fmt.Sprintf("Agora: you are %s on the Agora board.", agent),

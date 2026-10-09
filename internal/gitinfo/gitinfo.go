@@ -40,8 +40,8 @@ func Read(dir string) Head {
 func Branch(dir string) string { return Read(dir).Branch }
 
 // Repo returns the name of the repository that contains dir: the directory of its main
-// checkout, also for a linked worktree, or the bare repository's name without `.git`. It
-// returns "" outside any checkout.
+// checkout, also from a linked worktree, or, for a worktree of a bare repository, the bare
+// repository's name without `.git`. It returns "" outside any checkout.
 func Repo(dir string) string {
 	gitDir := find(dir)
 	if gitDir == "" {

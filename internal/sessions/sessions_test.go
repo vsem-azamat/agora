@@ -248,7 +248,8 @@ func TestUnboundStartIsInvited(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, want := range []string{"agora join <name> --project example-app --task '<what you are doing>'", "agora status", "agora charter", "If you"} {
+		for _, want := range []string{"agora join <name> --project example-app --task '<what you are doing>'",
+			"(name: 2-32 lowercase letters, digits and dashes, starting with a letter)", "agora status", "agora charter", "If you"} {
 			if !strings.Contains(r.Context, want) {
 				t.Fatalf("invitation lacks %q: %q", want, r.Context)
 			}
@@ -285,13 +286,50 @@ func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
 	}
 	r := e.report(t, "session-1", sessions.Start) // the conversation was compacted
 	for _, want := range []string{"Agora: you are builder on the Agora board.", "Task: fix login timeout.", "Status: reviewing.",
-		"Rooms: #general.", "1 unread message addresses you.", "agora unread", "agora set --task", "agora leave"} {
+		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "agora leave"} {
 		if !strings.Contains(r.Context, want) {
 			t.Fatalf("reminder lacks %q: %q", want, r.Context)
 		}
 	}
 	if strings.Index(r.Context, "please review #57") < strings.Index(r.Context, "agora leave") {
 		t.Fatalf("message not after the reminder: %q", r.Context)
+	}
+}
+
+func TestStartRemindsEvenWhenAConcurrentHookWonTheCheck(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.r.Post(ctx, "reviewer", "general", "@builder please review #57", 0)
+	sessions.RaceNoteCheck(t) // a concurrent prompt records its check first
+	r := e.report(t, "session-1", sessions.Start)
+	if !strings.HasPrefix(r.Context, "Agora: you are builder on the Agora board.") || !strings.Contains(r.Context, "please review #57") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestReminderCountsAddressedMessagesNotShown(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	for range 7 {
+		e.r.Post(ctx, "reviewer", "general", "@builder ping", 0)
+	}
+	r := e.report(t, "session-1", sessions.Start)
+	if !strings.Contains(r.Context, "7 unread messages address you (5 below).") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestUnsafeRepositoryNameIsNotSuggested(t *testing.T) {
+	e := newEnv(t)
+	repo := filepath.Join(t.TempDir(), "example app;x")
+	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start, CWD: repo})
+	if err != nil || !strings.Contains(r.Context, "--project <project>") {
+		t.Fatalf("context %q err %v", r.Context, err)
 	}
 }
 

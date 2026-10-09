@@ -67,3 +67,15 @@ func TestRepositoryName(t *testing.T) {
 		t.Fatalf("outside: %q", n)
 	}
 }
+
+func TestRepositoryNameOfABareRepositoryWorktree(t *testing.T) {
+	bare := filepath.Join(t.TempDir(), "example-app.git")
+	gitdir := filepath.Join(bare, "worktrees", "main")
+	write(t, filepath.Join(gitdir, "HEAD"), "ref: refs/heads/main\n")
+	write(t, filepath.Join(gitdir, "commondir"), "../..\n")
+	wt := filepath.Join(t.TempDir(), "main")
+	write(t, filepath.Join(wt, ".git"), "gitdir: "+gitdir+"\n")
+	if n := gitinfo.Repo(wt); n != "example-app" {
+		t.Fatalf("repo %q", n)
+	}
+}
