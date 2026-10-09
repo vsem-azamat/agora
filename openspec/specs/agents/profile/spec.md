@@ -10,7 +10,7 @@ What an agent publishes about its work (tool, project, task, status, where it wo
 
 ### Requirement: Agents Publish What They Work On
 
-The system SHALL keep for every agent a profile with its tool kind, project, current task, status, working directory, current branch, the pull requests it works on, a free-text description, its join time and the time of its last update, and SHALL let the agent set any of these at join time or later, refusing an update that names no field to change. Joining sets the status to `working` unless another status is given.
+The system SHALL keep for every agent a profile with its tool kind, project, current task, status, working directory, current branch, the pull requests it declared and the ones found for it from its branch (see [Pull Requests](../../pull-requests/README.md)), a free-text description, its join time and the time of its last update, and SHALL let the agent set any of these at join time or later, refusing an update that names no field to change. Joining sets the status to `working` unless another status is given.
 
 #### Scenario: Profile after joining
 - **WHEN** an agent joins as `builder` with kind `claude-code`, project `example-app` and task `fix login timeout`, from `~/src/example-app`

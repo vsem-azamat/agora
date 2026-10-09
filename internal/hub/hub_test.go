@@ -16,6 +16,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/proc"
 	"github.com/vsem-azamat/agora/internal/store"
@@ -47,6 +48,7 @@ type running struct {
 	client   agorav1connect.ResourceServiceClient
 	sessions agorav1connect.SessionServiceClient
 	rooms    agorav1connect.RoomServiceClient
+	agents   agorav1connect.AgentServiceClient
 	clock    *clock
 	stop     context.CancelFunc
 	done     chan struct{} // closed when Serve returns
@@ -90,6 +92,7 @@ func startWith(t *testing.T, configure func(*hub.Hub)) *running {
 	r.client = agorav1connect.NewResourceServiceClient(&http.Client{Transport: transport}, "http://agora")
 	r.sessions = agorav1connect.NewSessionServiceClient(&http.Client{Transport: transport}, "http://agora")
 	r.rooms = agorav1connect.NewRoomServiceClient(&http.Client{Transport: transport}, "http://agora")
+	r.agents = agorav1connect.NewAgentServiceClient(&http.Client{Transport: transport}, "http://agora")
 	return r
 }
 
@@ -372,5 +375,110 @@ func TestWakeCommandTimeoutKillsTheWholeGroup(t *testing.T) {
 	result, ok := hub.RunWakeCommand(ctx, "sleep 30 & wait")
 	if ok || time.Since(start) > 5*time.Second {
 		t.Fatalf("ok %v after %s: %s", ok, time.Since(start), result)
+	}
+}
+
+// greenForge reports pull request 57 of every repository as open with CI green, and counts lookups.
+type greenForge struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (f *greenForge) Lookup(context.Context, forge.Repo, forge.Query) (forge.Result, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	return forge.Result{DefaultBranch: "main", PRs: []forge.PR{{Number: 57, Head: "a1", Open: true, Merge: forge.Mergeable, Checks: []forge.Check{{Name: "test", Outcome: forge.Succeeded}}}}}, nil
+}
+
+func (f *greenForge) count() int { f.mu.Lock(); defer f.mu.Unlock(); return f.calls }
+
+// joinIn joins builder working in a checkout whose origin is on GitHub, declaring #57.
+func joinIn(t *testing.T, r *running) {
+	t.Helper()
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:example-org/example-app.git\n"), 0o644)
+	ctx := context.Background()
+	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.agents.UpdateProfile(ctx, connect.NewRequest(&agorav1.UpdateProfileRequest{Name: "builder", Cwd: &dir, AddPrs: []int32{57}})); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHubWatchesPullRequestsAndPostsCI(t *testing.T) {
+	f := &greenForge{}
+	r := startWith(t, func(h *hub.Hub) {
+		h.Forges = forge.Forges{"github.com": f}
+		h.WatchFirst, h.WatchEvery = 20*time.Millisecond, 20*time.Millisecond
+	})
+	joinIn(t, r)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		resp, err := r.rooms.Unread(context.Background(), connect.NewRequest(&agorav1.UnreadRequest{Agent: "builder", Peek: true}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if msgs := resp.Msg.GetMessages(); len(msgs) == 1 {
+			if m := msgs[0]; m.GetAuthor() != "agora" || m.GetBody() != "@builder CI is green on #57." || !m.GetAddressed() {
+				t.Fatalf("message %+v", m)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no CI message after %d lookups", f.count())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestWatchingTurnedOff(t *testing.T) {
+	r := startWith(t, func(h *hub.Hub) { h.WatchFirst, h.WatchEvery = 10*time.Millisecond, 10*time.Millisecond })
+	joinIn(t, r) // no forges: what --watch-prs=false gives
+	time.Sleep(200 * time.Millisecond)
+	resp, _ := r.rooms.Unread(context.Background(), connect.NewRequest(&agorav1.UnreadRequest{Agent: "builder", Peek: true}))
+	if len(resp.Msg.GetMessages()) != 0 {
+		t.Fatalf("messages %+v", resp.Msg.GetMessages())
+	}
+}
+
+// slowForge blocks in Lookup until its context ends, then takes a little longer to return.
+type slowForge struct {
+	started chan struct{}
+	mu      sync.Mutex
+	done    bool
+}
+
+func (f *slowForge) Lookup(ctx context.Context, _ forge.Repo, _ forge.Query) (forge.Result, error) {
+	close(f.started)
+	<-ctx.Done()
+	time.Sleep(50 * time.Millisecond)
+	f.mu.Lock()
+	f.done = true
+	f.mu.Unlock()
+	return forge.Result{}, ctx.Err()
+}
+
+func TestShutdownWaitsForTheWatchRound(t *testing.T) {
+	f := &slowForge{started: make(chan struct{})}
+	r := startWith(t, func(h *hub.Hub) {
+		h.Forges = forge.Forges{"github.com": f}
+		h.WatchFirst = 10 * time.Millisecond
+	})
+	joinIn(t, r)
+	select {
+	case <-f.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no lookup")
+	}
+	r.stop()
+	<-r.done
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.done {
+		t.Fatal("Serve returned while a lookup was still running")
 	}
 }

@@ -27,6 +27,7 @@ message Profile {
   string status = 5;
   string cwd = 6;
   string branch = 7;
+  // Pull requests the agent declared.
   repeated int32 prs = 8;
   string about = 9;
   google.protobuf.Timestamp joined_at = 10;
@@ -34,6 +35,8 @@ message Profile {
   // busy, idle or offline
   string session_state = 12;
   bool active = 13;
+  // Open pull requests found from the agent's branch by the hub.
+  repeated int32 found_prs = 14;
 }
 
 message UpdateProfileRequest {

@@ -24,8 +24,10 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/proc"
+	"github.com/vsem-azamat/agora/internal/pullrequests"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -43,10 +45,15 @@ const (
 	DefaultWakeSettle = 10 * time.Second
 	// WakeTimeout bounds one run of the wake command.
 	WakeTimeout = time.Minute
+	// DefaultWatchFirst is how long after starting the hub first looks up pull requests.
+	DefaultWatchFirst = 10 * time.Second
+	// DefaultWatchEvery is how often the hub looks up pull requests after that.
+	DefaultWatchEvery = 2 * time.Minute
 )
 
 // Hub holds the services and the change signal that wakes streaming waiters.
 type Hub struct {
+	db       *sql.DB
 	queue    *queue.Queue
 	sessions *sessions.Sessions
 	agents   *agents.Agents
@@ -61,6 +68,12 @@ type Hub struct {
 	WakeCommand string
 	// WakeSettle is how long a session stays idle before the wake command may wake it.
 	WakeSettle time.Duration
+
+	// Forges, by host, are asked about the pull requests of active agents; with none the hub
+	// does not follow pull requests.
+	Forges forge.Forges
+	// WatchFirst and WatchEvery time the pull request rounds: the first after start, then the gap.
+	WatchFirst, WatchEvery time.Duration
 
 	waitMu  sync.Mutex
 	waiters map[string]*waiter // by session id
@@ -78,7 +91,8 @@ func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms,
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle}
+	return &Hub{queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle,
+		WatchFirst: DefaultWatchFirst, WatchEvery: DefaultWatchEvery}
 }
 
 // Open builds a hub over db with the given clock (time.Now when nil).
@@ -87,6 +101,7 @@ func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	r := rooms.New(db, now)
 	h := New(q, sessions.New(db, q, r, now), agents.New(db, q, now), r, log)
 	h.gov = governance.New(db, r, now)
+	h.db = db
 	return h
 }
 
@@ -203,10 +218,17 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		BaseContext:       func(net.Listener) context.Context { return base },
 	}
 	sweepCtx, stopSweep := context.WithCancel(ctx)
-	defer stopSweep()
+	var watching sync.WaitGroup
+	defer func() {
+		stopSweep()
+		watching.Wait() // a pull request round writes to the database the caller closes next
+	}()
 	go h.Sweep(sweepCtx)
 	if h.WakeCommand != "" {
 		go h.wakeLoop(sweepCtx)
+	}
+	if len(h.Forges) > 0 && h.db != nil {
+		watching.Go(func() { h.watchLoop(sweepCtx) })
 	}
 	stopped := make(chan struct{})
 	go func() {
@@ -529,6 +551,9 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	for _, n := range p.PRs {
 		out.Prs = append(out.Prs, int32(n))
 	}
+	for _, n := range p.FoundPRs {
+		out.FoundPrs = append(out.FoundPrs, int32(n))
+	}
 	return out
 }
 
@@ -760,6 +785,27 @@ func runWakeCommand(ctx context.Context, command, terminal, text string) (string
 		tail = tail[len(tail)-300:]
 	}
 	return strings.TrimSpace(err.Error() + ": " + tail), false
+}
+
+// --- pull requests ------------------------------------------------------------------
+
+// watchLoop looks up the pull requests of active agents WatchFirst after start and then every
+// WatchEvery, and wakes waiters when it posted CI messages.
+func (h *Hub) watchLoop(ctx context.Context) {
+	w := pullrequests.New(h.db, h.agents, h.rooms, h.Forges, h.log)
+	t := time.NewTimer(h.WatchFirst)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if w.Round(ctx) > 0 {
+				h.changes.fire()
+			}
+			t.Reset(h.WatchEvery)
+		}
+	}
 }
 
 // --- GovernanceService --------------------------------------------------------------

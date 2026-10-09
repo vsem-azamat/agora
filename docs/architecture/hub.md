@@ -31,6 +31,7 @@ The hub is the process that holds Agora's state and serves its API.
 - Every call that may have changed a queue (any call that settles one, including listing) fires a single change signal; every streaming waiter wakes, re-reads its own entry and reports a new position or takes its slot. A spurious wake costs one small query.
 - As a safety net, each waiter also re-reads its entry once a second.
 - With a wake command configured, every 10 seconds the hub wakes idle sessions that no connector waits for (see [Wakeups](wakeups.md)).
+- Unless started with `--watch-prs=false` (or `$AGORA_WATCH_PRS=false`), 10 seconds after start and then every 2 minutes the hub looks up agents' pull requests and posts CI messages (see [Pull requests and CI](pull-requests.md)).
 
 ## Shutdown
 

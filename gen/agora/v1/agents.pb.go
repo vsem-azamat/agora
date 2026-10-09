@@ -23,21 +23,24 @@ const (
 )
 
 type Profile struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	Name      string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Kind      string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	Project   string                 `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
-	Task      string                 `protobuf:"bytes,4,opt,name=task,proto3" json:"task,omitempty"`
-	Status    string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	Cwd       string                 `protobuf:"bytes,6,opt,name=cwd,proto3" json:"cwd,omitempty"`
-	Branch    string                 `protobuf:"bytes,7,opt,name=branch,proto3" json:"branch,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Name    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Kind    string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Project string                 `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
+	Task    string                 `protobuf:"bytes,4,opt,name=task,proto3" json:"task,omitempty"`
+	Status  string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	Cwd     string                 `protobuf:"bytes,6,opt,name=cwd,proto3" json:"cwd,omitempty"`
+	Branch  string                 `protobuf:"bytes,7,opt,name=branch,proto3" json:"branch,omitempty"`
+	// Pull requests the agent declared.
 	Prs       []int32                `protobuf:"varint,8,rep,packed,name=prs,proto3" json:"prs,omitempty"`
 	About     string                 `protobuf:"bytes,9,opt,name=about,proto3" json:"about,omitempty"`
 	JoinedAt  *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=joined_at,json=joinedAt,proto3" json:"joined_at,omitempty"`
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// busy, idle or offline
-	SessionState  string `protobuf:"bytes,12,opt,name=session_state,json=sessionState,proto3" json:"session_state,omitempty"`
-	Active        bool   `protobuf:"varint,13,opt,name=active,proto3" json:"active,omitempty"`
+	SessionState string `protobuf:"bytes,12,opt,name=session_state,json=sessionState,proto3" json:"session_state,omitempty"`
+	Active       bool   `protobuf:"varint,13,opt,name=active,proto3" json:"active,omitempty"`
+	// Open pull requests found from the agent's branch by the hub.
+	FoundPrs      []int32 `protobuf:"varint,14,rep,packed,name=found_prs,json=foundPrs,proto3" json:"found_prs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -161,6 +164,13 @@ func (x *Profile) GetActive() bool {
 		return x.Active
 	}
 	return false
+}
+
+func (x *Profile) GetFoundPrs() []int32 {
+	if x != nil {
+		return x.FoundPrs
+	}
+	return nil
 }
 
 type UpdateProfileRequest struct {
@@ -601,7 +611,7 @@ var File_agora_v1_agents_proto protoreflect.FileDescriptor
 
 const file_agora_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xfa\x02\n" +
+	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x03\n" +
 	"\aProfile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -617,7 +627,8 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12#\n" +
 	"\rsession_state\x18\f \x01(\tR\fsessionState\x12\x16\n" +
-	"\x06active\x18\r \x01(\bR\x06active\"\xb9\x02\n" +
+	"\x06active\x18\r \x01(\bR\x06active\x12\x1b\n" +
+	"\tfound_prs\x18\x0e \x03(\x05R\bfoundPrs\"\xb9\x02\n" +
 	"\x14UpdateProfileRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\x04kind\x18\x02 \x01(\tH\x00R\x04kind\x88\x01\x01\x12\x1d\n" +

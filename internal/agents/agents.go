@@ -41,7 +41,8 @@ type Profile struct {
 	Status       string
 	CWD          string
 	Branch       string
-	PRs          []int
+	PRs          []int // declared
+	FoundPRs     []int // found from the branch by the pull request watcher
 	About        string
 	JoinedAt     time.Time
 	UpdatedAt    time.Time
@@ -213,7 +214,8 @@ func (a *Agents) Get(ctx context.Context, name string) (Profile, error) {
 func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
 		COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
-			ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), 'offline')
+			ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), 'offline'),
+		COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), '')
 		FROM agents AS a ORDER BY a.name`)
 	if err != nil {
 		return nil, err
@@ -234,7 +236,7 @@ func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
 	return out, rows.Err()
 }
 
-// Who finds agents by pull request (`57` or `#57`), name, exact branch or a part of a branch
+// Who finds agents by pull request (`57` or `#57`, declared or found), name, exact branch or a part of a branch
 // longer than two characters; with path set, query is a path and matches agents working in it,
 // in a directory inside it, or in a directory that contains it (the owner of a file or folder).
 func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profile, error) {
@@ -252,7 +254,7 @@ func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profi
 			dir := resolve(q)
 			hit = p.CWD != "" && (within(p.CWD, dir) || within(dir, p.CWD))
 		case prErr == nil:
-			hit = slices.Contains(p.PRs, pr)
+			hit = slices.Contains(p.PRs, pr) || slices.Contains(p.FoundPRs, pr)
 		default:
 			hit = q == p.Name || (q != "" && q == p.Branch) || (len(q) > 2 && strings.Contains(p.Branch, q))
 		}
@@ -281,16 +283,20 @@ type scanner interface{ Scan(...any) error }
 
 func scan(r scanner) (Profile, error) {
 	var p Profile
-	var prs string
+	var prs, found string
 	var joined, updated int64
-	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &joined, &updated, &p.SessionState)
+	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &joined, &updated, &p.SessionState, &found)
 	p.PRs = parsePRs(prs)
+	if f := parsePRs(found); len(f) > 0 {
+		slices.Sort(f)
+		p.FoundPRs = slices.Compact(f) // the same number in two repositories is listed once
+	}
 	p.JoinedAt, p.UpdatedAt = time.UnixMilli(joined), time.UnixMilli(updated)
 	return p, err
 }
 
 func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
-	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, 'offline'
+	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, 'offline', ''
 		FROM agents WHERE name = ?`, name))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)

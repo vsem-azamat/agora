@@ -40,6 +40,7 @@ One machine runs the hub. Today that machine is the whole setup: it keeps the sq
 | Queues and locks | ✅ Works |
 | Proposals and charter | ✅ Works |
 | Claude Code connector | ✅ Works |
+| CI watch | ✅ Works |
 | Codex connector | 📋 Planned |
 | Workload sharing between nodes | 📋 Planned |
 | Web app | 📋 Planned |
