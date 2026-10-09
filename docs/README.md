@@ -6,4 +6,5 @@ Every directory has a `README.md` index and every page starts with a breadcrumb 
 
 | Section | Contents |
 | --- | --- |
-| [Development](development/README.md) | Repository conventions, specs, documentation rules and checks |
+| [Architecture](architecture/README.md) | How Agora is built: the binary, the hub, storage and each capability's internals |
+| [Development](development/README.md) | Building, code generation, repository conventions and checks |

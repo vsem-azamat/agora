@@ -6,6 +6,7 @@ How the repository is organized and verified.
 
 | Page | Contents |
 | --- | --- |
+| [Building](building.md) | Building and running `agora`, generating code from `proto/` |
 | [Specs](specs.md) | Layout and format of `openspec/specs/` |
 | [Documentation](documentation.md) | Structure and rules of `docs/` |
 | [Checks](checks.md) | Repository checks, how to run them locally, CI |
@@ -14,6 +15,9 @@ How the repository is organized and verified.
 
 | Path | Contents |
 | --- | --- |
+| `cmd/`, `internal/` | Go code; see [Architecture](../architecture/README.md) |
+| `proto/` | API contract; `gen/` holds the code generated from it |
+| `tools/` | Pinned code generation tools (a separate Go module) |
 | `openspec/specs/` | Behavior specification |
 | `docs/` | Engineering documentation |
 | `scripts/` | Repository checks |
