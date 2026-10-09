@@ -2,6 +2,7 @@ package install
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -24,13 +25,18 @@ func ServiceDir() (string, error) {
 	return filepath.Join(home, ".config", "systemd", "user"), nil
 }
 
+// UnitHeader is the first line of every unit Agora writes; units without it are not Agora's
+// and are never overwritten or removed.
+const UnitHeader = "# Written by agora install service; agora uninstall service removes it."
+
 // Unit is the systemd user unit that runs argv (the agora binary, "hub" and its flags).
 func Unit(argv []string) string {
 	quoted := make([]string, len(argv))
 	for i, a := range argv {
 		quoted[i] = systemdQuote(a)
 	}
-	return "[Unit]\n" +
+	return UnitHeader + "\n" +
+		"[Unit]\n" +
 		"Description=Agora hub\n" +
 		"Documentation=https://github.com/vsem-azamat/agora\n" +
 		"\n" +
@@ -74,20 +80,53 @@ func systemdQuote(s string) string {
 	return b.String()
 }
 
-// InstallService writes unit as the hub's unit file in dir.
-func InstallService(dir, unit string) (Outcome, error) {
-	return writeIfChanged(filepath.Join(dir, ServiceName+".service"), []byte(unit))
+func unitPath(dir string) string { return filepath.Join(dir, ServiceName+".service") }
+
+// ServiceInstalled reports whether dir holds the hub's unit, and refuses one Agora did not write.
+func ServiceInstalled(dir string) (bool, error) {
+	b, err := os.ReadFile(unitPath(dir))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !strings.HasPrefix(string(b), UnitHeader+"\n") {
+		return true, fmt.Errorf("%s was not written by agora install; move it away first", unitPath(dir))
+	}
+	return true, nil
 }
 
-// UninstallService removes the hub's unit file from dir and the link that enabling it made.
+// InstallService writes unit as the hub's unit file in dir.
+func InstallService(dir, unit string) (Outcome, error) {
+	if _, err := ServiceInstalled(dir); err != nil {
+		return 0, err
+	}
+	return writeIfChanged(unitPath(dir), []byte(unit))
+}
+
+// UninstallService removes the hub's unit file from dir and the link that enabling it made,
+// also when that link dangles.
 func UninstallService(dir string) (Outcome, error) {
+	if _, err := ServiceInstalled(dir); err != nil {
+		return 0, err
+	}
+	outcome := Absent
 	link := filepath.Join(dir, "default.target.wants", ServiceName+".service")
 	if fi, err := os.Lstat(link); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
 		if err := os.Remove(link); err != nil {
 			return 0, err
 		}
+		outcome = Removed
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return 0, err
 	}
-	return removeIfExists(filepath.Join(dir, ServiceName+".service"))
+	o, err := removeIfExists(unitPath(dir))
+	if err != nil {
+		return 0, err
+	}
+	if o == Removed {
+		outcome = Removed
+	}
+	return outcome, nil
 }

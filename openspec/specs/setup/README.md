@@ -28,6 +28,7 @@ Installing and removing Agora's integrations with one command each: the Claude C
 
 - [Installing The Claude Code Hooks](claude-code/spec.md#requirement-installing-the-claude-code-hooks)
 - [Other Settings Are Preserved](claude-code/spec.md#requirement-other-settings-are-preserved)
+- [Changes Made Meanwhile Are Kept](claude-code/spec.md#requirement-changes-made-meanwhile-are-kept)
 - [Outdated Entries Are Replaced](claude-code/spec.md#requirement-outdated-entries-are-replaced)
 - [Mapping A Terminal Handle](claude-code/spec.md#requirement-mapping-a-terminal-handle)
 - [Settings Are Backed Up](claude-code/spec.md#requirement-settings-are-backed-up)

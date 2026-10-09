@@ -38,13 +38,70 @@ func listTargets(w io.Writer, verb string) {
 	fmt.Fprintf(w, "\nRun `agora %s <target> --help` for its options.\n", verb)
 }
 
-// executable is the absolute path of the running agora binary, which hooks and the service call.
-func executable() (string, error) {
+// lookPath finds agora on PATH; tests replace it.
+var lookPath = exec.LookPath
+
+// agoraBinary is the absolute path hooks and the service call: --bin when given, else the
+// running binary, by its path on PATH when that is the same file (so a link such as one in a
+// package manager's bin directory survives upgrades). A temporary build (`go run`, a test
+// binary) is refused, since it disappears.
+func agoraBinary(flag string) (string, error) {
+	if flag != "" {
+		abs, err := filepath.Abs(expandHome(flag))
+		if err != nil {
+			return "", err
+		}
+		if fi, err := os.Stat(abs); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
+			return "", fmt.Errorf("--bin %s: not an executable file", flag)
+		}
+		return abs, nil
+	}
 	exe, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("cannot find the agora binary: %w", err)
+		return "", fmt.Errorf("cannot find the agora binary: %w; pass --bin <path>", err)
 	}
-	return filepath.Abs(exe)
+	if exe, err = filepath.Abs(exe); err != nil {
+		return "", err
+	}
+	if p, err := lookPath("agora"); err == nil {
+		if abs, err := filepath.Abs(p); err == nil && sameFile(abs, exe) {
+			return abs, nil
+		}
+	}
+	if temporaryPath(exe) {
+		return "", fmt.Errorf("%s is a temporary build that will disappear; install agora (go install) and run that, or pass --bin <path>", exe)
+	}
+	return exe, nil
+}
+
+func sameFile(a, b string) bool {
+	fa, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	fb, err := os.Stat(b)
+	return err == nil && os.SameFile(fa, fb)
+}
+
+// temporaryPath reports whether p lies in the temporary directory or a Go build directory.
+func temporaryPath(p string) bool {
+	if strings.Contains(p, string(filepath.Separator)+"go-build") {
+		return true
+	}
+	tmp, err := filepath.Abs(os.TempDir())
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(tmp, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+const binHelp = "agora binary the integration runs (default: the running binary, by its PATH location when that is the same file)"
+
+func printForeign(w io.Writer, cmds []string) {
+	for _, c := range cmds {
+		fmt.Fprintf(w, "warning: found an Agora-like hook it did not write, left as it is: %s\n", c)
+	}
 }
 
 func installCmd(o *options) *cobra.Command {
@@ -85,7 +142,7 @@ func settingsPath(flag string) (string, error) {
 }
 
 func installClaudeCodeCmd(o *options) *cobra.Command {
-	var settings, terminalEnv string
+	var settings, terminalEnv, binFlag string
 	cmd := &cobra.Command{
 		Use:   "claude-code",
 		Short: "Add the Agora hooks to Claude Code's user settings",
@@ -95,7 +152,7 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			bin, err := executable()
+			bin, err := agoraBinary(binFlag)
 			if err != nil {
 				return err
 			}
@@ -103,6 +160,7 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			printForeign(cmd.ErrOrStderr(), ch.Foreign)
 			if ch.Outcome == install.Unchanged {
 				fmt.Fprintf(o.out, "Claude Code hooks already installed in %s\n", path)
 				return nil
@@ -116,11 +174,12 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 	cmd.Flags().StringVar(&settings, "settings", "", "Claude Code settings file (default $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json)")
 	cmd.Flags().StringVar(&terminalEnv, "terminal-env", "",
 		"environment variable that holds the session's terminal handle, passed to the hub as $AGORA_TERMINAL for its wake command")
+	cmd.Flags().StringVar(&binFlag, "bin", "", binHelp)
 	return cmd
 }
 
 func uninstallClaudeCodeCmd(o *options) *cobra.Command {
-	var settings string
+	var settings, binFlag string
 	cmd := &cobra.Command{
 		Use:   "claude-code",
 		Short: "Remove the Agora hooks from Claude Code's user settings",
@@ -130,14 +189,15 @@ func uninstallClaudeCodeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			bin, err := executable()
+			bin, err := agoraBinary(binFlag)
 			if err != nil {
-				return err
+				bin = "" // entries are still recognised by a binary named agora
 			}
 			ch, err := install.UninstallClaudeCode(path, bin, time.Now())
 			if err != nil {
 				return err
 			}
+			printForeign(cmd.ErrOrStderr(), ch.Foreign)
 			if ch.Outcome == install.Absent {
 				fmt.Fprintf(o.out, "Claude Code hooks not installed in %s\n", path)
 				return nil
@@ -148,6 +208,7 @@ func uninstallClaudeCodeCmd(o *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&settings, "settings", "", "Claude Code settings file (default $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&binFlag, "bin", "", "also remove hooks that run this binary, whatever its name")
 	return cmd
 }
 
@@ -166,8 +227,13 @@ func needLinux() error {
 	return nil
 }
 
-// runSystemctl runs each systemctl command in order and stops at the first failure.
+// runSystemctl runs each systemctl command in order and stops at the first failure, after
+// checking that the user's service manager answers.
 func (o *options) runSystemctl(ctx context.Context, cmds [][]string) error {
+	if out, err := systemctl(ctx, "show-environment"); err != nil {
+		return fmt.Errorf("the systemd user manager is not reachable (systemctl --user: %v %s); run the commands yourself where it is, or leave out --now",
+			err, strings.TrimSpace(string(out)))
+	}
 	for _, args := range cmds {
 		fmt.Fprintf(o.out, "running systemctl --user %s\n", strings.Join(args, " "))
 		if out, err := systemctl(ctx, args...); err != nil {
@@ -186,7 +252,7 @@ func printSystemctl(w io.Writer, cmds [][]string) {
 }
 
 func installServiceCmd(o *options) *cobra.Command {
-	var dbPath, wakeCommand string
+	var dbPath, wakeCommand, binFlag string
 	var now bool
 	cmd := &cobra.Command{
 		Use:   "service",
@@ -196,7 +262,7 @@ func installServiceCmd(o *options) *cobra.Command {
 			if err := needLinux(); err != nil {
 				return err
 			}
-			bin, err := executable()
+			bin, err := agoraBinary(binFlag)
 			if err != nil {
 				return err
 			}
@@ -254,6 +320,7 @@ func installServiceCmd(o *options) *cobra.Command {
 	cmd.Flags().StringVar(&dbPath, "db", os.Getenv("AGORA_DB"), "database file for the hub (default $AGORA_DB, else the hub's default)")
 	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"), "the hub's wake command (default $AGORA_WAKE_COMMAND)")
 	cmd.Flags().BoolVar(&now, "now", false, "also run systemctl to load, enable and start the service")
+	cmd.Flags().StringVar(&binFlag, "bin", "", binHelp)
 	return cmd
 }
 
@@ -272,17 +339,22 @@ func uninstallServiceCmd(o *options) *cobra.Command {
 				return err
 			}
 			path := filepath.Join(dir, install.ServiceName+".service")
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				fmt.Fprintf(o.out, "hub service not installed: no %s\n", path)
-				return nil
+			installed, err := install.ServiceInstalled(dir)
+			if err != nil {
+				return err
 			}
-			if now {
+			if installed && now {
 				if err := o.runSystemctl(cmd.Context(), [][]string{{"disable", "--now", install.ServiceName}}); err != nil {
 					return err
 				}
 			}
-			if _, err := install.UninstallService(dir); err != nil {
+			outcome, err := install.UninstallService(dir)
+			if err != nil {
 				return err
+			}
+			if outcome == install.Absent {
+				fmt.Fprintf(o.out, "hub service not installed: no %s\n", path)
+				return nil
 			}
 			fmt.Fprintf(o.out, "removed the hub service: %s\n", path)
 			if now {

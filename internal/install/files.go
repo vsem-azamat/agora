@@ -32,17 +32,35 @@ const (
 // Change is the result of changing a file that keeps a backup.
 type Change struct {
 	Outcome Outcome
-	Backup  string // path of the copy made before the change, or ""
+	Backup  string   // path of the copy made before the change, or ""
+	Foreign []string // commands that look like Agora's hooks but were not written by it; left alone
 }
 
-// resolve follows a symbolic link at path to the file it points to, so writes update the
-// linked file instead of replacing the link. A path that does not exist resolves to itself.
+// resolve follows symbolic links at path, also dangling ones, to the file they point to, so
+// writes update the linked file instead of replacing the link. A path that is not a link
+// resolves to itself.
 func resolve(path string) (string, error) {
-	real, err := filepath.EvalSymlinks(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return path, nil
+	for range 40 {
+		fi, err := os.Lstat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if fi.Mode()&fs.ModeSymlink == 0 {
+			return path, nil
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = target
 	}
-	return real, err
+	return "", fmt.Errorf("%s: too many levels of symbolic links", path)
 }
 
 // readIfExists returns the file's content and mode, with exists false when there is no file.
@@ -65,7 +83,7 @@ func readIfExists(path string) (content []byte, mode fs.FileMode, exists bool, e
 // readers see the old or the new file and never a partial one.
 func writeAtomic(path string, content []byte, mode fs.FileMode) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")

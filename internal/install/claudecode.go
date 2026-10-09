@@ -44,20 +44,6 @@ var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // ValidEnvName reports whether s can name an environment variable in a shell.
 func ValidEnvName(s string) bool { return envName.MatchString(s) }
 
-// agoraCommand matches the commands of Agora's own hooks, whatever the binary's path, its
-// quoting and leading environment assignments.
-var agoraCommand = regexp.MustCompile(`(^|[\s/'"])agora['"]?\s+hook\s+claude-code(-wait)?\s*$`)
-
-// isAgoraHook reports whether a hook command is one of Agora's Claude Code hooks: a binary
-// named agora, or bin (the binary installing them, whatever its name), running a hook.
-func isAgoraHook(command, bin string) bool {
-	if agoraCommand.MatchString(command) {
-		return true
-	}
-	c := strings.TrimSpace(command)
-	return strings.HasSuffix(c, shellQuote(bin)+" hook claude-code") || strings.HasSuffix(c, shellQuote(bin)+" hook claude-code-wait")
-}
-
 type hookEntry struct {
 	Type        string `json:"type"`
 	Command     string `json:"command"`
@@ -80,7 +66,7 @@ type eventGroup struct {
 func claudeCodeHooks(bin, terminalEnv string) []eventGroup {
 	hook := shellQuote(bin) + " hook claude-code"
 	if terminalEnv != "" {
-		hook = `AGORA_TERMINAL="$` + terminalEnv + `" ` + hook
+		hook = `AGORA_TERMINAL="${` + terminalEnv + `:-$AGORA_TERMINAL}" ` + hook
 	}
 	plain := hookGroup{Hooks: []hookEntry{{Type: "command", Command: hook}}}
 	return []eventGroup{
@@ -103,23 +89,22 @@ func InstallClaudeCode(path, bin, terminalEnv string, now time.Time) (Change, er
 	if terminalEnv != "" && !ValidEnvName(terminalEnv) {
 		return Change{}, fmt.Errorf("--terminal-env %q: give the name of an environment variable, like TERM_HANDLE", terminalEnv)
 	}
-	return editSettings(path, now, func(hooks *object) error {
-		removeAgoraHooks(hooks, bin)
+	return editSettings(path, now, func(hooks *object) ([]string, error) {
+		foreign := removeAgoraHooks(hooks, bin)
 		for _, eg := range claudeCodeHooks(bin, terminalEnv) {
 			if err := appendGroup(hooks, eg.event, eg.group); err != nil {
-				return err
+				return nil, err
 			}
 		}
-		return nil
+		return foreign, nil
 	})
 }
 
 // UninstallClaudeCode removes every Agora hook entry from the settings file at path, including
 // those that run bin.
 func UninstallClaudeCode(path, bin string, now time.Time) (Change, error) {
-	ch, err := editSettings(path, now, func(hooks *object) error {
-		removeAgoraHooks(hooks, bin)
-		return nil
+	ch, err := editSettings(path, now, func(hooks *object) ([]string, error) {
+		return removeAgoraHooks(hooks, bin), nil
 	})
 	switch ch.Outcome {
 	case Unchanged:
@@ -130,23 +115,44 @@ func UninstallClaudeCode(path, bin string, now time.Time) (Change, error) {
 	return ch, err
 }
 
+// beforeWrite, when set by tests, runs just before the file is checked for changes.
+var beforeWrite func()
+
+// errChanged reports that the settings file changed between reading and writing it.
+var errChanged = errors.New("settings changed while editing; run again")
+
 // editSettings reads the settings at path, lets edit change its hooks object, and writes the
-// result, with a backup, when it differs from what is there.
-func editSettings(path string, now time.Time, edit func(hooks *object) error) (Change, error) {
+// result, with a backup, when it differs from what is there. When the file changes while it
+// is being edited, it starts over once.
+func editSettings(path string, now time.Time, edit func(hooks *object) ([]string, error)) (Change, error) {
 	real, err := resolve(path)
 	if err != nil {
 		return Change{}, err
 	}
+	ch, err := editOnce(path, real, now, edit)
+	if errors.Is(err, errChanged) {
+		ch, err = editOnce(path, real, now, edit)
+	}
+	return ch, err
+}
+
+func editOnce(path, real string, now time.Time, edit func(hooks *object) ([]string, error)) (Change, error) {
 	old, mode, exists, err := readIfExists(real)
 	if err != nil {
 		return Change{}, err
 	}
 	fail := func(err error) (Change, error) { return Change{}, fmt.Errorf("%s: %w", path, err) }
+	if exists && mode&0o200 == 0 {
+		return fail(errors.New("the file is read-only; make it writable or edit it by hand"))
+	}
 	settings := object{}
 	if exists && len(bytes.TrimSpace(old)) > 0 {
 		if settings, err = parseObject(old); err != nil {
 			return fail(err)
 		}
+	}
+	if settings.count("hooks") > 1 {
+		return fail(errors.New(`more than one "hooks" key; merge them first`))
 	}
 	hooks := object{}
 	if raw, ok := settings.get("hooks"); ok {
@@ -154,8 +160,14 @@ func editSettings(path string, now time.Time, edit func(hooks *object) error) (C
 			return fail(fmt.Errorf("hooks: %w", err))
 		}
 	}
+	for _, m := range hooks {
+		if hooks.count(m.key) > 1 {
+			return fail(fmt.Errorf("hooks: more than one %q key; merge them first", m.key))
+		}
+	}
 	before := len(hooks)
-	if err := edit(&hooks); err != nil {
+	foreign, err := edit(&hooks)
+	if err != nil {
 		return fail(err)
 	}
 	if len(hooks) == 0 && before > 0 {
@@ -168,9 +180,20 @@ func editSettings(path string, now time.Time, edit func(hooks *object) error) (C
 		return fail(err)
 	}
 	if exists && sameJSON(old, out) || !exists && len(hooks) == 0 {
-		return Change{Outcome: Unchanged}, nil
+		return Change{Outcome: Unchanged, Foreign: foreign}, nil
 	}
-	ch := Change{Outcome: Created}
+	// Claude Code or another tool may have written the file meanwhile; never overwrite that.
+	if beforeWrite != nil {
+		beforeWrite()
+	}
+	cur, _, stillExists, err := readIfExists(real)
+	if err != nil {
+		return Change{}, err
+	}
+	if stillExists != exists || !bytes.Equal(cur, old) {
+		return fail(errChanged)
+	}
+	ch := Change{Outcome: Created, Foreign: foreign}
 	if exists {
 		ch.Outcome = Updated
 		if ch.Backup, err = backup(real, old, mode, now); err != nil {
@@ -186,8 +209,9 @@ func editSettings(path string, now time.Time, edit func(hooks *object) error) (C
 }
 
 // removeAgoraHooks takes Agora's hook entries out of every event, dropping groups and events
-// that are left empty. Values it does not understand are kept as they are.
-func removeAgoraHooks(hooks *object, bin string) {
+// that are left empty, and returns the commands that look like Agora's hooks but are not
+// recognised as its own, which stay. Values it does not understand are kept as they are.
+func removeAgoraHooks(hooks *object, bin string) (foreign []string) {
 	for i := 0; i < len(*hooks); i++ {
 		m := (*hooks)[i]
 		var groups []json.RawMessage
@@ -216,6 +240,9 @@ func removeAgoraHooks(hooks *object, bin string) {
 				if json.Unmarshal(e, &h) == nil && isAgoraHook(h.Command, bin) {
 					continue
 				}
+				if looksLikeAgoraHook(h.Command) {
+					foreign = append(foreign, h.Command)
+				}
 				keptEntries = append(keptEntries, e)
 			}
 			switch {
@@ -239,6 +266,7 @@ func removeAgoraHooks(hooks *object, bin string) {
 		}
 		(*hooks)[i].value = marshalArray(kept)
 	}
+	return foreign
 }
 
 // appendGroup adds group at the end of event's list, creating the list when needed.
@@ -318,6 +346,16 @@ func (o object) get(key string) (json.RawMessage, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (o object) count(key string) int {
+	n := 0
+	for _, m := range o {
+		if m.key == key {
+			n++
+		}
+	}
+	return n
 }
 
 func (o *object) set(key string, value json.RawMessage) {

@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -32,6 +33,57 @@ func isolate(t *testing.T) string {
 	return home
 }
 
+// fakeBin is an executable file named agora to pass with --bin.
+func fakeBin(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "bin", "agora")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestTemporaryBinaryIsRefused(t *testing.T) {
+	home := isolate(t)
+	t.Setenv("PATH", t.TempDir())
+	r := run("install", "claude-code")
+	if r.code == 0 || !strings.Contains(r.stderr, "--bin") {
+		t.Fatalf("test binary accepted: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude")); !os.IsNotExist(err) {
+		t.Fatalf("wrote files: %v", err)
+	}
+	if r := run("install", "claude-code", "--bin", filepath.Join(home, "nothing")); r.code == 0 {
+		t.Fatalf("missing --bin accepted: %+v", r)
+	}
+}
+
+func TestBinaryOnPathIsPreferred(t *testing.T) {
+	home := isolate(t)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, "bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(exe, filepath.Join(dir, "agora")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if r := run("install", "claude-code"); r.code != 0 {
+		t.Fatalf("install: %+v", r)
+	}
+	b, _ := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if !strings.Contains(string(b), `"`+filepath.Join(dir, "agora")+` hook claude-code"`) {
+		t.Fatalf("hooks do not use the PATH location:\n%s", b)
+	}
+}
+
 func TestInstallListsTargets(t *testing.T) {
 	for _, cmd := range []string{"install", "uninstall"} {
 		r := run(cmd)
@@ -51,12 +103,9 @@ func TestInstallListsTargets(t *testing.T) {
 
 func TestInstallClaudeCodeCommand(t *testing.T) {
 	home := isolate(t)
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
+	exe := fakeBin(t)
 	settings := filepath.Join(home, ".claude", "settings.json")
-	r := run("install", "claude-code")
+	r := run("install", "claude-code", "--bin", exe)
 	if r.code != 0 || !strings.Contains(r.stdout, settings) {
 		t.Fatalf("install: %+v", r)
 	}
@@ -64,20 +113,20 @@ func TestInstallClaudeCodeCommand(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), exe+" hook claude-code") {
 		t.Fatalf("settings: %v\n%s", err, b)
 	}
-	if r := run("install", "claude-code"); r.code != 0 || !strings.Contains(r.stdout, "already installed") {
+	if r := run("install", "claude-code", "--bin", exe); r.code != 0 || !strings.Contains(r.stdout, "already installed") {
 		t.Fatalf("second install: %+v", r)
 	}
-	if r := run("install", "claude-code", "--terminal-env", "1BAD;rm"); r.code == 0 {
+	if r := run("install", "claude-code", "--bin", exe, "--terminal-env", "1BAD;rm"); r.code == 0 {
 		t.Fatalf("invalid --terminal-env accepted: %+v", r)
 	}
 	if after, _ := os.ReadFile(settings); string(after) != string(b) {
 		t.Fatal("refused install changed the settings")
 	}
-	r = run("install", "claude-code", "--terminal-env", "TERM_HANDLE")
+	r = run("install", "claude-code", "--bin", exe, "--terminal-env", "TERM_HANDLE")
 	if r.code != 0 || !strings.Contains(r.stdout, "backup") {
 		t.Fatalf("terminal-env install: %+v", r)
 	}
-	if b, _ := os.ReadFile(settings); !strings.Contains(string(b), `AGORA_TERMINAL=\"$TERM_HANDLE\" `+exe+" hook claude-code") {
+	if b, _ := os.ReadFile(settings); !strings.Contains(string(b), `AGORA_TERMINAL=\"${TERM_HANDLE:-$AGORA_TERMINAL}\" `+exe+" hook claude-code") {
 		t.Fatalf("terminal env not in hooks:\n%s", b)
 	}
 	if r := run("uninstall", "claude-code"); r.code != 0 || !strings.Contains(r.stdout, "removed") {
@@ -92,14 +141,15 @@ func TestInstallClaudeCodeFollowsConfigDir(t *testing.T) {
 	isolate(t)
 	dir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)
-	if r := run("install", "claude-code"); r.code != 0 {
+	bin := fakeBin(t)
+	if r := run("install", "claude-code", "--bin", bin); r.code != 0 {
 		t.Fatalf("install: %+v", r)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "settings.json")); err != nil {
 		t.Fatal(err)
 	}
 	other := filepath.Join(t.TempDir(), "s.json")
-	if r := run("install", "claude-code", "--settings", other); r.code != 0 {
+	if r := run("install", "claude-code", "--bin", bin, "--settings", other); r.code != 0 {
 		t.Fatalf("install --settings: %+v", r)
 	}
 	if _, err := os.Stat(other); err != nil {
@@ -115,10 +165,10 @@ func TestInstallService(t *testing.T) {
 		calls = append(calls, strings.Join(args, " "))
 		return nil, nil
 	})()
-	exe, _ := os.Executable()
+	exe := fakeBin(t)
 	unit := filepath.Join(home, ".config", "systemd", "user", "agora-hub.service")
 
-	r := run("install", "service")
+	r := run("install", "service", "--bin", exe)
 	if r.code != 0 || !strings.Contains(r.stdout, unit) ||
 		!strings.Contains(r.stdout, "systemctl --user daemon-reload && systemctl --user enable --now agora-hub") || len(calls) != 0 {
 		t.Fatalf("install: %+v, calls %q", r, calls)
@@ -129,11 +179,11 @@ func TestInstallService(t *testing.T) {
 	}
 
 	t.Setenv("AGORA_WAKE_COMMAND", `notify "$AGORA_TERMINAL"`)
-	r = run("install", "service", "--db", "/srv/agora/agora.db", "--now")
+	r = run("install", "service", "--bin", exe, "--db", "/srv/agora/agora.db", "--now")
 	if r.code != 0 {
 		t.Fatalf("install --now: %+v", r)
 	}
-	if want := []string{"daemon-reload", "enable --now agora-hub", "restart agora-hub"}; !reflect.DeepEqual(calls, want) {
+	if want := []string{"show-environment", "daemon-reload", "enable --now agora-hub", "restart agora-hub"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("systemctl calls %q, want %q", calls, want)
 	}
 	b, _ = os.ReadFile(unit)
@@ -145,17 +195,34 @@ func TestInstallService(t *testing.T) {
 	if r := run("uninstall", "service", "--now"); r.code != 0 {
 		t.Fatalf("uninstall --now: %+v", r)
 	}
-	if want := []string{"disable --now agora-hub", "daemon-reload"}; !reflect.DeepEqual(calls, want) {
+	if want := []string{"show-environment", "disable --now agora-hub", "show-environment", "daemon-reload"}; !reflect.DeepEqual(calls, want) {
 		t.Fatalf("systemctl calls %q, want %q", calls, want)
 	}
 	if _, err := os.Stat(unit); !os.IsNotExist(err) {
 		t.Fatalf("unit left: %v", err)
 	}
-	run("install", "service")
+	run("install", "service", "--bin", exe)
 	calls = nil
 	r = run("uninstall", "service")
 	if r.code != 0 || !strings.Contains(r.stdout, "systemctl --user stop agora-hub && systemctl --user daemon-reload") || len(calls) != 0 {
 		t.Fatalf("uninstall: %+v, calls %q", r, calls)
+	}
+}
+
+func TestNowNeedsTheUserManager(t *testing.T) {
+	home := isolate(t)
+	defer cli.SetGOOS("linux")()
+	var calls []string
+	defer cli.SetSystemctl(func(_ context.Context, args ...string) ([]byte, error) {
+		calls = append(calls, strings.Join(args, " "))
+		return []byte("Failed to connect to bus"), errors.New("exit status 1")
+	})()
+	r := run("install", "service", "--bin", fakeBin(t), "--now")
+	if r.code == 0 || !strings.Contains(r.stderr, "user manager is not reachable") || !reflect.DeepEqual(calls, []string{"show-environment"}) {
+		t.Fatalf("install --now without a manager: %+v, calls %q", r, calls)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "systemd", "user", "agora-hub.service")); err != nil {
+		t.Fatalf("unit not written: %v", err)
 	}
 }
 

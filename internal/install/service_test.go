@@ -11,6 +11,9 @@ import (
 
 func TestPlainUnit(t *testing.T) {
 	unit := install.Unit([]string{bin, "hub"})
+	if !strings.HasPrefix(unit, install.UnitHeader+"\n") {
+		t.Errorf("unit lacks the header:\n%s", unit)
+	}
 	for _, line := range []string{
 		"[Service]",
 		"ExecStart=" + bin + " hub\n",
@@ -68,5 +71,41 @@ func TestServiceInstallAndUninstall(t *testing.T) {
 	}
 	if o, err := install.UninstallService(dir); err != nil || o != install.Absent {
 		t.Fatalf("second uninstall: %v %v", o, err)
+	}
+}
+
+func TestForeignUnitIsLeftAlone(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, install.ServiceName+".service")
+	mine := "[Service]\nExecStart=/usr/bin/true\n"
+	if err := os.WriteFile(path, []byte(mine), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := install.InstallService(dir, install.Unit([]string{bin, "hub"})); err == nil {
+		t.Error("overwrote a unit Agora did not write")
+	}
+	if _, err := install.UninstallService(dir); err == nil {
+		t.Error("removed a unit Agora did not write")
+	}
+	if b, _ := os.ReadFile(path); string(b) != mine {
+		t.Fatalf("unit changed: %s", b)
+	}
+}
+
+func TestDanglingWantsLinkIsRemoved(t *testing.T) {
+	dir := t.TempDir()
+	wants := filepath.Join(dir, "default.target.wants")
+	if err := os.MkdirAll(wants, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(wants, install.ServiceName+".service")
+	if err := os.Symlink(filepath.Join(dir, install.ServiceName+".service"), link); err != nil {
+		t.Fatal(err)
+	}
+	if o, err := install.UninstallService(dir); err != nil || o != install.Removed {
+		t.Fatalf("uninstall: %v %v", o, err)
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Fatalf("link left: %v", err)
 	}
 }

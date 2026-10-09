@@ -2,6 +2,7 @@ package install_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -210,7 +211,7 @@ func TestTerminalEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := readJSON(t, path)
-	hooked := `AGORA_TERMINAL="$TERM_HANDLE" ` + bin + " hook claude-code"
+	hooked := `AGORA_TERMINAL="${TERM_HANDLE:-$AGORA_TERMINAL}" ` + bin + " hook claude-code"
 	if got := commands(t, s, "Stop"); !reflect.DeepEqual(got, []string{hooked, bin + " hook claude-code-wait async"}) {
 		t.Errorf("Stop: %q", got)
 	}
@@ -337,5 +338,104 @@ func TestSymlinkedSettingsStayALink(t *testing.T) {
 	}
 	if fi, _ := os.Stat(real); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode changed to %v", fi.Mode().Perm())
+	}
+}
+
+func TestOnlyPlainAgoraCommandsAreRecognised(t *testing.T) {
+	foreignCmds := []string{
+		"notify-send done; agora hook claude-code",
+		"echo agora hook claude-code",
+		"agora hook claude-code 2>/dev/null",
+		"agora hook claude-code --debug",
+		"agora hook claude-code && notify-send x",
+		"agora hook claude-code | tee log",
+		"$(agora) hook claude-code",
+	}
+	ours := []string{
+		"agora hook claude-code",
+		"$HOME/.local/bin/agora hook claude-code",
+		`AGORA_TERMINAL="$X" '/old place/agora' hook claude-code-wait`,
+		`A=1 B="x y" /usr/local/bin/agora   hook claude-code`,
+		"/opt/agora/bin/agora-renamed hook claude-code", // the installing binary, whatever its name
+	}
+	var groups []string
+	for _, c := range append(append([]string{}, foreignCmds...), ours...) {
+		b, _ := json.Marshal(c)
+		groups = append(groups, `{"hooks": [{"type": "command", "command": `+string(b)+`}]}`)
+	}
+	path := filepath.Join(t.TempDir(), "settings.json")
+	write(t, path, `{"hooks": {"Notification": [`+strings.Join(groups, ",")+`]}}`)
+	ch, err := install.UninstallClaudeCode(path, "/opt/agora/bin/agora-renamed", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := commands(t, readJSON(t, path), "Notification"); !reflect.DeepEqual(got, foreignCmds) {
+		t.Errorf("kept %q, want %q", got, foreignCmds)
+	}
+	if !reflect.DeepEqual(ch.Foreign, foreignCmds) {
+		t.Errorf("warned about %q, want %q", ch.Foreign, foreignCmds)
+	}
+}
+
+func TestDanglingSymlinkIsFollowed(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../dotfiles/claude/settings.json", link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := install.InstallClaudeCode(link, bin, "", now); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link replaced: %v", err)
+	}
+	if got := commands(t, readJSON(t, filepath.Join(dir, "dotfiles", "claude", "settings.json")), "SessionEnd"); len(got) != 1 {
+		t.Fatalf("target not written: %q", got)
+	}
+}
+
+func TestConcurrentChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	write(t, path, `{"model": "opus"}`)
+	n := 0
+	defer install.BeforeWrite(func() {
+		n++
+		if n == 1 {
+			write(t, path, `{"model": "opus", "theme": "dark"}`)
+		}
+	})()
+	if _, err := install.InstallClaudeCode(path, bin, "", now); err != nil {
+		t.Fatal(err)
+	}
+	s := readJSON(t, path)
+	if s["theme"] != "dark" || len(commands(t, s, "Stop")) != 2 {
+		t.Fatalf("change made meanwhile lost or hooks missing: %v", s)
+	}
+
+	write(t, path, `{"model": "opus"}`)
+	defer install.BeforeWrite(func() { write(t, path, fmt.Sprintf(`{"n": %d}`, time.Now().UnixNano())) })()
+	if _, err := install.InstallClaudeCode(path, bin, "", now); err == nil || !strings.Contains(err.Error(), "changed while editing") {
+		t.Fatalf("error: %v", err)
+	}
+}
+
+func TestReadOnlyAndDuplicateKeysAreRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	write(t, path, `{"model": "opus"}`)
+	if err := os.Chmod(path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := install.InstallClaudeCode(path, bin, "", now); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Errorf("read-only file: %v", err)
+	}
+	for _, content := range []string{`{"hooks": {}, "hooks": {}}`, `{"hooks": {"Stop": [], "Stop": []}}`} {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		write(t, path, content)
+		if _, err := install.InstallClaudeCode(path, bin, "", now); err == nil || !strings.Contains(err.Error(), "more than one") {
+			t.Errorf("%s: %v", content, err)
+		}
 	}
 }
