@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 476" role="img" aria-label="One main node runs the hub; optional nodes join it and share agents and dev workloads" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#59636e"/></marker></defs>
+          <g fill="none" stroke="#59636e" stroke-width="1.25">
+            <path d="M174 110H200" marker-end="url(#ar)"/>
+            <path d="M560 110H586" marker-end="url(#ar)"/>
+            <path d="M280 196V276" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <path d="M480 196V276" marker-start="url(#ar)" marker-end="url(#ar)"/>
+          </g>
+          <rect x="24" y="78" width="150" height="64" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="99" y="104" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">You</text>
+          <text x="99" y="124" text-anchor="middle" font-size="12.5" fill="#59636e">web app · CLI</text>
+          <rect x="586" y="78" width="150" height="64" rx="8" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="661" y="104" text-anchor="middle" font-size="14" font-weight="600" fill="#1f2328">GitHub</text>
+          <text x="661" y="124" text-anchor="middle" font-size="12.5" fill="#59636e">pull requests · CI</text>
+          <rect x="200" y="24" width="360" height="172" rx="10" fill="none" stroke="#0969da" stroke-width="2"/>
+          <text x="216" y="48" font-size="14" font-weight="600" fill="#1f2328">Main node · always on</text>
+          <rect x="216" y="60" width="328" height="56" rx="8" fill="#ddf4ff" stroke="#0969da"/>
+          <text x="380" y="83" text-anchor="middle" font-size="13.5" font-weight="600" fill="#1f2328">Agora hub</text>
+          <text x="380" y="103" text-anchor="middle" font-size="12" fill="#1f2328">rooms · mentions · locks · CI watch · build cache</text>
+          <rect x="216" y="124" width="172" height="56" rx="10" fill="#f6f8fa" stroke="#d1d9e0"/>
+          <text x="226" y="139" font-size="11" fill="#59636e" letter-spacing=".04em">agents</text>
+          <rect x="224" y="146" width="92" height="26" rx="13" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="270" y="163" text-anchor="middle" font-size="12" fill="#1f2328">Claude Code</text>
+          <rect x="322" y="146" width="58" height="26" rx="13" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="351" y="163" text-anchor="middle" font-size="12" fill="#1f2328">Codex</text>
+          <rect x="396" y="124" width="148" height="56" rx="10" fill="none" stroke="#59636e" stroke-dasharray="4 3"/>
+          <text x="470.0" y="148" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">workloads</text>
+          <text x="470.0" y="166" text-anchor="middle" font-size="11" fill="#59636e">builds, tests, jobs</text>
+          <text x="380" y="241" text-anchor="middle" font-size="12" fill="#59636e">messages · jobs · logs</text>
+          <rect x="30" y="276" width="340" height="124" rx="10" fill="none" stroke="#d1d9e0"/>
+          <text x="46" y="300" font-size="14" font-weight="600" fill="#1f2328">Node B · laptop</text>
+          <text x="46" y="318" font-size="12" fill="#59636e">optional · joins when connected</text>
+          <rect x="46" y="328" width="172" height="56" rx="10" fill="#f6f8fa" stroke="#d1d9e0"/>
+          <text x="56" y="343" font-size="11" fill="#59636e" letter-spacing=".04em">agents</text>
+          <rect x="54" y="350" width="92" height="26" rx="13" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="100" y="367" text-anchor="middle" font-size="12" fill="#1f2328">Claude Code</text>
+          <rect x="152" y="350" width="58" height="26" rx="13" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="181" y="367" text-anchor="middle" font-size="12" fill="#1f2328">Codex</text>
+          <rect x="226" y="328" width="128" height="56" rx="10" fill="none" stroke="#59636e" stroke-dasharray="4 3"/>
+          <text x="290.0" y="352" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">workloads</text>
+          <text x="290.0" y="370" text-anchor="middle" font-size="11" fill="#59636e">builds, tests, jobs</text>
+          <rect x="390" y="276" width="340" height="124" rx="10" fill="none" stroke="#d1d9e0"/>
+          <text x="406" y="300" font-size="14" font-weight="600" fill="#1f2328">Node C · spare machine</text>
+          <text x="406" y="318" font-size="12" fill="#59636e">optional · joins when connected</text>
+          <rect x="406" y="328" width="172" height="56" rx="10" fill="#f6f8fa" stroke="#d1d9e0"/>
+          <text x="416" y="343" font-size="11" fill="#59636e" letter-spacing=".04em">agents</text>
+          <rect x="414" y="350" width="92" height="26" rx="13" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="460" y="367" text-anchor="middle" font-size="12" fill="#1f2328">Claude Code</text>
+          <rect x="512" y="350" width="58" height="26" rx="13" fill="#ffffff" stroke="#d1d9e0"/>
+          <text x="541" y="367" text-anchor="middle" font-size="12" fill="#1f2328">Codex</text>
+          <rect x="586" y="328" width="128" height="56" rx="10" fill="none" stroke="#59636e" stroke-dasharray="4 3"/>
+          <text x="650.0" y="352" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1f2328">workloads</text>
+          <text x="650.0" y="370" text-anchor="middle" font-size="11" fill="#59636e">builds, tests, jobs</text>
+          <text x="380" y="436" text-anchor="middle" font-size="12.5" fill="#59636e">Agents are the coding CLIs you already use, on any node, in the same rooms.</text>
+          <text x="380" y="456" text-anchor="middle" font-size="12.5" fill="#59636e">Workloads (dashed) run on whichever node has room, or locally if none is free.</text>
+        </svg>
