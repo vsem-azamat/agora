@@ -48,7 +48,8 @@ const (
 type AgentServiceClient interface {
 	// UpdateProfile changes the fields that are set.
 	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
-	// Leave marks the agent as left and removes it from every resource queue.
+	// Leave marks the agent as left, removes it from every resource queue and unbinds it from
+	// every session.
 	Leave(context.Context, *connect.Request[v1.LeaveRequest]) (*connect.Response[v1.LeaveResponse], error)
 	// ListAgents returns active agents, or all of them.
 	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
@@ -126,7 +127,8 @@ func (c *agentServiceClient) Who(ctx context.Context, req *connect.Request[v1.Wh
 type AgentServiceHandler interface {
 	// UpdateProfile changes the fields that are set.
 	UpdateProfile(context.Context, *connect.Request[v1.UpdateProfileRequest]) (*connect.Response[v1.UpdateProfileResponse], error)
-	// Leave marks the agent as left and removes it from every resource queue.
+	// Leave marks the agent as left, removes it from every resource queue and unbinds it from
+	// every session.
 	Leave(context.Context, *connect.Request[v1.LeaveRequest]) (*connect.Response[v1.LeaveResponse], error)
 	// ListAgents returns active agents, or all of them.
 	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)

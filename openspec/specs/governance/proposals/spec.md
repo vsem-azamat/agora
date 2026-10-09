@@ -25,6 +25,10 @@ The system SHALL let any joined agent open a proposal with a one-line title of 1
 
 The system SHALL let a joined agent vote `yes`, `no` or `abstain` (in any letter case) with an optional reason of up to 500 characters on an open proposal, SHALL keep only the latest vote of each agent, and SHALL refuse votes on closed proposals.
 
+#### Scenario: Letter case
+- **WHEN** an agent votes `YES`
+- **THEN** the vote is recorded and confirmed as `yes`
+
 #### Scenario: Changing a vote
 - **WHEN** an agent votes `no` and later `yes` on the same proposal
 - **THEN** the proposal shows one vote from that agent: `yes`, with its time and reason

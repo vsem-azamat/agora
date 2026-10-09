@@ -19,6 +19,8 @@ const (
 	ClaimWindow = 2 * time.Minute
 	// MaxMissedTurns is how many turns an agent may miss before it leaves the queue.
 	MaxMissedTurns = 2
+	// MinLease is the shortest lease an agent may ask for.
+	MinLease = time.Second
 	// MaxLease is the longest lease an agent may ask for.
 	MaxLease = 7 * 24 * time.Hour
 	// MaxSlots is the largest number of slots a resource may have.
@@ -116,10 +118,11 @@ func checkAgent(agent string) error {
 }
 
 // Join puts agent in the queue of key, granting a slot at once when one is free and nobody
-// waits. Joining again keeps the agent's place and updates its note. With noWait (a lock), the
+// waits. Joining again keeps the agent's place and updates its note; a nonzero lease becomes the
+// entry's lease duration, and a held slot then lasts lease from now. With noWait (a lock), the
 // agent ends up holding a slot or the request is refused and the returned entry is nil: a
 // holder's lease is renewed for lease, and an agent that only waits or is offered is refused.
-// A zero lease means DefaultLease.
+// A zero lease means DefaultLease for a new entry or a lock.
 func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Duration, noWait bool) (*Entry, Resource, error) {
 	if err := checkKey(key); err != nil {
 		return nil, Resource{}, err
@@ -127,11 +130,12 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 	if err := checkAgent(agent); err != nil {
 		return nil, Resource{}, err
 	}
-	if lease == 0 {
+	given := lease != 0
+	if !given {
 		lease = DefaultLease
 	}
-	if lease < 0 || lease > MaxLease {
-		return nil, Resource{}, fmt.Errorf("%w: lease must be between 1s and %s", ErrInvalid, MaxLease)
+	if lease < MinLease || lease > MaxLease {
+		return nil, Resource{}, fmt.Errorf("%w: lease must be between %s and %s", ErrInvalid, MinLease, MaxLease)
 	}
 	var res Resource
 	var joined bool
@@ -152,10 +156,15 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 				return nil
 			}
 			var err error
-			if noWait {
+			switch {
+			case noWait:
 				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ?, lease_ms = ?, expires_at = ? WHERE key = ? AND agent = ?`,
 					note, lease.Milliseconds(), ms(now.Add(lease)), key, agent)
-			} else {
+			case given:
+				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ?, lease_ms = ?,
+					expires_at = CASE WHEN state = 'held' THEN ? ELSE expires_at END WHERE key = ? AND agent = ?`,
+					note, lease.Milliseconds(), ms(now.Add(lease)), key, agent)
+			default:
 				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ? WHERE key = ? AND agent = ?`, note, key, agent)
 			}
 			if err != nil {

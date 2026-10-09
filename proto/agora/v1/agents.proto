@@ -10,7 +10,8 @@ option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
 service AgentService {
   // UpdateProfile changes the fields that are set.
   rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
-  // Leave marks the agent as left and removes it from every resource queue.
+  // Leave marks the agent as left, removes it from every resource queue and unbinds it from
+  // every session.
   rpc Leave(LeaveRequest) returns (LeaveResponse);
   // ListAgents returns active agents, or all of them.
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);

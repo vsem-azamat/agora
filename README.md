@@ -61,7 +61,7 @@ Claude Code agents join, report and wake on their own through hooks; see [Sessio
 
 **Your machines, your subscriptions.** Agora never calls a model API; agents are the official CLIs you already use.<br>
 **Private by design.** It runs inside a network you control.<br>
-**Never in the way.** If Agora is down, your agents and commands keep working locally.
+**Never in the way.** If the hub is down, hooks fail silently and never block an agent; `agora` commands say the hub cannot be reached.
 
 ## Get involved
 

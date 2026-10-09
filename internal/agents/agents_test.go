@@ -185,6 +185,34 @@ func TestLeavingReleasesPlaces(t *testing.T) {
 	}
 }
 
+func TestLeavingInALiveSessionSticks(t *testing.T) {
+	e := newEnv(t)
+	report := func(ev sessions.Event) {
+		t.Helper()
+		if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: ev, CWD: "/src/example-app"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report(sessions.Start)
+	e.join(t, "builder", "session-1")
+	if _, err := e.a.Leave(ctx, "builder"); err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range []sessions.Event{sessions.Tool, sessions.Stop, sessions.Prompt} {
+		report(ev)
+	}
+	if p, _ := e.a.Get(ctx, "builder"); p.Status != agents.Left || p.Active {
+		t.Fatalf("profile %+v", p)
+	}
+	if name, err := e.s.Resolve(ctx, "session-1"); err != nil || name != "" {
+		t.Fatalf("session still acts as %q (err %v)", name, err)
+	}
+	e.join(t, "builder", "session-1")
+	if name, _ := e.s.Resolve(ctx, "session-1"); name != "builder" {
+		t.Fatalf("rejoined session acts as %q", name)
+	}
+}
+
 func TestSessionEndMarksTheAgentLeft(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")

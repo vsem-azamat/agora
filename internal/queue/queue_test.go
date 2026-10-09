@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -167,6 +168,45 @@ func TestJoiningTwiceKeepsPlaceAndUpdatesNote(t *testing.T) {
 	}
 	if e.Position != 2 || e.Note != "new note" {
 		t.Fatalf("got position %d note %q", e.Position, e.Note)
+	}
+}
+
+func TestJoiningAgainWithANewLeaseRestartsAHeldSlot(t *testing.T) {
+	q, c := newQueue(t)
+	join(t, q, "r", "a") // 10-minute lease
+	c.add(5 * time.Minute)
+	e, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false)
+	if err != nil || e.Lease != 2*time.Hour || !e.Expires.Equal(c.now().Add(2*time.Hour)) {
+		t.Fatalf("entry %+v, err %v", e, err)
+	}
+	c.add(time.Hour)
+	if e, err = q.Renew(ctx, "r", "a"); err != nil || !e.Expires.Equal(c.now().Add(2*time.Hour)) {
+		t.Fatalf("renewed %+v, err %v", e, err)
+	}
+}
+
+func TestWaitingAgentJoiningAgainWithANewLeaseHoldsForIt(t *testing.T) {
+	q, c := newQueue(t)
+	join(t, q, "r", "holder")
+	join(t, q, "r", "a")
+	if _, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	q.Release(ctx, "r", "holder", "holder", false)
+	e, err := q.Claim(ctx, "r", "a")
+	if err != nil || e.State != queue.Held || !e.Expires.Equal(c.now().Add(2*time.Hour)) {
+		t.Fatalf("entry %+v, err %v", e, err)
+	}
+}
+
+func TestJoiningAgainWithoutALeaseKeepsIt(t *testing.T) {
+	q, c := newQueue(t)
+	q.Join(ctx, "r", "a", "", 2*time.Hour, false)
+	end := c.now().Add(2 * time.Hour)
+	c.add(time.Minute)
+	e, _, err := q.Join(ctx, "r", "a", "note", 0, false)
+	if err != nil || e.Lease != 2*time.Hour || !e.Expires.Equal(end) || e.Note != "note" {
+		t.Fatalf("entry %+v, err %v", e, err)
 	}
 }
 
@@ -447,9 +487,12 @@ func TestLockingAgainRenewsTheLease(t *testing.T) {
 
 func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
 	q, _ := newQueue(t)
-	for _, lease := range []time.Duration{-time.Minute, queue.MaxLease + time.Second} {
-		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, queue.ErrInvalid) {
+	for _, lease := range []time.Duration{-time.Minute, time.Millisecond, time.Second - time.Millisecond, queue.MaxLease + time.Second} {
+		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, queue.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
 			t.Errorf("lease %v: err = %v", lease, err)
+		}
+		if _, _, err := q.Join(ctx, "r", "a", "", lease, true); !errors.Is(err, queue.ErrInvalid) {
+			t.Errorf("lock for %v: err = %v", lease, err)
 		}
 	}
 	for _, n := range []int{0, queue.MaxSlots + 1} {
