@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -21,11 +22,17 @@ type GitHub struct {
 
 const prFields = `fragment pr on PullRequest {
   number headRefName headRefOid isCrossRepository state isDraft mergeable
-  commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
-    __typename
-    ... on CheckRun { name status conclusion }
-    ... on StatusContext { context state }
-  } } } } } }
+  commits(last: 1) { nodes { commit {
+    statusCheckRollup { contexts(first: 100) {
+      nodes {
+        __typename
+        ... on CheckRun { name status conclusion }
+        ... on StatusContext { context state }
+      }
+      pageInfo { hasNextPage }
+    } }
+    checkSuites(first: 50) { nodes { status workflowRun { id } } }
+  } } }
 }`
 
 // Lookup asks for the default branch, the open pull requests from each branch and each pull
@@ -46,7 +53,7 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 		seenBranch[b] = true
 		k := "b" + strconv.Itoa(len(seenBranch)-1)
 		vars = append(vars, "$"+k+": String!")
-		fields = append(fields, k+": pullRequests(headRefName: $"+k+", states: OPEN, first: 20) { nodes { ...pr } }")
+		fields = append(fields, k+": pullRequests(headRefName: $"+k+", states: OPEN, first: 5) { nodes { ...pr } }")
 		args = append(args, "-f", k+"="+b)
 	}
 	seenNumber := map[int]bool{}
@@ -74,20 +81,32 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 			Repository map[string]json.RawMessage `json:"repository"`
 		} `json:"data"`
 		Errors []struct {
+			Type    string `json:"type"`
+			Path    []any  `json:"path"`
 			Message string `json:"message"`
 		} `json:"errors"`
 	}
-	if err := json.Unmarshal(out, &resp); err != nil || resp.Data.Repository == nil {
-		// A pull request number that does not exist makes gh fail but still returns the rest;
-		// without the repository there is nothing to use.
-		msgs := []string{}
-		for _, e := range resp.Errors {
-			msgs = append(msgs, e.Message)
+	err := json.Unmarshal(out, &resp)
+	// A pull request number that does not exist makes gh fail but still prints the rest of the
+	// reply. That reply is used only when every error is such a missing pull request.
+	missing := map[string]bool{}
+	usable := err == nil && resp.Data.Repository != nil
+	var msgs []string
+	for _, e := range resp.Errors {
+		msgs = append(msgs, e.Message)
+		if e.Type == "NOT_FOUND" && len(e.Path) == 2 && e.Path[0] == "repository" {
+			if alias, ok := e.Path[1].(string); ok && strings.HasPrefix(alias, "n") {
+				missing[alias] = true
+				continue
+			}
 		}
-		if runErr == nil && err != nil {
-			runErr = err
+		usable = false
+	}
+	if !usable {
+		if err == nil {
+			err = errors.New("no usable reply")
 		}
-		return Result{}, fmt.Errorf("gh: %s: %w", strings.Join(msgs, "; "), errors.Join(runErr, errors.New("no repository in the reply")))
+		return Result{}, fmt.Errorf("gh: %s: %w", strings.Join(msgs, "; "), errors.Join(runErr, err))
 	}
 
 	var res Result
@@ -113,9 +132,20 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 			add(p)
 		}
 	}
-	for i := range len(seenNumber) {
+	numbers := make([]int, 0, len(seenNumber))
+	for _, n := range q.Numbers {
+		if seenNumber[n] && !slices.Contains(numbers, n) {
+			numbers = append(numbers, n)
+		}
+	}
+	for i, n := range numbers {
+		k := "n" + strconv.Itoa(i)
+		if missing[k] {
+			res.NotFound = append(res.NotFound, n)
+			continue
+		}
 		var p ghPR
-		json.Unmarshal(resp.Data.Repository["n"+strconv.Itoa(i)], &p)
+		json.Unmarshal(resp.Data.Repository[k], &p)
 		add(p)
 	}
 	return res, nil
@@ -142,8 +172,17 @@ type ghPR struct {
 							Context    string `json:"context"`
 							State      string `json:"state"`
 						} `json:"nodes"`
+						PageInfo struct {
+							HasNextPage bool `json:"hasNextPage"`
+						} `json:"pageInfo"`
 					} `json:"contexts"`
 				} `json:"statusCheckRollup"`
+				CheckSuites struct {
+					Nodes []struct {
+						Status      string           `json:"status"`
+						WorkflowRun *json.RawMessage `json:"workflowRun"`
+					} `json:"nodes"`
+				} `json:"checkSuites"`
 			} `json:"commit"`
 		} `json:"nodes"`
 	} `json:"commits"`
@@ -151,10 +190,26 @@ type ghPR struct {
 
 func (p ghPR) pr() PR {
 	out := PR{Number: p.Number, Branch: p.HeadRefName, Head: p.HeadRefOid, Fork: p.IsCrossRepository,
-		Open: p.State == "OPEN", Draft: p.IsDraft, Conflicts: p.Mergeable == "CONFLICTING"}
+		Open: p.State == "OPEN", Draft: p.IsDraft}
+	switch p.Mergeable {
+	case "MERGEABLE":
+		out.Merge = Mergeable
+	case "CONFLICTING":
+		out.Merge = Conflicting
+	}
 	for _, n := range p.Commits.Nodes {
+		// A workflow run that has not finished may not have reported its checks yet. Suites
+		// without a workflow run are apps that may never report, so they are ignored.
+		for _, s := range n.Commit.CheckSuites.Nodes {
+			if s.WorkflowRun != nil && string(*s.WorkflowRun) != "null" && s.Status != "COMPLETED" {
+				out.Incomplete = true
+			}
+		}
 		if n.Commit.StatusCheckRollup == nil {
 			continue
+		}
+		if n.Commit.StatusCheckRollup.Contexts.PageInfo.HasNextPage {
+			out.Incomplete = true
 		}
 		for _, c := range n.Commit.StatusCheckRollup.Contexts.Nodes {
 			if c.Typename == "StatusContext" {
@@ -179,7 +234,7 @@ func checkRunOutcome(status, conclusion string) Outcome {
 	case "CANCELLED", "STALE":
 		return Cancelled
 	}
-	return Unfinished
+	return Failed // finished with a conclusion Agora does not know
 }
 
 func statusOutcome(state string) Outcome {
@@ -195,7 +250,7 @@ func statusOutcome(state string) Outcome {
 // runGH runs gh, killing it if ctx ends.
 func runGH(ctx context.Context, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
-	cmd.Env = append(cmd.Environ(), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
+	cmd.Env = append(cmd.Environ(), "GH_PROMPT_DISABLED=1", "GH_NO_UPDATE_NOTIFIER=1", "NO_COLOR=1")
 	cmd.WaitDelay = time.Second
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

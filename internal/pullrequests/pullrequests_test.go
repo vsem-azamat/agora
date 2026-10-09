@@ -33,12 +33,13 @@ type fakeForge struct {
 	def     map[string]string // repository key -> default branch ("main" when unset)
 	prs     map[string][]forge.PR
 	fail    map[string]error
+	omit    map[int]bool // numbers left out of replies, as if the forge said nothing about them
 	calls   map[string]int
 	queries map[string]forge.Query
 }
 
 func newFake() *fakeForge {
-	return &fakeForge{def: map[string]string{}, prs: map[string][]forge.PR{}, fail: map[string]error{}, calls: map[string]int{}, queries: map[string]forge.Query{}}
+	return &fakeForge{def: map[string]string{}, prs: map[string][]forge.PR{}, fail: map[string]error{}, omit: map[int]bool{}, calls: map[string]int{}, queries: map[string]forge.Query{}}
 }
 
 func (f *fakeForge) Lookup(_ context.Context, repo forge.Repo, q forge.Query) (forge.Result, error) {
@@ -55,8 +56,16 @@ func (f *fakeForge) Lookup(_ context.Context, repo forge.Repo, q forge.Query) (f
 		res.DefaultBranch = "main"
 	}
 	for _, p := range f.prs[k] {
+		if f.omit[p.Number] {
+			continue
+		}
 		if (p.Open && slices.Contains(q.Branches, p.Branch)) || slices.Contains(q.Numbers, p.Number) {
 			res.PRs = append(res.PRs, p)
+		}
+	}
+	for _, n := range q.Numbers {
+		if !f.omit[n] && !slices.ContainsFunc(f.prs[k], func(p forge.PR) bool { return p.Number == n }) {
+			res.NotFound = append(res.NotFound, n)
 		}
 	}
 	return res, nil
@@ -182,7 +191,7 @@ func (e *env) board(t *testing.T) []string {
 }
 
 func green(n int, branch, head string) forge.PR {
-	return forge.PR{Number: n, Branch: branch, Head: head, Open: true, Checks: []forge.Check{{Name: "lint", Outcome: forge.Succeeded}, {Name: "test", Outcome: forge.Succeeded}}}
+	return forge.PR{Number: n, Branch: branch, Head: head, Open: true, Merge: forge.Mergeable, Checks: []forge.Check{{Name: "lint", Outcome: forge.Succeeded}, {Name: "test", Outcome: forge.Succeeded}}}
 }
 
 func TestPullRequestIsFoundFromTheAgentsBranch(t *testing.T) {
@@ -341,13 +350,21 @@ func TestCIMessages(t *testing.T) {
 		{"one failed", forge.PR{Number: 57, Open: true, Head: "h", Checks: append(failed("test"), forge.Check{Name: "lint", Outcome: forge.Succeeded})}, "@builder CI failed on #57: test."},
 		{"failed list", forge.PR{Number: 57, Open: true, Head: "h", Checks: failed("lint", "test")}, "@builder CI failed on #57: lint, test."},
 		{"capped", forge.PR{Number: 57, Open: true, Head: "h", Checks: failed("a", "b", "c", "d", "e", "f", "g", "g")}, "@builder CI failed on #57: a, b, c, d, e and 2 more."},
-		{"superseded", forge.PR{Number: 57, Open: true, Head: "h", Checks: []forge.Check{{Name: "test", Outcome: forge.Cancelled}, {Name: "test", Outcome: forge.Succeeded}, {Name: "lint", Outcome: forge.Succeeded}}}, "@builder CI is green on #57."},
+		{"superseded", forge.PR{Number: 57, Open: true, Head: "h", Merge: forge.Mergeable, Checks: []forge.Check{{Name: "test", Outcome: forge.Cancelled}, {Name: "test", Outcome: forge.Succeeded}, {Name: "lint", Outcome: forge.Succeeded}}}, "@builder CI is green on #57."},
 		{"running", forge.PR{Number: 57, Open: true, Head: "h", Checks: []forge.Check{{Name: "lint", Outcome: forge.Succeeded}, {Name: "test", Outcome: forge.Unfinished}}}, ""},
 		{"failed while running", forge.PR{Number: 57, Open: true, Head: "h", Checks: append(failed("lint"), forge.Check{Name: "test", Outcome: forge.Unfinished})}, "@builder CI failed on #57: lint."},
 		{"only cancelled", forge.PR{Number: 57, Open: true, Head: "h", Checks: []forge.Check{{Name: "test", Outcome: forge.Cancelled}}}, ""},
 		{"no checks", forge.PR{Number: 57, Open: true, Head: "h"}, ""},
 		{"draft", func() forge.PR { p := green(57, "x", "h"); p.Draft = true; return p }(), ""},
-		{"conflict", func() forge.PR { p := green(57, "x", "h"); p.Conflicts = true; return p }(), "@builder CI is green on #57, but it conflicts with its base."},
+		{"merge not computed yet", func() forge.PR { p := green(57, "x", "h"); p.Merge = forge.MergeUnknown; return p }(), ""},
+		{"workflow run not reported yet", func() forge.PR { p := green(57, "x", "h"); p.Incomplete = true; return p }(), ""},
+		{"failed with more to come", forge.PR{Number: 57, Open: true, Head: "h", Incomplete: true, Checks: failed("lint")}, "@builder CI failed on #57: lint."},
+		{"conflict", func() forge.PR {
+			p := green(57, "x", "h")
+			p.Merge, p.Checks = forge.Conflicting, []forge.Check{{Name: "scan", Outcome: forge.Succeeded}}
+			return p
+		}(), "@builder #57 conflicts with its base; CI did not run."},
+		{"conflict and failed", forge.PR{Number: 57, Open: true, Head: "h", Merge: forge.Conflicting, Checks: failed("lint")}, "@builder CI failed on #57: lint. It also conflicts with its base."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -418,5 +435,93 @@ func TestInactiveAgentsAreNotLookedUp(t *testing.T) {
 	e.w.Round(ctx)
 	if len(e.fake.calls) != 0 {
 		t.Fatalf("calls %v", e.fake.calls)
+	}
+}
+
+func TestConflictIsReportedOncePerCommit(t *testing.T) {
+	e := newEnv(t)
+	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
+	pr := forge.PR{Number: 57, Open: true, Head: "a1", Merge: forge.Conflicting}
+	e.fake.set(app, pr)
+	e.w.Round(ctx)
+	e.w.Round(ctx)
+	pr.Head = "a2"
+	e.fake.set(app, pr)
+	e.w.Round(ctx)
+	if b := e.board(t); len(b) != 2 {
+		t.Fatalf("messages %q", b)
+	}
+}
+
+func TestFoundPullRequestIsDroppedAfterTheAgentMovedRepository(t *testing.T) {
+	e := newEnv(t)
+	wt := worktree(t, repo(t, "git@github.com:example-org/example-app.git"), "w", "fix/login-timeout")
+	e.agent(t, "builder", wt)
+	e.fake.set(app, forge.PR{Number: 57, Branch: "fix/login-timeout", Head: "a1", Open: true})
+	e.w.Round(ctx)
+	other := repo(t, "git@github.com:example-org/other-app.git")
+	e.a.Update(ctx, "builder", agents.Update{CWD: &other})
+	e.fake.set(app, forge.PR{Number: 57, Branch: "fix/login-timeout", Head: "a1"}) // merged
+	e.w.Round(ctx)
+	if p := e.profile(t, "builder"); len(p.FoundPRs) != 0 {
+		t.Fatalf("found %v", p.FoundPRs)
+	}
+}
+
+func TestPullRequestMissingFromAReplyKeepsItsState(t *testing.T) {
+	e := newEnv(t)
+	e.agent(t, "builder", worktree(t, repo(t, "git@github.com:example-org/example-app.git"), "w", "fix/login-timeout"))
+	e.fake.set(app, green(57, "fix/login-timeout", "a1"))
+	e.w.Round(ctx)
+	e.fake.omit[57] = true
+	e.w.Round(ctx)
+	if p := e.profile(t, "builder"); !slices.Equal(p.FoundPRs, []int{57}) {
+		t.Fatalf("found %v after a reply without 57", p.FoundPRs)
+	}
+	delete(e.fake.omit, 57)
+	e.w.Round(ctx)
+	if b := e.board(t); len(b) != 1 {
+		t.Fatalf("messages %q", b)
+	}
+	e.fake.prs[app] = nil // the forge says 57 does not exist
+	e.w.Round(ctx)
+	if p := e.profile(t, "builder"); len(p.FoundPRs) != 0 {
+		t.Fatalf("found %v after not found", p.FoundPRs)
+	}
+}
+
+func TestFailingLookupsBackOffAndAreLoggedOnce(t *testing.T) {
+	e := newEnv(t)
+	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
+	e.fake.fail[app] = errors.New("gh: HTTP 401: Bad credentials")
+	for range 8 {
+		e.w.Round(ctx)
+	}
+	if n := e.fake.calls[app]; n != 4 { // rounds 1, 2, 4 and 8
+		t.Fatalf("%d lookups in 8 rounds", n)
+	}
+	if n := strings.Count(e.log.String(), "Bad credentials"); n != 1 {
+		t.Fatalf("logged %d times: %s", n, e.log.String())
+	}
+	delete(e.fake.fail, app)
+	e.fake.set(app, green(57, "x", "h"))
+	for range 8 {
+		e.w.Round(ctx)
+	}
+	if b := e.board(t); len(b) != 1 {
+		t.Fatalf("no recovery: %q", b)
+	}
+}
+
+func TestDetachedHeadIsNotMatchedByBranch(t *testing.T) {
+	e := newEnv(t)
+	dir := repo(t, "git@github.com:example-org/example-app.git")
+	wt := worktree(t, dir, "w", "feat/export")
+	e.agent(t, "builder", wt)
+	write(t, filepath.Join(dir, ".git", "worktrees", "w", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
+	e.fake.set(app, forge.PR{Number: 57, Branch: "feat/export", Head: "a1", Open: true})
+	e.w.Round(ctx)
+	if p := e.profile(t, "builder"); p.Branch != "feat/export" || len(p.FoundPRs) != 0 {
+		t.Fatalf("branch %q found %v", p.Branch, p.FoundPRs)
 	}
 }

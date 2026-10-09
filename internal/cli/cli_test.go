@@ -29,13 +29,13 @@ func startHubWith(t *testing.T, configure func(*hub.Hub)) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	stop := runHub(t, dir)
+	stop := runHub(t, dir, configure)
 	t.Cleanup(stop)
 	return filepath.Join(dir, "hub.sock")
 }
 
 // runHub runs a hub with its socket and database in dir and returns a function that stops it.
-func runHub(t *testing.T, dir string) (stop func()) {
+func runHub(t *testing.T, dir string, configure func(*hub.Hub)) (stop func()) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	db, err := store.Open(ctx, filepath.Join(dir, "agora.db"))
@@ -157,7 +157,7 @@ func TestWaitSurvivesAHubRestart(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "hub.sock")
-	stop := runHub(t, dir)
+	stop := runHub(t, dir, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	agora(ctx, socket, "a", "queue", "join", "r")
@@ -167,7 +167,7 @@ func TestWaitSurvivesAHubRestart(t *testing.T) {
 	time.Sleep(6 * time.Second) // a quiet wait, longer than the give-up time
 	stop()
 	time.Sleep(1500 * time.Millisecond) // the wait retries against a missing hub, well within the give-up time
-	stop = runHub(t, dir)
+	stop = runHub(t, dir, nil)
 	t.Cleanup(stop)
 	agora(ctx, socket, "a", "queue", "release", "r")
 	select {
@@ -584,5 +584,75 @@ func TestFoundPullRequestsShowInStatusAndWho(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "builder", "status"); !strings.Contains(r.stdout, "#57,#61") {
 		t.Fatalf("status: %s", r.stdout)
+	}
+}
+
+// lockedBuffer is a buffer the hub's log and the test can use at once.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+func (l *lockedBuffer) String() string { l.mu.Lock(); defer l.mu.Unlock(); return l.b.String() }
+
+// hubLog starts `agora hub` with args, returns its log once it listens (or its exit), and stops it.
+func hubLog(t *testing.T, args ...string) (string, int) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "agora-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out lockedBuffer
+	code := make(chan int, 1)
+	all := append([]string{"--socket", filepath.Join(dir, "hub.sock"), "hub", "--db", filepath.Join(dir, "agora.db")}, args...)
+	go func() { code <- cli.Run(ctx, all, &out, &out) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "hub listening") {
+		select {
+		case c := <-code:
+			return out.String(), c
+		case <-time.After(10 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("hub did not start: %s", out.String())
+		}
+	}
+	cancel()
+	return out.String(), <-code
+}
+
+func TestWatchPullRequestsSetting(t *testing.T) {
+	withGH := t.TempDir()
+	os.WriteFile(filepath.Join(withGH, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0o755)
+	cases := []struct {
+		name, path, env string
+		args            []string
+		want            string // in the log
+		code            int
+	}{
+		{"on by default", withGH, "", nil, "watch_prs=[github.com]", 0},
+		{"off by flag", withGH, "", []string{"--watch-prs=false"}, "watch_prs=[]", 0},
+		{"off by environment", withGH, "false", nil, "watch_prs=[]", 0},
+		{"flag over environment", withGH, "false", []string{"--watch-prs"}, "watch_prs=[github.com]", 0},
+		{"invalid environment", withGH, "off", nil, `AGORA_WATCH_PRS="off": use true or false`, 1},
+		{"no gh", t.TempDir(), "", nil, "gh is not installed", 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("PATH", c.path)
+			t.Setenv("AGORA_WATCH_PRS", c.env)
+			log, code := hubLog(t, c.args...)
+			if code != c.code || !strings.Contains(log, c.want) {
+				t.Fatalf("exit %d, log: %s", code, log)
+			}
+		})
 	}
 }

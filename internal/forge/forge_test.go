@@ -39,10 +39,14 @@ const reply = `{"data":{"repository":{"defaultBranchRef":{"name":"dev"},
    {"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"CANCELLED"},
    {"__typename":"CheckRun","name":"e2e","status":"COMPLETED","conclusion":"TIMED_OUT"},
    {"__typename":"CheckRun","name":"build","status":"IN_PROGRESS","conclusion":null},
+   {"__typename":"CheckRun","name":"odd","status":"COMPLETED","conclusion":"SOMETHING_NEW"},
    {"__typename":"StatusContext","context":"ci/legacy","state":"ERROR"},
-   {"__typename":"StatusContext","context":"ci/wait","state":"PENDING"}]}}}}]}},
+   {"__typename":"StatusContext","context":"ci/wait","state":"PENDING"}],"pageInfo":{"hasNextPage":false}}},
+   "checkSuites":{"nodes":[{"status":"COMPLETED","workflowRun":{"id":"r1"}},{"status":"QUEUED","workflowRun":null}]}}}]}},
  {"number":58,"headRefName":"fix/login-timeout","headRefOid":"def","isCrossRepository":true,"state":"OPEN","isDraft":true,"mergeable":"MERGEABLE",
-  "commits":{"nodes":[{"commit":{"statusCheckRollup":null}}]}}]},
+  "commits":{"nodes":[{"commit":{"statusCheckRollup":null,"checkSuites":{"nodes":[{"status":"IN_PROGRESS","workflowRun":{"id":"r2"}}]}}}]}},
+ {"number":59,"headRefName":"fix/login-timeout","headRefOid":"0b2","isCrossRepository":false,"state":"OPEN","isDraft":false,"mergeable":"UNKNOWN",
+  "commits":{"nodes":[{"commit":{"statusCheckRollup":{"contexts":{"nodes":[],"pageInfo":{"hasNextPage":true}}},"checkSuites":{"nodes":[]}}}]}}]},
 "n0":{"number":41,"headRefName":"feat/old","headRefOid":"0a1","isCrossRepository":false,"state":"MERGED","isDraft":false,"mergeable":"UNKNOWN","commits":{"nodes":[]}},
 "n1":null}},
 "errors":[{"type":"NOT_FOUND","path":["repository","n1"],"message":"Could not resolve to a PullRequest with the number of 9999."}]}`
@@ -59,16 +63,16 @@ func TestGitHubLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(args, " ")
-	for _, want := range []string{"api graphql", "--hostname github.com", "owner=example-org", "name=example-app", "b0=fix/login-timeout", "n0=41", "n1=9999"} {
+	for _, want := range []string{"api graphql", "--hostname github.com", "owner=example-org", "name=example-app", "b0=fix/login-timeout", "n0=41", "n1=9999", "first: 5", "checkSuites", "hasNextPage"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args lack %q: %s", want, joined)
 		}
 	}
-	if res.DefaultBranch != "dev" || len(res.PRs) != 3 {
+	if res.DefaultBranch != "dev" || len(res.PRs) != 4 || !slices.Equal(res.NotFound, []int{9999}) {
 		t.Fatalf("result %+v", res)
 	}
 	p := res.PRs[0]
-	if p.Number != 57 || p.Branch != "fix/login-timeout" || p.Head != "abc" || !p.Open || p.Draft || p.Fork || !p.Conflicts {
+	if p.Number != 57 || p.Branch != "fix/login-timeout" || p.Head != "abc" || !p.Open || p.Draft || p.Fork || p.Merge != forge.Conflicting || p.Incomplete {
 		t.Fatalf("pr %+v", p)
 	}
 	outcomes := map[string]forge.Outcome{}
@@ -76,16 +80,19 @@ func TestGitHubLookup(t *testing.T) {
 		outcomes[c.Name] = c.Outcome
 	}
 	want := map[string]forge.Outcome{"lint": forge.Succeeded, "docs": forge.Succeeded, "test": forge.Cancelled, "e2e": forge.Failed,
-		"build": forge.Unfinished, "ci/legacy": forge.Failed, "ci/wait": forge.Unfinished}
+		"build": forge.Unfinished, "odd": forge.Failed, "ci/legacy": forge.Failed, "ci/wait": forge.Unfinished}
 	for k, v := range want {
 		if outcomes[k] != v {
 			t.Errorf("%s: %v, want %v", k, outcomes[k], v)
 		}
 	}
-	if q := res.PRs[1]; !q.Fork || !q.Draft || q.Conflicts || len(q.Checks) != 0 {
-		t.Fatalf("fork pr %+v", q)
+	if q := res.PRs[1]; !q.Fork || !q.Draft || q.Merge != forge.Mergeable || len(q.Checks) != 0 || !q.Incomplete {
+		t.Fatalf("fork pr with an unfinished workflow run %+v", q)
 	}
-	if q := res.PRs[2]; q.Number != 41 || q.Open {
+	if q := res.PRs[2]; q.Merge != forge.MergeUnknown || !q.Incomplete {
+		t.Fatalf("truncated checks %+v", q)
+	}
+	if q := res.PRs[3]; q.Number != 41 || q.Open {
 		t.Fatalf("merged pr %+v", q)
 	}
 }
@@ -96,6 +103,12 @@ func TestGitHubLookupFails(t *testing.T) {
 	}}
 	if _, err := gh.Lookup(context.Background(), forge.Repo{Host: "github.com", Path: "example-org/gone"}, forge.Query{}); err == nil || !strings.Contains(err.Error(), "Could not resolve") {
 		t.Fatalf("err = %v", err)
+	}
+	gh.Run = func(context.Context, []string) ([]byte, error) {
+		return []byte(`{"data":{"repository":{"defaultBranchRef":{"name":"main"},"n0":null}},"errors":[{"type":"RATE_LIMITED","path":["repository","n0"],"message":"API rate limit exceeded"}]}`), errors.New("exit status 1")
+	}
+	if _, err := gh.Lookup(context.Background(), forge.Repo{Host: "github.com", Path: "example-org/example-app"}, forge.Query{Numbers: []int{5}}); err == nil || !strings.Contains(err.Error(), "rate limit") {
+		t.Fatalf("a partial reply with another error was used: %v", err)
 	}
 	if _, err := gh.Lookup(context.Background(), forge.Repo{Host: "github.com", Path: "group/sub/example-app"}, forge.Query{}); err == nil {
 		t.Fatal("a nested path was looked up")

@@ -4,14 +4,14 @@
 
 ## Purpose
 
-Following the pull requests agents work on and telling each agent when CI on one of them turns green or red, so no agent has to poll CI.
+Following the pull requests agents work on and telling each agent when CI on one of them turns green or red or it conflicts with its base, so no agent has to poll CI.
 
 ## Sub-capabilities
 
 | Spec | Covers |
 | --- | --- |
 | [`discovery/`](discovery/spec.md) | Which pull requests the hub follows for each agent, found from its branch or declared, and which forges it asks |
-| [`ci/`](ci/spec.md) | The CI state of a pull request and the message an agent gets when it turns green or red |
+| [`ci/`](ci/spec.md) | The CI state of a pull request and the message an agent gets when it turns green, red or conflicting |
 
 ## Requirement Index
 

@@ -64,19 +64,37 @@ type Result struct {
 	// PRs holds the open pull requests from the queried branches and the queried numbers that
 	// exist, in any state.
 	PRs []PR
+	// NotFound holds the queried numbers the forge says do not exist. A queried number in
+	// neither list is unknown this time.
+	NotFound []int
 }
 
 // PR is a pull request.
 type PR struct {
-	Number    int
-	Branch    string // head branch
-	Head      string // head commit
-	Fork      bool   // the head branch is in another repository
-	Open      bool
-	Draft     bool
-	Conflicts bool // the forge reports a conflict with the base branch
-	Checks    []Check
+	Number int
+	Branch string // head branch
+	Head   string // head commit
+	Fork   bool   // the head branch is in another repository
+	Open   bool
+	Draft  bool
+	Merge  Merge
+	Checks []Check
+	// Incomplete means the checks listed are not all there are: runs the forge has started
+	// that have not reported yet, or a list cut short.
+	Incomplete bool
 }
+
+// Merge is whether a pull request merges cleanly into its base branch.
+type Merge int
+
+const (
+	// MergeUnknown means the forge has not computed it yet, as right after a push.
+	MergeUnknown Merge = iota
+	// Mergeable means no conflict with the base branch.
+	Mergeable
+	// Conflicting means the pull request conflicts with its base branch.
+	Conflicting
+)
 
 // Check is one check on the head commit.
 type Check struct {
@@ -92,7 +110,8 @@ const (
 	Unfinished Outcome = iota
 	// Succeeded includes skipped and neutral checks.
 	Succeeded
-	// Failed includes errors, timeouts, startup failures and checks that require action.
+	// Failed includes errors, timeouts, startup failures, checks that require action and
+	// finished checks with a conclusion Agora does not know.
 	Failed
 	// Cancelled includes stale checks: neither failed nor unfinished.
 	Cancelled

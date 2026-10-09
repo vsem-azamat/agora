@@ -388,7 +388,7 @@ func (f *greenForge) Lookup(context.Context, forge.Repo, forge.Query) (forge.Res
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
-	return forge.Result{DefaultBranch: "main", PRs: []forge.PR{{Number: 57, Head: "a1", Open: true, Checks: []forge.Check{{Name: "test", Outcome: forge.Succeeded}}}}}, nil
+	return forge.Result{DefaultBranch: "main", PRs: []forge.PR{{Number: 57, Head: "a1", Open: true, Merge: forge.Mergeable, Checks: []forge.Check{{Name: "test", Outcome: forge.Succeeded}}}}}, nil
 }
 
 func (f *greenForge) count() int { f.mu.Lock(); defer f.mu.Unlock(); return f.calls }
@@ -442,5 +442,43 @@ func TestWatchingTurnedOff(t *testing.T) {
 	resp, _ := r.rooms.Unread(context.Background(), connect.NewRequest(&agorav1.UnreadRequest{Agent: "builder", Peek: true}))
 	if len(resp.Msg.GetMessages()) != 0 {
 		t.Fatalf("messages %+v", resp.Msg.GetMessages())
+	}
+}
+
+// slowForge blocks in Lookup until its context ends, then takes a little longer to return.
+type slowForge struct {
+	started chan struct{}
+	mu      sync.Mutex
+	done    bool
+}
+
+func (f *slowForge) Lookup(ctx context.Context, _ forge.Repo, _ forge.Query) (forge.Result, error) {
+	close(f.started)
+	<-ctx.Done()
+	time.Sleep(50 * time.Millisecond)
+	f.mu.Lock()
+	f.done = true
+	f.mu.Unlock()
+	return forge.Result{}, ctx.Err()
+}
+
+func TestShutdownWaitsForTheWatchRound(t *testing.T) {
+	f := &slowForge{started: make(chan struct{})}
+	r := startWith(t, func(h *hub.Hub) {
+		h.Forges = forge.Forges{"github.com": f}
+		h.WatchFirst = 10 * time.Millisecond
+	})
+	joinIn(t, r)
+	select {
+	case <-f.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no lookup")
+	}
+	r.stop()
+	<-r.done
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.done {
+		t.Fatal("Serve returned while a lookup was still running")
 	}
 }

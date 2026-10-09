@@ -218,13 +218,17 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		BaseContext:       func(net.Listener) context.Context { return base },
 	}
 	sweepCtx, stopSweep := context.WithCancel(ctx)
-	defer stopSweep()
+	var watching sync.WaitGroup
+	defer func() {
+		stopSweep()
+		watching.Wait() // a pull request round writes to the database the caller closes next
+	}()
 	go h.Sweep(sweepCtx)
 	if h.WakeCommand != "" {
 		go h.wakeLoop(sweepCtx)
 	}
 	if len(h.Forges) > 0 && h.db != nil {
-		go h.watchLoop(sweepCtx)
+		watching.Go(func() { h.watchLoop(sweepCtx) })
 	}
 	stopped := make(chan struct{})
 	go func() {

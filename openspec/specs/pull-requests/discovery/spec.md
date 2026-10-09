@@ -38,15 +38,19 @@ The system SHALL record on an agent's profile, as found pull requests separate f
 
 ### Requirement: The Default Branch Owns No Pull Request
 
-The system SHALL not find pull requests by branch for an agent on the repository's default branch, as reported by the forge, or on an empty branch.
+The system SHALL not find pull requests by branch for an agent on the repository's default branch, as reported by the forge, on an empty branch, or whose checkout is on a detached commit.
 
 #### Scenario: Agent on the default branch
 - **WHEN** the forge reports `dev` as the default branch, `builder` works on `dev`, and pull request 60 is open from `dev`
 - **THEN** no pull request is found for `builder`
 
+#### Scenario: Detached checkout
+- **WHEN** `builder`'s checkout of `feat/export` is switched to a commit by its hash and pull request 57 is open from `feat/export`
+- **THEN** 57 is not found for `builder`
+
 ### Requirement: Found Pull Requests Stay Followed While Open
 
-The system SHALL keep following a found pull request while it is open, whatever branch the agent is on now, and SHALL drop it from the profile once the forge reports it closed or merged.
+The system SHALL keep following a found pull request while it is open, whatever branch or repository the agent works in now, and SHALL drop it from the profile once the forge reports it closed, merged or not existing. A pull request the forge's reply says nothing about keeps its place and what was reported for it.
 
 #### Scenario: Agent moves to its next task
 - **WHEN** `builder` switches from `fix/login-timeout` (pull request 57, still open) to `feat/export`
@@ -55,6 +59,14 @@ The system SHALL keep following a found pull request while it is open, whatever 
 #### Scenario: Pull request merged
 - **WHEN** found pull request 57 is merged
 - **THEN** after the next round it is no longer among the agent's pull requests and no CI message is posted for it
+
+#### Scenario: Merged after the agent moved to another repository
+- **WHEN** `builder` found pull request 57 in `example-org/example-app`, moved to another repository, and 57 is merged
+- **THEN** after the next round 57 is no longer among its pull requests
+
+#### Scenario: Reply without the pull request
+- **WHEN** a reply from the forge says nothing about found pull request 57, whose green CI was reported
+- **THEN** 57 stays found, and when a later reply shows it still green, nothing is posted again
 
 ### Requirement: Declared Pull Requests Are Followed
 
@@ -66,7 +78,7 @@ The system SHALL follow every pull request an agent declared, in the repository 
 
 ### Requirement: Forges
 
-The system SHALL choose the forge of a repository by the host of its `origin` remote URL, SHALL ask GitHub (`github.com`) through the `gh` command-line tool with the credentials it already has, without storing tokens, and SHALL skip repositories without an `origin` remote, on hosts it does not know, or on GitHub when `gh` is not installed, without reporting an error. A lookup SHALL time out after 30 seconds; a failed lookup SHALL be logged and SHALL not stop the other repositories, the round, or the hub.
+The system SHALL choose the forge of a repository by the host of its `origin` remote URL, SHALL ask GitHub (`github.com`) through the `gh` command-line tool with the credentials it already has, without storing tokens, and SHALL skip repositories without an `origin` remote, on hosts it does not know, or on GitHub when `gh` is not installed, without reporting an error. A lookup SHALL time out after 30 seconds and SHALL fail when the forge reports any error other than a pull request number that does not exist. A failed lookup SHALL be logged, SHALL not stop the other repositories, the round, or the hub, and is retried with growing gaps: after `n` failures in a row the repository is skipped for the next `2^(n-1) - 1` rounds, at most 7. The same error is logged once until a lookup of that repository succeeds again.
 
 #### Scenario: Unknown host
 - **WHEN** an agent works in a repository whose `origin` is on `git.example.com`
@@ -75,3 +87,7 @@ The system SHALL choose the forge of a repository by the host of its `origin` re
 #### Scenario: Failed lookup
 - **WHEN** the lookup for one repository fails
 - **THEN** the failure is logged, the other repositories are still processed, and the next round tries again
+
+#### Scenario: Lookups keep failing
+- **WHEN** every lookup of a repository fails with the same error over 8 rounds
+- **THEN** it is tried in rounds 1, 2, 4 and 8 and the error is logged once

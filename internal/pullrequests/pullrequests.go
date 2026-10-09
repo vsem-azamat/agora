@@ -23,6 +23,8 @@ const (
 	LookupTimeout = 30 * time.Second
 	// MaxFailedNames is how many failed checks a red message names.
 	MaxFailedNames = 5
+	// MaxSkip is the most rounds a repository whose lookups keep failing is skipped.
+	MaxSkip = 7
 )
 
 // CI states.
@@ -30,6 +32,9 @@ const (
 	Green   = "green"
 	Red     = "red"
 	Pending = "pending"
+	// Conflict is the state of a pull request that conflicts with its base branch and has no
+	// failed check: CI does not run for it.
+	Conflict = "conflict"
 )
 
 // Watcher looks up pull requests in rounds and posts CI messages.
@@ -39,6 +44,15 @@ type Watcher struct {
 	rooms  *rooms.Rooms
 	forges forge.Forges
 	log    *slog.Logger
+
+	failing map[string]*failing // by repository key; used by one round at a time
+}
+
+// failing tracks the consecutive failed lookups of a repository.
+type failing struct {
+	times int    // consecutive failures
+	skip  int    // rounds left to skip
+	err   string // the last error, logged once
 }
 
 // New returns a watcher that asks forges, by host, about the repositories of active agents.
@@ -46,7 +60,7 @@ func New(db *sql.DB, a *agents.Agents, r *rooms.Rooms, forges forge.Forges, log 
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Watcher{db: db, agents: a, rooms: r, forges: forges, log: log}
+	return &Watcher{db: db, agents: a, rooms: r, forges: forges, log: log, failing: map[string]*failing{}}
 }
 
 // member is an active agent working in a repository now.
@@ -64,8 +78,9 @@ type group struct {
 }
 
 // Round looks up every repository active agents work in, once each, updates the pull requests
-// followed for them and posts a message for every CI state that turned green or red. Failures
-// are logged; it returns how many messages it posted.
+// followed for them and posts a message for every CI state that turned green, red or
+// conflicting. Failures are logged once and retried with growing gaps; it returns how many
+// messages it posted.
 func (w *Watcher) Round(ctx context.Context) int {
 	groups, err := w.groups(ctx)
 	if err != nil {
@@ -77,10 +92,35 @@ func (w *Watcher) Round(ctx context.Context) int {
 		if ctx.Err() != nil {
 			return posted
 		}
+		key := g.repo.Key()
+		f := w.failing[key]
+		if f != nil && f.skip > 0 {
+			f.skip--
+			continue
+		}
 		res, err := w.lookup(ctx, g)
 		if err != nil {
-			w.log.Error("pull requests: lookup failed", "repo", g.repo.Key(), "err", err)
+			if ctx.Err() != nil {
+				return posted
+			}
+			if f == nil {
+				f = &failing{}
+				w.failing[key] = f
+			}
+			// After n failures in a row the next 2^(n-1)-1 rounds are skipped, at most MaxSkip.
+			f.times++
+			f.skip = min(1<<(f.times-1)-1, MaxSkip)
+			if msg := err.Error(); msg != f.err {
+				f.err = msg
+				w.log.Error("pull requests: lookup failed; retrying with growing gaps", "repo", key, "err", err)
+			} else {
+				w.log.Debug("pull requests: lookup failed again", "repo", key, "times", f.times)
+			}
 			continue
+		}
+		if f != nil {
+			delete(w.failing, key)
+			w.log.Info("pull requests: lookup works again", "repo", key)
 		}
 		n, err := w.apply(ctx, g, res)
 		if err != nil {
@@ -113,9 +153,14 @@ func (w *Watcher) groups(ctx context.Context) ([]*group, error) {
 		if p.CWD == "" {
 			continue
 		}
-		common := gitinfo.Read(p.CWD).CommonDir
+		head := gitinfo.Read(p.CWD)
+		common := head.CommonDir
 		if common == "" {
 			continue
+		}
+		branch := p.Branch
+		if head.Detached {
+			branch = "" // a detached checkout is matched by no branch
 		}
 		origin, ok := origins[common]
 		if !ok {
@@ -126,7 +171,7 @@ func (w *Watcher) groups(ctx context.Context) ([]*group, error) {
 		if !ok || w.forges[repo.Host] == nil {
 			continue
 		}
-		get(repo).current[p.Name] = member{branch: p.Branch, declared: p.PRs}
+		get(repo).current[p.Name] = member{branch: branch, declared: p.PRs}
 	}
 	rows, err := w.db.QueryContext(ctx, `SELECT agent, repo, number FROM pull_requests WHERE found = 1 ORDER BY agent, repo, number`)
 	if err != nil {
@@ -181,20 +226,24 @@ func (w *Watcher) lookup(ctx context.Context, g *group) (forge.Result, error) {
 // one transaction.
 func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, error) {
 	open := map[int]forge.PR{}
+	gone := map[int]bool{} // reported closed, merged or not existing
 	for _, p := range res.PRs {
 		if p.Open {
 			open[p.Number] = p
+		} else {
+			gone[p.Number] = true
 		}
+	}
+	for _, n := range res.NotFound {
+		gone[n] = true
 	}
 	// agent -> number -> found from the branch (false: followed because declared)
 	follow := map[string]map[int]bool{}
 	mark := func(agent string, n int, found bool) {
-		if follow[agent] == nil {
-			follow[agent] = map[int]bool{}
-		}
 		follow[agent][n] = follow[agent][n] || found
 	}
 	for agent, ns := range g.found {
+		follow[agent] = map[int]bool{} // so its closed pull requests are removed even if none is open
 		for _, n := range ns {
 			if _, ok := open[n]; ok {
 				mark(agent, n, true)
@@ -202,7 +251,7 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 		}
 	}
 	for agent, m := range g.current {
-		if follow[agent] == nil { // an agent with nothing open still gets its stale rows removed
+		if follow[agent] == nil {
 			follow[agent] = map[int]bool{}
 		}
 		if m.branch != "" && m.branch != res.DefaultBranch {
@@ -229,32 +278,43 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 	defer tx.Rollback()
 	for _, agent := range slices.Sorted(maps.Keys(follow)) {
 		nums := follow[agent]
-		reported := map[int]string{}
-		rows, err := tx.QueryContext(ctx, `SELECT number, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
+		type row struct {
+			found    bool
+			reported string
+		}
+		rows := map[int]row{}
+		q, err := tx.QueryContext(ctx, `SELECT number, found, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
 		if err != nil {
 			return 0, err
 		}
-		for rows.Next() {
+		for q.Next() {
 			var n int
-			var r string
-			if err := rows.Scan(&n, &r); err != nil {
-				rows.Close()
+			var r row
+			if err := q.Scan(&n, &r.found, &r.reported); err != nil {
+				q.Close()
 				return 0, err
 			}
-			reported[n] = r
+			rows[n] = r
 		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
+		q.Close()
+		if err := q.Err(); err != nil {
 			return 0, err
 		}
-		for n := range reported {
-			if _, ok := nums[n]; !ok { // closed, merged, or no longer declared
+		m, current := g.current[agent]
+		for n, r := range rows {
+			if _, ok := nums[n]; ok {
+				continue
+			}
+			// Not followed this round: drop it when the forge says it is closed or gone, or when
+			// it was followed only as a declared pull request the agent no longer declares. A
+			// pull request the reply says nothing about keeps its row and what was reported.
+			if gone[n] || (!r.found && current && !slices.Contains(m.declared, n)) {
 				if _, err := tx.ExecContext(ctx, `DELETE FROM pull_requests WHERE agent = ? AND repo = ? AND number = ?`, agent, key, n); err != nil {
 					return 0, err
 				}
 			}
 		}
-		if _, current := g.current[agent]; current {
+		if current {
 			// declared pull requests are followed only in the repository the agent works in now
 			if _, err := tx.ExecContext(ctx, `DELETE FROM pull_requests WHERE agent = ? AND repo != ? AND found = 0`, agent, key); err != nil {
 				return 0, err
@@ -263,12 +323,12 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 		for _, n := range slices.Sorted(maps.Keys(nums)) {
 			pr := open[n]
 			state, failed := CI(pr)
-			report := reported[n]
+			report := rows[n].reported
 			var body string
-			if state == Green || state == Red {
+			if state == Green || state == Red || state == Conflict {
 				if k := state + " " + pr.Head; k != report {
 					report = k
-					body = Message(agent, n, state, failed, pr.Conflicts)
+					body = Message(agent, n, state, failed, pr.Merge == forge.Conflicting)
 				}
 			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, reported) VALUES (?, ?, ?, ?, ?)
@@ -303,8 +363,15 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 	return posted, nil
 }
 
-// CI returns the CI state of an open pull request ("" when it has none: a draft, or no
-// finished check other than cancelled ones) and the names of its failed checks.
+// CI returns the CI state of an open pull request and the names of its failed checks:
+//
+//   - "" for a draft, or when no check other than cancelled ones finished;
+//   - Red when any check failed, also while others run and whatever the merge state;
+//   - Conflict when the pull request conflicts with its base branch, since CI does not run
+//     for it then;
+//   - Pending while the merge state is unknown, a check is unfinished, or the forge knows
+//     more checks than it listed;
+//   - Green otherwise, when at least one check succeeded.
 func CI(pr forge.PR) (string, []string) {
 	if pr.Draft {
 		return "", nil
@@ -326,7 +393,9 @@ func CI(pr forge.PR) (string, []string) {
 	switch {
 	case len(failed) > 0:
 		return Red, failed
-	case unfinished:
+	case pr.Merge == forge.Conflicting:
+		return Conflict, nil
+	case unfinished || pr.Incomplete || pr.Merge == forge.MergeUnknown:
 		return Pending, nil
 	case succeeded:
 		return Green, nil
@@ -334,17 +403,22 @@ func CI(pr forge.PR) (string, []string) {
 	return "", nil
 }
 
-// Message is the text the board posts when CI on pull request n of agent turns green or red.
+// Message is the text the board posts when pull request n of agent turns green, red or
+// conflicting.
 func Message(agent string, n int, state string, failed []string, conflicts bool) string {
-	if state == Green {
-		if conflicts {
-			return fmt.Sprintf("@%s CI is green on #%d, but it conflicts with its base.", agent, n)
-		}
+	switch state {
+	case Green:
 		return fmt.Sprintf("@%s CI is green on #%d.", agent, n)
+	case Conflict:
+		return fmt.Sprintf("@%s #%d conflicts with its base; CI did not run.", agent, n)
 	}
 	names := strings.Join(failed[:min(len(failed), MaxFailedNames)], ", ")
 	if more := len(failed) - MaxFailedNames; more > 0 {
 		names += fmt.Sprintf(" and %d more", more)
 	}
-	return fmt.Sprintf("@%s CI failed on #%d: %s.", agent, n, names)
+	text := fmt.Sprintf("@%s CI failed on #%d: %s.", agent, n, names)
+	if conflicts {
+		text += " It also conflicts with its base."
+	}
+	return text
 }
