@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
@@ -30,6 +31,7 @@ var ctx = context.Background()
 type env struct {
 	s     *sessions.Sessions
 	q     *queue.Queue
+	r     *rooms.Rooms
 	clock *clock
 }
 
@@ -42,7 +44,8 @@ func newEnv(t *testing.T) env {
 	t.Cleanup(func() { db.Close() })
 	c := &clock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
 	q := queue.New(db, c.now)
-	return env{s: sessions.New(db, q, c.now), q: q, clock: c}
+	r := rooms.New(db, c.now)
+	return env{s: sessions.New(db, q, r, c.now), q: q, r: r, clock: c}
 }
 
 func (e env) report(t *testing.T, id string, ev sessions.Event) sessions.Reply {
@@ -397,5 +400,75 @@ func TestConcurrentHooksNoteOnce(t *testing.T) {
 	wg.Wait()
 	if notes != 1 {
 		t.Fatalf("%d notes", notes)
+	}
+}
+
+// --- delivery ---------------------------------------------------------------------------
+
+func TestMessagesArriveDuringTheTurn(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.report(t, "session-1", sessions.Prompt)
+	e.r.Post(ctx, "reviewer", "general", "PR #57 is ready", 0)
+	if r := e.report(t, "session-1", sessions.Tool); r.Context != "" {
+		t.Fatalf("delivered within 15s: %q", r.Context)
+	}
+	e.clock.add(sessions.ToolCheckEvery)
+	r := e.report(t, "session-1", sessions.Tool)
+	if !strings.Contains(r.Context, "PR #57 is ready") || !strings.Contains(r.Context, "agora post <room>") {
+		t.Fatalf("context %q", r.Context)
+	}
+	e.clock.add(sessions.ToolCheckEvery)
+	if r := e.report(t, "session-1", sessions.Tool); r.Context != "" {
+		t.Fatalf("delivered twice: %q", r.Context)
+	}
+}
+
+func TestOnlyFiveMessagesAtOnce(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	for range 8 {
+		e.r.Post(ctx, "reviewer", "general", "note", 0)
+	}
+	r := e.report(t, "session-1", sessions.Prompt)
+	if strings.Count(r.Context, "#general [") != 5 || !strings.Contains(r.Context, "3 more") {
+		t.Fatalf("context %q", r.Context)
+	}
+	if left, total, _ := e.r.Unread(ctx, "builder", false, 0); total != 3 || len(left) != 3 {
+		t.Fatalf("%d left", total)
+	}
+}
+
+func TestMentionKeepsTheTurnGoingOnce(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.r.Post(ctx, "reviewer", "general", "chatter", 0)
+	e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0)
+	r := e.report(t, "session-1", sessions.Stop)
+	if !r.Block || !strings.Contains(r.BlockReason, "can you take #57") || strings.Contains(r.BlockReason, "chatter") {
+		t.Fatalf("reply %+v", r)
+	}
+	if left, _, _ := e.r.Unread(ctx, "builder", false, 0); len(left) != 1 || left[0].Body != "chatter" {
+		t.Fatalf("unread %+v", left)
+	}
+	if r, _ := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Stop, StopActive: true}); r.Block {
+		t.Fatalf("blocked again: %+v", r)
+	}
+}
+
+func TestMentionAndOfferBlockTogether(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.q.Join(ctx, "example-app/merge", "reviewer", "", 0, false)
+	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
+	e.q.Release(ctx, "example-app/merge", "reviewer", "reviewer", false)
+	e.r.Post(ctx, "reviewer", "general", "@builder your turn to merge", 0)
+	r := e.report(t, "session-1", sessions.Stop)
+	if !r.Block || !strings.Contains(r.BlockReason, "your turn to merge") || !strings.Contains(r.BlockReason, "agora queue renew example-app/merge") {
+		t.Fatalf("reply %+v", r)
 	}
 }

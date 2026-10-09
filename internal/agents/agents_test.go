@@ -11,6 +11,7 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
@@ -45,7 +46,7 @@ func newEnv(t *testing.T) env {
 	t.Cleanup(func() { db.Close() })
 	c := &clock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
 	q := queue.New(db, c.now)
-	return env{a: agents.New(db, q, c.now), s: sessions.New(db, q, c.now), q: q, clock: c}
+	return env{a: agents.New(db, q, c.now), s: sessions.New(db, q, rooms.New(db, c.now), c.now), q: q, clock: c}
 }
 
 func str(s string) *string { return &s }

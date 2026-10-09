@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package agora.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
+
+// RoomService keeps rooms, their messages, subscriptions and what each agent has read.
+service RoomService {
+  rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+  rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+  // Subscribe follows or stops following rooms; #general always stays followed.
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
+  rpc Post(PostRequest) returns (PostResponse);
+  // History returns a room's last messages without changing read state.
+  rpc History(HistoryRequest) returns (HistoryResponse);
+  // Unread returns the agent's unread messages and, unless peek, marks the returned ones read.
+  rpc Unread(UnreadRequest) returns (UnreadResponse);
+}
+
+message Room {
+  string name = 1;
+  string purpose = 2;
+  string created_by = 3;
+  google.protobuf.Timestamp created_at = 4;
+  int32 messages = 5;
+  // Unset when the room has no messages.
+  google.protobuf.Timestamp last_at = 6;
+}
+
+message Message {
+  int64 id = 1;
+  string room = 2;
+  string author = 3;
+  string body = 4;
+  int64 reply_to = 5;
+  google.protobuf.Timestamp at = 6;
+  // In unread lists: the message is addressed to the reader.
+  bool addressed = 7;
+}
+
+message CreateRoomRequest {
+  string name = 1;
+  string purpose = 2;
+  string creator = 3;
+}
+
+message CreateRoomResponse {}
+
+message ListRoomsRequest {}
+
+message ListRoomsResponse {
+  repeated Room rooms = 1;
+}
+
+message SubscribeRequest {
+  string agent = 1;
+  repeated string rooms = 2;
+  // True to follow, false to stop following.
+  bool follow = 3;
+}
+
+message SubscribeResponse {
+  // Rooms the agent follows afterwards.
+  repeated string rooms = 1;
+}
+
+message PostRequest {
+  string author = 1;
+  string room = 2;
+  string body = 3;
+  int64 reply_to = 4;
+}
+
+message PostResponse {
+  int64 id = 1;
+}
+
+message HistoryRequest {
+  string room = 1;
+  // How many messages; 20 when 0.
+  int32 last = 2;
+}
+
+message HistoryResponse {
+  repeated Message messages = 1;
+}
+
+message UnreadRequest {
+  string agent = 1;
+  bool peek = 2;
+  bool mentions_only = 3;
+  // At most this many; all when 0.
+  int32 limit = 4;
+}
+
+message UnreadResponse {
+  repeated Message messages = 1;
+  // How many unread messages there are in all.
+  int32 total = 2;
+}

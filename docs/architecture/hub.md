@@ -14,7 +14,7 @@ The hub is the process that holds Agora's state and serves its API.
 ## API
 
 - ConnectRPC services defined in `proto/agora/v1/`, served over HTTP/1.1 and unencrypted HTTP/2 on the socket. Unary calls and server streams both work over HTTP/1.1 with the Connect protocol.
-- Services: `ResourceService` (see [Resource queues](resource-queues.md)) `SessionService` (see [Sessions and connectors](sessions.md)) and `AgentService` (see [Agent profiles](agents.md)).
+- Services: `ResourceService` (see [Resource queues](resource-queues.md)) `SessionService` (see [Sessions and connectors](sessions.md)), `AgentService` (see [Agent profiles](agents.md)) and `RoomService` (see [Rooms and messages](rooms.md)).
 - The CLI client dials the socket directly; the URL host (`http://agora`) is a placeholder.
 
 ## Storage

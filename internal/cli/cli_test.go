@@ -311,3 +311,49 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 		t.Fatalf("status after rejoin: %s", r.stdout)
 	}
 }
+
+func TestRoomsAndMessages(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	agora(ctx, socket, "reviewer", "join", "reviewer")
+	if r := agora(ctx, socket, "builder", "room-create", "#example-app", "work", "on", "example-app"); r.code != 0 || !strings.Contains(r.stdout, "created #example-app") {
+		t.Fatalf("create: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "subscribe", "example-app"); !strings.Contains(r.stdout, "#general #example-app") {
+		t.Fatalf("subscribe: %+v", r)
+	}
+	r := agora(ctx, socket, "builder", "post", "example-app", "@reviewer", "PR", "#57", "is", "ready")
+	if r.code != 0 || strings.TrimSpace(r.stdout) == "" {
+		t.Fatalf("post: %+v", r)
+	}
+	id := strings.TrimSpace(r.stdout)
+	if r := agora(ctx, socket, "reviewer", "unread", "--peek"); !strings.Contains(r.stdout, "PR #57 is ready") || !strings.Contains(r.stdout, "to you") {
+		t.Fatalf("peek: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "unread"); !strings.Contains(r.stdout, "PR #57 is ready") {
+		t.Fatalf("unread: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "unread"); !strings.Contains(r.stdout, "no unread messages") {
+		t.Fatalf("unread again: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "post", "example-app", "on it", "--reply", id); r.code != 0 {
+		t.Fatalf("reply: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "read", "example-app"); !strings.Contains(r.stdout, "re "+id) {
+		t.Fatalf("read: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "status"); !strings.Contains(r.stdout, "ROOMS") || !strings.Contains(r.stdout, "#example-app") {
+		t.Fatalf("status: %s", r.stdout)
+	}
+	var out, errOut bytes.Buffer
+	code := cli.RunWithInput(ctx, []string{"--socket", socket, "--as", "builder", "post", "general", "-"}, strings.NewReader("from stdin\n"), &out, &errOut)
+	if code != 0 {
+		t.Fatalf("stdin post: %d %s", code, errOut.String())
+	}
+	if r := agora(ctx, socket, "x", "read", "general"); !strings.Contains(r.stdout, "from stdin") {
+		t.Fatalf("read general: %+v", r)
+	}
+}

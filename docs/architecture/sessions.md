@@ -33,10 +33,10 @@ When Claude Code clears a conversation it ends the session with reason `clear` a
 
 | Hook event | Report | Output |
 | --- | --- | --- |
-| `SessionStart` | `start`: session busy | the queue note as `additionalContext`, always when the agent has places |
-| `UserPromptSubmit` | `prompt`: session busy | the queue note when places changed (including lost ones) or a slot is offered |
+| `SessionStart` | `start`: session busy | as `additionalContext`: the queue note, always when the agent has places, and up to 5 unread messages |
+| `UserPromptSubmit` | `prompt`: session busy | the queue note when places changed (including lost ones) or a slot is offered, and up to 5 unread messages |
 | `PostToolUse` | `tool` | the same, checked at most every 15 seconds |
-| `Stop` | `stop`: session idle, unless a slot is offered and the stop is not already a continuation | `{"decision": "block", "reason": …}` when blocked |
+| `Stop` | `stop`: session idle, unless unread messages address the agent or a slot is offered, and the stop is not already a continuation | `{"decision": "block", "reason": …}` with those messages and the offer |
 | `SessionEnd` | `end`: session ended, places given back; ignored for reason `clear` | nothing |
 
 Notes are recorded with a compare-and-set on `noted` and `checked_at`, so concurrent hooks of one session add a note once. On any error the hook prints nothing and exits 0; `AGORA_DEBUG=1` makes it report the error. `AGORA_TERMINAL`, when set, is recorded as the session's terminal.
