@@ -8,11 +8,13 @@ CREATE TABLE sessions (
     kind        TEXT    NOT NULL,
     agent       TEXT REFERENCES agents (name),
     pid         INTEGER NOT NULL DEFAULT 0,
+    pid_start   INTEGER NOT NULL DEFAULT 0, -- the process start time, to tell a reused pid apart
     cwd         TEXT    NOT NULL DEFAULT '',
     terminal    TEXT    NOT NULL DEFAULT '',
     state       TEXT    NOT NULL CHECK (state IN ('busy', 'idle', 'ended')),
     state_at    INTEGER NOT NULL,
     started_at  INTEGER NOT NULL,
+    seen_at     INTEGER NOT NULL,            -- last event from the session
     noted       TEXT    NOT NULL DEFAULT '', -- the queue note last added to the agent's context
     checked_at  INTEGER NOT NULL DEFAULT 0   -- last tool-use check, for throttling
 );

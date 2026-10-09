@@ -249,7 +249,11 @@ type ReportRequest struct {
 	Cwd       string                 `protobuf:"bytes,5,opt,name=cwd,proto3" json:"cwd,omitempty"`
 	Terminal  string                 `protobuf:"bytes,6,opt,name=terminal,proto3" json:"terminal,omitempty"`
 	// The turn is already continuing because of an earlier block.
-	StopActive    bool `protobuf:"varint,7,opt,name=stop_active,json=stopActive,proto3" json:"stop_active,omitempty"`
+	StopActive bool `protobuf:"varint,7,opt,name=stop_active,json=stopActive,proto3" json:"stop_active,omitempty"`
+	// Start time of the process, in the units the platform reports (0 when unknown).
+	PidStart int64 `protobuf:"varint,8,opt,name=pid_start,json=pidStart,proto3" json:"pid_start,omitempty"`
+	// Why the session ends (for END), as the agent tool reports it, e.g. "clear".
+	Reason        string `protobuf:"bytes,9,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -331,6 +335,20 @@ func (x *ReportRequest) GetStopActive() bool {
 		return x.StopActive
 	}
 	return false
+}
+
+func (x *ReportRequest) GetPidStart() int64 {
+	if x != nil {
+		return x.PidStart
+	}
+	return 0
+}
+
+func (x *ReportRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 type ReportResponse struct {
@@ -684,7 +702,7 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"started_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x10\n" +
 	"\x03pid\x18\a \x01(\x05R\x03pid\x12\x10\n" +
 	"\x03cwd\x18\b \x01(\tR\x03cwd\x12\x1a\n" +
-	"\bterminal\x18\t \x01(\tR\bterminal\"\xd1\x01\n" +
+	"\bterminal\x18\t \x01(\tR\bterminal\"\x86\x02\n" +
 	"\rReportRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
@@ -694,7 +712,9 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x03cwd\x18\x05 \x01(\tR\x03cwd\x12\x1a\n" +
 	"\bterminal\x18\x06 \x01(\tR\bterminal\x12\x1f\n" +
 	"\vstop_active\x18\a \x01(\bR\n" +
-	"stopActive\"c\n" +
+	"stopActive\x12\x1b\n" +
+	"\tpid_start\x18\b \x01(\x03R\bpidStart\x12\x16\n" +
+	"\x06reason\x18\t \x01(\tR\x06reason\"c\n" +
 	"\x0eReportResponse\x12\x18\n" +
 	"\acontext\x18\x01 \x01(\tR\acontext\x12\x14\n" +
 	"\x05block\x18\x02 \x01(\bR\x05block\x12!\n" +

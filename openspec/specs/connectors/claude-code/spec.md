@@ -22,7 +22,7 @@ The connector SHALL exit successfully and print nothing whenever it fails, inclu
 
 ### Requirement: Hook Events Report The Session
 
-The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, with the session's identifier, the Claude Code process, the working directory and the terminal named by `AGORA_TERMINAL` when it is set.
+The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session end.
 
 #### Scenario: Start and end
 - **WHEN** a Claude Code session starts and later exits
@@ -30,11 +30,15 @@ The connector SHALL report session start, new prompts, tool use, the end of a tu
 
 ### Requirement: The Agent Is Reminded Of Its Queues
 
-On session start, on a new prompt and after tool use (at most once every 15 seconds for tool use), the connector SHALL add to the agent's context a short note of every resource the agent bound to the session holds, waits for or is offered, when that changed since the last note or when the agent was offered a slot; the note says how to claim an offered slot.
+On session start, on a new prompt and after tool use (at most once every 15 seconds for tool use), the connector SHALL add to the agent's context a short note of every resource the agent bound to the session holds, waits for or is offered, and of every resource it lost since the last note, when that changed since the last note or when the agent was offered a slot; the note says how to claim an offered slot. Concurrent hooks of one session add a note once.
 
 #### Scenario: Offered slot
 - **WHEN** a slot of `example-app/merge` is offered to `builder` while it runs tools
 - **THEN** after a later tool call the context says it is `builder`'s turn on `example-app/merge`, until when, and that `agora queue renew example-app/merge` claims it
+
+#### Scenario: Lost lock
+- **WHEN** the lease of `db/shared` held by `builder` ended since the last note
+- **THEN** the next note says that `builder` no longer holds `db/shared`
 
 #### Scenario: Nothing changed
 - **WHEN** the agent's places in queues are the same as at the last note and nothing is offered

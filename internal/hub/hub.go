@@ -20,6 +20,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/proc"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/sessions"
 )
@@ -31,7 +32,7 @@ const SweepEvery = time.Second
 type Hub struct {
 	queue    *queue.Queue
 	sessions *sessions.Sessions
-	alive    func(pid int) bool
+	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
 }
@@ -41,13 +42,7 @@ func New(q *queue.Queue, s *sessions.Sessions, log *slog.Logger) *Hub {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, sessions: s, alive: processAlive, changes: newSignal(), log: log}
-}
-
-// processAlive reports whether a process with pid exists on this machine.
-func processAlive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return &Hub{queue: q, sessions: s, alive: proc.Alive, changes: newSignal(), log: log}
 }
 
 // Handler returns the HTTP handler with every service mounted.
@@ -68,11 +63,8 @@ func (h *Hub) Sweep(ctx context.Context) {
 			return
 		case <-t.C:
 			changed, err := h.queue.Sweep(ctx)
-			if err != nil {
-				if ctx.Err() == nil {
-					h.log.Error("sweep", "err", err)
-				}
-				continue
+			if err != nil && ctx.Err() == nil {
+				h.log.Error("sweep", "err", err)
 			}
 			ended, err := h.sessions.EndDead(ctx, h.alive)
 			if err != nil && ctx.Err() == nil {
@@ -358,9 +350,12 @@ func (s *sessionService) Report(ctx context.Context, req *connect.Request[agorav
 	if !ok {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("unknown session event"))
 	}
+	if ev == sessions.End {
+		ctx = context.WithoutCancel(ctx) // finish giving back places even if the hook is cut short
+	}
 	reply, err := s.h.sessions.Report(ctx, sessions.Report{
-		SessionID: m.GetSessionId(), Kind: m.GetKind(), Event: ev, PID: int(m.GetPid()),
-		CWD: m.GetCwd(), Terminal: m.GetTerminal(), StopActive: m.GetStopActive(),
+		SessionID: m.GetSessionId(), Kind: m.GetKind(), Event: ev, PID: int(m.GetPid()), PIDStart: m.GetPidStart(),
+		CWD: m.GetCwd(), Terminal: m.GetTerminal(), StopActive: m.GetStopActive(), Reason: m.GetReason(),
 	})
 	if err != nil {
 		return nil, toConnect(err)

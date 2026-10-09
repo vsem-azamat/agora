@@ -26,11 +26,15 @@ The system SHALL let an agent join under a name it chooses, SHALL accept only na
 
 ### Requirement: Joining Binds The Name To The Session
 
-The system SHALL bind a joined name to the session the command runs in, when that session is known, so later commands from the session act under that name without naming it again.
+The system SHALL bind a joined name to the session the command runs in, when that session has not ended, so later commands from the session act under that name without naming it again; otherwise it only registers the name.
 
 #### Scenario: Acting without repeating the name
 - **WHEN** an agent has joined as `builder` from a registered session and then takes a lock
 - **THEN** the lock is held by `builder`
+
+#### Scenario: Ended session
+- **WHEN** a command joins as `builder` with the identifier of a session that has ended
+- **THEN** the name is registered, the session stays ended, and the command says to pass the name explicitly
 
 #### Scenario: Switching names within a session
 - **WHEN** a session bound to `alpha` joins as `beta`
@@ -54,7 +58,7 @@ The system SHALL refuse a name bound to another session that has not ended, unle
 
 ### Requirement: Resolving Who Runs A Command
 
-The system SHALL resolve the agent behind a command in this order: a name passed with the command, then the `AGORA_NAME` environment variable, then the name bound to the session the command runs in; and SHALL refuse commands that need an identity when none resolves. The session is the one whose identifier the agent tool exposes to the command (`CLAUDE_CODE_SESSION_ID` for Claude Code, or `AGORA_SESSION`).
+The system SHALL resolve the agent behind a command in this order: a name passed with the command, then the `AGORA_NAME` environment variable, then the name bound to the session the command runs in; and SHALL refuse commands that need an identity when none resolves. The session is the one whose identifier the agent tool exposes to the command: `CLAUDE_CODE_SESSION_ID` for Claude Code, else `AGORA_SESSION`.
 
 #### Scenario: Explicit name wins
 - **WHEN** a command passes a name while its session is bound to another name

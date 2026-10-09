@@ -378,22 +378,30 @@ func (q *Queue) EntriesOf(ctx context.Context, agent string) ([]Entry, error) {
 func (q *Queue) ReleaseAgent(ctx context.Context, agent string) ([]string, error) {
 	var left []string
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		keys, err := keysOf(ctx, tx, agent)
-		if err != nil {
-			return err
-		}
-		for _, k := range keys {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM entries WHERE key = ? AND agent = ?`, k, agent); err != nil {
-				return err
-			}
-			if err := settle(ctx, tx, k, now); err != nil {
-				return err
-			}
-		}
-		left = keys
-		return nil
+		var err error
+		left, err = q.ReleaseAgentTx(ctx, tx, agent)
+		return err
 	})
 	return left, err
+}
+
+// ReleaseAgentTx is ReleaseAgent inside the caller's transaction, so other packages can give
+// back an agent's places atomically with their own changes.
+func (q *Queue) ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
+	now := q.now()
+	keys, err := keysOf(ctx, tx, agent)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM entries WHERE key = ? AND agent = ?`, k, agent); err != nil {
+			return nil, err
+		}
+		if err := settle(ctx, tx, k, now); err != nil {
+			return nil, err
+		}
+	}
+	return keys, nil
 }
 
 func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {

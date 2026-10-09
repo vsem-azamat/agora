@@ -47,7 +47,7 @@ func newEnv(t *testing.T) env {
 
 func (e env) report(t *testing.T, id string, ev sessions.Event) sessions.Reply {
 	t.Helper()
-	r, err := e.s.Report(ctx, sessions.Report{SessionID: id, Kind: "claude-code", Event: ev, PID: 4242, CWD: "/src/example-app"})
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: id, Kind: "claude-code", Event: ev, PID: 4242, PIDStart: 111, CWD: "/src/example-app"})
 	if err != nil {
 		t.Fatalf("report %s %s: %v", id, ev, err)
 	}
@@ -184,7 +184,7 @@ func TestDeadProcessEndsTheSessionAndGivesBackPlaces(t *testing.T) {
 	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
 	e.q.Join(ctx, "heavy/typecheck", "other", "", 0, false)
 	e.q.Join(ctx, "heavy/typecheck", "builder", "", 0, false)
-	ended, err := e.s.EndDead(ctx, func(pid int) bool { return pid != 4242 })
+	ended, err := e.s.EndDead(ctx, func(pid int, _ int64) bool { return pid != 4242 })
 	if err != nil || len(ended) != 1 {
 		t.Fatalf("ended %v, err %v", ended, err)
 	}
@@ -199,7 +199,7 @@ func TestDeadProcessEndsTheSessionAndGivesBackPlaces(t *testing.T) {
 func TestLiveProcessesAreLeftAlone(t *testing.T) {
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
-	if ended, _ := e.s.EndDead(ctx, func(int) bool { return true }); len(ended) != 0 {
+	if ended, _ := e.s.EndDead(ctx, func(int, int64) bool { return true }); len(ended) != 0 {
 		t.Fatalf("ended %v", ended)
 	}
 }
@@ -285,5 +285,117 @@ func TestOfferedSlotKeepsTheTurnGoingOnce(t *testing.T) {
 	}
 	if st := e.state(t, "session-1"); st != sessions.Idle {
 		t.Fatalf("state %s", st)
+	}
+}
+
+func alwaysAlive(int, int64) bool { return true }
+
+func TestJoiningAnEndedSessionOnlyRegistersTheName(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.report(t, "session-1", sessions.End)
+	bound, err := e.s.Join(ctx, "builder", "session-1", false)
+	if err != nil || bound {
+		t.Fatalf("bound %v err %v", bound, err)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Ended {
+		t.Fatalf("session came back as %s", st)
+	}
+}
+
+func TestUnknownProcessEndsAfterSixHoursWithoutEvents(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1") // registered by join only: no process known
+	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	e.clock.add(sessions.UnknownProcessTimeout - time.Minute)
+	if ended, _ := e.s.EndDead(ctx, alwaysAlive); len(ended) != 0 {
+		t.Fatalf("ended early: %v", ended)
+	}
+	e.clock.add(time.Minute)
+	if ended, _ := e.s.EndDead(ctx, alwaysAlive); len(ended) != 1 {
+		t.Fatalf("ended %v", ended)
+	}
+	if p := e.places(t, "builder"); len(p) != 0 {
+		t.Fatalf("places %+v", p)
+	}
+	e.join(t, "builder", "session-2") // the name is free again
+}
+
+func TestReusedPidDoesNotKeepASessionAlive(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start) // pid 4242 started at 111
+	sameProcess := func(pid int, start int64) bool { return pid == 4242 && start == 111 }
+	if ended, _ := e.s.EndDead(ctx, sameProcess); len(ended) != 0 {
+		t.Fatalf("ended a live session: %v", ended)
+	}
+	reused := func(pid int, start int64) bool { return pid == 4242 && start == 999 }
+	if ended, _ := e.s.EndDead(ctx, reused); len(ended) != 1 {
+		t.Fatalf("ended %v", ended)
+	}
+}
+
+func TestClearKeepsTheNameAndPlaces(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End, Reason: sessions.EndReasonClear}); err != nil {
+		t.Fatal(err)
+	}
+	r := e.report(t, "session-2", sessions.Start) // same process 4242/111
+	if got, _ := e.s.Resolve(ctx, "session-2"); got != "builder" {
+		t.Fatalf("new session bound to %q", got)
+	}
+	if got, _ := e.s.Resolve(ctx, "session-1"); got != "" {
+		t.Fatalf("old session still bound to %q", got)
+	}
+	if p := e.places(t, "builder"); len(p) != 1 {
+		t.Fatalf("places %+v", p)
+	}
+	if !strings.Contains(r.Context, "You hold db/shared") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestLostPlacesAreAnnounced(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false)
+	e.report(t, "session-1", sessions.Start)
+	e.clock.add(10 * time.Minute)
+	r := e.report(t, "session-1", sessions.Prompt)
+	if !strings.Contains(r.Context, "no longer hold or wait for db/shared") {
+		t.Fatalf("context %q", r.Context)
+	}
+	if r := e.report(t, "session-1", sessions.Prompt); r.Context != "" {
+		t.Fatalf("repeated: %q", r.Context)
+	}
+}
+
+func TestConcurrentHooksNoteOnce(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	notes := 0
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Prompt})
+			if err != nil {
+				t.Error(err)
+			}
+			if r.Context != "" {
+				mu.Lock()
+				notes++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if notes != 1 {
+		t.Fatalf("%d notes", notes)
 	}
 }

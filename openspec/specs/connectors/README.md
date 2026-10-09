@@ -20,6 +20,7 @@ Integrations with agent tools: the sessions they report, and the Claude Code con
 - [Sessions Are Registered By Connectors](sessions/spec.md#requirement-sessions-are-registered-by-connectors)
 - [Session States](sessions/spec.md#requirement-session-states)
 - [Dead Processes End Their Sessions](sessions/spec.md#requirement-dead-processes-end-their-sessions)
+- [A New Conversation In The Same Process Keeps The Name](sessions/spec.md#requirement-a-new-conversation-in-the-same-process-keeps-the-name)
 - [Ended Sessions Give Back Their Places](sessions/spec.md#requirement-ended-sessions-give-back-their-places)
 - [Listing Sessions](sessions/spec.md#requirement-listing-sessions)
 

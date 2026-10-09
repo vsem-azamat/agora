@@ -34,15 +34,31 @@ The system SHALL keep each session `busy`, `idle` or `ended` as reported by its 
 
 ### Requirement: Dead Processes End Their Sessions
 
-The system SHALL check every second whether the process of each session that has not ended still exists on the hub's machine, and SHALL end the session when it does not.
+The system SHALL check every second whether the process of each session that has not ended still runs on the hub's machine, telling a reused process number apart by the process start time, and SHALL end the session when it does not. A session whose process is unknown SHALL end after 6 hours without events from it.
 
 #### Scenario: Process gone
 - **WHEN** the process of a session exits without its connector reporting the end
 - **THEN** by the next check, at most a second later, the session is `ended`
 
+#### Scenario: Process number reused
+- **WHEN** the session's process exited and another process now has the same number
+- **THEN** the session is `ended`
+
+#### Scenario: Unknown process
+- **WHEN** a session whose process is unknown sends no event for 6 hours
+- **THEN** it is `ended`, and its name is free
+
+### Requirement: A New Conversation In The Same Process Keeps The Name
+
+The system SHALL move the name of a live session to a session that starts in the same process, and SHALL then end the old session without giving back its places; an end that the agent tool reports as caused by starting a new conversation SHALL not give back places.
+
+#### Scenario: Clearing the conversation
+- **WHEN** the agent `builder` holds `db/shared` and its Claude Code conversation is cleared, which ends the session and starts a new one in the same process
+- **THEN** the new session is bound to `builder`, and `builder` still holds `db/shared`
+
 ### Requirement: Ended Sessions Give Back Their Places
 
-The system SHALL, when a session ends, remove the agent bound to it from every resource queue, unless that agent is now bound to another session that has not ended.
+The system SHALL, when a session ends, remove the agent bound to it from every resource queue in the same step, unless that agent is now bound to another session that has not ended.
 
 #### Scenario: Session ends while holding a lock
 - **WHEN** the session bound to `builder` ends while `builder` holds `example-app/merge` and waits for `heavy/typecheck`

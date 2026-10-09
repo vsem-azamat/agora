@@ -122,7 +122,7 @@ func defaultDB() string {
 
 // sessionID is the agent session this command runs in, as the agent tool exposes it.
 func sessionID() string {
-	for _, v := range []string{"AGORA_SESSION", "CLAUDE_CODE_SESSION_ID"} {
+	for _, v := range []string{"CLAUDE_CODE_SESSION_ID", "AGORA_SESSION"} {
 		if id := os.Getenv(v); id != "" {
 			return id
 		}

@@ -5,18 +5,16 @@ package claudecode
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/proc"
 )
 
 // Kind is how Claude Code sessions are labelled.
@@ -31,6 +29,7 @@ type hookInput struct {
 	HookEventName  string `json:"hook_event_name"`
 	CWD            string `json:"cwd"`
 	StopHookActive bool   `json:"stop_hook_active"`
+	Reason         string `json:"reason"` // SessionEnd: why the session ends, e.g. "clear"
 }
 
 var events = map[string]agorav1.SessionEvent{
@@ -55,9 +54,14 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
 	defer cancel()
+	pid := agentPID()
+	var start int64
+	if pid > 0 {
+		start = proc.StartTime(pid)
+	}
 	resp, err := client.Report(ctx, connect.NewRequest(&agorav1.ReportRequest{
-		SessionId: h.SessionID, Kind: Kind, Event: ev, Pid: int32(agentPID()),
-		Cwd: h.CWD, Terminal: os.Getenv("AGORA_TERMINAL"), StopActive: h.StopHookActive,
+		SessionId: h.SessionID, Kind: Kind, Event: ev, Pid: int32(pid), PidStart: start,
+		Cwd: h.CWD, Terminal: os.Getenv("AGORA_TERMINAL"), StopActive: h.StopHookActive, Reason: h.Reason,
 	}))
 	if err != nil {
 		return fmt.Errorf("report to hub: %w", err)
@@ -80,35 +84,14 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 func agentPID() int {
 	pid := os.Getppid()
 	for range 6 {
-		comm, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
-		if err != nil {
-			break
-		}
-		if strings.TrimSpace(string(comm)) == "claude" {
+		if proc.Command(pid) == "claude" {
 			return pid
 		}
-		next, err := parentOf(pid)
+		next, err := proc.Parent(pid)
 		if err != nil || next <= 1 {
 			break
 		}
 		pid = next
 	}
 	return 0
-}
-
-func parentOf(pid int) (int, error) {
-	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, err
-	}
-	// the command name in field 2 may contain spaces; fields after the last ')' are fixed
-	i := strings.LastIndexByte(string(stat), ')')
-	if i < 0 {
-		return 0, errors.New("unexpected stat format")
-	}
-	fields := strings.Fields(string(stat)[i+1:])
-	if len(fields) < 2 {
-		return 0, errors.New("unexpected stat format")
-	}
-	return strconv.Atoi(fields[1])
 }

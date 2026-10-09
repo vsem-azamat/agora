@@ -55,6 +55,10 @@ message ReportRequest {
   string terminal = 6;
   // The turn is already continuing because of an earlier block.
   bool stop_active = 7;
+  // Start time of the process, in the units the platform reports (0 when unknown).
+  int64 pid_start = 8;
+  // Why the session ends (for END), as the agent tool reports it, e.g. "clear".
+  string reason = 9;
 }
 
 message ReportResponse {

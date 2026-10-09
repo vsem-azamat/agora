@@ -158,6 +158,8 @@ func TestNoHubIsReported(t *testing.T) {
 }
 
 func TestIdentityIsRequired(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
 	socket := startHub(t)
 	r := agora(context.Background(), socket, "", "lock", "r")
 	if r.code != 1 || !strings.Contains(r.stderr, "--as") {
@@ -213,6 +215,7 @@ func TestJoinedSessionActsWithoutAName(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()
 	t.Setenv("AGORA_NAME", "")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "") // the test may itself run inside Claude Code
 	t.Setenv("AGORA_SESSION", "session-123")
 	if r := agora(ctx, socket, "", "join", "builder"); r.code != 0 || !strings.Contains(r.stdout, "joined as builder; commands from this session") {
 		t.Fatalf("join: %+v", r)
@@ -234,6 +237,7 @@ func TestJoinedSessionActsWithoutAName(t *testing.T) {
 func TestTakenNameIsRefused(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
 	t.Setenv("AGORA_SESSION", "session-aaa")
 	agora(ctx, socket, "", "join", "builder")
 	t.Setenv("AGORA_SESSION", "session-bbb")
