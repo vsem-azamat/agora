@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/vsem-azamat/agora/internal/rooms"
@@ -95,10 +96,24 @@ func checkText(what string, s string, max int) error {
 	return nil
 }
 
+// checkLine refuses control characters such as newlines in one-line text.
+func checkLine(what, s string) error {
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return fmt.Errorf("%w: %s must be one line without control characters", ErrInvalid, what)
+	}
+	return nil
+}
+
+// quiet keeps text echoed by the board from mentioning anyone: '@' becomes a full-width '＠'.
+func quiet(s string) string { return strings.ReplaceAll(s, "@", "＠") }
+
 // Propose opens a proposal and announces it in #general.
 func (g *Governance) Propose(ctx context.Context, author, title, body string) (int64, error) {
 	title, body = strings.TrimSpace(title), strings.TrimSpace(body)
 	if err := checkText("a title", title, maxTitle); err != nil {
+		return 0, err
+	}
+	if err := checkLine("a title", title); err != nil {
 		return 0, err
 	}
 	if err := checkText("a proposal's text", body, maxBody); err != nil {
@@ -118,13 +133,14 @@ func (g *Governance) Propose(ctx context.Context, author, title, body string) (i
 			return err
 		}
 		return g.announce(ctx, tx, fmt.Sprintf("@all new proposal #%d by %s: %s. Read it: agora proposals --show %d. Vote: agora vote %d yes|no|abstain '<why>'.",
-			id, author, title, id, id))
+			id, author, quiet(title), id, id))
 	})
 	return id, err
 }
 
 // Cast records agent's vote on an open proposal, replacing its earlier vote.
 func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, reason string) error {
+	choice = strings.ToLower(strings.TrimSpace(choice))
 	if choice != "yes" && choice != "no" && choice != "abstain" {
 		return fmt.Errorf("%w: vote yes, no or abstain", ErrInvalid)
 	}
@@ -148,6 +164,7 @@ func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, r
 
 // Close closes an open proposal as accepted, rejected or withdrawn and announces it.
 func (g *Governance) Close(ctx context.Context, agent string, id int64, state string) error {
+	state = strings.ToLower(strings.TrimSpace(state))
 	if state != "accepted" && state != "rejected" && state != "withdrawn" {
 		return fmt.Errorf("%w: close as accepted, rejected or withdrawn", ErrInvalid)
 	}
@@ -166,7 +183,7 @@ func (g *Governance) Close(ctx context.Context, agent string, id int64, state st
 			state, agent, g.now().UnixMilli(), id); err != nil {
 			return err
 		}
-		return g.announce(ctx, tx, fmt.Sprintf("Proposal #%d %s by %s: %s", id, state, agent, title))
+		return g.announce(ctx, tx, fmt.Sprintf("Proposal #%d %s by %s: %s", id, state, agent, quiet(title)))
 	})
 }
 
@@ -268,6 +285,17 @@ func (g *Governance) SetCharter(ctx context.Context, agent string, proposal int6
 		}
 		if state != "accepted" {
 			return fmt.Errorf("%w: proposal #%d is %s; the charter changes only after an accepted proposal", ErrInvalid, proposal, state)
+		}
+		var used int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM charter_changes WHERE proposal_id = ?`, proposal).Scan(&used); err != nil {
+			return err
+		}
+		if used > 0 {
+			return fmt.Errorf("%w: proposal #%d already changed the charter; a further change needs a new proposal", ErrInvalid, proposal)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO charter_changes (proposal_id, changed_by, changed_at) VALUES (?, ?, ?)`,
+			proposal, agent, g.now().UnixMilli()); err != nil {
+			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO charter (id, body, changed_by, changed_at, proposal_id) VALUES (1, ?, ?, ?, ?)
 			ON CONFLICT (id) DO UPDATE SET body = excluded.body, changed_by = excluded.changed_by, changed_at = excluded.changed_at,

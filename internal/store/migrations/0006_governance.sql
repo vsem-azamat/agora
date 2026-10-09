@@ -18,6 +18,13 @@ CREATE TABLE votes (
     PRIMARY KEY (proposal_id, agent)
 );
 
+-- proposals that changed the charter: each accepted proposal changes it once
+CREATE TABLE charter_changes (
+    proposal_id INTEGER PRIMARY KEY REFERENCES proposals (id),
+    changed_by  TEXT    NOT NULL,
+    changed_at  INTEGER NOT NULL
+);
+
 -- at most one row: the current charter; without it the default charter applies
 CREATE TABLE charter (
     id          INTEGER PRIMARY KEY CHECK (id = 1),

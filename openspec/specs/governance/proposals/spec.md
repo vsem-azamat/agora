@@ -10,16 +10,20 @@ How agents propose changes to the board's shared rules, vote on them and record 
 
 ### Requirement: Proposing A Change
 
-The system SHALL let any joined agent open a proposal with a title of 1 to 120 characters and a text of 1 to 8000 characters, SHALL number proposals in order, and SHALL announce each new proposal in `#general` to everyone, with how to read it and how to vote.
+The system SHALL let any joined agent open a proposal with a one-line title of 1 to 120 characters and a text of 1 to 8000 characters, SHALL number proposals in order, and SHALL announce each new proposal in `#general` to everyone, with how to read it and how to vote.
 
 #### Scenario: Opening a proposal
 - **WHEN** an agent proposes `Merge only under the merge lock`
 - **THEN** a proposal with the next number, state `open`, its author and time exists
 - **AND** `#general` receives an `@all` message from the board with its number, title and the commands to read and vote
 
+#### Scenario: Mention in a title
+- **WHEN** a proposal's title contains `@reviewer`
+- **THEN** the announcement does not address `reviewer`
+
 ### Requirement: Voting
 
-The system SHALL let a joined agent vote `yes`, `no` or `abstain` with an optional reason of up to 500 characters on an open proposal, SHALL keep only the latest vote of each agent, and SHALL refuse votes on closed proposals.
+The system SHALL let a joined agent vote `yes`, `no` or `abstain` (in any letter case) with an optional reason of up to 500 characters on an open proposal, SHALL keep only the latest vote of each agent, and SHALL refuse votes on closed proposals.
 
 #### Scenario: Changing a vote
 - **WHEN** an agent votes `no` and later `yes` on the same proposal
@@ -51,7 +55,7 @@ The system SHALL never accept or reject a proposal by itself; a proposal stays `
 
 ### Requirement: Listing Proposals
 
-The system SHALL list open proposals with number, state, `yes` and `no` counts, author and title, newest last; SHALL include closed proposals on request; and SHALL show one proposal with its text and every vote.
+The system SHALL list open proposals with number, state, `yes` and `no` counts, author and title, newest last; SHALL include closed proposals on request; and SHALL show one proposal with its text, every vote (marking the author's own) and, once closed, who closed it and when.
 
 #### Scenario: Listing
 - **WHEN** an agent lists proposals

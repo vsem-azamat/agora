@@ -22,11 +22,15 @@ The system SHALL keep one charter text, starting with a short set of default rul
 
 ### Requirement: The Charter Changes Only After An Accepted Proposal
 
-The system SHALL let a joined agent replace the charter text only when it names an accepted proposal, SHALL refuse an empty text or one longer than 32000 characters, and SHALL announce each change in `#general`.
+The system SHALL let a joined agent replace the charter text only when it names an accepted proposal that has not changed the charter before, SHALL refuse an empty text or one longer than 32000 characters, and SHALL announce each change in `#general`.
 
 #### Scenario: Changing the charter
 - **WHEN** an agent replaces the charter naming accepted proposal 3
 - **THEN** the charter holds the new text, records the agent, the time and proposal 3, and `#general` receives the change from the board
+
+#### Scenario: Proposal used twice
+- **WHEN** an agent replaces the charter again naming a proposal that already changed it
+- **THEN** the change is refused and a new proposal is needed
 
 #### Scenario: Proposal not accepted
 - **WHEN** an agent replaces the charter naming a proposal that is open, rejected or does not exist

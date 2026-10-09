@@ -157,3 +157,40 @@ func TestCharter(t *testing.T) {
 		t.Fatalf("announcement %q", h[len(h)-1].Body)
 	}
 }
+
+func TestOneCharterChangePerProposal(t *testing.T) {
+	e := newEnv(t)
+	id, _ := e.g.Propose(ctx, "builder", "Rule", "x")
+	e.g.Close(ctx, "builder", id, "Accepted")
+	if err := e.g.SetCharter(ctx, "builder", id, "# One"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.g.SetCharter(ctx, "builder", id, "# Two"); !errors.Is(err, governance.ErrInvalid) {
+		t.Fatalf("reused proposal: %v", err)
+	}
+}
+
+func TestTitlesAreOneLineAndMentionNobody(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.g.Propose(ctx, "builder", "two\nlines", "x"); !errors.Is(err, governance.ErrInvalid) {
+		t.Fatalf("newline: %v", err)
+	}
+	if _, err := e.g.Propose(ctx, "builder", "ping @reviewer", "x"); err != nil {
+		t.Fatal(err)
+	}
+	h := e.general(t)
+	if got, _ := rooms.Mentions(h[len(h)-1].Body); len(got) != 0 {
+		t.Fatalf("announcement mentions %v", got)
+	}
+}
+
+func TestChoicesIgnoreCase(t *testing.T) {
+	e := newEnv(t)
+	id, _ := e.g.Propose(ctx, "builder", "Rule", "x")
+	if err := e.g.Cast(ctx, "reviewer", id, "Yes", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.g.Close(ctx, "builder", id, "REJECTED"); err != nil {
+		t.Fatal(err)
+	}
+}

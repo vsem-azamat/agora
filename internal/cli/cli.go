@@ -406,12 +406,16 @@ func statusCmd(o *options) *cobra.Command {
 			}
 			props, err := o.governance().ListProposals(cmd.Context(), connect.NewRequest(&agorav1.ListProposalsRequest{}))
 			if err != nil {
-				return err
+				fmt.Fprintf(o.out, "(proposals unavailable: %s)\n", message(err))
 			}
-			if len(props.Msg.GetProposals()) > 0 {
+			if err == nil && len(props.Msg.GetProposals()) > 0 {
+				list := props.Msg.GetProposals()
 				fmt.Fprintln(o.out, "OPEN PROPOSALS")
-				for _, p := range props.Msg.GetProposals() {
+				for _, p := range list[:min(len(list), 10)] {
 					printProposalLine(o.out, p)
+				}
+				if len(list) > 10 {
+					fmt.Fprintf(o.out, "  +%d more: agora proposals\n", len(list)-10)
 				}
 			}
 			if len(res.Msg.GetResources()) > 0 {
@@ -733,10 +737,14 @@ func proposalsCmd(o *options) *cobra.Command {
 					fmt.Fprintln(o.out, "  none yet")
 				}
 				for _, v := range p.GetVotes() {
-					fmt.Fprintf(o.out, "  %-16s %-7s %s  %s\n", v.GetAgent(), v.GetChoice(), v.GetAt().AsTime().Local().Format("15:04"), v.GetReason())
+					who := v.GetAgent()
+					if who == p.GetAuthor() {
+						who += " (author)"
+					}
+					fmt.Fprintf(o.out, "  %-25s %-7s %s  %s\n", who, v.GetChoice(), v.GetAt().AsTime().Local().Format("15:04"), v.GetReason())
 				}
 				if p.GetClosedBy() != "" {
-					fmt.Fprintf(o.out, "\nClosed as %s by %s.\n", p.GetState(), p.GetClosedBy())
+					fmt.Fprintf(o.out, "\nClosed as %s by %s, %s.\n", p.GetState(), p.GetClosedBy(), p.GetClosedAt().AsTime().Local().Format("2006-01-02 15:04"))
 				}
 				return nil
 			}
@@ -778,8 +786,8 @@ func charterCmd(o *options) *cobra.Command {
 	}
 	var proposal string
 	set := &cobra.Command{
-		Use:   "set --proposal <n> [-]",
-		Short: "Replace the charter (read from standard input) after an accepted proposal",
+		Use:   "set --proposal <n> [file | -]",
+		Short: "Replace the charter after an accepted proposal, from a file or standard input",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, err := o.agent(cmd.Context())
@@ -790,9 +798,24 @@ func charterCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body, err := textArg(cmd, []string{"-"})
-			if err != nil {
-				return err
+			var body string
+			if len(args) == 1 && args[0] != "-" {
+				b, err := os.ReadFile(args[0])
+				if err != nil {
+					return err
+				}
+				body = string(b)
+			} else {
+				if f, ok := cmd.InOrStdin().(*os.File); ok {
+					if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
+						return fmt.Errorf("give the new charter as a file, or pipe it: agora charter set --proposal %s < charter.md", proposal)
+					}
+				}
+				b, err := io.ReadAll(cmd.InOrStdin())
+				if err != nil {
+					return err
+				}
+				body = string(b)
 			}
 			if _, err := o.governance().SetCharter(cmd.Context(), connect.NewRequest(&agorav1.SetCharterRequest{Agent: name, ProposalId: id, Body: body})); err != nil {
 				return err
