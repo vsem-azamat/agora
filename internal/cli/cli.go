@@ -174,6 +174,9 @@ func queueCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if lease <= 0 {
+				return fmt.Errorf("--lease must be positive, like 90s, 30m or 2h")
+			}
 			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(&agorav1.JoinRequest{
 				Key: args[0], Agent: agent, Note: strings.Join(args[1:], " "), Lease: durationpb.New(lease),
 			}))
@@ -271,8 +274,8 @@ func queueCmd(o *options) *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			n, err := strconv.Atoi(args[1])
-			if err != nil {
-				return fmt.Errorf("slots: %q is not a number", args[1])
+			if err != nil || n < 1 || n > queue.MaxSlots {
+				return fmt.Errorf("slots: %q must be a number from 1 to %d", args[1], queue.MaxSlots)
 			}
 			resp, err := o.resources().SetSlots(cmd.Context(), connect.NewRequest(&agorav1.SetSlotsRequest{Key: args[0], Slots: int32(n)}))
 			if err != nil {
@@ -287,16 +290,45 @@ func queueCmd(o *options) *cobra.Command {
 	return cmd
 }
 
+// waitTurn streams the agent's position until it holds the slot. When the hub restarts, the
+// queue survives, so the wait reconnects instead of failing.
 func (o *options) waitTurn(ctx context.Context, key, agent string) error {
+	for {
+		err := o.waitOnce(ctx, key, agent)
+		if err == nil || ctx.Err() != nil {
+			return err
+		}
+		code := connect.CodeOf(err)
+		if code != connect.CodeUnavailable && code != connect.CodeCanceled && code != connect.CodeUnknown {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func (o *options) waitOnce(ctx context.Context, key, agent string) error {
 	stream, err := o.resources().Wait(ctx, connect.NewRequest(&agorav1.WaitRequest{Key: key, Agent: agent}))
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
+	held := false
 	for stream.Receive() {
-		printEntry(o.out, stream.Msg().GetEntry())
+		e := stream.Msg().GetEntry()
+		printEntry(o.out, e)
+		held = e.GetState() == agorav1.EntryState_ENTRY_STATE_HELD
 	}
-	return stream.Err()
+	if err := stream.Err(); err != nil {
+		return err
+	}
+	if !held {
+		return connect.NewError(connect.CodeUnavailable, errors.New("the hub ended the wait"))
+	}
+	return nil
 }
 
 func (o *options) release(ctx context.Context, key, agent, actor string, force bool) error {
@@ -305,14 +337,53 @@ func (o *options) release(ctx context.Context, key, agent, actor string, force b
 		return err
 	}
 	switch {
-	case !resp.Msg.GetReleased():
-		fmt.Fprintf(o.out, "%s: %s was not queued\n", key, agent)
-	case agent != actor:
+	case resp.Msg.GetReleased() && agent != actor:
 		fmt.Fprintf(o.out, "removed %s from %s\n", agent, key)
-	default:
+	case resp.Msg.GetReleased():
 		fmt.Fprintf(o.out, "released %s\n", key)
+	default:
+		holders, err := o.holders(ctx, key)
+		if err != nil {
+			return err
+		}
+		if len(holders) > 0 && agent == actor {
+			return fmt.Errorf("%s is held by %s, not by you; release it with --force only if they are gone", key, strings.Join(holders, ", "))
+		}
+		fmt.Fprintf(o.out, "%s: %s was not queued\n", key, agent)
 	}
 	return nil
+}
+
+// holders describes who holds or is offered key, for refusals.
+func (o *options) holders(ctx context.Context, key string) ([]string, error) {
+	resp, err := o.resources().List(ctx, connect.NewRequest(&agorav1.ListRequest{Key: key}))
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, r := range resp.Msg.GetResources() {
+		out = append(out, describeHolders(r)...)
+	}
+	return out, nil
+}
+
+func describeHolders(r *agorav1.Resource) []string {
+	var out []string
+	waiting := 0
+	for _, e := range r.GetEntries() {
+		switch e.GetState() {
+		case agorav1.EntryState_ENTRY_STATE_HELD:
+			out = append(out, fmt.Sprintf("%s until %s%s", e.GetAgent(), clock(e.GetExpiresAt().AsTime()), noteSuffix(e.GetNote())))
+		case agorav1.EntryState_ENTRY_STATE_OFFERED:
+			out = append(out, fmt.Sprintf("%s (its turn, claim by %s)", e.GetAgent(), clock(e.GetExpiresAt().AsTime())))
+		default:
+			waiting++
+		}
+	}
+	if waiting > 0 && len(out) > 0 {
+		out[len(out)-1] += fmt.Sprintf("; %d waiting", waiting)
+	}
+	return out
 }
 
 // --- locks: queues that do not wait --------------------------------------------------
@@ -328,6 +399,9 @@ func lockCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if ttl <= 0 {
+				return fmt.Errorf("--ttl must be positive, like 90s, 30m or 2h")
+			}
 			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(&agorav1.JoinRequest{
 				Key: args[0], Agent: agent, Note: strings.Join(args[1:], " "), Lease: durationpb.New(ttl), NoWait: true,
 			}))
@@ -335,18 +409,12 @@ func lockCmd(o *options) *cobra.Command {
 				return err
 			}
 			if e := resp.Msg.GetEntry(); e != nil {
-				if e.GetState() != agorav1.EntryState_ENTRY_STATE_HELD {
-					printEntry(o.out, e)
-					return nil
-				}
 				fmt.Fprintf(o.out, "locked %s until %s\n", e.GetKey(), clock(e.GetExpiresAt().AsTime()))
 				return nil
 			}
-			var held []string
-			for _, h := range resp.Msg.GetResource().GetEntries() {
-				if h.GetState() == agorav1.EntryState_ENTRY_STATE_HELD {
-					held = append(held, fmt.Sprintf("%s until %s%s", h.GetAgent(), clock(h.GetExpiresAt().AsTime()), noteSuffix(h.GetNote())))
-				}
+			held := describeHolders(resp.Msg.GetResource())
+			if len(held) == 0 {
+				return &exitError{code: ExitRefused, msg: fmt.Sprintf("%s: you are queued for it; wait with `agora queue wait %s`", args[0], args[0])}
 			}
 			return &exitError{code: ExitRefused, msg: fmt.Sprintf("%s is held by %s", args[0], strings.Join(held, ", "))}
 		},
@@ -373,14 +441,19 @@ func unlockCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			released := 0
 			for _, r := range resp.Msg.GetResources() {
 				for _, e := range r.GetEntries() {
 					if e.GetState() == agorav1.EntryState_ENTRY_STATE_HELD {
 						if err := o.release(cmd.Context(), args[0], e.GetAgent(), agent, true); err != nil {
 							return err
 						}
+						released++
 					}
 				}
+			}
+			if released == 0 {
+				fmt.Fprintf(o.out, "%s is not locked\n", args[0])
 			}
 			return nil
 		},

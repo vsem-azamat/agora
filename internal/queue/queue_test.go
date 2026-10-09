@@ -423,3 +423,38 @@ func TestQueuesSurviveARestart(t *testing.T) {
 	expect(t, q, "r", "a", queue.Held, 0)
 	expect(t, q, "r", "b", queue.Waiting, 1)
 }
+
+func TestLockWhileWaitingIsRefused(t *testing.T) {
+	q, _ := newQueue(t)
+	join(t, q, "r", "a")
+	join(t, q, "r", "b")
+	e, _, err := q.Join(ctx, "r", "b", "", 0, true)
+	if err != nil || e != nil {
+		t.Fatalf("entry %+v, err %v", e, err)
+	}
+	expect(t, q, "r", "b", queue.Waiting, 1)
+}
+
+func TestLockingAgainRenewsTheLease(t *testing.T) {
+	q, c := newQueue(t)
+	q.Join(ctx, "r", "a", "", 10*time.Minute, true)
+	c.add(5 * time.Minute)
+	e, _, err := q.Join(ctx, "r", "a", "longer", 2*time.Hour, true)
+	if err != nil || e == nil || !e.Expires.Equal(c.now().Add(2*time.Hour)) || e.Note != "longer" {
+		t.Fatalf("entry %+v, err %v", e, err)
+	}
+}
+
+func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
+	q, _ := newQueue(t)
+	for _, lease := range []time.Duration{-time.Minute, queue.MaxLease + time.Second} {
+		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, queue.ErrInvalid) {
+			t.Errorf("lease %v: err = %v", lease, err)
+		}
+	}
+	for _, n := range []int{0, queue.MaxSlots + 1} {
+		if _, err := q.SetSlots(ctx, "r", n); !errors.Is(err, queue.ErrInvalid) {
+			t.Errorf("slots %d: err = %v", n, err)
+		}
+	}
+}

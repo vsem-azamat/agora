@@ -10,7 +10,7 @@ Fair, first-come access to resources that only a limited number of agents may us
 
 ### Requirement: Resources Have Slots
 
-The system SHALL give every resource a key and a number of slots, 1 unless set otherwise, SHALL accept keys of up to 64 characters made of lowercase letters, digits, `.`, `_`, `-` and `/` that start with a letter or digit and contain no `..`, and SHALL let an agent change the number of slots of a resource.
+The system SHALL give every resource a key and a number of slots, 1 unless set otherwise, SHALL accept keys of up to 64 characters made of lowercase letters, digits, `.`, `_`, `-` and `/` that start with a letter or digit and contain no `..`, and SHALL let an agent change the number of slots of a resource to any number from 1 to 1000.
 
 #### Scenario: First use of a key
 - **WHEN** an agent joins the queue of `example-app/merge`, which nobody used before
@@ -30,7 +30,7 @@ The system SHALL give every resource a key and a number of slots, 1 unless set o
 
 ### Requirement: Joining A Queue
 
-The system SHALL let an agent join the queue of a resource with an optional note and a lease duration (30 minutes by default); SHALL grant a slot at once when one is free and nobody is waiting; and SHALL otherwise place the agent at the end of the queue and report its position. Joining a queue the agent is already in SHALL keep its place and update its note.
+The system SHALL let an agent join the queue of a resource with an optional note and a lease duration (30 minutes by default, at most 7 days, never zero or negative); SHALL grant a slot at once when one is free and nobody is waiting; and SHALL otherwise place the agent at the end of the queue and report its position. Joining a queue the agent is already in SHALL keep its place and update its note.
 
 #### Scenario: Free resource
 - **WHEN** an agent joins the queue of a free resource
@@ -118,7 +118,7 @@ The system SHALL let an agent leave a queue whether it holds a slot or waits, SH
 
 ### Requirement: Locks Are Queues That Do Not Wait
 
-The system SHALL offer locks as a shorthand: taking a lock joins the resource's queue only if a slot can be held at once, and otherwise leaves the queue unchanged and reports the holders with their notes and lease ends, signalling the refusal to scripts with exit code 2. Releasing a lock leaves the queue.
+The system SHALL offer locks as a shorthand: taking a lock joins the resource's queue only if a slot can be held at once, and otherwise leaves the queue unchanged and reports the holders with their notes and lease ends, and any agent whose turn it is, signalling the refusal to scripts with exit code 2. Taking a lock the agent already holds renews it for the new duration; taking a lock while only waiting for it is refused. Releasing a lock leaves the queue, and releasing a lock someone else holds is refused with the holder's name unless forced.
 
 #### Scenario: Free lock
 - **WHEN** an agent takes the lock `example-app/merge` for 10 minutes with the note `merging #57`
@@ -127,6 +127,18 @@ The system SHALL offer locks as a shorthand: taking a lock joins the resource's 
 #### Scenario: Taken lock
 - **WHEN** an agent takes a lock another agent holds until 12:30
 - **THEN** the command exits with code 2, names the holder, `12:30` and the holder's note, and the agent is not queued
+
+#### Scenario: Locking again
+- **WHEN** the holder of a lock that ends in 5 minutes takes it again for 2 hours
+- **THEN** it holds the lock until 2 hours from now
+
+#### Scenario: Locking while queued
+- **WHEN** an agent that waits in a resource's queue takes its lock
+- **THEN** the command exits with code 2 and the agent keeps its place in the queue
+
+#### Scenario: Releasing someone else's lock
+- **WHEN** an agent releases a lock another agent holds, without force
+- **THEN** the command fails and names the holder
 
 ### Requirement: Listing Resources
 

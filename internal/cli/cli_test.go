@@ -78,7 +78,7 @@ func TestUnlockOthersNeedsForce(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()
 	agora(ctx, socket, "a", "lock", "db/shared")
-	if r := agora(ctx, socket, "b", "unlock", "db/shared"); !strings.Contains(r.stdout, "b was not queued") {
+	if r := agora(ctx, socket, "b", "unlock", "db/shared"); r.code != 1 || !strings.Contains(r.stderr, "held by a until") {
 		t.Fatalf("unlock without force: %+v", r)
 	}
 	if r := agora(ctx, socket, "b", "unlock", "db/shared", "--force"); r.code != 0 || !strings.Contains(r.stdout, "removed a from db/shared") {
@@ -160,5 +160,49 @@ func TestIdentityIsRequired(t *testing.T) {
 	r := agora(context.Background(), socket, "", "lock", "r")
 	if r.code != 1 || !strings.Contains(r.stderr, "--as") {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestLockWhileQueuedIsRefused(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	agora(ctx, socket, "a", "lock", "r")
+	agora(ctx, socket, "b", "queue", "join", "r")
+	if r := agora(ctx, socket, "b", "lock", "r"); r.code != cli.ExitRefused || !strings.Contains(r.stderr, "held by a until") || !strings.Contains(r.stderr, "1 waiting") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestRefusalNamesAnAgentWhoseTurnItIs(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	agora(ctx, socket, "a", "lock", "r")
+	agora(ctx, socket, "b", "queue", "join", "r")
+	agora(ctx, socket, "a", "unlock", "r")
+	if r := agora(ctx, socket, "c", "lock", "r"); r.code != cli.ExitRefused || !strings.Contains(r.stderr, "b (its turn, claim by") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestUnlockForceWithNothingHeld(t *testing.T) {
+	socket := startHub(t)
+	if r := agora(context.Background(), socket, "a", "unlock", "r", "--force"); r.code != 0 || !strings.Contains(r.stdout, "r is not locked") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestBadValuesAreRefused(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	for _, args := range [][]string{
+		{"lock", "r", "--ttl", "-1m"},
+		{"lock", "r", "--ttl", "0s"},
+		{"queue", "join", "r", "--lease", "0s"},
+		{"queue", "slots", "r", "4294967297"},
+		{"queue", "slots", "r", "0"},
+	} {
+		if r := agora(ctx, socket, "a", args...); r.code != 1 {
+			t.Errorf("%v: %+v", args, r)
+		}
 	}
 }

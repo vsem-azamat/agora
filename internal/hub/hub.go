@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"connectrpc.com/connect"
@@ -71,51 +72,95 @@ func (h *Hub) Sweep(ctx context.Context) {
 	}
 }
 
-// Listen opens the hub's unix socket at path, readable and writable by the owner only. A stale
-// socket left by a hub that is no longer running is replaced; a live one is an error.
+// MaxSocketPath is the longest unix socket path that works on every supported system.
+const MaxSocketPath = 104
+
+// Listen opens the hub's unix socket at path, readable and writable by the owner only. An
+// exclusive lock on path+".lock" keeps a second hub away, so a socket left by a hub that no
+// longer runs can be replaced safely; a path that is not a socket is never removed.
 func Listen(path string) (net.Listener, error) {
+	if len(path) > MaxSocketPath {
+		return nil, fmt.Errorf("socket path is %d bytes; unix sockets allow at most %d: %s", len(path), MaxSocketPath, path)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(path); err == nil {
-		if c, err := net.DialTimeout("unix", path, time.Second); err == nil {
-			c.Close()
-			return nil, fmt.Errorf("a hub is already running on %s", path)
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lock.Close()
+		return nil, fmt.Errorf("a hub is already running on %s", path)
+	}
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSocket == 0 {
+			lock.Close()
+			return nil, fmt.Errorf("%s exists and is not a socket; choose another --socket", path)
 		}
-		if err := os.Remove(path); err != nil {
+		if err := os.Remove(path); err != nil { // a socket nobody serves: we hold the lock
+			lock.Close()
 			return nil, err
 		}
 	}
 	l, err := net.Listen("unix", path)
 	if err != nil {
+		lock.Close()
 		return nil, err
 	}
 	if err := os.Chmod(path, 0o600); err != nil {
 		l.Close()
+		lock.Close()
 		return nil, err
 	}
-	return l, nil
+	return &lockedListener{Listener: l, lock: lock}, nil
 }
 
-// Serve runs the hub on l until ctx ends.
+// lockedListener releases the hub lock when the listener closes.
+type lockedListener struct {
+	net.Listener
+	lock *os.File
+	once sync.Once
+}
+
+func (l *lockedListener) Close() error {
+	err := l.Listener.Close()
+	l.once.Do(func() { l.lock.Close() })
+	return err
+}
+
+// Serve runs the hub on l until ctx ends. On shutdown it ends open streams, lets unary calls
+// finish for up to 5 seconds, and returns only after the server has stopped.
 func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)
-	srv := &http.Server{Handler: h.Handler(), Protocols: protocols, ReadHeaderTimeout: 10 * time.Second}
+	base, endStreams := context.WithCancel(context.Background())
+	defer endStreams()
+	srv := &http.Server{
+		Handler:           h.Handler(),
+		Protocols:         protocols,
+		ReadHeaderTimeout: 10 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return base },
+	}
 	sweepCtx, stopSweep := context.WithCancel(ctx)
 	defer stopSweep()
 	go h.Sweep(sweepCtx)
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		<-ctx.Done()
+		endStreams() // waiting streams return; clients reconnect to the next hub
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	if err := srv.Serve(l); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+	err := srv.Serve(l)
+	if errors.Is(err, http.ErrServerClosed) {
+		<-stopped
+		return nil
 	}
-	return nil
+	return err
 }
 
 // signal lets any number of goroutines wait for the next change.
@@ -149,9 +194,7 @@ func (s *resources) Join(ctx context.Context, req *connect.Request[agorav1.JoinR
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	if e != nil {
-		s.h.changes.fire()
-	}
+	s.h.changes.fire() // even a refused lock may have settled the queue
 	return connect.NewResponse(&agorav1.JoinResponse{Entry: entryPB(e), Resource: resourcePB(res)}), nil
 }
 
@@ -177,6 +220,7 @@ func (s *resources) Wait(ctx context.Context, req *connect.Request[agorav1.WaitR
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-changed:
+		case <-time.After(SweepEvery): // a safety net: re-check even if no change was signalled
 		}
 	}
 }
@@ -196,12 +240,10 @@ func (s *resources) Release(ctx context.Context, req *connect.Request[agorav1.Re
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	if ok {
-		if m.GetActor() != "" && m.GetActor() != m.GetAgent() {
-			s.h.log.Warn("forced release", "resource", m.GetKey(), "agent", m.GetAgent(), "by", m.GetActor())
-		}
-		s.h.changes.fire()
+	if ok && m.GetActor() != "" && m.GetActor() != m.GetAgent() {
+		s.h.log.Warn("forced release", "resource", m.GetKey(), "agent", m.GetAgent(), "by", m.GetActor())
 	}
+	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.ReleaseResponse{Released: ok}), nil
 }
 
@@ -210,6 +252,7 @@ func (s *resources) List(ctx context.Context, req *connect.Request[agorav1.ListR
 	if err != nil {
 		return nil, toConnect(err)
 	}
+	s.h.changes.fire() // listing settles queues and may have offered a slot
 	out := &agorav1.ListResponse{}
 	for _, r := range rs {
 		out.Resources = append(out.Resources, resourcePB(r))

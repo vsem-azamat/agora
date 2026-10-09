@@ -26,7 +26,7 @@ Settling looks at one instant, so a long gap without any operation advances one 
 
 ## Operations
 
-- **Join** holds a slot at once only when one is free and nobody waits; otherwise it appends a `waiting` entry. Joining again updates the note only. `no_wait` (locks) inserts nothing unless the slot can be held at once.
+- **Join** holds a slot at once only when one is free and nobody waits; otherwise it appends a `waiting` entry. Joining again updates the note only. With `no_wait` (locks), a new agent is inserted only if it can hold a slot at once; a holder's lease is renewed for the new duration; an agent that waits or is offered is refused without losing its place.
 - **Claim** (used by waiting clients) turns an offer into a held slot and leaves other states unchanged. **Renew** does the same and also extends a held lease to now plus the entry's lease duration.
 - **Release** deletes the entry and settles, which offers the freed slot. Removing another agent's entry needs `force` and writes a `removals` row.
 - **Wait** (in the hub) loops: subscribe to the change signal, claim, send the entry when its state or position changed, return once held.

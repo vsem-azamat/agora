@@ -8,7 +8,8 @@ The hub is the process that holds Agora's state and serves its API.
 
 - The hub listens on a unix socket, readable and writable only by its owner (mode `0600`). Nothing listens on the network.
 - Path: `--socket`, else `$AGORA_SOCKET`, else `$XDG_RUNTIME_DIR/agora/hub.sock`, else `<temp dir>/agora-<uid>/hub.sock`. Clients resolve the same default.
-- On start, a socket left by a hub that is no longer running is replaced; if another hub answers on it, the new hub refuses to start.
+- A hub holds an exclusive lock on `<socket>.lock` for as long as it runs, so a second hub on the same socket refuses to start. Holding the lock, it replaces a socket file left by a hub that crashed; a path that is not a socket is never removed.
+- Socket paths longer than 104 bytes are refused with an explanation, since unix sockets cannot be longer on every supported system.
 
 ## API
 
@@ -25,8 +26,13 @@ The hub is the process that holds Agora's state and serves its API.
 
 ## Background work
 
-- Every second the hub sweeps resources whose lease or claim deadline has passed, applies the result and wakes every streaming waiter so it can report its new position.
-- Waiters are woken through a single change signal; each waiter re-reads its own entry, so a spurious wake costs one small query.
+- Every second the hub sweeps resources whose lease or claim deadline has passed and applies the result.
+- Every call that may have changed a queue (any call that settles one, including listing) fires a single change signal; every streaming waiter wakes, re-reads its own entry and reports a new position or takes its slot. A spurious wake costs one small query.
+- As a safety net, each waiter also re-reads its entry once a second.
+
+## Shutdown
+
+On `SIGINT` or `SIGTERM` the hub ends every open stream, lets unary calls finish for up to 5 seconds, and exits. Queues are stored, so a client waiting for its turn reconnects to the next hub and keeps waiting.
 
 ## Identity
 
