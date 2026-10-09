@@ -494,12 +494,24 @@ func TestCheckWake(t *testing.T) {
 		t.Fatal("woken by chatter")
 	}
 	e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0)
-	text, done, err := e.s.CheckWake(ctx, "session-1", turn)
-	if err != nil || !done || !strings.Contains(text, "can you take #57") {
-		t.Fatalf("text %q done %v err %v", text, done, err)
+	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
+	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57") {
+		t.Fatalf("wake %+v done %v err %v", w, done, err)
+	}
+	if left, _, _ := e.r.Unread(ctx, "builder", true, 0); len(left) != 1 {
+		t.Fatal("mention consumed before the wake was delivered")
+	}
+	if err := e.s.ConfirmWake(ctx, "session-1", w); err != nil {
+		t.Fatal(err)
 	}
 	if left, _, _ := e.r.Unread(ctx, "builder", true, 0); len(left) != 0 {
-		t.Fatalf("mention still unread: %+v", left)
+		t.Fatalf("mention still unread after the wake: %+v", left)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Busy {
+		t.Fatalf("woken session is %s", st)
+	}
+	if next, _ := e.s.Turn(ctx, "session-1"); next != turn+1 {
+		t.Fatalf("turn %d, want %d", next, turn+1)
 	}
 }
 
@@ -509,12 +521,23 @@ func TestWaitEndsQuietlyOnANewTurn(t *testing.T) {
 	e.report(t, "session-1", sessions.Stop)
 	turn, _ := e.s.Turn(ctx, "session-1")
 	e.report(t, "session-1", sessions.Prompt)
-	if text, done, _ := e.s.CheckWake(ctx, "session-1", turn); !done || text != "" {
-		t.Fatalf("text %q done %v", text, done)
+	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); !done || w != nil {
+		t.Fatalf("wake %+v done %v", w, done)
 	}
 }
 
-func TestOfferWakes(t *testing.T) {
+func TestWaitEndsWhenTheSessionLosesItsAgent(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.report(t, "session-1", sessions.Stop)
+	turn, _ := e.s.Turn(ctx, "session-1")
+	e.s.Join(ctx, "builder", "session-2", true)
+	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); !done || w != nil {
+		t.Fatalf("wake %+v done %v", w, done)
+	}
+}
+
+func TestAnOfferWakesOnce(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.Stop)
@@ -522,9 +545,15 @@ func TestOfferWakes(t *testing.T) {
 	e.q.Join(ctx, "example-app/merge", "other", "", 0, false)
 	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
 	e.q.Release(ctx, "example-app/merge", "other", "other", false)
-	text, done, _ := e.s.CheckWake(ctx, "session-1", turn)
-	if !done || !strings.Contains(text, "agora queue renew example-app/merge") {
-		t.Fatalf("text %q done %v", text, done)
+	w, done, _ := e.s.CheckWake(ctx, "session-1", turn)
+	if !done || w == nil || !strings.Contains(w.Text, "agora queue renew example-app/merge") {
+		t.Fatalf("wake %+v done %v", w, done)
+	}
+	e.s.ConfirmWake(ctx, "session-1", w)
+	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Stop, StopActive: true}) // the woken turn ends unclaimed
+	turn, _ = e.s.Turn(ctx, "session-1")
+	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
+		t.Fatalf("woken again for the same offer: %+v", w)
 	}
 }
 
@@ -537,7 +566,7 @@ func TestPendingKeyChangesWithNewMentions(t *testing.T) {
 	}
 	e.r.Post(ctx, "reviewer", "general", "@builder one", 0)
 	k1, text, _ := e.s.Pending(ctx, "builder")
-	if k1 == "" || !strings.Contains(text, "reviewer in #general") {
+	if k1 == "" || !strings.Contains(text, "reviewer in #general") || strings.Contains(text, "`") {
 		t.Fatalf("key %q text %q", k1, text)
 	}
 	if k, _, _ := e.s.Pending(ctx, "builder"); k != k1 {

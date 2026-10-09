@@ -17,6 +17,7 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/hub"
+	"github.com/vsem-azamat/agora/internal/proc"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -210,8 +211,14 @@ func TestLongSocketPathIsExplained(t *testing.T) {
 
 func (r *running) idleAgent(t *testing.T, name, session, terminal string) {
 	t.Helper()
+	r.idleAgentWithPID(t, name, session, terminal, int32(os.Getpid()))
+}
+
+func (r *running) idleAgentWithPID(t *testing.T, name, session, terminal string, pid int32) {
+	t.Helper()
 	bg := context.Background()
-	if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: session, Kind: "claude-code", Event: agorav1.SessionEvent_SESSION_EVENT_START, Terminal: terminal})); err != nil {
+	if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: session, Kind: "claude-code", Event: agorav1.SessionEvent_SESSION_EVENT_START,
+		Terminal: terminal, Pid: pid, PidStart: proc.StartTime(int(pid))})); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: session})); err != nil {
@@ -307,6 +314,7 @@ func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
 		x.WakeCommand = `printf '%s|%s\n' "$AGORA_TERMINAL" "$AGORA_WAKE_TEXT" >> ` + log
+		x.WakeSettle = 0
 		h = x
 	})
 	r.idleAgent(t, "builder", "session-1", "pane-7")
@@ -330,5 +338,39 @@ func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
 	}
 	if text, ended := within(t, woke, 2*time.Second); !ended || !strings.Contains(text, "ping") {
 		t.Fatalf("connector: ended %v text %q", ended, text)
+	}
+}
+
+func TestWakeCommandSkipsDeadProcessesAndRetriesFailures(t *testing.T) {
+	log := filepath.Join(shortDir(t), "wakes")
+	var h *hub.Hub
+	r := startWith(t, func(x *hub.Hub) {
+		x.WakeCommand = `test -e ` + log + `.ready && echo "$AGORA_TERMINAL" >> ` + log
+		x.WakeSettle = 0
+		h = x
+	})
+	r.idleAgentWithPID(t, "ghost", "session-dead", "pane-dead", 999999) // no such process
+	r.idleAgent(t, "builder", "session-1", "pane-7")
+	r.post(t, "reviewer", "@ghost @builder ping")
+	hub.WakeByCommand(h, context.Background()) // fails: not ready
+	os.WriteFile(log+".ready", nil, 0o600)
+	hub.WakeByCommand(h, context.Background()) // within the gap: not retried yet
+	if b, _ := os.ReadFile(log); len(b) != 0 {
+		t.Fatalf("ran within the gap: %q", b)
+	}
+	r.clock.add(hub.WakeGap)
+	hub.WakeByCommand(h, context.Background())
+	if b, _ := os.ReadFile(log); string(b) != "pane-7\n" {
+		t.Fatalf("wakes %q", b)
+	}
+}
+
+func TestWakeCommandTimeoutKillsTheWholeGroup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	result, ok := hub.RunWakeCommand(ctx, "sleep 30 & wait")
+	if ok || time.Since(start) > 5*time.Second {
+		t.Fatalf("ok %v after %s: %s", ok, time.Since(start), result)
 	}
 }

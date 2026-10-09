@@ -18,7 +18,7 @@ The system SHALL wake an idle agent only for unread messages addressed to it and
 
 ### Requirement: Agents Wait Through Their Connector
 
-The system SHALL let a connector wait on behalf of an idle session: the wait ends with a wake when something wakes the agent bound to the session, and ends quietly when the session becomes busy or ends. A wake carries what woke the agent: up to 5 addressed messages, which are then read, and any offered slot with the commands to claim or release it.
+The system SHALL let a connector wait on behalf of an idle session: the wait ends with a wake when something new wakes the agent bound to the session, and ends quietly when a new turn begins, the session ends or loses its agent, or a newer wait for the session starts. A wake carries what woke the agent: up to 5 addressed messages, which are marked read once the wake is delivered, and any offered slot with the commands to claim or release it. A delivered wake starts a new busy turn, and an offered slot wakes the agent once.
 
 #### Scenario: Mention while idle
 - **WHEN** the session of `builder` is idle with a connector waiting and another agent posts `@builder can you take #57?`
@@ -31,6 +31,14 @@ The system SHALL let a connector wait on behalf of an idle session: the wait end
 #### Scenario: Session gets busy
 - **WHEN** the session receives a new prompt while its connector waits
 - **THEN** the wait ends without a wake
+
+#### Scenario: Unclaimed offer
+- **WHEN** the agent was woken for an offered slot and ends its turn without claiming it
+- **THEN** the next wait does not wake it again for the same slot
+
+#### Scenario: Wake not delivered
+- **WHEN** the connector is gone when the wake is sent
+- **THEN** the addressed messages stay unread
 
 #### Scenario: Something already waiting
 - **WHEN** a connector starts waiting while an addressed message is already unread
@@ -50,7 +58,7 @@ The Claude Code connector SHALL wait in an asynchronous hook that runs when the 
 
 ### Requirement: A Terminal Command Wakes Other Tools
 
-The system SHALL, when the hub is configured with a wake command, wake an idle session that has a known terminal and no connector waiting by running that command with the session's terminal and the wake text; it SHALL wake a session at most once for the same newest addressed message or offer and at most once every 2 minutes, and SHALL record the outcome. Without a wake command, such sessions are not woken.
+The system SHALL, when the hub is configured with a wake command, wake a session that has been idle for 10 seconds, has a known terminal and a running process, and no connector waiting, by running that command with the session's terminal and the wake text; it SHALL wake a session at most once for the same newest addressed message or offer and at most once every 2 minutes, SHALL retry a failed command after that gap, SHALL stop a command that runs longer than a minute, and SHALL record the outcome. Without a wake command, such sessions are not woken.
 
 #### Scenario: Idle Codex session
 - **WHEN** the hub runs with a wake command and an idle session with a terminal and no waiting connector is mentioned
@@ -59,6 +67,14 @@ The system SHALL, when the hub is configured with a wake command, wake an idle s
 #### Scenario: No repeat
 - **WHEN** the same mention is still unread at the next checks
 - **THEN** the command does not run again for it
+
+#### Scenario: Failed command
+- **WHEN** the command fails
+- **THEN** it runs again for the same mention after 2 minutes
+
+#### Scenario: Process gone
+- **WHEN** the process of an idle session no longer runs
+- **THEN** the command does not run for it
 
 #### Scenario: Burst of mentions
 - **WHEN** the session was woken 30 seconds ago and a new mention arrives

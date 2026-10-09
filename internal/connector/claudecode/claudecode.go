@@ -99,7 +99,8 @@ func agentPID() int {
 // ExitWake is the exit code with which an asyncRewake hook wakes Claude Code.
 const ExitWake = 2
 
-// GiveUpAfter is how long the waiting hook keeps trying to reach the hub before it ends quietly.
+// GiveUpAfter is how long the waiting hook keeps trying to reach the hub, since it last
+// answered, before it ends quietly.
 const GiveUpAfter = 5 * time.Minute
 
 // Wait is the asynchronous wake hook: it waits on behalf of the idle session named in Claude
@@ -112,9 +113,9 @@ func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	if err := json.NewDecoder(in).Decode(&h); err != nil {
 		return "", fmt.Errorf("read hook input: %w", err)
 	}
-	reached := time.Now()
+	reached := time.Now() // the last time the hub answered
 	for {
-		text, err := waitOnce(ctx, client, h.SessionID)
+		text, err := waitOnce(ctx, client, h.SessionID, func() { reached = time.Now() })
 		if err == nil {
 			return text, nil
 		}
@@ -133,16 +134,18 @@ func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	}
 }
 
-func waitOnce(ctx context.Context, client agorav1connect.SessionServiceClient, sessionID string) (string, error) {
+func waitOnce(ctx context.Context, client agorav1connect.SessionServiceClient, sessionID string, armed func()) (string, error) {
 	stream, err := client.WaitWake(ctx, connect.NewRequest(&agorav1.WaitWakeRequest{SessionId: sessionID}))
 	if err != nil {
 		return "", err
 	}
 	defer stream.Close()
 	for stream.Receive() {
-		if !stream.Msg().GetArmed() {
-			return stream.Msg().GetText(), nil
+		if stream.Msg().GetArmed() {
+			armed()
+			continue
 		}
+		return stream.Msg().GetText(), nil
 	}
 	return "", stream.Err()
 }

@@ -37,6 +37,11 @@ const (
 	WakeCheckEvery = 10 * time.Second
 	// WakeGap is the least time between two command wakes of one session.
 	WakeGap = 2 * time.Minute
+	// DefaultWakeSettle is how long a session stays idle before the wake command may wake it,
+	// so a connector that is about to wait for it gets there first.
+	DefaultWakeSettle = 10 * time.Second
+	// WakeTimeout bounds one run of the wake command.
+	WakeTimeout = time.Minute
 )
 
 // Hub holds the services and the change signal that wakes streaming waiters.
@@ -52,9 +57,12 @@ type Hub struct {
 	// WakeCommand, when set, wakes idle sessions that no connector waits for: it runs with
 	// `sh -c`, with $AGORA_TERMINAL and $AGORA_WAKE_TEXT in its environment.
 	WakeCommand string
+	// WakeSettle is how long a session stays idle before the wake command may wake it.
+	WakeSettle time.Duration
 
 	waitMu  sync.Mutex
 	waiters map[string]*waiter // by session id
+	waking  map[string]bool    // sessions whose wake command runs now
 }
 
 // waiter tracks the connector waits of one session: only the newest generation stays.
@@ -68,7 +76,7 @@ func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms,
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}}
+	return &Hub{queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle}
 }
 
 // Open builds a hub over db with the given clock (time.Now when nil).
@@ -639,15 +647,22 @@ func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agor
 		if current, _ := s.h.currentWait(id); current != gen {
 			return nil // a newer wait for this session took over
 		}
-		text, finished, err := s.h.sessions.CheckWake(ctx, id, turn)
+		w, finished, err := s.h.sessions.CheckWake(ctx, id, turn)
 		if err != nil {
 			return toConnect(err)
 		}
 		if finished {
-			if text != "" {
-				s.h.log.Info("woke a session", "session", id)
-				return stream.Send(&agorav1.WaitWakeResponse{Text: text})
+			if w == nil {
+				return nil
 			}
+			if err := stream.Send(&agorav1.WaitWakeResponse{Text: w.Text}); err != nil {
+				return err // not delivered: nothing is marked read
+			}
+			s.h.log.Info("woke a session", "session", id)
+			if err := s.h.sessions.ConfirmWake(context.WithoutCancel(ctx), id, w); err != nil {
+				s.h.log.Error("confirm wake", "session", id, "err", err)
+			}
+			s.h.changes.fire()
 			return nil
 		}
 		select {
@@ -676,44 +691,62 @@ func (h *Hub) wakeLoop(ctx context.Context) {
 }
 
 func (h *Hub) wakeByCommand(ctx context.Context) error {
-	idle, err := h.sessions.IdleWithTerminal(ctx)
+	idle, err := h.sessions.IdleWithTerminal(ctx, h.WakeSettle)
 	if err != nil {
 		return err
 	}
+	now := h.sessions.Now()
+	var wg sync.WaitGroup
 	for _, c := range idle {
-		if _, active := h.currentWait(c.SessionID); active > 0 {
-			continue // its connector waits and will wake it
+		if _, active := h.currentWait(c.SessionID); active > 0 || !h.alive(c.PID, c.PIDStart) {
+			continue // its connector waits and will wake it, or its process is gone
 		}
 		key, text, err := h.sessions.Pending(ctx, c.Agent)
 		if err != nil {
 			return err
 		}
-		if key == "" || key == c.WokenFor || time.Since(c.WokenAt) < WakeGap {
+		if key == "" || key == c.WokenFor || now.Sub(c.WokenAt) < WakeGap {
 			continue
 		}
-		result := runWakeCommand(ctx, h.WakeCommand, c.Terminal, text)
-		h.log.Info("woke a session by command", "session", c.SessionID, "agent", c.Agent, "result", result)
-		if err := h.sessions.RecordWake(ctx, c.SessionID, key, result); err != nil {
-			return err
+		h.waitMu.Lock()
+		busy := h.waking[c.SessionID]
+		h.waking[c.SessionID] = true
+		h.waitMu.Unlock()
+		if busy {
+			continue // the previous run for this session has not finished
 		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { h.waitMu.Lock(); delete(h.waking, c.SessionID); h.waitMu.Unlock() }()
+			result, ok := runWakeCommand(ctx, h.WakeCommand, c.Terminal, text)
+			h.log.Info("woke a session by command", "session", c.SessionID, "agent", c.Agent, "result", result)
+			if err := h.sessions.RecordWake(context.WithoutCancel(ctx), c.SessionID, key, result, ok); err != nil {
+				h.log.Error("record wake", "session", c.SessionID, "err", err)
+			}
+		}()
 	}
+	wg.Wait()
 	return nil
 }
 
-// runWakeCommand runs the wake command for one terminal and returns "ok" or the error with
-// the end of its output.
-func runWakeCommand(ctx context.Context, command, terminal, text string) string {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+// runWakeCommand runs the wake command for one terminal in its own process group, killing the
+// whole group after WakeTimeout, and returns "ok" or the error with the end of its output.
+func runWakeCommand(ctx context.Context, command, terminal, text string) (string, bool) {
+	ctx, cancel := context.WithTimeout(ctx, WakeTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Env = append(os.Environ(), "AGORA_TERMINAL="+terminal, "AGORA_WAKE_TEXT="+text)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = time.Second
 	out, err := cmd.CombinedOutput()
 	if err == nil {
-		return "ok"
+		return "ok", true
 	}
 	tail := strings.TrimSpace(string(out))
 	if len(tail) > 300 {
 		tail = tail[len(tail)-300:]
 	}
-	return strings.TrimSpace(err.Error() + ": " + tail)
+	return strings.TrimSpace(err.Error() + ": " + tail), false
 }
