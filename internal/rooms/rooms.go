@@ -384,6 +384,74 @@ func unread(ctx context.Context, tx *sql.Tx, agent string, mentionsOnly bool, li
 	return all, total, nil
 }
 
+// RoomUnread counts an agent's unread messages in one room.
+type RoomUnread struct {
+	Room      string
+	Unread    int
+	Addressed int // how many of the unread messages address the agent
+}
+
+// UnreadByRoom counts agent's unread messages per room, for rooms with any, in name order,
+// without changing what is read.
+func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, error) {
+	var out []RoomUnread
+	err := r.tx(ctx, func(tx *sql.Tx) error {
+		if err := requireAgent(ctx, tx, agent); err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT room, COUNT(*), SUM(addressed) FROM (`+unreadQuery+`) GROUP BY room ORDER BY room`,
+			sql.Named("a", agent))
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var u RoomUnread
+			if err := rows.Scan(&u.Room, &u.Unread, &u.Addressed); err != nil {
+				return err
+			}
+			out = append(out, u)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// MarkRoomRead moves agent's reading position in room up to the message through, which must
+// be in that room, and reports whether it moved; the position never moves backwards, also not
+// behind where the agent's reading started when it joined.
+func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through int64) (bool, error) {
+	room = strings.TrimPrefix(room, "#")
+	moved := false
+	err := r.tx(ctx, func(tx *sql.Tx) error {
+		if err := requireAgent(ctx, tx, agent); err != nil {
+			return err
+		}
+		if err := requireRoom(ctx, tx, room); err != nil {
+			return err
+		}
+		var in string
+		err := tx.QueryRowContext(ctx, `SELECT room FROM messages WHERE id = ?`, through).Scan(&in)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && in != room) {
+			return fmt.Errorf("%w: message %d is not in #%s", ErrInvalid, through, room)
+		}
+		if err != nil {
+			return err
+		}
+		var pos int64
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT last_id FROM read_positions WHERE agent = ? AND room = ?),
+			(SELECT read_from FROM agents WHERE name = ?))`, agent, room, agent).Scan(&pos); err != nil {
+			return err
+		}
+		if through <= pos {
+			return nil
+		}
+		moved = true
+		return markRead(ctx, tx, agent, []Message{{ID: through, Room: room}})
+	})
+	return moved, err
+}
+
 // MarkEach marks single messages read without moving the reading position, so earlier unread
 // messages in the same rooms stay unread.
 func (r *Rooms) MarkEach(ctx context.Context, agent string, msgs []Message) error {

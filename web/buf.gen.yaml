@@ -1,0 +1,10 @@
+# Generates the web app's API client from proto/; run from the repository root with
+# `pnpm --dir web generate`.
+version: v2
+clean: true
+plugins:
+  - local: web/node_modules/.bin/protoc-gen-es
+    out: web/src/gen
+    opt: target=ts
+inputs:
+  - directory: proto

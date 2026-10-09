@@ -46,7 +46,8 @@ type Profile struct {
 	About        string
 	JoinedAt     time.Time
 	UpdatedAt    time.Time
-	SessionState string // busy, idle or offline
+	SessionState string         // busy, idle or offline
+	CI           map[int]string // the CI state last reported per followed pull request
 	Active       bool
 }
 
@@ -215,7 +216,8 @@ func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
 		COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
 			ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), 'offline'),
-		COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), '')
+		COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), ''),
+		`+ciColumn+`
 		FROM agents AS a ORDER BY a.name`)
 	if err != nil {
 		return nil, err
@@ -281,11 +283,33 @@ func (a *Agents) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 
 type scanner interface{ Scan(...any) error }
 
+// ciColumn lists the CI states last reported for agent a's pull requests as "57:green 58:red";
+// pull_requests.reported holds the state and the head commit.
+const ciColumn = `COALESCE((SELECT group_concat(p.number || ':' || substr(p.reported, 1, instr(p.reported, ' ') - 1), ' ')
+	FROM pull_requests AS p WHERE p.agent = a.name AND p.reported != ''), '')`
+
+func parseCI(s string) map[int]string {
+	var out map[int]string
+	for _, f := range strings.Fields(s) {
+		num, state, ok := strings.Cut(f, ":")
+		n, err := strconv.Atoi(num)
+		if !ok || err != nil || state == "" {
+			continue
+		}
+		if out == nil {
+			out = map[int]string{}
+		}
+		out[n] = state
+	}
+	return out
+}
+
 func scan(r scanner) (Profile, error) {
 	var p Profile
-	var prs, found string
+	var prs, found, ci string
 	var joined, updated int64
-	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &joined, &updated, &p.SessionState, &found)
+	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &joined, &updated, &p.SessionState, &found, &ci)
+	p.CI = parseCI(ci)
 	p.PRs = parsePRs(prs)
 	if f := parsePRs(found); len(f) > 0 {
 		slices.Sort(f)
@@ -296,8 +320,9 @@ func scan(r scanner) (Profile, error) {
 }
 
 func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
-	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, 'offline', ''
-		FROM agents WHERE name = ?`, name))
+	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, 'offline', '',
+		`+ciColumn+`
+		FROM agents AS a WHERE name = ?`, name))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)
 	}

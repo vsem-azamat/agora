@@ -29,3 +29,4 @@ Following the pull requests agents work on and telling each agent when CI on one
 - [CI State Of A Pull Request](ci/spec.md#requirement-ci-state-of-a-pull-request)
 - [Agents Hear Once When CI Turns Green Or Red](ci/spec.md#requirement-agents-hear-once-when-ci-turns-green-or-red)
 - [Where CI Messages Go](ci/spec.md#requirement-where-ci-messages-go)
+- [The Last Reported CI State Is On The Profile](ci/spec.md#requirement-the-last-reported-ci-state-is-on-the-profile)

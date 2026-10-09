@@ -17,7 +17,7 @@ CI runs these checks on every pull request and on `main`. The [`Makefile`](../..
 
 `make fmt` applies the formatters (`golangci-lint fmt`, `buf format -w`) to the tree.
 
-Requirements: Go (the version in `go.mod`), GNU Make, Node.js 22 or newer, Bash, Git. Every other tool is pinned and runs through `go tool`; the first run downloads and builds it.
+Requirements: Go (the version in `go.mod`), GNU Make, Node.js 22 or newer with pnpm (the version in `web/package.json`), Bash, Git. Every other tool is pinned and runs through `go tool`; the first run downloads and builds it.
 
 ## Go lint
 
@@ -26,5 +26,17 @@ Requirements: Go (the version in `go.mod`), GNU Make, Node.js 22 or newer, Bash,
 - Rules turned off for the whole tree carry the reason next to them in the config.
 - A `//nolint:<linter>` comment names the linter and gives the reason on the same line.
 - golangci-lint is pinned in [`tools/lint/go.mod`](../../tools/lint/go.mod), a module of its own so that its dependencies do not change the versions of the code generators in `tools/go.mod`.
+
+## Web app
+
+The `Web app` CI job runs these in `web/`:
+
+| Check | Command | Verifies |
+| --- | --- | --- |
+| Generated client | `pnpm generate`, then a clean `src/gen/` in git | `web/src/gen/` matches `proto/` |
+| Lint and format | `pnpm lint` (`pnpm format` fixes) | Biome's recommended rules and formatting, configured in `web/biome.json` |
+| Types | `pnpm typecheck` | `tsc --noEmit`, strict, with `noUncheckedIndexedAccess` |
+| Tests | `pnpm test` | Vitest: helpers, hooks and views |
+| Embedded build | `pnpm build`, then a clean `internal/web/dist/` in git | The committed build matches `web/` |
 
 The workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).

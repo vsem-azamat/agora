@@ -37,6 +37,9 @@ message Profile {
   bool active = 13;
   // Open pull requests found from the agent's branch by the hub.
   repeated int32 found_prs = 14;
+  // The CI state last reported for a followed pull request, by number: green, red or conflict.
+  // A pull request without a reported state is absent.
+  map<int32, string> ci = 15;
 }
 
 message UpdateProfileRequest {

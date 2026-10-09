@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package agora.v1;
+
+option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
+
+// WebService supports the web app: its access token, the operator it acts as, and live updates.
+service WebService {
+  // Token returns the web access token, creating one when there is none; with rotate it
+  // replaces the token, so browsers holding the old one must sign in again. Only the hub's
+  // socket serves it, never the web listener.
+  rpc Token(TokenRequest) returns (TokenResponse);
+  // Whoami returns the name the web app acts as.
+  rpc Whoami(WhoamiRequest) returns (WhoamiResponse);
+  // Watch sends a message at once and then whenever the board may have changed, at most
+  // once a second, until the client goes away or the hub stops.
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
+
+message TokenRequest {
+  bool rotate = 1;
+}
+
+message TokenResponse {
+  string token = 1;
+  // Address the hub serves the web app on; empty when it serves none.
+  string web_address = 2;
+}
+
+message WhoamiRequest {}
+
+message WhoamiResponse {
+  // The operator name; empty when the hub serves no web app.
+  string name = 1;
+}
+
+message WatchRequest {}
+
+message WatchResponse {
+  // Counts the changes the hub has seen since it started.
+  int64 revision = 1;
+}

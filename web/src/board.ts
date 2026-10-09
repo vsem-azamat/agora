@@ -1,0 +1,189 @@
+// Pure helpers that turn hub data into what the views show. Kept free of React so they are
+// cheap to test.
+import { type Timestamp, timestampDate } from '@bufbuild/protobuf/wkt';
+import type { Profile } from './gen/agora/v1/agents_pb';
+import type { Proposal } from './gen/agora/v1/governance_pb';
+import { type Entry, EntryState, type Resource } from './gen/agora/v1/resources_pb';
+
+/** The board posts its own messages under this name. */
+export const BOARD = 'agora';
+
+export type Liveness = 'busy' | 'idle' | 'offline';
+
+export function liveness(p: Pick<Profile, 'sessionState'>): Liveness {
+  return p.sessionState === 'busy' || p.sessionState === 'idle' ? p.sessionState : 'offline';
+}
+
+const order: Record<Liveness, number> = { busy: 0, idle: 1, offline: 2 };
+
+/** The agents the board lists: everyone but the operator, busy first, then idle, then offline, by name. */
+export function boardAgents(agents: Profile[], operator: string): Profile[] {
+  return agents
+    .filter((a) => a.name !== operator)
+    .sort((a, b) => order[liveness(a)] - order[liveness(b)] || a.name.localeCompare(b.name));
+}
+
+/** Declared and found pull requests, once each, in order. */
+export function pullRequests(p: Pick<Profile, 'prs' | 'foundPrs'>): number[] {
+  return [...new Set([...p.prs, ...p.foundPrs])].sort((a, b) => a - b);
+}
+
+export type CIMark = 'green' | 'red' | undefined;
+
+/** The icon for a pull request's last reported CI state: laurel for green, ostrakon for red or a conflict. */
+export function ciMark(p: Pick<Profile, 'ci'>, pr: number): CIMark {
+  const s = p.ci[pr];
+  if (s === 'green') return 'green';
+  if (s === 'red' || s === 'conflict') return 'red';
+  return undefined;
+}
+
+export type Filter = 'all' | 'busy' | 'idle' | 'pr';
+
+export function matches(p: Profile, filter: Filter, project?: string): boolean {
+  if (project !== undefined && projectOf(p) !== project) return false;
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'busy':
+    case 'idle':
+      return liveness(p) === filter;
+    case 'pr':
+      return pullRequests(p).length > 0;
+  }
+}
+
+export function filterCounts(agents: Profile[], project?: string): Record<Filter, number> {
+  const out: Record<Filter, number> = { all: 0, busy: 0, idle: 0, pr: 0 };
+  for (const f of Object.keys(out) as Filter[]) out[f] = agents.filter((a) => matches(a, f, project)).length;
+  return out;
+}
+
+/** Agents without a project are listed under this name. */
+export const OTHER = 'other';
+
+export function projectOf(p: Pick<Profile, 'project'>): string {
+  return p.project.trim() || OTHER;
+}
+
+/** Projects with their agent counts, most agents first, `other` last. */
+export function projects(agents: Profile[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const a of agents) counts.set(projectOf(a), (counts.get(projectOf(a)) ?? 0) + 1);
+  return [...counts].sort(([a, n], [b, m]) => Number(a === OTHER) - Number(b === OTHER) || m - n || a.localeCompare(b));
+}
+
+export function toDate(t: Timestamp | undefined): Date | undefined {
+  return t ? timestampDate(t) : undefined;
+}
+
+/** A short age: `now`, `45s`, `16m`, `3h`, `2d`. */
+export function age(from: Date | undefined, now: Date): string {
+  if (!from) return '';
+  const s = Math.max(0, Math.floor((now.getTime() - from.getTime()) / 1000));
+  if (s < 10) return 'now';
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+/** Time left until a deadline: `17m left`, `40s left`, `2h left`; `ending` once it passed. */
+export function timeLeft(until: Date | undefined, now: Date): string {
+  if (!until) return '';
+  const s = Math.floor((until.getTime() - now.getTime()) / 1000);
+  if (s <= 0) return 'ending';
+  if (s < 60) return `${s}s left`;
+  if (s < 3600) return `${Math.ceil(s / 60)}m left`;
+  return `${Math.floor(s / 3600)}h left`;
+}
+
+// --- turns ---------------------------------------------------------------------------
+
+export type Turn = { agent: string; label: string; holds: boolean };
+
+/** How each entry of a queue reads: holders with their lease left, `offered`, `next`, then `#n`. */
+export function turns(r: Resource, now: Date): Turn[] {
+  return r.entries.map((e: Entry) => {
+    switch (e.state) {
+      case EntryState.HELD:
+        return { agent: e.agent, label: `holds · ${timeLeft(toDate(e.expiresAt), now)}`, holds: true };
+      case EntryState.OFFERED:
+        return { agent: e.agent, label: 'offered', holds: false };
+      default:
+        return { agent: e.agent, label: e.position === 1 ? 'next' : `#${e.position}`, holds: false };
+    }
+  });
+}
+
+/** Resources with one slot are locks; the rest are queues. */
+export function splitResources(rs: Resource[]): { locks: Resource[]; queues: Resource[] } {
+  return { locks: rs.filter((r) => r.slots <= 1), queues: rs.filter((r) => r.slots > 1) };
+}
+
+export type LockState = { holder?: string; left: string; waiting: number };
+
+export function lockState(r: Resource, now: Date): LockState {
+  const held = r.entries.find((e) => e.state === EntryState.HELD);
+  const waiting = r.entries.filter((e) => e.state !== EntryState.HELD).length;
+  return held ? { holder: held.agent, left: timeLeft(toDate(held.expiresAt), now), waiting } : { left: '', waiting };
+}
+
+// --- charter -------------------------------------------------------------------------
+
+export type Pebble = 'yes' | 'no' | 'abstain';
+
+/** One pebble per vote, yes first, then no, then abstain. */
+export function pebbles(p: Pick<Proposal, 'votes'>): { agent: string; choice: Pebble }[] {
+  const rank: Record<Pebble, number> = { yes: 0, no: 1, abstain: 2 };
+  return p.votes
+    .map((v) => ({
+      agent: v.agent,
+      choice: (v.choice === 'yes' || v.choice === 'no' ? v.choice : 'abstain') as Pebble,
+    }))
+    .sort((a, b) => rank[a.choice] - rank[b.choice] || a.agent.localeCompare(b.agent));
+}
+
+/** Open proposals first, then the newest. */
+export function proposalOrder(ps: Proposal[]): Proposal[] {
+  return [...ps].sort((a, b) => Number(b.state === 'open') - Number(a.state === 'open') || Number(b.id - a.id));
+}
+
+// --- messages ------------------------------------------------------------------------
+
+export type Part = { text: string; kind: 'text' | 'mention' | 'ref'; at: number };
+
+// A mention is @name not preceded by a letter, digit, `.`, `_`, `-` or `@` (as the hub parses it);
+// a reference is #123.
+const token = /(?<![\p{L}\p{N}._@-])@[a-z][a-z0-9-]*[a-z0-9]|(?<![\p{L}\p{N}._@-])@[a-z]|(?<![\p{L}\p{N}&])#\d+\b/giu;
+
+/** Splits a message body into plain text, @mentions and #references. */
+export function parts(body: string): Part[] {
+  const out: Part[] = [];
+  let last = 0;
+  for (const m of body.matchAll(token)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push({ text: body.slice(last, i), kind: 'text', at: last });
+    out.push({ text: m[0], kind: m[0].startsWith('@') ? 'mention' : 'ref', at: i });
+    last = i + m[0].length;
+  }
+  if (last < body.length) out.push({ text: body.slice(last), kind: 'text', at: last });
+  return out;
+}
+
+export type RoomCount = { unread: number; addressed: number };
+
+/** What a room shows in the list: `@n` for messages addressed to the operator, else the unread count. */
+export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean } | undefined {
+  if (!c || c.unread === 0) return undefined;
+  return c.addressed > 0 ? { text: `@${c.addressed}`, mention: true } : { text: String(c.unread), mention: false };
+}
+
+/** A clock time for a message: `22:41`, or the date when it is not from today. */
+export function clock(at: Date | undefined, now: Date): string {
+  if (!at) return '';
+  const hm = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return at.toDateString() === now.toDateString()
+    ? hm
+    : `${at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${hm}`;
+}

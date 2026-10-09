@@ -323,24 +323,28 @@ func (q *Queue) SetSlots(ctx context.Context, key string, slots int) (Resource, 
 	return res, err
 }
 
-// List returns resources that someone holds or waits for, or whose slots were set; only key
+// List returns resources that someone holds or waits for, or whose slots were set, and whether
+// settling them changed any queue; only key
 // when key is not empty.
-func (q *Queue) List(ctx context.Context, key string) ([]Resource, error) {
+func (q *Queue) List(ctx context.Context, key string) ([]Resource, bool, error) {
 	if key != "" {
 		if err := checkKey(key); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 	var out []Resource
+	var settledAny bool
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
 		keys, err := listKeys(ctx, tx, key)
 		if err != nil {
 			return err
 		}
 		for _, k := range keys {
-			if err := settle(ctx, tx, k, now); err != nil {
+			changed, err := settled(ctx, tx, k, now)
+			if err != nil {
 				return err
 			}
+			settledAny = settledAny || changed
 			r, err := load(ctx, tx, k)
 			if err != nil {
 				return err
@@ -355,7 +359,7 @@ func (q *Queue) List(ctx context.Context, key string) ([]Resource, error) {
 		}
 		return nil
 	})
-	return out, err
+	return out, settledAny, err
 }
 
 // EntriesOf returns every place agent has in any resource queue, ordered by resource key.
@@ -491,39 +495,55 @@ func ensureResource(ctx context.Context, tx *sql.Tx, key string) error {
 // settle applies everything time has decided for key: ends expired leases, moves agents that
 // missed their turn to the end of the queue (or out of it), and offers free slots in order.
 func settle(ctx context.Context, tx *sql.Tx, key string, now time.Time) error {
+	_, err := settled(ctx, tx, key, now)
+	return err
+}
+
+// settled is settle, also reporting whether it changed anything.
+func settled(ctx context.Context, tx *sql.Tx, key string, now time.Time) (bool, error) {
 	t := ms(now)
-	if _, err := tx.ExecContext(ctx, `DELETE FROM entries WHERE key = ? AND state = 'held' AND expires_at <= ?`, key, t); err != nil {
+	changed := false
+	exec := func(query string, args ...any) error {
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		changed = changed || n > 0
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? AND skips + 1 >= ?`,
+	if err := exec(`DELETE FROM entries WHERE key = ? AND state = 'held' AND expires_at <= ?`, key, t); err != nil {
+		return false, err
+	}
+	if err := exec(`DELETE FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? AND skips + 1 >= ?`,
 		key, t, MaxMissedTurns); err != nil {
-		return err
+		return false, err
 	}
 	missed, err := column(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, a := range missed {
-		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = 'waiting', expires_at = NULL, skips = skips + 1,
+		if err := exec(`UPDATE entries SET state = 'waiting', expires_at = NULL, skips = skips + 1,
 			seq = `+nextSeq+` WHERE key = ? AND agent = ?`, key, key, a); err != nil {
-			return err
+			return false, err
 		}
 	}
 	var slots, active int
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), 1)`, key).Scan(&slots); err != nil {
-		return err
+		return false, err
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE key = ? AND state IN ('held', 'offered')`, key).Scan(&active); err != nil {
-		return err
+		return false, err
 	}
 	if free := slots - active; free > 0 {
-		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = 'offered', expires_at = ?
+		if err := exec(`UPDATE entries SET state = 'offered', expires_at = ?
 			WHERE key = ? AND agent IN (SELECT agent FROM entries WHERE key = ? AND state = 'waiting' ORDER BY seq LIMIT ?)`,
 			ms(now.Add(ClaimWindow)), key, key, free); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return changed, nil
 }
 
 func load(ctx context.Context, tx *sql.Tx, key string) (Resource, error) {

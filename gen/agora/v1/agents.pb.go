@@ -40,7 +40,10 @@ type Profile struct {
 	SessionState string `protobuf:"bytes,12,opt,name=session_state,json=sessionState,proto3" json:"session_state,omitempty"`
 	Active       bool   `protobuf:"varint,13,opt,name=active,proto3" json:"active,omitempty"`
 	// Open pull requests found from the agent's branch by the hub.
-	FoundPrs      []int32 `protobuf:"varint,14,rep,packed,name=found_prs,json=foundPrs,proto3" json:"found_prs,omitempty"`
+	FoundPrs []int32 `protobuf:"varint,14,rep,packed,name=found_prs,json=foundPrs,proto3" json:"found_prs,omitempty"`
+	// The CI state last reported for a followed pull request, by number: green, red or conflict.
+	// A pull request without a reported state is absent.
+	Ci            map[int32]string `protobuf:"bytes,15,rep,name=ci,proto3" json:"ci,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -169,6 +172,13 @@ func (x *Profile) GetActive() bool {
 func (x *Profile) GetFoundPrs() []int32 {
 	if x != nil {
 		return x.FoundPrs
+	}
+	return nil
+}
+
+func (x *Profile) GetCi() map[int32]string {
+	if x != nil {
+		return x.Ci
 	}
 	return nil
 }
@@ -611,7 +621,7 @@ var File_agora_v1_agents_proto protoreflect.FileDescriptor
 
 const file_agora_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x03\n" +
+	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x03\n" +
 	"\aProfile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -628,7 +638,11 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12#\n" +
 	"\rsession_state\x18\f \x01(\tR\fsessionState\x12\x16\n" +
 	"\x06active\x18\r \x01(\bR\x06active\x12\x1b\n" +
-	"\tfound_prs\x18\x0e \x03(\x05R\bfoundPrs\"\xb9\x02\n" +
+	"\tfound_prs\x18\x0e \x03(\x05R\bfoundPrs\x12)\n" +
+	"\x02ci\x18\x0f \x03(\v2\x19.agora.v1.Profile.CiEntryR\x02ci\x1a5\n" +
+	"\aCiEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb9\x02\n" +
 	"\x14UpdateProfileRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\x04kind\x18\x02 \x01(\tH\x00R\x04kind\x88\x01\x01\x12\x1d\n" +
@@ -682,7 +696,7 @@ func file_agora_v1_agents_proto_rawDescGZIP() []byte {
 	return file_agora_v1_agents_proto_rawDescData
 }
 
-var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_agora_v1_agents_proto_goTypes = []any{
 	(*Profile)(nil),               // 0: agora.v1.Profile
 	(*UpdateProfileRequest)(nil),  // 1: agora.v1.UpdateProfileRequest
@@ -693,27 +707,29 @@ var file_agora_v1_agents_proto_goTypes = []any{
 	(*ListAgentsResponse)(nil),    // 6: agora.v1.ListAgentsResponse
 	(*WhoRequest)(nil),            // 7: agora.v1.WhoRequest
 	(*WhoResponse)(nil),           // 8: agora.v1.WhoResponse
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	nil,                           // 9: agora.v1.Profile.CiEntry
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
 }
 var file_agora_v1_agents_proto_depIdxs = []int32{
-	9, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
-	9, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
-	0, // 2: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
-	0, // 3: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
-	0, // 4: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
-	1, // 5: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
-	3, // 6: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
-	5, // 7: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
-	7, // 8: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
-	2, // 9: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
-	4, // 10: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
-	6, // 11: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
-	8, // 12: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
-	9, // [9:13] is the sub-list for method output_type
-	5, // [5:9] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	10, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
+	10, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
+	9,  // 2: agora.v1.Profile.ci:type_name -> agora.v1.Profile.CiEntry
+	0,  // 3: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
+	0,  // 4: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
+	0,  // 5: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
+	1,  // 6: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
+	3,  // 7: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
+	5,  // 8: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
+	7,  // 9: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
+	2,  // 10: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
+	4,  // 11: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
+	6,  // 12: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
+	8,  // 13: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_agents_proto_init() }
@@ -728,7 +744,7 @@ func file_agora_v1_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_agents_proto_rawDesc), len(file_agora_v1_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

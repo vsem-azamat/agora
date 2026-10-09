@@ -191,6 +191,16 @@ func TestInstallService(t *testing.T) {
 		t.Fatalf("unit:\n%s", b)
 	}
 
+	t.Setenv("AGORA_WAKE_COMMAND", "")
+	t.Setenv("AGORA_WEB_AS", "owner")
+	if r := run("install", "service", "--bin", exe, "--web", "8484"); r.code != 0 {
+		t.Fatalf("install --web: %+v", r)
+	}
+	b, _ = os.ReadFile(unit)
+	if !strings.Contains(string(b), "ExecStart="+exe+" hub --web 8484 --web-as owner\n") {
+		t.Fatalf("unit:\n%s", b)
+	}
+
 	calls = nil
 	if r := run("uninstall", "service", "--now"); r.code != 0 {
 		t.Fatalf("uninstall --now: %+v", r)

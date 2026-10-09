@@ -252,7 +252,7 @@ func printSystemctl(w io.Writer, cmds [][]string) {
 }
 
 func installServiceCmd(o *options) *cobra.Command {
-	var dbPath, wakeCommand, binFlag string
+	var dbPath, wakeCommand, webFlag, webAs, binFlag string
 	var now bool
 	cmd := &cobra.Command{
 		Use:   "service",
@@ -283,6 +283,15 @@ func installServiceCmd(o *options) *cobra.Command {
 			}
 			if wakeCommand != "" {
 				argv = append(argv, "--wake-command", wakeCommand)
+			}
+			if webFlag != "" {
+				if _, err := webAddress(webFlag); err != nil {
+					return err
+				}
+				argv = append(argv, "--web", webFlag)
+			}
+			if webFlag != "" && webAs != "" {
+				argv = append(argv, "--web-as", webAs)
 			}
 			dir, err := install.ServiceDir()
 			if err != nil {
@@ -319,6 +328,8 @@ func installServiceCmd(o *options) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dbPath, "db", os.Getenv("AGORA_DB"), "database file for the hub (default $AGORA_DB, else the hub's default)")
 	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"), "the hub's wake command (default $AGORA_WAKE_COMMAND)")
+	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"), "serve the web app on host:port or a port (default $AGORA_WEB)")
+	cmd.Flags().StringVar(&webAs, "web-as", os.Getenv("AGORA_WEB_AS"), "the name the web app acts under (default $AGORA_WEB_AS)")
 	cmd.Flags().BoolVar(&now, "now", false, "also run systemctl to load, enable and start the service")
 	cmd.Flags().StringVar(&binFlag, "bin", "", binHelp)
 	return cmd

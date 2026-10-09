@@ -7,9 +7,9 @@ How `agora install` and `agora uninstall` (`internal/install`, commands in `inte
 ```sh
 agora install                                   # lists the targets
 agora install claude-code [--settings <file>] [--terminal-env <VAR>] [--bin <agora>]
-agora install service [--db <file>] [--wake-command <cmd>] [--now] [--bin <agora>]
+agora install service [--db <file>] [--wake-command <cmd>] [--web <addr>] [--web-as <name>] [--now] [--bin <agora>]
 agora install skill [--dir <skills-dir>]...
-agora uninstall claude-code|service|skill       # same options; --terminal-env, --db and --wake-command do not apply
+agora uninstall claude-code|service|skill       # same options; --terminal-env, --db, --wake-command, --web and --web-as do not apply
 ```
 
 Every target is idempotent: it computes what it would write, compares it with what is there, and writes only when they differ.
@@ -52,7 +52,7 @@ Description=Agora hub
 Documentation=https://github.com/vsem-azamat/agora
 
 [Service]
-ExecStart=<agora> hub [--socket <path>] [--db <path>] [--wake-command <cmd>]
+ExecStart=<agora> hub [--socket <path>] [--db <path>] [--wake-command <cmd>] [--web <addr>] [--web-as <name>]
 Restart=on-failure
 RestartSec=2
 
@@ -60,7 +60,7 @@ RestartSec=2
 WantedBy=default.target
 ```
 
-`--socket` is added when given or `$AGORA_SOCKET` is set, `--db` when given or `$AGORA_DB` is set, `--wake-command` when given or `$AGORA_WAKE_COMMAND` is set, because a systemd user service does not see the shell's environment. Paths are made absolute. Each argument that is not a plain word is double-quoted with `\\`, `\"`, `\n` and `\t` escapes, and `$` and `%` are doubled, so systemd passes it unchanged instead of expanding variables or specifiers.
+`--socket` is added when given or `$AGORA_SOCKET` is set, `--db` when given or `$AGORA_DB` is set, `--wake-command` when given or `$AGORA_WAKE_COMMAND` is set, `--web` and `--web-as` when given or `$AGORA_WEB` / `$AGORA_WEB_AS` are set, because a systemd user service does not see the shell's environment. Paths are made absolute. Each argument that is not a plain word is double-quoted with `\\`, `\"`, `\n` and `\t` escapes, and `$` and `%` are doubled, so systemd passes it unchanged instead of expanding variables or specifiers.
 
 The first line marks the unit as Agora's: install and uninstall refuse an `agora-hub.service` without it, naming the file.
 

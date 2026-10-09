@@ -17,6 +17,7 @@ How the repository is organized and verified.
 | --- | --- |
 | `cmd/`, `internal/` | Go code; see [Architecture](../architecture/README.md) |
 | `proto/` | API contract; `gen/` holds the code generated from it |
+| `web/` | The web app's sources; its build is committed in `internal/web/dist/` |
 | `tools/` | Pinned development tools: code generators in `tools/go.mod`, golangci-lint in `tools/lint/go.mod` |
 | `Makefile` | Entry point for formatting, lint, tests and every CI check |
 | `openspec/specs/` | Behavior specification |
