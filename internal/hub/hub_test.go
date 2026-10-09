@@ -18,6 +18,7 @@ import (
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -66,8 +67,9 @@ func start(t *testing.T) *running {
 		t.Fatal(err)
 	}
 	r := &running{clock: c, stop: cancel, done: make(chan struct{})}
+	qq := queue.New(db, c.now)
 	go func() {
-		r.err = hub.New(queue.New(db, c.now), nil).Serve(ctx, l)
+		r.err = hub.New(qq, sessions.New(db, qq, c.now), nil).Serve(ctx, l)
 		close(r.done)
 	}()
 	t.Cleanup(func() {

@@ -13,6 +13,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/cli"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -35,8 +36,9 @@ func startHub(t *testing.T) string {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
+	qq := queue.New(db, nil)
 	go func() {
-		hub.New(queue.New(db, nil), nil).Serve(ctx, l)
+		hub.New(qq, sessions.New(db, qq, nil), nil).Serve(ctx, l)
 		close(done)
 	}()
 	t.Cleanup(func() {
@@ -204,5 +206,64 @@ func TestBadValuesAreRefused(t *testing.T) {
 		if r := agora(ctx, socket, "a", args...); r.code != 1 {
 			t.Errorf("%v: %+v", args, r)
 		}
+	}
+}
+
+func TestJoinedSessionActsWithoutAName(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("AGORA_NAME", "")
+	t.Setenv("AGORA_SESSION", "session-123")
+	if r := agora(ctx, socket, "", "join", "builder"); r.code != 0 || !strings.Contains(r.stdout, "joined as builder; commands from this session") {
+		t.Fatalf("join: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "lock", "db/shared"); r.code != 0 {
+		t.Fatalf("lock: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "locks"); !strings.Contains(r.stdout, "builder") {
+		t.Fatalf("locks: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "whoami"); !strings.Contains(r.stdout, "name: builder") || !strings.Contains(r.stdout, "session: session-123") {
+		t.Fatalf("whoami: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "sessions"); !strings.Contains(r.stdout, "builder") || !strings.Contains(r.stdout, "session-123") {
+		t.Fatalf("sessions: %+v", r)
+	}
+}
+
+func TestTakenNameIsRefused(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("AGORA_SESSION", "session-aaa")
+	agora(ctx, socket, "", "join", "builder")
+	t.Setenv("AGORA_SESSION", "session-bbb")
+	if r := agora(ctx, socket, "", "join", "builder"); r.code != 1 || !strings.Contains(r.stderr, "live session") {
+		t.Fatalf("%+v", r)
+	}
+	if r := agora(ctx, socket, "", "join", "builder", "--force"); r.code != 0 {
+		t.Fatalf("forced: %+v", r)
+	}
+}
+
+func TestHookIsSilentWithoutAHub(t *testing.T) {
+	var out, errOut bytes.Buffer
+	root := []string{"--socket", filepath.Join(t.TempDir(), "none.sock"), "hook", "claude-code"}
+	t.Setenv("AGORA_DEBUG", "")
+	code := cli.RunWithInput(context.Background(), root, strings.NewReader(`{"session_id":"session-1","hook_event_name":"Stop"}`), &out, &errOut)
+	if code != 0 || out.Len() != 0 || errOut.Len() != 0 {
+		t.Fatalf("code %d out %q err %q", code, out.String(), errOut.String())
+	}
+}
+
+func TestHookReportsTheSession(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	var out, errOut bytes.Buffer
+	in := strings.NewReader(`{"session_id":"session-hook","hook_event_name":"SessionStart","cwd":"/src/example-app"}`)
+	if code := cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code"}, in, &out, &errOut); code != 0 {
+		t.Fatalf("code %d err %q", code, errOut.String())
+	}
+	if r := agora(ctx, socket, "", "sessions"); !strings.Contains(r.stdout, "session-hook") || !strings.Contains(r.stdout, "/src/example-app") {
+		t.Fatalf("sessions: %+v", r)
 	}
 }

@@ -23,8 +23,10 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -41,8 +43,14 @@ func (e *exitError) Error() string { return e.msg }
 
 // Run executes the agora command with args and returns the process exit code.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return RunWithInput(ctx, args, os.Stdin, stdout, stderr)
+}
+
+// RunWithInput is Run with an explicit standard input, which hooks read.
+func RunWithInput(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	root := newRoot(stdout, stderr)
 	root.SetArgs(args)
+	root.SetIn(stdin)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	err := root.ExecuteContext(ctx)
@@ -86,7 +94,8 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&o.as, "as", os.Getenv("AGORA_NAME"), "agent name to act as (default $AGORA_NAME)")
 	root.PersistentFlags().StringVar(&o.socket, "socket", defaultSocket(), "hub socket (default $AGORA_SOCKET)")
 
-	root.AddCommand(hubCmd(o, stderr), queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o))
+	root.AddCommand(hubCmd(o, stderr), joinCmd(o), whoamiCmd(o), sessionsCmd(o), hookCmd(o),
+		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o))
 	return root
 }
 
@@ -111,14 +120,35 @@ func defaultDB() string {
 	return filepath.Join(home, ".local", "state", "agora", "agora.db")
 }
 
-func (o *options) agent() (string, error) {
-	if strings.TrimSpace(o.as) == "" {
-		return "", errors.New("who are you? pass --as <name> or set AGORA_NAME")
+// sessionID is the agent session this command runs in, as the agent tool exposes it.
+func sessionID() string {
+	for _, v := range []string{"AGORA_SESSION", "CLAUDE_CODE_SESSION_ID"} {
+		if id := os.Getenv(v); id != "" {
+			return id
+		}
 	}
-	return o.as, nil
+	return ""
 }
 
-func (o *options) resources() agorav1connect.ResourceServiceClient {
+// agent resolves who runs the command: --as, else $AGORA_NAME, else the name bound to the
+// command's session.
+func (o *options) agent(ctx context.Context) (string, error) {
+	if strings.TrimSpace(o.as) != "" {
+		return o.as, nil
+	}
+	if id := sessionID(); id != "" {
+		resp, err := o.sessions().Resolve(ctx, connect.NewRequest(&agorav1.ResolveRequest{SessionId: id}))
+		if err != nil {
+			return "", err
+		}
+		if name := resp.Msg.GetAgent(); name != "" {
+			return name, nil
+		}
+	}
+	return "", errors.New("who are you? join first (`agora join <name>`), or pass --as <name> or set AGORA_NAME")
+}
+
+func (o *options) httpClient() *http.Client {
 	socket := o.socket
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -126,7 +156,15 @@ func (o *options) resources() agorav1connect.ResourceServiceClient {
 			return d.DialContext(ctx, "unix", socket)
 		},
 	}
-	return agorav1connect.NewResourceServiceClient(&http.Client{Transport: transport}, "http://agora")
+	return &http.Client{Transport: transport}
+}
+
+func (o *options) resources() agorav1connect.ResourceServiceClient {
+	return agorav1connect.NewResourceServiceClient(o.httpClient(), "http://agora")
+}
+
+func (o *options) sessions() agorav1connect.SessionServiceClient {
+	return agorav1connect.NewSessionServiceClient(o.httpClient(), "http://agora")
 }
 
 // --- hub ------------------------------------------------------------------------
@@ -151,11 +189,103 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				return err
 			}
 			log.Info("hub listening", "socket", o.socket, "db", dbPath)
-			return hub.New(queue.New(db, nil), log).Serve(ctx, l)
+			q := queue.New(db, nil)
+			return hub.New(q, sessions.New(db, q, nil), log).Serve(ctx, l)
 		},
 	}
 	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
 	return cmd
+}
+
+// --- identity and sessions ----------------------------------------------------------
+
+func joinCmd(o *options) *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "join <name>",
+		Short: "Take a name and bind it to this session",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id := sessionID()
+			resp, err := o.sessions().JoinName(cmd.Context(), connect.NewRequest(&agorav1.JoinNameRequest{Name: args[0], SessionId: id, Force: force}))
+			if err != nil {
+				return err
+			}
+			if resp.Msg.GetBound() {
+				fmt.Fprintf(o.out, "joined as %s; commands from this session now act as %s\n", args[0], args[0])
+			} else {
+				fmt.Fprintf(o.out, "joined as %s; no session found, so pass --as %s or set AGORA_NAME=%s\n", args[0], args[0], args[0])
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "take the name from another live session")
+	return cmd
+}
+
+func whoamiCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "whoami",
+		Short: "Show the name and session this command resolves to",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				name = "-"
+			}
+			id := sessionID()
+			if id == "" {
+				id = "-"
+			}
+			fmt.Fprintf(o.out, "name: %s\nsession: %s\n", name, id)
+			return nil
+		},
+	}
+}
+
+func sessionsCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "sessions",
+		Short: "List agent sessions that have not ended",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			resp, err := o.sessions().ListSessions(cmd.Context(), connect.NewRequest(&agorav1.ListSessionsRequest{}))
+			if err != nil {
+				return err
+			}
+			if len(resp.Msg.GetSessions()) == 0 {
+				fmt.Fprintln(o.out, "no live sessions")
+			}
+			for _, x := range resp.Msg.GetSessions() {
+				agent := x.GetAgent()
+				if agent == "" {
+					agent = "-"
+				}
+				state := strings.ToLower(strings.TrimPrefix(x.GetState().String(), "SESSION_STATE_"))
+				fmt.Fprintf(o.out, "%-16s %-5s since %s  %-12s %s  %s\n", agent, state, clock(x.GetStateAt().AsTime()), x.GetKind(), x.GetId(), x.GetCwd())
+			}
+			return nil
+		},
+	}
+}
+
+func hookCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:    "hook <tool>",
+		Short:  "Run as an agent tool's hook (claude-code)",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] != "claude-code" {
+				return fmt.Errorf("unknown tool %q", args[0])
+			}
+			err := claudecode.Hook(cmd.Context(), o.sessions(), cmd.InOrStdin(), o.out)
+			if err != nil && os.Getenv("AGORA_DEBUG") != "" {
+				return err
+			}
+			return nil // a board problem must never disturb the agent's session
+		},
+	}
 }
 
 // --- queue ----------------------------------------------------------------------
@@ -170,7 +300,7 @@ func queueCmd(o *options) *cobra.Command {
 		Short: "Join a resource's queue; holds a slot at once when one is free",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := o.agent()
+			agent, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -198,7 +328,7 @@ func queueCmd(o *options) *cobra.Command {
 		Short: "Wait for your turn; ends when you hold the slot",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := o.agent()
+			agent, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -211,7 +341,7 @@ func queueCmd(o *options) *cobra.Command {
 		Short: "Claim an offered slot or extend your lease",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := o.agent()
+			agent, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -231,7 +361,7 @@ func queueCmd(o *options) *cobra.Command {
 		Short: "Leave a resource's queue, freeing your slot",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := o.agent()
+			agent, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -395,7 +525,7 @@ func lockCmd(o *options) *cobra.Command {
 		Short: "Take a lock (a one-slot queue) without waiting; exit code 2 if someone holds it",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := o.agent()
+			agent, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -430,7 +560,7 @@ func unlockCmd(o *options) *cobra.Command {
 		Short: "Release your lock; with --force, release whoever holds it",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := o.agent()
+			agent, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}

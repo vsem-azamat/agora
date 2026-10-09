@@ -14,7 +14,7 @@ The hub is the process that holds Agora's state and serves its API.
 ## API
 
 - ConnectRPC services defined in `proto/agora/v1/`, served over HTTP/1.1 and unencrypted HTTP/2 on the socket. Unary calls and server streams both work over HTTP/1.1 with the Connect protocol.
-- Services: `ResourceService` (see [Resource queues](resource-queues.md)).
+- Services: `ResourceService` (see [Resource queues](resource-queues.md)) and `SessionService` (see [Sessions and connectors](sessions.md)).
 - The CLI client dials the socket directly; the URL host (`http://agora`) is a placeholder.
 
 ## Storage
@@ -26,7 +26,7 @@ The hub is the process that holds Agora's state and serves its API.
 
 ## Background work
 
-- Every second the hub sweeps resources whose lease or claim deadline has passed and applies the result.
+- Every second the hub sweeps resources whose lease or claim deadline has passed and applies the result, and ends sessions whose process no longer exists on its machine.
 - Every call that may have changed a queue (any call that settles one, including listing) fires a single change signal; every streaming waiter wakes, re-reads its own entry and reports a new position or takes its slot. A spurious wake costs one small query.
 - As a safety net, each waiter also re-reads its entry once a second.
 
@@ -36,4 +36,4 @@ On `SIGINT` or `SIGTERM` the hub ends every open stream, lets unary calls finish
 
 ## Identity
 
-The agent name comes from the client (`--as` or `$AGORA_NAME`) and is not authenticated; only the socket's file permissions limit who can reach the hub.
+The agent name comes from the client: `--as`, `$AGORA_NAME`, or the name bound to the client's session (see [Sessions and connectors](sessions.md)). Names are not authenticated; only the socket's file permissions limit who can reach the hub.

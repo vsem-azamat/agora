@@ -21,6 +21,7 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/sessions"
 )
 
 // SweepEvery is how often the hub applies expired leases and claim deadlines.
@@ -28,23 +29,32 @@ const SweepEvery = time.Second
 
 // Hub holds the services and the change signal that wakes streaming waiters.
 type Hub struct {
-	queue   *queue.Queue
-	changes *signal
-	log     *slog.Logger
+	queue    *queue.Queue
+	sessions *sessions.Sessions
+	alive    func(pid int) bool
+	changes  *signal
+	log      *slog.Logger
 }
 
-// New returns a hub over q.
-func New(q *queue.Queue, log *slog.Logger) *Hub {
+// New returns a hub over q and s.
+func New(q *queue.Queue, s *sessions.Sessions, log *slog.Logger) *Hub {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, changes: newSignal(), log: log}
+	return &Hub{queue: q, sessions: s, alive: processAlive, changes: newSignal(), log: log}
+}
+
+// processAlive reports whether a process with pid exists on this machine.
+func processAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 // Handler returns the HTTP handler with every service mounted.
 func (h *Hub) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(agorav1connect.NewResourceServiceHandler(&resources{h}))
+	mux.Handle(agorav1connect.NewSessionServiceHandler(&sessionService{h}))
 	return mux
 }
 
@@ -64,8 +74,17 @@ func (h *Hub) Sweep(ctx context.Context) {
 				}
 				continue
 			}
+			ended, err := h.sessions.EndDead(ctx, h.alive)
+			if err != nil && ctx.Err() == nil {
+				h.log.Error("sweep sessions", "err", err)
+			}
+			if len(ended) > 0 {
+				h.log.Info("sessions ended: process gone", "sessions", ended)
+			}
 			if len(changed) > 0 {
 				h.log.Info("leases or offers expired", "resources", changed)
+			}
+			if len(changed) > 0 || len(ended) > 0 {
 				h.changes.fire()
 			}
 		}
@@ -280,6 +299,10 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.As(err, &forbidden):
 		return connect.NewError(connect.CodePermissionDenied, err)
+	case errors.Is(err, sessions.ErrInvalid):
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, sessions.ErrNameTaken):
+		return connect.NewError(connect.CodeAlreadyExists, err)
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return connect.NewError(connect.CodeCanceled, err)
 	}
@@ -315,4 +338,71 @@ func resourcePB(r queue.Resource) *agorav1.Resource {
 		out.Entries = append(out.Entries, entryPB(&r.Entries[i]))
 	}
 	return out
+}
+
+// --- SessionService ---------------------------------------------------------------
+
+type sessionService struct{ h *Hub }
+
+var events = map[agorav1.SessionEvent]sessions.Event{
+	agorav1.SessionEvent_SESSION_EVENT_START:  sessions.Start,
+	agorav1.SessionEvent_SESSION_EVENT_PROMPT: sessions.Prompt,
+	agorav1.SessionEvent_SESSION_EVENT_TOOL:   sessions.Tool,
+	agorav1.SessionEvent_SESSION_EVENT_STOP:   sessions.Stop,
+	agorav1.SessionEvent_SESSION_EVENT_END:    sessions.End,
+}
+
+func (s *sessionService) Report(ctx context.Context, req *connect.Request[agorav1.ReportRequest]) (*connect.Response[agorav1.ReportResponse], error) {
+	m := req.Msg
+	ev, ok := events[m.GetEvent()]
+	if !ok {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("unknown session event"))
+	}
+	reply, err := s.h.sessions.Report(ctx, sessions.Report{
+		SessionID: m.GetSessionId(), Kind: m.GetKind(), Event: ev, PID: int(m.GetPid()),
+		CWD: m.GetCwd(), Terminal: m.GetTerminal(), StopActive: m.GetStopActive(),
+	})
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire() // an ended session may have given back places
+	return connect.NewResponse(&agorav1.ReportResponse{Context: reply.Context, Block: reply.Block, BlockReason: reply.BlockReason}), nil
+}
+
+func (s *sessionService) JoinName(ctx context.Context, req *connect.Request[agorav1.JoinNameRequest]) (*connect.Response[agorav1.JoinNameResponse], error) {
+	bound, err := s.h.sessions.Join(ctx, req.Msg.GetName(), req.Msg.GetSessionId(), req.Msg.GetForce())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.JoinNameResponse{Bound: bound}), nil
+}
+
+func (s *sessionService) Resolve(ctx context.Context, req *connect.Request[agorav1.ResolveRequest]) (*connect.Response[agorav1.ResolveResponse], error) {
+	agent, err := s.h.sessions.Resolve(ctx, req.Msg.GetSessionId())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.ResolveResponse{Agent: agent}), nil
+}
+
+var sessionStates = map[sessions.State]agorav1.SessionState{
+	sessions.Busy:  agorav1.SessionState_SESSION_STATE_BUSY,
+	sessions.Idle:  agorav1.SessionState_SESSION_STATE_IDLE,
+	sessions.Ended: agorav1.SessionState_SESSION_STATE_ENDED,
+}
+
+func (s *sessionService) ListSessions(ctx context.Context, _ *connect.Request[agorav1.ListSessionsRequest]) (*connect.Response[agorav1.ListSessionsResponse], error) {
+	list, err := s.h.sessions.List(ctx)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.ListSessionsResponse{}
+	for _, x := range list {
+		out.Sessions = append(out.Sessions, &agorav1.Session{
+			Id: x.ID, Kind: x.Kind, Agent: x.Agent, State: sessionStates[x.State],
+			StateAt: timestamppb.New(x.StateAt), StartedAt: timestamppb.New(x.StartedAt),
+			Pid: int32(x.PID), Cwd: x.CWD, Terminal: x.Terminal,
+		})
+	}
+	return connect.NewResponse(out), nil
 }
