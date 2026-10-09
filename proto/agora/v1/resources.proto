@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package agora.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
+
+// ResourceService gives agents fair, first-come access to resources with a limited
+// number of slots. A lock is a resource with one slot.
+service ResourceService {
+  // Join puts the agent in the resource's queue, or grants a slot at once when one is free.
+  // With no_wait, the agent is queued only if it can hold a slot at once.
+  rpc Join(JoinRequest) returns (JoinResponse);
+  // Wait streams the agent's position until it holds a slot. An offered slot is claimed at once.
+  rpc Wait(WaitRequest) returns (stream WaitResponse);
+  // Renew claims an offered slot or extends a held lease by the entry's lease duration.
+  rpc Renew(RenewRequest) returns (RenewResponse);
+  // Release removes an agent from a queue, freeing its slot.
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+  // List returns resources with their holders, offers and waiting agents.
+  rpc List(ListRequest) returns (ListResponse);
+  // SetSlots changes how many agents may hold a resource at once.
+  rpc SetSlots(SetSlotsRequest) returns (SetSlotsResponse);
+}
+
+enum EntryState {
+  ENTRY_STATE_UNSPECIFIED = 0;
+  ENTRY_STATE_WAITING = 1;
+  ENTRY_STATE_OFFERED = 2;
+  ENTRY_STATE_HELD = 3;
+}
+
+message Entry {
+  string key = 1;
+  string agent = 2;
+  string note = 3;
+  EntryState state = 4;
+  // Position among waiting agents, starting at 1; 0 when offered or held.
+  int32 position = 5;
+  google.protobuf.Timestamp joined_at = 6;
+  // Lease end when held, claim deadline when offered, unset when waiting.
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Duration lease = 8;
+}
+
+message Resource {
+  string key = 1;
+  int32 slots = 2;
+  // Holders and offers first, then waiting agents in order.
+  repeated Entry entries = 3;
+}
+
+message JoinRequest {
+  string key = 1;
+  string agent = 2;
+  string note = 3;
+  // Lease duration; 30 minutes when unset.
+  google.protobuf.Duration lease = 4;
+  bool no_wait = 5;
+}
+
+message JoinResponse {
+  // The agent's entry; unset when no_wait was refused.
+  Entry entry = 1;
+  // The resource as it stands, so a refused no_wait can name the holders.
+  Resource resource = 2;
+}
+
+message WaitRequest {
+  string key = 1;
+  string agent = 2;
+}
+
+message WaitResponse {
+  Entry entry = 1;
+}
+
+message RenewRequest {
+  string key = 1;
+  string agent = 2;
+}
+
+message RenewResponse {
+  Entry entry = 1;
+}
+
+message ReleaseRequest {
+  string key = 1;
+  // The agent to remove from the queue.
+  string agent = 2;
+  // Who asks; another agent's entry is removed only with force.
+  string actor = 3;
+  bool force = 4;
+}
+
+message ReleaseResponse {
+  // False when the agent was not queued.
+  bool released = 1;
+}
+
+message ListRequest {
+  // Only this resource when set.
+  string key = 1;
+}
+
+message ListResponse {
+  repeated Resource resources = 1;
+}
+
+message SetSlotsRequest {
+  string key = 1;
+  int32 slots = 2;
+}
+
+message SetSlotsResponse {
+  Resource resource = 1;
+}

@@ -1,0 +1,455 @@
+// Package cli implements the agora command.
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"connectrpc.com/connect"
+	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
+	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/hub"
+	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/store"
+)
+
+// ExitRefused is the exit code of a lock that someone else holds.
+const ExitRefused = 2
+
+// exitError carries a specific exit code out of a command.
+type exitError struct {
+	code int
+	msg  string
+}
+
+func (e *exitError) Error() string { return e.msg }
+
+// Run executes the agora command with args and returns the process exit code.
+func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	root := newRoot(stdout, stderr)
+	root.SetArgs(args)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	err := root.ExecuteContext(ctx)
+	if err == nil {
+		return 0
+	}
+	var ee *exitError
+	if errors.As(err, &ee) {
+		fmt.Fprintln(stderr, ee.msg)
+		return ee.code
+	}
+	fmt.Fprintf(stderr, "agora: %s\n", message(err))
+	return 1
+}
+
+func message(err error) string {
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		if ce.Code() == connect.CodeUnavailable {
+			return "cannot reach the hub; start it with `agora hub`"
+		}
+		return ce.Message()
+	}
+	return err.Error()
+}
+
+type options struct {
+	as     string
+	socket string
+	out    io.Writer
+}
+
+func newRoot(stdout, stderr io.Writer) *cobra.Command {
+	o := &options{out: stdout}
+	root := &cobra.Command{
+		Use:           "agora",
+		Short:         "Coordinate AI coding agents on your machines",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	root.PersistentFlags().StringVar(&o.as, "as", os.Getenv("AGORA_NAME"), "agent name to act as (default $AGORA_NAME)")
+	root.PersistentFlags().StringVar(&o.socket, "socket", defaultSocket(), "hub socket (default $AGORA_SOCKET)")
+
+	root.AddCommand(hubCmd(o, stderr), queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o))
+	return root
+}
+
+func defaultSocket() string {
+	if s := os.Getenv("AGORA_SOCKET"); s != "" {
+		return s
+	}
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+		return filepath.Join(d, "agora", "hub.sock")
+	}
+	return filepath.Join(os.TempDir(), fmt.Sprintf("agora-%d", os.Getuid()), "hub.sock")
+}
+
+func defaultDB() string {
+	if s := os.Getenv("AGORA_DB"); s != "" {
+		return s
+	}
+	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
+		return filepath.Join(d, "agora", "agora.db")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "state", "agora", "agora.db")
+}
+
+func (o *options) agent() (string, error) {
+	if strings.TrimSpace(o.as) == "" {
+		return "", errors.New("who are you? pass --as <name> or set AGORA_NAME")
+	}
+	return o.as, nil
+}
+
+func (o *options) resources() agorav1connect.ResourceServiceClient {
+	socket := o.socket
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", socket)
+		},
+	}
+	return agorav1connect.NewResourceServiceClient(&http.Client{Transport: transport}, "http://agora")
+}
+
+// --- hub ------------------------------------------------------------------------
+
+func hubCmd(o *options, stderr io.Writer) *cobra.Command {
+	var dbPath string
+	cmd := &cobra.Command{
+		Use:   "hub",
+		Short: "Run the hub",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			log := slog.New(slog.NewTextHandler(stderr, nil))
+			db, err := store.Open(ctx, dbPath)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
+			l, err := hub.Listen(o.socket)
+			if err != nil {
+				return err
+			}
+			log.Info("hub listening", "socket", o.socket, "db", dbPath)
+			return hub.New(queue.New(db, nil), log).Serve(ctx, l)
+		},
+	}
+	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
+	return cmd
+}
+
+// --- queue ----------------------------------------------------------------------
+
+func queueCmd(o *options) *cobra.Command {
+	cmd := &cobra.Command{Use: "queue", Short: "Queue for resources with a limited number of slots"}
+
+	var lease time.Duration
+	var wait bool
+	join := &cobra.Command{
+		Use:   "join <key> [note...]",
+		Short: "Join a resource's queue; holds a slot at once when one is free",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := o.agent()
+			if err != nil {
+				return err
+			}
+			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(&agorav1.JoinRequest{
+				Key: args[0], Agent: agent, Note: strings.Join(args[1:], " "), Lease: durationpb.New(lease),
+			}))
+			if err != nil {
+				return err
+			}
+			printEntry(o.out, resp.Msg.GetEntry())
+			if wait && resp.Msg.GetEntry().GetState() != agorav1.EntryState_ENTRY_STATE_HELD {
+				return o.waitTurn(cmd.Context(), args[0], agent)
+			}
+			return nil
+		},
+	}
+	join.Flags().DurationVar(&lease, "lease", queue.DefaultLease, "how long a held slot lasts without renewal")
+	join.Flags().BoolVar(&wait, "wait", false, "wait until the slot is yours")
+
+	waitCmd := &cobra.Command{
+		Use:   "wait <key>",
+		Short: "Wait for your turn; ends when you hold the slot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := o.agent()
+			if err != nil {
+				return err
+			}
+			return o.waitTurn(cmd.Context(), args[0], agent)
+		},
+	}
+
+	renew := &cobra.Command{
+		Use:   "renew <key>",
+		Short: "Claim an offered slot or extend your lease",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := o.agent()
+			if err != nil {
+				return err
+			}
+			resp, err := o.resources().Renew(cmd.Context(), connect.NewRequest(&agorav1.RenewRequest{Key: args[0], Agent: agent}))
+			if err != nil {
+				return err
+			}
+			printEntry(o.out, resp.Msg.GetEntry())
+			return nil
+		},
+	}
+
+	var other string
+	var force bool
+	release := &cobra.Command{
+		Use:   "release <key>",
+		Short: "Leave a resource's queue, freeing your slot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := o.agent()
+			if err != nil {
+				return err
+			}
+			target := agent
+			if other != "" {
+				target = other
+			}
+			return o.release(cmd.Context(), args[0], target, agent, force)
+		},
+	}
+	release.Flags().StringVar(&other, "agent", "", "remove this agent instead of yourself (needs --force)")
+	release.Flags().BoolVar(&force, "force", false, "remove another agent; recorded by the hub")
+
+	ls := &cobra.Command{
+		Use:   "ls [key]",
+		Short: "List resources with holders and waiting agents",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := ""
+			if len(args) == 1 {
+				key = args[0]
+			}
+			resp, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{Key: key}))
+			if err != nil {
+				return err
+			}
+			if len(resp.Msg.GetResources()) == 0 {
+				fmt.Fprintln(o.out, "no queued resources")
+			}
+			for _, r := range resp.Msg.GetResources() {
+				printResource(o.out, r)
+			}
+			return nil
+		},
+	}
+
+	slots := &cobra.Command{
+		Use:   "slots <key> <n>",
+		Short: "Set how many agents may hold a resource at once",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			n, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("slots: %q is not a number", args[1])
+			}
+			resp, err := o.resources().SetSlots(cmd.Context(), connect.NewRequest(&agorav1.SetSlotsRequest{Key: args[0], Slots: int32(n)}))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(o.out, "%s has %d slots\n", resp.Msg.GetResource().GetKey(), resp.Msg.GetResource().GetSlots())
+			return nil
+		},
+	}
+
+	cmd.AddCommand(join, waitCmd, renew, release, ls, slots)
+	return cmd
+}
+
+func (o *options) waitTurn(ctx context.Context, key, agent string) error {
+	stream, err := o.resources().Wait(ctx, connect.NewRequest(&agorav1.WaitRequest{Key: key, Agent: agent}))
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+	for stream.Receive() {
+		printEntry(o.out, stream.Msg().GetEntry())
+	}
+	return stream.Err()
+}
+
+func (o *options) release(ctx context.Context, key, agent, actor string, force bool) error {
+	resp, err := o.resources().Release(ctx, connect.NewRequest(&agorav1.ReleaseRequest{Key: key, Agent: agent, Actor: actor, Force: force}))
+	if err != nil {
+		return err
+	}
+	switch {
+	case !resp.Msg.GetReleased():
+		fmt.Fprintf(o.out, "%s: %s was not queued\n", key, agent)
+	case agent != actor:
+		fmt.Fprintf(o.out, "removed %s from %s\n", agent, key)
+	default:
+		fmt.Fprintf(o.out, "released %s\n", key)
+	}
+	return nil
+}
+
+// --- locks: queues that do not wait --------------------------------------------------
+
+func lockCmd(o *options) *cobra.Command {
+	var ttl time.Duration
+	cmd := &cobra.Command{
+		Use:   "lock <key> [note...]",
+		Short: "Take a lock (a one-slot queue) without waiting; exit code 2 if someone holds it",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := o.agent()
+			if err != nil {
+				return err
+			}
+			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(&agorav1.JoinRequest{
+				Key: args[0], Agent: agent, Note: strings.Join(args[1:], " "), Lease: durationpb.New(ttl), NoWait: true,
+			}))
+			if err != nil {
+				return err
+			}
+			if e := resp.Msg.GetEntry(); e != nil {
+				if e.GetState() != agorav1.EntryState_ENTRY_STATE_HELD {
+					printEntry(o.out, e)
+					return nil
+				}
+				fmt.Fprintf(o.out, "locked %s until %s\n", e.GetKey(), clock(e.GetExpiresAt().AsTime()))
+				return nil
+			}
+			var held []string
+			for _, h := range resp.Msg.GetResource().GetEntries() {
+				if h.GetState() == agorav1.EntryState_ENTRY_STATE_HELD {
+					held = append(held, fmt.Sprintf("%s until %s%s", h.GetAgent(), clock(h.GetExpiresAt().AsTime()), noteSuffix(h.GetNote())))
+				}
+			}
+			return &exitError{code: ExitRefused, msg: fmt.Sprintf("%s is held by %s", args[0], strings.Join(held, ", "))}
+		},
+	}
+	cmd.Flags().DurationVar(&ttl, "ttl", queue.DefaultLease, "how long the lock lasts")
+	return cmd
+}
+
+func unlockCmd(o *options) *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "unlock <key>",
+		Short: "Release your lock; with --force, release whoever holds it",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agent, err := o.agent()
+			if err != nil {
+				return err
+			}
+			if !force {
+				return o.release(cmd.Context(), args[0], agent, agent, false)
+			}
+			resp, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{Key: args[0]}))
+			if err != nil {
+				return err
+			}
+			for _, r := range resp.Msg.GetResources() {
+				for _, e := range r.GetEntries() {
+					if e.GetState() == agorav1.EntryState_ENTRY_STATE_HELD {
+						if err := o.release(cmd.Context(), args[0], e.GetAgent(), agent, true); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "release another agent's lock; recorded by the hub")
+	return cmd
+}
+
+func locksCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "locks",
+		Short: "List held slots of every resource",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			resp, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{}))
+			if err != nil {
+				return err
+			}
+			for _, r := range resp.Msg.GetResources() {
+				for _, e := range r.GetEntries() {
+					if e.GetState() == agorav1.EntryState_ENTRY_STATE_HELD {
+						fmt.Fprintf(o.out, "%-28s %-16s until %s%s\n", e.GetKey(), e.GetAgent(), clock(e.GetExpiresAt().AsTime()), noteSuffix(e.GetNote()))
+					}
+				}
+			}
+			return nil
+		},
+	}
+}
+
+// --- output ---------------------------------------------------------------------------
+
+func clock(t time.Time) string { return t.Local().Format("15:04:05") }
+
+func noteSuffix(note string) string {
+	if note == "" {
+		return ""
+	}
+	return ": " + note
+}
+
+func printEntry(w io.Writer, e *agorav1.Entry) {
+	switch e.GetState() {
+	case agorav1.EntryState_ENTRY_STATE_HELD:
+		fmt.Fprintf(w, "holding %s until %s\n", e.GetKey(), clock(e.GetExpiresAt().AsTime()))
+	case agorav1.EntryState_ENTRY_STATE_OFFERED:
+		fmt.Fprintf(w, "your turn on %s: claim it by %s with `agora queue renew %s`\n", e.GetKey(), clock(e.GetExpiresAt().AsTime()), e.GetKey())
+	case agorav1.EntryState_ENTRY_STATE_WAITING:
+		fmt.Fprintf(w, "waiting for %s at position %d\n", e.GetKey(), e.GetPosition())
+	}
+}
+
+func printResource(w io.Writer, r *agorav1.Resource) {
+	fmt.Fprintf(w, "%s (%d slot%s)\n", r.GetKey(), r.GetSlots(), plural(r.GetSlots()))
+	for _, e := range r.GetEntries() {
+		switch e.GetState() {
+		case agorav1.EntryState_ENTRY_STATE_HELD:
+			fmt.Fprintf(w, "  held     %-16s until %s%s\n", e.GetAgent(), clock(e.GetExpiresAt().AsTime()), noteSuffix(e.GetNote()))
+		case agorav1.EntryState_ENTRY_STATE_OFFERED:
+			fmt.Fprintf(w, "  offered  %-16s claim by %s%s\n", e.GetAgent(), clock(e.GetExpiresAt().AsTime()), noteSuffix(e.GetNote()))
+		default:
+			fmt.Fprintf(w, "  #%-7d %-16s since %s%s\n", e.GetPosition(), e.GetAgent(), clock(e.GetJoinedAt().AsTime()), noteSuffix(e.GetNote()))
+		}
+	}
+}
+
+func plural(n int32) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}

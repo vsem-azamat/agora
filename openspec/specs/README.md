@@ -10,3 +10,4 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 
 | Capability | Covers |
 | --- | --- |
+| [Resources](resources/README.md) | Fair queues for resources with a limited number of slots; locks are one-slot queues. |
