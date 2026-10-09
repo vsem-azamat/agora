@@ -448,12 +448,13 @@ func TestWatchingTurnedOff(t *testing.T) {
 // slowForge blocks in Lookup until its context ends, then takes a little longer to return.
 type slowForge struct {
 	started chan struct{}
+	once    sync.Once
 	mu      sync.Mutex
 	done    bool
 }
 
 func (f *slowForge) Lookup(ctx context.Context, _ forge.Repo, _ forge.Query) (forge.Result, error) {
-	close(f.started)
+	f.once.Do(func() { close(f.started) })
 	<-ctx.Done()
 	time.Sleep(50 * time.Millisecond)
 	f.mu.Lock()
@@ -466,7 +467,7 @@ func TestShutdownWaitsForTheWatchRound(t *testing.T) {
 	f := &slowForge{started: make(chan struct{})}
 	r := startWith(t, func(h *hub.Hub) {
 		h.Forges = forge.Forges{"github.com": f}
-		h.WatchFirst = 10 * time.Millisecond
+		h.WatchFirst, h.WatchEvery = 10*time.Millisecond, 10*time.Millisecond
 	})
 	joinIn(t, r)
 	select {
