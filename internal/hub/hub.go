@@ -24,6 +24,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/proc"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
 )
 
@@ -35,23 +36,25 @@ type Hub struct {
 	queue    *queue.Queue
 	sessions *sessions.Sessions
 	agents   *agents.Agents
+	rooms    *rooms.Rooms
 	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
 }
 
 // New returns a hub over the given domain services.
-func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, log *slog.Logger) *Hub {
+func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms, log *slog.Logger) *Hub {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, sessions: s, agents: a, alive: proc.Alive, changes: newSignal(), log: log}
+	return &Hub{queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log}
 }
 
 // Open builds a hub over db with the given clock (time.Now when nil).
 func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	q := queue.New(db, now)
-	return New(q, sessions.New(db, q, now), agents.New(db, q, now), log)
+	r := rooms.New(db, now)
+	return New(q, sessions.New(db, q, r, now), agents.New(db, q, now), r, log)
 }
 
 // Handler returns the HTTP handler with every service mounted.
@@ -60,6 +63,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.Handle(agorav1connect.NewResourceServiceHandler(&resources{h}))
 	mux.Handle(agorav1connect.NewSessionServiceHandler(&sessionService{h}))
 	mux.Handle(agorav1connect.NewAgentServiceHandler(&agentService{h}))
+	mux.Handle(agorav1connect.NewRoomServiceHandler(&roomService{h}))
 	return mux
 }
 
@@ -307,8 +311,12 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeAlreadyExists, err)
 	case errors.Is(err, agents.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, agents.ErrUnknown):
+	case errors.Is(err, agents.ErrUnknown), errors.Is(err, rooms.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, rooms.ErrInvalid):
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, rooms.ErrExists):
+		return connect.NewError(connect.CodeAlreadyExists, err)
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return connect.NewError(connect.CodeCanceled, err)
 	}
@@ -477,6 +485,84 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	}
 	for _, n := range p.PRs {
 		out.Prs = append(out.Prs, int32(n))
+	}
+	return out
+}
+
+// --- RoomService ------------------------------------------------------------------
+
+type roomService struct{ h *Hub }
+
+func (s *roomService) CreateRoom(ctx context.Context, req *connect.Request[agorav1.CreateRoomRequest]) (*connect.Response[agorav1.CreateRoomResponse], error) {
+	if err := s.h.rooms.Create(ctx, req.Msg.GetName(), req.Msg.GetPurpose(), req.Msg.GetCreator()); err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.CreateRoomResponse{}), nil
+}
+
+func (s *roomService) ListRooms(ctx context.Context, _ *connect.Request[agorav1.ListRoomsRequest]) (*connect.Response[agorav1.ListRoomsResponse], error) {
+	list, err := s.h.rooms.List(ctx)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.ListRoomsResponse{}
+	for _, r := range list {
+		pb := &agorav1.Room{Name: r.Name, Purpose: r.Purpose, CreatedBy: r.CreatedBy, CreatedAt: timestamppb.New(r.CreatedAt), Messages: int32(r.Messages)}
+		if !r.LastAt.IsZero() {
+			pb.LastAt = timestamppb.New(r.LastAt)
+		}
+		out.Rooms = append(out.Rooms, pb)
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav1.SubscribeRequest]) (*connect.Response[agorav1.SubscribeResponse], error) {
+	followed, err := s.h.rooms.Subscribe(ctx, req.Msg.GetAgent(), req.Msg.GetRooms(), req.Msg.GetFollow())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.SubscribeResponse{Rooms: followed}), nil
+}
+
+func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
+	m := req.Msg
+	if m.GetAuthor() == rooms.Board {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the board itself posts as agora"))
+	}
+	id, err := s.h.rooms.Post(ctx, m.GetAuthor(), m.GetRoom(), m.GetBody(), m.GetReplyTo())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.PostResponse{Id: id}), nil
+}
+
+func (s *roomService) History(ctx context.Context, req *connect.Request[agorav1.HistoryRequest]) (*connect.Response[agorav1.HistoryResponse], error) {
+	msgs, err := s.h.rooms.History(ctx, req.Msg.GetRoom(), int(req.Msg.GetLast()))
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.HistoryResponse{Messages: messagesPB(msgs)}), nil
+}
+
+func (s *roomService) Unread(ctx context.Context, req *connect.Request[agorav1.UnreadRequest]) (*connect.Response[agorav1.UnreadResponse], error) {
+	m := req.Msg
+	msgs, total, err := s.h.rooms.Unread(ctx, m.GetAgent(), m.GetMentionsOnly(), int(m.GetLimit()))
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	if !m.GetPeek() {
+		if err := s.h.rooms.MarkRead(ctx, m.GetAgent(), msgs); err != nil {
+			return nil, toConnect(err)
+		}
+	}
+	return connect.NewResponse(&agorav1.UnreadResponse{Messages: messagesPB(msgs), Total: int32(total)}), nil
+}
+
+func messagesPB(msgs []rooms.Message) []*agorav1.Message {
+	out := make([]*agorav1.Message, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, &agorav1.Message{Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed})
 	}
 	return out
 }

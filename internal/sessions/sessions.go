@@ -14,11 +14,16 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 const (
 	// ToolCheckEvery limits how often tool use looks for something to tell the agent.
 	ToolCheckEvery = 15 * time.Second
+	// DeliverAtOnce is how many unread messages one hook adds to the agent's context.
+	DeliverAtOnce = 5
+	// DeliverChars is how long each delivered message may be.
+	DeliverChars = 700
 	// UnknownProcessTimeout ends a session whose process is unknown after this long without
 	// events from it.
 	UnknownProcessTimeout = 6 * time.Hour
@@ -118,16 +123,17 @@ func checkSession(id string) error {
 type Sessions struct {
 	db    *sql.DB
 	queue *queue.Queue
+	rooms *rooms.Rooms
 	now   func() time.Time
 }
 
 // New returns Sessions over db; q is used for reminders and for releasing ended sessions'
-// places; now is the clock (time.Now when nil).
-func New(db *sql.DB, q *queue.Queue, now func() time.Time) *Sessions {
+// places, r for delivering messages; now is the clock (time.Now when nil).
+func New(db *sql.DB, q *queue.Queue, r *rooms.Rooms, now func() time.Time) *Sessions {
 	if now == nil {
 		now = time.Now
 	}
-	return &Sessions{db: db, queue: q, now: now}
+	return &Sessions{db: db, queue: q, rooms: r, now: now}
 }
 
 // Report records one connector event and returns what to tell the agent.
@@ -177,19 +183,50 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	if agent == "" {
 		return Reply{}, nil
 	}
-	return s.remind(ctx, r, agent, now)
+	note, checked, err := s.remind(ctx, r, agent, now)
+	if err != nil || !checked {
+		return Reply{}, err
+	}
+	news, err := s.deliver(ctx, agent)
+	if err != nil {
+		return Reply{}, err
+	}
+	return Reply{Context: strings.TrimSpace(note + "\n\n" + news)}, nil
+}
+
+// deliver returns the agent's oldest unread messages as context text and marks the ones shown
+// as read.
+func (s *Sessions) deliver(ctx context.Context, agent string) (string, error) {
+	if s.rooms == nil {
+		return "", nil
+	}
+	msgs, total, err := s.rooms.Unread(ctx, agent, false, DeliverAtOnce)
+	if err != nil || len(msgs) == 0 {
+		return "", err
+	}
+	if err := s.rooms.MarkRead(ctx, agent, msgs); err != nil {
+		return "", err
+	}
+	lines := []string{fmt.Sprintf("Agora: new board messages for you (%s). Act on what is addressed to you "+
+		"(reply: agora post <room> '...' --reply <id>); otherwise note them and carry on.", agent)}
+	for _, m := range msgs {
+		lines = append(lines, rooms.Format(m, DeliverChars))
+	}
+	if more := total - len(msgs); more > 0 {
+		lines = append(lines, fmt.Sprintf("... %d more: run `agora unread`.", more))
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 // remind returns a note about the agent's places when they changed since the last note, when a
 // slot is offered, or at session start. The note is recorded with a compare-and-set, so
 // concurrent hooks of one session add it once.
-func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.Time) (Reply, error) {
+func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.Time) (text string, checked bool, err error) {
 	entries, err := s.queue.EntriesOf(ctx, agent)
 	if err != nil {
-		return Reply{}, err
+		return "", false, err
 	}
 	sig := signature(entries)
-	var text string
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var noted string
 		var checkedAt int64
@@ -207,6 +244,7 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		if n, _ := res.RowsAffected(); n == 0 {
 			return nil // a concurrent hook of this session got there first
 		}
+		checked = true
 		lost := lostKeys(noted, entries)
 		if len(entries) == 0 && len(lost) == 0 {
 			return nil
@@ -216,18 +254,42 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		}
 		return nil
 	})
-	return Reply{Context: text}, err
+	return text, checked, err
 }
 
 func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Time) (Reply, error) {
 	if agent != "" && !r.StopActive {
+		var parts []string
+		if s.rooms != nil {
+			msgs, total, err := s.rooms.Unread(ctx, agent, true, DeliverAtOnce)
+			if err != nil {
+				return Reply{}, err
+			}
+			if len(msgs) > 0 {
+				if err := s.rooms.MarkEach(ctx, agent, msgs); err != nil {
+					return Reply{}, err
+				}
+				lines := []string{fmt.Sprintf("Agora: before you end your turn, answer what is addressed to you (%s), "+
+					"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", agent)}
+				for _, m := range msgs {
+					lines = append(lines, rooms.Format(m, DeliverChars))
+				}
+				if more := total - len(msgs); more > 0 {
+					lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
+				}
+				parts = append(parts, strings.Join(lines, "\n"))
+			}
+		}
 		entries, err := s.queue.EntriesOf(ctx, agent)
 		if err != nil {
 			return Reply{}, err
 		}
 		if hasOffer(entries) {
-			return Reply{Block: true, BlockReason: note(agent, entries, nil) +
-				" Claim or release the offered slot before you end your turn; otherwise it passes to the next agent."}, nil
+			parts = append(parts, note(agent, entries, nil)+
+				" Claim or release the offered slot before you end your turn; otherwise it passes to the next agent.")
+		}
+		if len(parts) > 0 {
+			return Reply{Block: true, BlockReason: strings.Join(parts, "\n\n")}, nil
 		}
 	}
 	return Reply{}, s.tx(ctx, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
@@ -248,7 +310,8 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 	now := s.now()
 	bound := false
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES (?, ?) ON CONFLICT (name) DO NOTHING`, name, now.UnixMilli()); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (name, joined_at, read_from) VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages))
+			ON CONFLICT (name) DO NOTHING`, name, now.UnixMilli()); err != nil {
 			return err
 		}
 		if sessionID == "" {

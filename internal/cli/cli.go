@@ -26,6 +26,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -94,6 +95,7 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&o.socket, "socket", defaultSocket(), "hub socket (default $AGORA_SOCKET)")
 
 	root.AddCommand(hubCmd(o, stderr), joinCmd(o), setCmd(o), leaveCmd(o), statusCmd(o), whoCmd(o),
+		roomsCmd(o), roomCreateCmd(o), subscribeCmd(o, true), subscribeCmd(o, false), postCmd(o), readCmd(o), unreadCmd(o),
 		whoamiCmd(o), sessionsCmd(o), hookCmd(o),
 		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o))
 	return root
@@ -169,6 +171,10 @@ func (o *options) sessions() agorav1connect.SessionServiceClient {
 
 func (o *options) agents() agorav1connect.AgentServiceClient {
 	return agorav1connect.NewAgentServiceClient(o.httpClient(), "http://agora")
+}
+
+func (o *options) rooms() agorav1connect.RoomServiceClient {
+	return agorav1connect.NewRoomServiceClient(o.httpClient(), "http://agora")
 }
 
 // --- hub ------------------------------------------------------------------------
@@ -382,6 +388,9 @@ func statusCmd(o *options) *cobra.Command {
 				fmt.Fprintf(o.out, "  %-16s %-9s %-7s %-14s %-12s %4s  %s\n", p.GetName(), p.GetStatus(), p.GetSessionState(),
 					p.GetProject(), prList(p.GetPrs()), age(p.GetUpdatedAt().AsTime()), p.GetTask())
 			}
+			if err := o.printRooms(cmd.Context()); err != nil {
+				return err
+			}
 			res, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{}))
 			if err != nil {
 				return err
@@ -557,6 +566,169 @@ func hookCmd(o *options) *cobra.Command {
 			return nil // a board problem must never disturb the agent's session
 		},
 	}
+}
+
+// --- rooms and messages -------------------------------------------------------------
+
+func (o *options) printRooms(ctx context.Context) error {
+	resp, err := o.rooms().ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{}))
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(o.out, "ROOMS")
+	for _, r := range resp.Msg.GetRooms() {
+		last := "-"
+		if r.GetLastAt() != nil {
+			last = age(r.GetLastAt().AsTime())
+		}
+		purpose, _, _ := strings.Cut(r.GetPurpose(), "\n")
+		fmt.Fprintf(o.out, "  #%-20s %5d msgs  last %4s  %s\n", r.GetName(), r.GetMessages(), last, purpose)
+	}
+	return nil
+}
+
+func roomsCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rooms",
+		Short: "List rooms",
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, _ []string) error { return o.printRooms(cmd.Context()) },
+	}
+}
+
+func roomCreateCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "room-create <room> <purpose...>",
+		Short: "Create a room with a purpose and follow it",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			room := strings.TrimPrefix(args[0], "#")
+			if _, err := o.rooms().CreateRoom(cmd.Context(), connect.NewRequest(&agorav1.CreateRoomRequest{
+				Name: room, Purpose: strings.Join(args[1:], " "), Creator: name,
+			})); err != nil {
+				return err
+			}
+			fmt.Fprintf(o.out, "created #%s; you follow it\n", room)
+			return nil
+		},
+	}
+}
+
+func subscribeCmd(o *options, follow bool) *cobra.Command {
+	use, short := "subscribe <room...>", "Follow rooms: their new messages count as unread for you"
+	if !follow {
+		use, short = "unsubscribe <room...>", "Stop following rooms (#general stays)"
+	}
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			resp, err := o.rooms().Subscribe(cmd.Context(), connect.NewRequest(&agorav1.SubscribeRequest{Agent: name, Rooms: args, Follow: follow}))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(o.out, "%s follows: #%s\n", name, strings.Join(resp.Msg.GetRooms(), " #"))
+			return nil
+		},
+	}
+}
+
+func postCmd(o *options) *cobra.Command {
+	var reply int64
+	cmd := &cobra.Command{
+		Use:   "post <room> [text...]",
+		Short: "Post to a room (text as arguments, or '-' / nothing to read standard input); @name or @all to address",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			text := strings.TrimSpace(strings.Join(args[1:], " "))
+			if text == "" || text == "-" {
+				b, err := io.ReadAll(cmd.InOrStdin())
+				if err != nil {
+					return err
+				}
+				text = strings.TrimSpace(string(b))
+			}
+			resp, err := o.rooms().Post(cmd.Context(), connect.NewRequest(&agorav1.PostRequest{
+				Author: name, Room: strings.TrimPrefix(args[0], "#"), Body: text, ReplyTo: reply,
+			}))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(o.out, resp.Msg.GetId())
+			return nil
+		},
+	}
+	cmd.Flags().Int64Var(&reply, "reply", 0, "message id this replies to")
+	return cmd
+}
+
+func readCmd(o *options) *cobra.Command {
+	var last int32
+	cmd := &cobra.Command{
+		Use:   "read <room>",
+		Short: "Show a room's recent messages (does not mark anything read)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resp, err := o.rooms().History(cmd.Context(), connect.NewRequest(&agorav1.HistoryRequest{Room: strings.TrimPrefix(args[0], "#"), Last: last}))
+			if err != nil {
+				return err
+			}
+			for _, m := range resp.Msg.GetMessages() {
+				fmt.Fprintln(o.out, formatMessage(m))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().Int32Var(&last, "last", 20, "how many messages")
+	return cmd
+}
+
+func unreadCmd(o *options) *cobra.Command {
+	var peek bool
+	cmd := &cobra.Command{
+		Use:   "unread",
+		Short: "New messages in your rooms and mentions anywhere; marks them read",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			resp, err := o.rooms().Unread(cmd.Context(), connect.NewRequest(&agorav1.UnreadRequest{Agent: name, Peek: peek}))
+			if err != nil {
+				return err
+			}
+			if len(resp.Msg.GetMessages()) == 0 {
+				fmt.Fprintln(o.out, "no unread messages")
+			}
+			for _, m := range resp.Msg.GetMessages() {
+				fmt.Fprintln(o.out, formatMessage(m))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&peek, "peek", false, "show without marking read")
+	return cmd
+}
+
+func formatMessage(m *agorav1.Message) string {
+	return rooms.Format(rooms.Message{
+		ID: m.GetId(), Room: m.GetRoom(), Author: m.GetAuthor(), Body: m.GetBody(),
+		ReplyTo: m.GetReplyTo(), At: m.GetAt().AsTime(), Addressed: m.GetAddressed(),
+	}, 0)
 }
 
 // --- queue ----------------------------------------------------------------------
