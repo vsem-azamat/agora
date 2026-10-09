@@ -306,7 +306,7 @@ func shellWords(s string) []string {
 		cur.Reset()
 		started = false
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		switch {
 		case quote != 0:

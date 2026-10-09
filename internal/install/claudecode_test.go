@@ -315,16 +315,16 @@ func TestUninstallRemovesEmptyHooks(t *testing.T) {
 
 func TestSymlinkedSettingsStayALink(t *testing.T) {
 	dir := t.TempDir()
-	real := filepath.Join(dir, "dotfiles", "settings.json")
-	write(t, real, `{"model": "opus"}`)
-	if err := os.Chmod(real, 0o600); err != nil {
+	target := filepath.Join(dir, "dotfiles", "settings.json")
+	write(t, target, `{"model": "opus"}`)
+	if err := os.Chmod(target, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(dir, "claude", "settings.json")
 	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := install.InstallClaudeCode(link, bin, "", now); err != nil {
@@ -333,10 +333,10 @@ func TestSymlinkedSettingsStayALink(t *testing.T) {
 	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("link replaced: %v", err)
 	}
-	if got := commands(t, readJSON(t, real), "SessionEnd"); len(got) != 1 {
+	if got := commands(t, readJSON(t, target), "SessionEnd"); len(got) != 1 {
 		t.Fatalf("linked file not updated: %q", got)
 	}
-	if fi, _ := os.Stat(real); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(target); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode changed to %v", fi.Mode().Perm())
 	}
 }

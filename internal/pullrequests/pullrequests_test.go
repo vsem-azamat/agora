@@ -118,7 +118,9 @@ func (e *env) restart() {
 
 func write(t *testing.T, p, body string) {
 	t.Helper()
-	os.MkdirAll(filepath.Dir(p), 0o755)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -184,8 +186,13 @@ func (e *env) board(t *testing.T) []string {
 	var out []string
 	for rows.Next() {
 		var room, body string
-		rows.Scan(&room, &body)
+		if err := rows.Scan(&room, &body); err != nil {
+			t.Fatal(err)
+		}
 		out = append(out, room+": "+body)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	return out
 }
@@ -264,7 +271,9 @@ func TestFoundPullRequestStaysWhileOpenAndIsDroppedWhenMerged(t *testing.T) {
 	e.w.Round(ctx)
 
 	worktree(t, dir, "work", "feat/export") // the agent moves on in the same worktree
-	e.a.Update(ctx, "builder", agents.Update{CWD: &wt})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: &wt}); err != nil {
+		t.Fatal(err)
+	}
 	e.w.Round(ctx)
 	if p := e.profile(t, "builder"); p.Branch != "feat/export" || !slices.Equal(p.FoundPRs, []int{57}) {
 		t.Fatalf("branch %q, found %v", p.Branch, p.FoundPRs)
@@ -460,7 +469,9 @@ func TestFoundPullRequestIsDroppedAfterTheAgentMovedRepository(t *testing.T) {
 	e.fake.set(app, forge.PR{Number: 57, Branch: "fix/login-timeout", Head: "a1", Open: true})
 	e.w.Round(ctx)
 	other := repo(t, "git@github.com:example-org/other-app.git")
-	e.a.Update(ctx, "builder", agents.Update{CWD: &other})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: &other}); err != nil {
+		t.Fatal(err)
+	}
 	e.fake.set(app, forge.PR{Number: 57, Branch: "fix/login-timeout", Head: "a1"}) // merged
 	e.w.Round(ctx)
 	if p := e.profile(t, "builder"); len(p.FoundPRs) != 0 {

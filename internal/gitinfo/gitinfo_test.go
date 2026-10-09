@@ -10,7 +10,9 @@ import (
 
 func write(t *testing.T, path, body string) {
 	t.Helper()
-	os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +21,9 @@ func write(t *testing.T, path, body string) {
 func TestBranchOfACheckoutAndItsWorktree(t *testing.T) {
 	repo := t.TempDir()
 	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
-	os.MkdirAll(filepath.Join(repo, "src", "deep"), 0o755)
+	if err := os.MkdirAll(filepath.Join(repo, "src", "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if b := gitinfo.Branch(filepath.Join(repo, "src", "deep")); b != "main" {
 		t.Fatalf("branch %q", b)
 	}
@@ -51,7 +55,9 @@ func TestDetachedAndOutside(t *testing.T) {
 func TestRepositoryName(t *testing.T) {
 	repo := filepath.Join(t.TempDir(), "example-app")
 	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
-	os.MkdirAll(filepath.Join(repo, "src"), 0o755)
+	if err := os.MkdirAll(filepath.Join(repo, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if n := gitinfo.Repo(filepath.Join(repo, "src")); n != "example-app" {
 		t.Fatalf("repo %q", n)
 	}

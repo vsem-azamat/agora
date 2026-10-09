@@ -113,7 +113,7 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 	var def struct {
 		Name string `json:"name"`
 	}
-	json.Unmarshal(resp.Data.Repository["defaultBranchRef"], &def)
+	_ = json.Unmarshal(resp.Data.Repository["defaultBranchRef"], &def) // absent or null: no default branch
 	res.DefaultBranch = def.Name
 	seenPR := map[int]bool{}
 	add := func(p ghPR) {
@@ -127,7 +127,7 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 		var list struct {
 			Nodes []ghPR `json:"nodes"`
 		}
-		json.Unmarshal(resp.Data.Repository["b"+strconv.Itoa(i)], &list)
+		_ = json.Unmarshal(resp.Data.Repository["b"+strconv.Itoa(i)], &list) // absent or null: no pull requests
 		for _, p := range list.Nodes {
 			add(p)
 		}
@@ -145,7 +145,7 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 			continue
 		}
 		var p ghPR
-		json.Unmarshal(resp.Data.Repository[k], &p)
+		_ = json.Unmarshal(resp.Data.Repository[k], &p) // absent or null: a zero PR, which add skips
 		add(p)
 	}
 	return res, nil
@@ -189,8 +189,10 @@ type ghPR struct {
 }
 
 func (p ghPR) pr() PR {
-	out := PR{Number: p.Number, Branch: p.HeadRefName, Head: p.HeadRefOid, Fork: p.IsCrossRepository,
-		Open: p.State == "OPEN", Draft: p.IsDraft}
+	out := PR{
+		Number: p.Number, Branch: p.HeadRefName, Head: p.HeadRefOid, Fork: p.IsCrossRepository,
+		Open: p.State == "OPEN", Draft: p.IsDraft,
+	}
 	switch p.Mergeable {
 	case "MERGEABLE":
 		out.Merge = Mergeable
@@ -249,7 +251,7 @@ func statusOutcome(state string) Outcome {
 
 // runGH runs gh, killing it if ctx ends.
 func runGH(ctx context.Context, args []string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd := exec.CommandContext(ctx, "gh", args...) //nolint:gosec // fixed binary; arguments are built by this package, not a shell
 	cmd.Env = append(cmd.Environ(), "GH_PROMPT_DISABLED=1", "GH_NO_UPDATE_NOTIFIER=1", "NO_COLOR=1")
 	cmd.WaitDelay = time.Second
 	var stderr bytes.Buffer

@@ -28,8 +28,10 @@ func TestPlainUnit(t *testing.T) {
 }
 
 func TestUnitArgumentsAreQuotedForSystemd(t *testing.T) {
-	unit := install.Unit([]string{"/opt/my tools/agora", "hub", "--db", "/srv/agora/agora.db",
-		"--wake-command", `notify -t "$AGORA_TERMINAL" 100% a\b`})
+	unit := install.Unit([]string{
+		"/opt/my tools/agora", "hub", "--db", "/srv/agora/agora.db",
+		"--wake-command", `notify -t "$AGORA_TERMINAL" 100% a\b`,
+	})
 	want := `ExecStart="/opt/my tools/agora" hub --db /srv/agora/agora.db --wake-command "notify -t \"$$AGORA_TERMINAL\" 100%% a\\b"` + "\n"
 	if !strings.Contains(unit, want) {
 		t.Fatalf("unit:\n%s\nwant line:\n%s", unit, want)

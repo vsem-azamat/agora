@@ -84,11 +84,11 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback() // report the error that failed the migration
 			return fmt.Errorf("apply %s: %w", names[i], err)
 		}
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback() // report the error that failed the migration
 			return err
 		}
 		if err := tx.Commit(); err != nil {

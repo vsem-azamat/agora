@@ -26,12 +26,18 @@ func TestProfilesMigrationMarksDepartedAgentsLeft(t *testing.T) {
 		if _, err := db.ExecContext(ctx, string(body)); err != nil {
 			t.Fatal(err)
 		}
-		db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1))
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	db.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES ('gone', 1), ('here', 1)`)
-	db.ExecContext(ctx, `INSERT INTO sessions (id, kind, agent, state, state_at, started_at, seen_at) VALUES
+	if _, err := db.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES ('gone', 1), ('here', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sessions (id, kind, agent, state, state_at, started_at, seen_at) VALUES
 		('session-gone', 'claude-code', NULL, 'ended', 1, 1, 1),
-		('session-here', 'claude-code', 'here', 'busy', 1, 1, 1)`)
+		('session-here', 'claude-code', 'here', 'busy', 1, 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
 	db.Close()
 
 	db, err = Open(ctx, path)

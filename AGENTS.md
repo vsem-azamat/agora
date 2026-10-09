@@ -34,7 +34,7 @@ Within one branch and one pull request:
 3. Write a failing test that enforces the scenario and watch it fail for the expected reason.
 4. Implement the smallest change that makes it pass, then clean up.
 5. Update docs when the engineering picture changes.
-6. Run the checks listed in [`docs/development/`](docs/development/README.md) before claiming success.
+6. Run `make check` before claiming success or pushing; `make fmt` applies the formatters. The checks are described in [`docs/development/checks.md`](docs/development/checks.md).
 
 ## Quality Bar
 
@@ -43,6 +43,7 @@ Within one branch and one pull request:
 - No abstraction until two real call sites need it.
 - Do not mix unrelated cleanup into a change.
 - Never patch generated code by hand; regenerate it.
+- Fix lint findings instead of silencing them. A `//nolint:<linter>` comment gives its reason on the same line.
 
 ## Git And Pull Requests
 

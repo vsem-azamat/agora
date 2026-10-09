@@ -22,14 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Repository policy
-        run: scripts/repo-policy-check.sh
-      - name: Documentation
-        run: node scripts/docs-check.mjs
-      - name: Spec layout
-        run: scripts/spec-layout-check.sh
-      - name: Spec format
-        run: npx -y @fission-ai/openspec@1.12.0 validate --specs --no-interactive
+      - name: Repository, documentation and spec checks
+        run: make repo
 
   go:
     name: Go
@@ -43,13 +37,17 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
-      - name: Format
-        run: test -z "$(gofmt -l cmd internal | tee /dev/stderr)"
-      - name: Vet
-        run: go vet ./...
+            tools/lint/go.sum
+      - name: Lint and format (golangci-lint)
+        run: make lint-go
       - name: Test
-        run: go test -race ./...
-      - name: API lint
-        run: go tool -modfile=tools/go.mod buf lint
+        run: make test
+      - name: API lint and format (buf)
+        run: make lint-proto
+      - name: API breaking changes
+        if: github.event_name == 'pull_request'
+        env:
+          BREAKING_AGAINST: ${{ github.server_url }}/${{ github.repository }}.git#branch=${{ github.base_ref }}
+        run: make breaking
       - name: Generated code is up to date
-        run: go tool -modfile=tools/go.mod buf generate && git diff --exit-code gen
+        run: make generate-check

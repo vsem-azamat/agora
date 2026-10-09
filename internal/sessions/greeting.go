@@ -58,10 +58,10 @@ func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.E
 		followed = strings.Join(rooms, ", ")
 	}
 	var waiting string
-	switch {
-	case addressed == 0:
+	switch addressed {
+	case 0:
 		waiting = "No unread message addresses you."
-	case addressed == 1:
+	case 1:
 		waiting = "1 unread message addresses you"
 	default:
 		waiting = fmt.Sprintf("%d unread messages address you", addressed)

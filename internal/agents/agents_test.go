@@ -56,8 +56,12 @@ func checkout(t *testing.T) (repo, worktree string) {
 	t.Helper()
 	repo = t.TempDir()
 	write := func(p, body string) {
-		os.MkdirAll(filepath.Dir(p), 0o755)
-		os.WriteFile(p, []byte(body), 0o644)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	write(filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
 	worktree = filepath.Join(repo, ".worktrees", "login-fix")
@@ -90,7 +94,9 @@ func TestProfileAfterJoining(t *testing.T) {
 func TestUpdatingTheTaskKeepsOtherFields(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "")
-	e.a.Update(ctx, "builder", agents.Update{Project: str("example-app")})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{Project: str("example-app")}); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.add(time.Minute)
 	p, _ := e.a.Update(ctx, "builder", agents.Update{Task: str("write tests")})
 	if p.Project != "example-app" || p.Task != "write tests" || !p.UpdatedAt.Equal(e.clock.now()) {
@@ -113,7 +119,9 @@ func TestBranchFollowsDirectoryAndSurvivesDetachedHead(t *testing.T) {
 	if p.Branch != "fix/login-timeout" {
 		t.Fatalf("branch %q", p.Branch)
 	}
-	os.WriteFile(filepath.Join(repo, ".git", "worktrees", "login-fix", "HEAD"), []byte("0123456789abcdef0123456789abcdef01234567\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(repo, ".git", "worktrees", "login-fix", "HEAD"), []byte("0123456789abcdef0123456789abcdef01234567\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	p, _ = e.a.Update(ctx, "builder", agents.Update{CWD: str(wt)})
 	if p.Branch != "fix/login-timeout" {
 		t.Fatalf("detached: branch %q", p.Branch)
@@ -128,13 +136,19 @@ func TestDirectoryFollowsTheSessionButKeepsADeclaredWorktree(t *testing.T) {
 	e := newEnv(t)
 	repo, wt := checkout(t)
 	e.join(t, "builder", "session-1")
-	e.a.Update(ctx, "builder", agents.Update{CWD: str(wt)})
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Prompt, CWD: repo})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str(wt)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Prompt, CWD: repo}); err != nil {
+		t.Fatal(err)
+	}
 	if p, _ := e.a.Get(ctx, "builder"); p.CWD != wt {
 		t.Fatalf("worktree lost: %q", p.CWD)
 	}
 	other := t.TempDir()
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Tool, CWD: other})
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Tool, CWD: other}); err != nil {
+		t.Fatal(err)
+	}
 	if p, _ := e.a.Get(ctx, "builder"); p.CWD != other || p.Branch != "" {
 		t.Fatalf("profile %+v", p)
 	}
@@ -143,7 +157,9 @@ func TestDirectoryFollowsTheSessionButKeepsADeclaredWorktree(t *testing.T) {
 func TestDeclaredPullRequests(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "")
-	e.a.Update(ctx, "builder", agents.Update{AddPRs: []int{42, 41, 57}})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{AddPRs: []int{42, 41, 57}}); err != nil {
+		t.Fatal(err)
+	}
 	p, _ := e.a.Update(ctx, "builder", agents.Update{DropPRs: []int{41}})
 	if len(p.PRs) != 2 || p.PRs[0] != 42 || p.PRs[1] != 57 {
 		t.Fatalf("prs %v", p.PRs)
@@ -153,10 +169,16 @@ func TestDeclaredPullRequests(t *testing.T) {
 func TestActivity(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "live", "session-1")
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start})
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start}); err != nil {
+		t.Fatal(err)
+	}
 	e.join(t, "silent", "")
-	e.a.Update(ctx, "silent", agents.Update{Task: str("x")})
-	e.a.Update(ctx, "live", agents.Update{Task: str("y")})
+	if _, err := e.a.Update(ctx, "silent", agents.Update{Task: str("x")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.a.Update(ctx, "live", agents.Update{Task: str("y")}); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.add(7 * time.Hour)
 	list, _ := e.a.List(ctx, false)
 	if len(list) != 1 || list[0].Name != "live" {
@@ -171,7 +193,9 @@ func TestActivity(t *testing.T) {
 func TestLeavingReleasesPlaces(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "")
-	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	left, err := e.a.Leave(ctx, "builder")
 	if err != nil || len(left) != 1 {
 		t.Fatalf("left %v err %v", left, err)
@@ -216,7 +240,9 @@ func TestLeavingInALiveSessionSticks(t *testing.T) {
 func TestSessionEndMarksTheAgentLeft(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End})
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End}); err != nil {
+		t.Fatal(err)
+	}
 	if p, _ := e.a.Get(ctx, "builder"); p.Status != agents.Left {
 		t.Fatalf("status %q", p.Status)
 	}
@@ -226,9 +252,13 @@ func TestWho(t *testing.T) {
 	e := newEnv(t)
 	repo, wt := checkout(t)
 	e.join(t, "builder", "")
-	e.a.Update(ctx, "builder", agents.Update{CWD: str(wt), AddPRs: []int{57}})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str(wt), AddPRs: []int{57}}); err != nil {
+		t.Fatal(err)
+	}
 	e.join(t, "reviewer", "")
-	e.a.Update(ctx, "reviewer", agents.Update{CWD: str(t.TempDir())})
+	if _, err := e.a.Update(ctx, "reviewer", agents.Update{CWD: str(t.TempDir())}); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		query string
 		path  bool
@@ -255,8 +285,12 @@ func TestWho(t *testing.T) {
 func TestResumedSessionBringsALeftAgentBack(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End})
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start})
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start}); err != nil {
+		t.Fatal(err)
+	}
 	p, _ := e.a.Get(ctx, "builder")
 	if p.Status != agents.Working || !p.Active {
 		t.Fatalf("profile %+v", p)
@@ -283,10 +317,16 @@ func TestDetachedCommitInAnotherRepoDoesNotKeepTheOldBranch(t *testing.T) {
 	e := newEnv(t)
 	repo, _ := checkout(t)
 	other := t.TempDir()
-	os.MkdirAll(filepath.Join(other, ".git"), 0o755)
-	os.WriteFile(filepath.Join(other, ".git", "HEAD"), []byte("0123456789abcdef0123456789abcdef01234567\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(other, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, ".git", "HEAD"), []byte("0123456789abcdef0123456789abcdef01234567\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	e.join(t, "builder", "")
-	e.a.Update(ctx, "builder", agents.Update{CWD: str(repo)})
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str(repo)}); err != nil {
+		t.Fatal(err)
+	}
 	p, _ := e.a.Update(ctx, "builder", agents.Update{CWD: str(other)})
 	if p.Branch != "0123456789ab" {
 		t.Fatalf("branch %q", p.Branch)

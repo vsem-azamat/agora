@@ -15,7 +15,7 @@ The full working rules are in [AGENTS.md](AGENTS.md); they apply to human contri
 
 - Use conventional commit messages (`feat:`, `fix:`, `docs:`, ...).
 - Keep each pull request to one topic.
-- Make sure the checks in [`docs/development/`](docs/development/README.md) pass.
+- Run `make check` before pushing; it runs what CI runs (see [Checks](docs/development/checks.md)). `make fmt` applies the formatters.
 - Do not include private details (hostnames, addresses, paths, credentials) in code, docs or examples.
 
 ## License

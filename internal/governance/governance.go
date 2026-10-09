@@ -89,9 +89,9 @@ func New(db *sql.DB, r *rooms.Rooms, now func() time.Time) *Governance {
 	return &Governance{db: db, rooms: r, now: now}
 }
 
-func checkText(what string, s string, max int) error {
-	if strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > max {
-		return fmt.Errorf("%w: %s must be 1 to %d characters", ErrInvalid, what, max)
+func checkText(what string, s string, limit int) error {
+	if strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > limit {
+		return fmt.Errorf("%w: %s must be 1 to %d characters", ErrInvalid, what, limit)
 	}
 	return nil
 }
@@ -190,26 +190,35 @@ func (g *Governance) Close(ctx context.Context, agent string, id int64, state st
 	})
 }
 
+// ids runs a query that selects proposal IDs. The rows are closed before it returns, so the
+// single database connection is free for the next query.
+func (g *Governance) ids(ctx context.Context, query string) ([]int64, error) {
+	rows, err := g.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // List returns proposals in number order: open ones, or all when all is true.
 func (g *Governance) List(ctx context.Context, all bool) ([]Proposal, error) {
 	query := `SELECT id FROM proposals WHERE state = 'open' ORDER BY id`
 	if all {
 		query = `SELECT id FROM proposals ORDER BY id`
 	}
-	rows, err := g.db.QueryContext(ctx, query)
+	ids, err := g.ids(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	rows.Close()
 	out := make([]Proposal, 0, len(ids))
 	for _, id := range ids {
 		p, err := g.Get(ctx, id)
@@ -327,7 +336,7 @@ func (g *Governance) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 		return err
 	}
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback() // report the error that failed the transaction
 		return err
 	}
 	return tx.Commit()
