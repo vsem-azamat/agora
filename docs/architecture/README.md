@@ -26,7 +26,7 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 | `internal/agents` | Profiles, activity, leaving and finding who works on what |
 | `internal/rooms` | Rooms, messages, mention parsing, subscriptions and reading positions |
 | `internal/governance` | Proposals, votes and the charter, with announcements in `#general` |
-| `internal/gitinfo` | Reading a checkout's branch from its `.git` files |
+| `internal/gitinfo` | Reading a checkout's branch and repository name from its `.git` files |
 | `internal/proc` | Identifying local processes by pid and start time |
 | `internal/connector/claudecode` | The Claude Code hook: hook input in, hub report, hook output out |
 | `internal/store` | Opening the SQLite database and applying migrations |

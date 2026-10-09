@@ -3,11 +3,14 @@ package sessions_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -32,6 +35,7 @@ type env struct {
 	s     *sessions.Sessions
 	q     *queue.Queue
 	r     *rooms.Rooms
+	a     *agents.Agents
 	clock *clock
 }
 
@@ -45,7 +49,7 @@ func newEnv(t *testing.T) env {
 	c := &clock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
 	q := queue.New(db, c.now)
 	r := rooms.New(db, c.now)
-	return env{s: sessions.New(db, q, r, c.now), q: q, r: r, clock: c}
+	return env{s: sessions.New(db, q, r, c.now), q: q, r: r, a: agents.New(db, q, c.now), clock: c}
 }
 
 func (e env) report(t *testing.T, id string, ev sessions.Event) sessions.Reply {
@@ -230,6 +234,105 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 	}
 }
 
+// --- greeting (Claude Code connector) ------------------------------------------------
+
+func TestUnboundStartIsInvited(t *testing.T) {
+	e := newEnv(t)
+	repo := filepath.Join(t.TempDir(), "example-app")
+	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
+	os.MkdirAll(filepath.Join(repo, "src"), 0o755)
+	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: filepath.Join(repo, "src")}
+	for range 2 { // a new session, then a resumed or compacted one
+		r, err := e.s.Report(ctx, start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"agora join <name> --project example-app --task '<what you are doing>'",
+			"(name: 2-32 lowercase letters, digits and dashes, starting with a letter)", "agora status", "agora charter", "If you"} {
+			if !strings.Contains(r.Context, want) {
+				t.Fatalf("invitation lacks %q: %q", want, r.Context)
+			}
+		}
+	}
+	if r := e.report(t, "session-1", sessions.Prompt); r.Context != "" {
+		t.Fatalf("prompt: %q", r.Context)
+	}
+	e.clock.add(sessions.ToolCheckEvery)
+	if r := e.report(t, "session-1", sessions.Tool); r.Context != "" {
+		t.Fatalf("tool: %q", r.Context)
+	}
+}
+
+func TestUnboundStartOutsideARepositoryUsesAPlaceholder(t *testing.T) {
+	e := newEnv(t)
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start, CWD: t.TempDir()})
+	if err != nil || !strings.Contains(r.Context, "--project <project>") {
+		t.Fatalf("context %q err %v", r.Context, err)
+	}
+}
+
+func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	task, status := "fix login timeout", "reviewing"
+	if _, err := e.a.Update(ctx, "builder", agents.Update{Task: &task, Status: &status}); err != nil {
+		t.Fatal(err)
+	}
+	e.join(t, "reviewer", "")
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder please review #57", 0); err != nil {
+		t.Fatal(err)
+	}
+	r := e.report(t, "session-1", sessions.Start) // the conversation was compacted
+	for _, want := range []string{"Agora: you are builder on the Agora board.", "Task: fix login timeout.", "Status: reviewing.",
+		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "agora leave"} {
+		if !strings.Contains(r.Context, want) {
+			t.Fatalf("reminder lacks %q: %q", want, r.Context)
+		}
+	}
+	if strings.Index(r.Context, "please review #57") < strings.Index(r.Context, "agora leave") {
+		t.Fatalf("message not after the reminder: %q", r.Context)
+	}
+}
+
+func TestStartRemindsEvenWhenAConcurrentHookWonTheCheck(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.r.Post(ctx, "reviewer", "general", "@builder please review #57", 0)
+	sessions.RaceNoteCheck(t) // a concurrent prompt records its check first
+	r := e.report(t, "session-1", sessions.Start)
+	if !strings.HasPrefix(r.Context, "Agora: you are builder on the Agora board.") || !strings.Contains(r.Context, "please review #57") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestReminderCountsAddressedMessagesNotShown(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	for range 7 {
+		e.r.Post(ctx, "reviewer", "general", "@builder ping", 0)
+	}
+	r := e.report(t, "session-1", sessions.Start)
+	if !strings.Contains(r.Context, "7 unread messages address you (5 below).") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestUnsafeRepositoryNameIsNotSuggested(t *testing.T) {
+	e := newEnv(t)
+	repo := filepath.Join(t.TempDir(), "example app;x")
+	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start, CWD: repo})
+	if err != nil || !strings.Contains(r.Context, "--project <project>") {
+		t.Fatalf("context %q err %v", r.Context, err)
+	}
+}
+
 // --- reminders (Claude Code connector) ------------------------------------------------
 
 func TestSessionStartRemindsOfHeldSlots(t *testing.T) {
@@ -355,7 +458,7 @@ func TestClearKeepsTheNameAndPlaces(t *testing.T) {
 	if p := e.places(t, "builder"); len(p) != 1 {
 		t.Fatalf("places %+v", p)
 	}
-	if !strings.Contains(r.Context, "You hold db/shared") {
+	if !strings.HasPrefix(r.Context, "Agora: you are builder on the Agora board.") || !strings.Contains(r.Context, "You hold db/shared") {
 		t.Fatalf("context %q", r.Context)
 	}
 }

@@ -294,6 +294,20 @@ func (r *Rooms) Unread(ctx context.Context, agent string, mentionsOnly bool, lim
 	return out, total, err
 }
 
+// UnreadCount returns how many unread messages agent has; with mentionsOnly, only those
+// addressed to it.
+func (r *Rooms) UnreadCount(ctx context.Context, agent string, mentionsOnly bool) (int, error) {
+	var n int
+	err := r.tx(ctx, func(tx *sql.Tx) error {
+		if err := requireAgent(ctx, tx, agent); err != nil {
+			return err
+		}
+		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE addressed OR NOT :m`,
+			sql.Named("a", agent), sql.Named("m", mentionsOnly)).Scan(&n)
+	})
+	return n, err
+}
+
 // Take returns what Unread returns and marks those messages read in the same transaction, so
 // concurrent readers never get the same message twice: the oldest unread messages move the
 // reading positions, mentions only get single read marks.

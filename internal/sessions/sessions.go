@@ -184,47 +184,90 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 		return s.stop(ctx, r, agent, now)
 	}
 	if agent == "" {
+		if r.Event == Start {
+			return Reply{Context: invitation(r.CWD)}, nil
+		}
 		return Reply{}, nil
 	}
-	note, checked, err := s.remind(ctx, r, agent, now)
-	if err != nil || !checked {
-		return Reply{}, err
-	}
-	news, err := s.deliver(ctx, agent)
+	entries, lost, show, checked, err := s.remind(ctx, r, agent, now)
 	if err != nil {
 		return Reply{}, err
 	}
-	return Reply{Context: strings.TrimSpace(note + "\n\n" + news)}, nil
+	if r.Event != Start {
+		if !checked {
+			return Reply{}, nil // checked recently, or a concurrent hook of this session did
+		}
+		var text string
+		if show {
+			text = note(agent, entries, lost)
+		}
+		news, _, err := s.deliver(ctx, agent)
+		if err != nil {
+			return Reply{}, err
+		}
+		return Reply{Context: strings.TrimSpace(text + "\n\n" + news)}, nil
+	}
+	// A start always reminds the agent who it is; the places only when this hook recorded the
+	// check, so concurrent hooks still add them once.
+	if !checked {
+		entries, lost, show = nil, nil, false
+	}
+	addressed, countErr := s.addressedCount(ctx, agent)
+	news, shown, err := s.deliver(ctx, agent)
+	if err != nil {
+		return Reply{}, err
+	}
+	text, err := s.reminder(ctx, agent, entries, lost, addressed, shown)
+	if err != nil || countErr != nil {
+		text = "" // fall back to the queue note
+		if show {
+			text = note(agent, entries, lost)
+		}
+	}
+	return Reply{Context: strings.TrimSpace(text + "\n\n" + news)}, nil
 }
 
 // deliver returns the agent's oldest unread messages as context text and marks the ones shown
-// as read.
-func (s *Sessions) deliver(ctx context.Context, agent string) (string, error) {
+// as read; it also returns how many of them address the agent.
+func (s *Sessions) deliver(ctx context.Context, agent string) (string, int, error) {
 	if s.rooms == nil {
-		return "", nil
+		return "", 0, nil
 	}
 	msgs, total, err := s.rooms.Take(ctx, agent, false, DeliverAtOnce)
 	if err != nil || len(msgs) == 0 {
-		return "", err
+		return "", 0, err
 	}
 	lines := []string{fmt.Sprintf("Agora: new board messages for you (%s). Act on what is addressed to you "+
 		"(reply: agora post <room> '...' --reply <id>); otherwise note them and carry on.", agent)}
+	addressed := 0
 	for _, m := range msgs {
 		lines = append(lines, rooms.Format(m, DeliverChars))
+		if m.Addressed {
+			addressed++
+		}
 	}
 	if more := total - len(msgs); more > 0 {
 		lines = append(lines, fmt.Sprintf("... %d more: run `agora unread`.", more))
 	}
-	return strings.Join(lines, "\n"), nil
+	return strings.Join(lines, "\n"), addressed, nil
 }
 
-// remind returns a note about the agent's places when they changed since the last note, when a
-// slot is offered, or at session start. The note is recorded with a compare-and-set, so
-// concurrent hooks of one session add it once.
-func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.Time) (text string, checked bool, err error) {
-	entries, err := s.queue.EntriesOf(ctx, agent)
+// addressedCount returns how many unread messages address the agent.
+func (s *Sessions) addressedCount(ctx context.Context, agent string) (int, error) {
+	if s.rooms == nil {
+		return 0, nil
+	}
+	return s.rooms.UnreadCount(ctx, agent, true)
+}
+
+// remind reports the agent's places, the places it lost since the last note, and whether a
+// note about them is due: when they changed since the last note, when a slot is offered, or at
+// session start. The check is recorded with a compare-and-set, so concurrent hooks of one
+// session see checked once.
+func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.Time) (entries []queue.Entry, lost []string, show, checked bool, err error) {
+	entries, err = s.queue.EntriesOf(ctx, agent)
 	if err != nil {
-		return "", false, err
+		return nil, nil, false, false, err
 	}
 	sig := signature(entries)
 	err = s.tx(ctx, func(tx *sql.Tx) error {
@@ -236,6 +279,11 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		if r.Event == Tool && now.Sub(time.UnixMilli(checkedAt)) < ToolCheckEvery {
 			return nil
 		}
+		if beforeNoteCheck != nil {
+			if err := beforeNoteCheck(ctx, tx, r.SessionID); err != nil {
+				return err
+			}
+		}
 		res, err := tx.ExecContext(ctx, `UPDATE sessions SET noted = ?, checked_at = ? WHERE id = ? AND noted = ? AND checked_at = ?`,
 			sig, now.UnixMilli(), r.SessionID, noted, checkedAt)
 		if err != nil {
@@ -245,17 +293,18 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 			return nil // a concurrent hook of this session got there first
 		}
 		checked = true
-		lost := lostKeys(noted, entries)
+		lost = lostKeys(noted, entries)
 		if len(entries) == 0 && len(lost) == 0 {
 			return nil
 		}
-		if r.Event == Start || sig != noted || hasOffer(entries) {
-			text = note(agent, entries, lost)
-		}
+		show = r.Event == Start || sig != noted || hasOffer(entries)
 		return nil
 	})
-	return text, checked, err
+	return entries, lost, show, checked, err
 }
+
+// beforeNoteCheck, when set by a test, runs between reading and recording a note check.
+var beforeNoteCheck func(ctx context.Context, tx *sql.Tx, sessionID string) error
 
 func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Time) (Reply, error) {
 	if agent != "" && !r.StopActive {
@@ -768,6 +817,11 @@ func lostKeys(prev string, entries []queue.Entry) []string {
 func clock(t time.Time) string { return t.Local().Format("15:04") }
 
 func note(agent string, entries []queue.Entry, lost []string) string {
+	return strings.TrimSpace(fmt.Sprintf("Agora: you are %s. %s", agent, places(entries, lost)))
+}
+
+// places describes the agent's places in queues and the ones it lost, or "" for none.
+func places(entries []queue.Entry, lost []string) string {
 	var held, waiting, offered []string
 	for _, e := range entries {
 		switch e.State {
@@ -780,19 +834,18 @@ func note(agent string, entries []queue.Entry, lost []string) string {
 				e.Key, clock(e.Expires), e.Key, e.Key))
 		}
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Agora: you are %s.", agent)
+	var parts []string
 	for _, o := range offered {
-		fmt.Fprintf(&b, " It is your turn on %s.", o)
+		parts = append(parts, fmt.Sprintf("It is your turn on %s.", o))
 	}
 	if len(held) > 0 {
-		fmt.Fprintf(&b, " You hold %s; release with `agora queue release <key>` when done.", strings.Join(held, ", "))
+		parts = append(parts, fmt.Sprintf("You hold %s; release with `agora queue release <key>` when done.", strings.Join(held, ", ")))
 	}
 	if len(waiting) > 0 {
-		fmt.Fprintf(&b, " You wait for %s.", strings.Join(waiting, ", "))
+		parts = append(parts, fmt.Sprintf("You wait for %s.", strings.Join(waiting, ", ")))
 	}
 	if len(lost) > 0 {
-		fmt.Fprintf(&b, " You no longer hold or wait for %s (lease ended, turn missed or removed).", strings.Join(lost, ", "))
+		parts = append(parts, fmt.Sprintf("You no longer hold or wait for %s (lease ended, turn missed or removed).", strings.Join(lost, ", ")))
 	}
-	return b.String()
+	return strings.Join(parts, " ")
 }

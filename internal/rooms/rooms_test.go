@@ -356,3 +356,17 @@ func TestTakingMentionsKeepsOtherMessagesUnread(t *testing.T) {
 		t.Fatalf("unread %+v", got)
 	}
 }
+
+func TestCountingUnreadMessages(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	e.post(t, "reviewer", "general", "chatter")
+	e.post(t, "reviewer", "general", "@builder look")
+	e.post(t, "reviewer", "general", "@all heads up")
+	if n, err := e.r.UnreadCount(ctx, "builder", false); err != nil || n != 3 {
+		t.Fatalf("all: %d %v", n, err)
+	}
+	if n, err := e.r.UnreadCount(ctx, "builder", true); err != nil || n != 2 {
+		t.Fatalf("addressed: %d %v", n, err)
+	}
+}

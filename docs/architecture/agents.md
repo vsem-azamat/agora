@@ -10,7 +10,7 @@ Profiles are columns of the `agents` table: `joined_at` from the start, and from
 
 ## Branches
 
-`internal/gitinfo` walks up from the directory to the first `.git`: a directory, or a worktree's `.git` file pointing at its git directory, and reads `HEAD`. A detached `HEAD` gives the first 12 characters of the commit; when the agent stays in the same checkout (same git directory), the profile keeps its previous branch instead. No `git` process is started.
+`internal/gitinfo` walks up from the directory to the first `.git`: a directory, or a worktree's `.git` file pointing at its git directory, and reads `HEAD`. A detached `HEAD` gives the first 12 characters of the commit; when the agent stays in the same checkout (same git directory), the profile keeps its previous branch instead. No `git` process is started. `gitinfo.Repo` reads the repository name the same way, following a worktree's `commondir` file to the main checkout; the session greeting uses it to suggest a project.
 
 ## Following the session
 
