@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -18,11 +19,16 @@ import (
 var migrations embed.FS
 
 // Open opens (creating if needed) the database at path and migrates it to the latest schema.
-// Use ":memory:" for a private in-memory database.
+// The database file is readable and writable by its owner only; SQLite gives its WAL and
+// shared-memory files the same mode. A database with a newer schema than this binary knows is
+// refused. Use ":memory:" for a private in-memory database.
 func Open(ctx context.Context, path string) (*sql.DB, error) {
 	if path != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, fmt.Errorf("create database directory: %w", err)
+		}
+		if err := ownerOnly(path); err != nil {
+			return nil, err
 		}
 	}
 	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_txlock=immediate"
@@ -39,6 +45,22 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 	return db, nil
 }
 
+// ownerOnly creates the database file with mode 0600 if it is missing, and restricts an
+// existing one and its WAL and shared-memory files to that mode.
+func ownerOnly(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return fmt.Errorf("create database: %w", err)
+	}
+	f.Close()
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("restrict database file: %w", err)
+		}
+	}
+	return nil
+}
+
 func migrate(ctx context.Context, db *sql.DB) error {
 	names, err := fs.Glob(migrations, "migrations/*.sql")
 	if err != nil {
@@ -48,6 +70,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
+	}
+	if version > len(names) {
+		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora", version, len(names))
 	}
 	for i := version; i < len(names); i++ {
 		body, err := migrations.ReadFile(names[i])

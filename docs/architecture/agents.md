@@ -14,7 +14,7 @@ Profiles are columns of the `agents` table: `joined_at` from the start, and from
 
 ## Following the session
 
-Every connector event except the end marks a `left` agent as `working` again (a resumed session) and calls `FollowTx` inside the session's transaction: the profile takes the session's directory, unless the profile's directory lies inside it (a worktree the agent set with `agora set --cwd`). `updated_at` changes only when the directory or branch changed.
+Every connector event except the end marks the `left` agent bound to the session as `working` again (a resumed session) and calls `FollowTx` inside the session's transaction: the profile takes the session's directory, unless the profile's directory lies inside it (a worktree the agent set with `agora set --cwd`). `updated_at` changes only when the directory or branch changed.
 
 ## Activity
 
@@ -22,7 +22,7 @@ An agent is active unless its status is `left`, while it has a session that has 
 
 ## Leaving
 
-`Leave` and the end of an agent's last session mark it `left` and remove it from every resource queue in one transaction.
+`Leave` and the end of an agent's last session mark it `left` and remove it from every resource queue in one transaction. `Leave` also clears `sessions.agent` for every session bound to the name, ended ones included, so later events of a live session and a resumed session do not mark it `working` again; the session acts under no name until `agora join` binds one.
 
 ## Lookup
 

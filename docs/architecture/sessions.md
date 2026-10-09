@@ -11,7 +11,7 @@ How `internal/sessions` and the Claude Code connector implement [`openspec/specs
 | `agents` | Every name that has joined, with the join time |
 | `sessions` | One row per session: kind, bound `agent`, `pid` and `pid_start` (the process start time), `cwd`, `terminal`, `state` (`busy`, `idle`, `ended`), `state_at`, `started_at`, `seen_at` (last event), the last queue note given to the agent (`noted`) and the last tool-use check (`checked_at`) |
 
-A partial unique index on `sessions (agent) WHERE state != 'ended'` guarantees that a name is bound to at most one live session. A forced claim unbinds the name from the other session first; a resumed session whose name was taken meanwhile comes back unbound. `agora join` never brings back an ended session: with an ended session it only registers the name.
+A partial unique index on `sessions (agent) WHERE state != 'ended'` guarantees that a name is bound to at most one live session. A forced claim unbinds the name from the other session first; a resumed session whose name was taken meanwhile comes back unbound. Leaving unbinds the name from all its sessions (see [Agent profiles](agents.md)). `agora join` never brings back an ended session: with an ended session it only registers the name.
 
 ## Resolving the agent
 

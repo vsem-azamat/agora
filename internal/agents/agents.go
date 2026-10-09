@@ -128,8 +128,9 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 	return a.Get(ctx, name)
 }
 
-// Leave marks name as left and removes it from every resource queue, in one step. It returns
-// the resources it left.
+// Leave marks name as left, removes it from every resource queue and unbinds it from every
+// session, in one step, so later events of its sessions do not bring it back. It returns the
+// resources it left.
 func (a *Agents) Leave(ctx context.Context, name string) ([]string, error) {
 	var left []string
 	err := a.tx(ctx, func(tx *sql.Tx) error {
@@ -137,6 +138,9 @@ func (a *Agents) Leave(ctx context.Context, name string) ([]string, error) {
 			return err
 		}
 		if err := MarkLeftTx(ctx, tx, name, a.now()); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL WHERE agent = ?`, name); err != nil {
 			return err
 		}
 		var err error
@@ -152,8 +156,8 @@ func MarkLeftTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) err
 	return err
 }
 
-// ReturnTx marks a left agent as working again, inside the caller's transaction: its session
-// is active once more, as after a resume.
+// ReturnTx marks a left agent as working again, inside the caller's transaction: a session
+// still bound to it is active once more, as after a resume.
 func ReturnTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `UPDATE agents SET status = ?, updated_at = ? WHERE name = ? AND status = ?`, Working, now.UnixMilli(), name, Left)
 	return err

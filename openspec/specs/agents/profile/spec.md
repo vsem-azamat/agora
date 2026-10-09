@@ -10,7 +10,7 @@ What an agent publishes about its work (tool, project, task, status, where it wo
 
 ### Requirement: Agents Publish What They Work On
 
-The system SHALL keep for every agent a profile with its tool kind, project, current task, status, working directory, current branch, the pull requests it works on, a free-text description, its join time and the time of its last update, and SHALL let the agent set any of these at join time or later. Joining sets the status to `working` unless another status is given.
+The system SHALL keep for every agent a profile with its tool kind, project, current task, status, working directory, current branch, the pull requests it works on, a free-text description, its join time and the time of its last update, and SHALL let the agent set any of these at join time or later, refusing an update that names no field to change. Joining sets the status to `working` unless another status is given.
 
 #### Scenario: Profile after joining
 - **WHEN** an agent joins as `builder` with kind `claude-code`, project `example-app` and task `fix login timeout`, from `~/src/example-app`
@@ -19,6 +19,10 @@ The system SHALL keep for every agent a profile with its tool kind, project, cur
 #### Scenario: Updating the task
 - **WHEN** the agent sets a new task
 - **THEN** the profile shows the new task and a new update time, and every other field is unchanged
+
+#### Scenario: Nothing to change
+- **WHEN** an agent updates its profile without naming any field, only who it is
+- **THEN** the update is refused with nothing to change, and the profile is unchanged
 
 #### Scenario: Unknown agent
 - **WHEN** a profile is updated for a name that never joined
@@ -78,11 +82,15 @@ The system SHALL treat an agent as active unless it has left, while it has a liv
 
 ### Requirement: Leaving
 
-The system SHALL let an agent leave, marking it `left` and removing it from every resource queue in the same step; SHALL not let the status `left` be set any other way; SHALL mark an agent `left` when its session ends and it is bound to no other live session; and SHALL mark it `working` again when a session bound to it becomes active.
+The system SHALL let an agent leave, marking it `left`, removing it from every resource queue and unbinding its name from every session in the same step, so the sessions stay registered but no longer act as the agent until one joins under the name again; SHALL not let the status `left` be set any other way; SHALL mark an agent `left` when its session ends and it is bound to no other live session; and SHALL mark it `working` again when a session still bound to it becomes active.
 
 #### Scenario: Leaving with a held lock
 - **WHEN** `builder` holds `example-app/merge` and leaves
 - **THEN** its status is `left` and `example-app/merge` is free
+
+#### Scenario: Leaving inside a live session
+- **WHEN** `builder` leaves from its live session and that session then reports more activity
+- **THEN** `builder` stays `left`, and commands from the session no longer act as `builder` until it joins again
 
 #### Scenario: Session ends
 - **WHEN** the only session bound to `builder` ends
@@ -93,7 +101,7 @@ The system SHALL let an agent leave, marking it `left` and removing it from ever
 - **THEN** its status is `working`
 
 #### Scenario: Session resumed
-- **WHEN** the session of a `left` agent is resumed
+- **WHEN** `builder` is `left` because its only session ended, and that session is resumed
 - **THEN** the agent is `working` and active again
 
 #### Scenario: Setting the status to left

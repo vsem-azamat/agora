@@ -138,9 +138,12 @@ func (g *Governance) Propose(ctx context.Context, author, title, body string) (i
 	return id, err
 }
 
+// Choice returns a vote choice as it is recorded: trimmed and in lowercase.
+func Choice(choice string) string { return strings.ToLower(strings.TrimSpace(choice)) }
+
 // Cast records agent's vote on an open proposal, replacing its earlier vote.
 func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, reason string) error {
-	choice = strings.ToLower(strings.TrimSpace(choice))
+	choice = Choice(choice)
 	if choice != "yes" && choice != "no" && choice != "abstain" {
 		return fmt.Errorf("%w: vote yes, no or abstain", ErrInvalid)
 	}

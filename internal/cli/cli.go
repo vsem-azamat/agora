@@ -19,6 +19,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
@@ -331,12 +332,14 @@ func setCmd(o *options) *cobra.Command {
 		Short: "Update your task, status, directory, pull requests or description",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			changed := false // only set's own flags count, not the inherited --as or --socket
+			cmd.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) { changed = changed || f.Changed })
+			if !changed {
+				return fmt.Errorf("nothing to change; pass at least one flag, e.g. --task")
+			}
 			name, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
-			}
-			if cmd.Flags().NFlag() == 0 {
-				return fmt.Errorf("nothing to change; pass at least one flag, e.g. --task")
 			}
 			req, err := f.request(cmd, name)
 			if err != nil {
@@ -372,6 +375,9 @@ func leaveCmd(o *options) *cobra.Command {
 				fmt.Fprintf(o.out, "released %s\n", k)
 			}
 			fmt.Fprintf(o.out, "%s marked as left\n", name)
+			if strings.TrimSpace(o.as) == "" { // the name came from this session, which no longer has one
+				fmt.Fprintf(o.out, "commands from this session no longer act as %s; `agora join %s` to come back\n", name, name)
+			}
 			return nil
 		},
 	}
@@ -666,12 +672,13 @@ func voteCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := o.governance().Vote(cmd.Context(), connect.NewRequest(&agorav1.VoteRequest{
+			resp, err := o.governance().Vote(cmd.Context(), connect.NewRequest(&agorav1.VoteRequest{
 				Agent: name, ProposalId: id, Choice: args[1], Reason: strings.Join(args[2:], " "),
-			})); err != nil {
+			}))
+			if err != nil {
 				return err
 			}
-			fmt.Fprintf(o.out, "%s voted %s on #%d\n", name, args[1], id)
+			fmt.Fprintf(o.out, "%s voted %s on #%d\n", name, resp.Msg.GetChoice(), id)
 			return nil
 		},
 	}
@@ -1013,12 +1020,14 @@ func queueCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if lease <= 0 {
-				return fmt.Errorf("--lease must be positive, like 90s, 30m or 2h")
+			req := &agorav1.JoinRequest{Key: args[0], Agent: agent, Note: strings.Join(args[1:], " ")}
+			if cmd.Flags().Changed("lease") { // unset: the default for a new place, unchanged for a re-join
+				if err := checkLease("--lease", lease); err != nil {
+					return err
+				}
+				req.Lease = durationpb.New(lease)
 			}
-			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(&agorav1.JoinRequest{
-				Key: args[0], Agent: agent, Note: strings.Join(args[1:], " "), Lease: durationpb.New(lease),
-			}))
+			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(req))
 			if err != nil {
 				return err
 			}
@@ -1029,7 +1038,7 @@ func queueCmd(o *options) *cobra.Command {
 			return nil
 		},
 	}
-	join.Flags().DurationVar(&lease, "lease", queue.DefaultLease, "how long a held slot lasts without renewal")
+	join.Flags().DurationVar(&lease, "lease", queue.DefaultLease, "how long a held slot lasts without renewal; joining again with it changes your lease")
 	join.Flags().BoolVar(&wait, "wait", false, "wait until the slot is yours")
 
 	waitCmd := &cobra.Command{
@@ -1129,17 +1138,33 @@ func queueCmd(o *options) *cobra.Command {
 	return cmd
 }
 
+// checkLease refuses a lease outside the bounds the hub accepts.
+func checkLease(flag string, d time.Duration) error {
+	if d < queue.MinLease || d > queue.MaxLease {
+		return fmt.Errorf("%s must be between %s and %s, like 90s, 30m or 2h", flag, queue.MinLease, queue.MaxLease)
+	}
+	return nil
+}
+
+// hubGiveUp is how long a wait for a turn tolerates a hub that does not answer.
+var hubGiveUp = 30 * time.Second
+
 // waitTurn streams the agent's position until it holds the slot. When the hub restarts, the
-// queue survives, so the wait reconnects instead of failing.
+// queue survives, so the wait reconnects instead of failing; once the hub has not answered for
+// hubGiveUp, the wait fails as unreachable.
 func (o *options) waitTurn(ctx context.Context, key, agent string) error {
+	contact := time.Now()
 	for {
-		err := o.waitOnce(ctx, key, agent)
+		err := o.waitOnce(ctx, key, agent, &contact)
 		if err == nil || ctx.Err() != nil {
 			return err
 		}
 		code := connect.CodeOf(err)
 		if code != connect.CodeUnavailable && code != connect.CodeCanceled && code != connect.CodeUnknown {
 			return err
+		}
+		if time.Since(contact) >= hubGiveUp {
+			return err // Unavailable reads as "cannot reach the hub"; other errors stay as they are
 		}
 		select {
 		case <-ctx.Done():
@@ -1149,14 +1174,22 @@ func (o *options) waitTurn(ctx context.Context, key, agent string) error {
 	}
 }
 
-func (o *options) waitOnce(ctx context.Context, key, agent string) error {
+// waitOnce runs one wait stream. The hub answers at the start of a stream, and a stream it
+// answered keeps contact until it ends, so contact is set then.
+func (o *options) waitOnce(ctx context.Context, key, agent string, contact *time.Time) error {
 	stream, err := o.resources().Wait(ctx, connect.NewRequest(&agorav1.WaitRequest{Key: key, Agent: agent}))
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
-	held := false
+	held, answered := false, false
+	defer func() {
+		if answered {
+			*contact = time.Now()
+		}
+	}()
 	for stream.Receive() {
+		answered = true
 		e := stream.Msg().GetEntry()
 		printEntry(o.out, e)
 		held = e.GetState() == agorav1.EntryState_ENTRY_STATE_HELD
@@ -1238,8 +1271,8 @@ func lockCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if ttl <= 0 {
-				return fmt.Errorf("--ttl must be positive, like 90s, 30m or 2h")
+			if err := checkLease("--ttl", ttl); err != nil {
+				return err
 			}
 			resp, err := o.resources().Join(cmd.Context(), connect.NewRequest(&agorav1.JoinRequest{
 				Key: args[0], Agent: agent, Note: strings.Join(args[1:], " "), Lease: durationpb.New(ttl), NoWait: true,

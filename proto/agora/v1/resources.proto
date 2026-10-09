@@ -56,7 +56,8 @@ message JoinRequest {
   string key = 1;
   string agent = 2;
   string note = 3;
-  // Lease duration; 30 minutes when unset.
+  // Lease duration, 1 second to 7 days. When unset: 30 minutes for a new entry or a lock;
+  // a re-join keeps the entry's lease.
   google.protobuf.Duration lease = 4;
   bool no_wait = 5;
 }

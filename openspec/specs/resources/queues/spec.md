@@ -30,7 +30,7 @@ The system SHALL give every resource a key and a number of slots, 1 unless set o
 
 ### Requirement: Joining A Queue
 
-The system SHALL let an agent join the queue of a resource with an optional note and a lease duration (30 minutes by default, at most 7 days, never zero or negative); SHALL grant a slot at once when one is free and nobody is waiting; and SHALL otherwise place the agent at the end of the queue and report its position. Joining a queue the agent is already in SHALL keep its place and update its note.
+The system SHALL let an agent join the queue of a resource with an optional note and a lease duration (30 minutes by default, from 1 second to 7 days); SHALL grant a slot at once when one is free and nobody is waiting; and SHALL otherwise place the agent at the end of the queue and report its position. Joining a queue the agent is already in SHALL keep its place, update its note and, when a lease duration is given, use that duration from then on: a slot the agent holds then lasts the new duration from now.
 
 #### Scenario: Free resource
 - **WHEN** an agent joins the queue of a free resource
@@ -43,6 +43,26 @@ The system SHALL let an agent join the queue of a resource with an optional note
 #### Scenario: Joining twice
 - **WHEN** an agent at position 2 joins the same queue again with a new note
 - **THEN** it is still at position 2 and its note is the new one
+
+#### Scenario: Joining again with a new lease
+- **WHEN** an agent holding a slot with a 10-minute lease joins the same queue again with a 2-hour lease
+- **THEN** it holds the slot until 2 hours from now, and a renewal extends it by 2 hours
+
+#### Scenario: Waiting agent joins again with a new lease
+- **WHEN** a waiting agent joins the same queue again with a 2-hour lease and later gets the slot
+- **THEN** it holds the slot for 2 hours
+
+#### Scenario: Offered agent joins again with a new lease
+- **WHEN** an agent offered a slot joins the same queue again with a 2-hour lease
+- **THEN** its claim deadline is unchanged, and once it claims the slot it holds it for 2 hours
+
+#### Scenario: Joining again without a lease
+- **WHEN** an agent holding a slot with a 2-hour lease joins the same queue again without giving a lease
+- **THEN** its lease end and lease duration are unchanged
+
+#### Scenario: Lease out of bounds
+- **WHEN** an agent joins a queue with a lease of 1 millisecond or 8 days
+- **THEN** the join is refused with the allowed range in the error
 
 #### Scenario: Simultaneous joins
 - **WHEN** several agents join the queue of a free 1-slot resource at the same moment
@@ -90,7 +110,7 @@ The system SHALL keep a slot held until its lease ends, SHALL let the holder ren
 
 ### Requirement: Waiting For A Turn
 
-The system SHALL let an agent wait for its turn and report its position whenever it changes, SHALL end the wait when the agent holds a slot, and SHALL end it with an error when the agent is no longer in the queue.
+The system SHALL let an agent wait for its turn and report its position whenever it changes, SHALL end the wait when the agent holds a slot, and SHALL end it with an error when the agent is no longer in the queue. A wait SHALL continue across a restart of the hub, and SHALL end with an error saying the hub cannot be reached once the hub has not answered for 30 seconds.
 
 #### Scenario: Turn comes
 - **WHEN** an agent at position 2 waits and the two agents ahead of it release their slots
@@ -99,6 +119,14 @@ The system SHALL let an agent wait for its turn and report its position whenever
 #### Scenario: Removed while waiting
 - **WHEN** a waiting agent is removed from the queue
 - **THEN** its wait ends with an error saying it is no longer queued
+
+#### Scenario: Hub restarts during a wait
+- **WHEN** the hub restarts while an agent waits for its turn, and the slot is freed after the restart
+- **THEN** the agent's wait continues and ends when it holds the slot
+
+#### Scenario: No hub
+- **WHEN** an agent waits for its turn and the hub cannot be reached for 30 seconds
+- **THEN** the wait ends with an error saying the hub cannot be reached
 
 ### Requirement: Leaving A Queue
 
@@ -118,7 +146,7 @@ The system SHALL let an agent leave a queue whether it holds a slot or waits, SH
 
 ### Requirement: Locks Are Queues That Do Not Wait
 
-The system SHALL offer locks as a shorthand: taking a lock joins the resource's queue only if a slot can be held at once, and otherwise leaves the queue unchanged and reports the holders with their notes and lease ends, and any agent whose turn it is, signalling the refusal to scripts with exit code 2. Taking a lock the agent already holds renews it for the new duration; taking a lock while only waiting for it is refused. Releasing a lock leaves the queue, and releasing a lock someone else holds is refused with the holder's name unless forced.
+The system SHALL offer locks as a shorthand: taking a lock joins the resource's queue only if a slot can be held at once, and otherwise leaves the queue unchanged and reports the holders with their notes and lease ends, and any agent whose turn it is, signalling the refusal to scripts with exit code 2. A lock lasts for a duration with the same bounds as a lease, 1 second to 7 days. Taking a lock the agent already holds renews it for the new duration; taking a lock while only waiting for it is refused. Releasing a lock leaves the queue, and releasing a lock someone else holds is refused with the holder's name unless forced.
 
 #### Scenario: Free lock
 - **WHEN** an agent takes the lock `example-app/merge` for 10 minutes with the note `merging #57`
@@ -135,6 +163,10 @@ The system SHALL offer locks as a shorthand: taking a lock joins the resource's 
 #### Scenario: Locking while queued
 - **WHEN** an agent that waits in a resource's queue takes its lock
 - **THEN** the command exits with code 2 and the agent keeps its place in the queue
+
+#### Scenario: Lock duration out of bounds
+- **WHEN** an agent takes a lock for 1 millisecond or 8 days
+- **THEN** the request is refused with the allowed range in the error
 
 #### Scenario: Releasing someone else's lock
 - **WHEN** an agent releases a lock another agent holds, without force

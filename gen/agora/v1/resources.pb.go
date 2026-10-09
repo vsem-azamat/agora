@@ -243,7 +243,8 @@ type JoinRequest struct {
 	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Agent string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
 	Note  string                 `protobuf:"bytes,3,opt,name=note,proto3" json:"note,omitempty"`
-	// Lease duration; 30 minutes when unset.
+	// Lease duration, 1 second to 7 days. When unset: 30 minutes for a new entry or a lock;
+	// a re-join keeps the entry's lease.
 	Lease         *durationpb.Duration `protobuf:"bytes,4,opt,name=lease,proto3" json:"lease,omitempty"`
 	NoWait        bool                 `protobuf:"varint,5,opt,name=no_wait,json=noWait,proto3" json:"no_wait,omitempty"`
 	unknownFields protoimpl.UnknownFields

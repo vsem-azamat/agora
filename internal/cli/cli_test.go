@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,13 +25,20 @@ func startHub(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
+	stop := runHub(t, dir)
+	t.Cleanup(stop)
+	return filepath.Join(dir, "hub.sock")
+}
+
+// runHub runs a hub with its socket and database in dir and returns a function that stops it.
+func runHub(t *testing.T, dir string) (stop func()) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	db, err := store.Open(ctx, filepath.Join(dir, "agora.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	socket := filepath.Join(dir, "hub.sock")
-	l, err := hub.Listen(socket)
+	l, err := hub.Listen(filepath.Join(dir, "hub.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,12 +47,14 @@ func startHub(t *testing.T) string {
 		hub.Open(db, nil, nil).Serve(ctx, l)
 		close(done)
 	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-		db.Close()
-	})
-	return socket
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			cancel()
+			<-done
+			db.Close()
+		})
+	}
 }
 
 type result struct {
@@ -131,6 +141,48 @@ func TestWaitEndsWithAnErrorWhenRemoved(t *testing.T) {
 	}
 }
 
+func TestWaitSurvivesAHubRestart(t *testing.T) {
+	defer cli.SetHubGiveUp(5 * time.Second)()
+	dir, err := os.MkdirTemp("", "agora-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "hub.sock")
+	stop := runHub(t, dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	agora(ctx, socket, "a", "queue", "join", "r")
+	agora(ctx, socket, "b", "queue", "join", "r")
+	waited := make(chan result)
+	go func() { waited <- agora(ctx, socket, "b", "queue", "wait", "r") }()
+	time.Sleep(6 * time.Second) // a quiet wait, longer than the give-up time
+	stop()
+	time.Sleep(1500 * time.Millisecond) // the wait retries against a missing hub, well within the give-up time
+	stop = runHub(t, dir)
+	t.Cleanup(stop)
+	agora(ctx, socket, "a", "queue", "release", "r")
+	select {
+	case r := <-waited:
+		if r.code != 0 || !strings.Contains(r.stdout, "holding r") {
+			t.Fatalf("wait: %+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("wait did not end")
+	}
+}
+
+func TestWaitGivesUpWithoutAHub(t *testing.T) {
+	defer cli.SetHubGiveUp(500 * time.Millisecond)()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	socket := filepath.Join(t.TempDir(), "none.sock")
+	r := agora(ctx, socket, "a", "queue", "wait", "r")
+	if ctx.Err() != nil || r.code != 1 || !strings.Contains(r.stderr, "cannot reach the hub") {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestSlotsAndListing(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()
@@ -200,6 +252,8 @@ func TestBadValuesAreRefused(t *testing.T) {
 		{"lock", "r", "--ttl", "-1m"},
 		{"lock", "r", "--ttl", "0s"},
 		{"queue", "join", "r", "--lease", "0s"},
+		{"queue", "join", "r", "--lease", "1ms"},
+		{"lock", "r", "--ttl", "1ms"},
 		{"queue", "slots", "r", "4294967297"},
 		{"queue", "slots", "r", "0"},
 	} {
@@ -307,8 +361,18 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	if r := agora(ctx, socket, "x", "who", "#99"); !strings.Contains(r.stdout, "nobody active matches") {
 		t.Fatalf("who none: %+v", r)
 	}
-	if r := agora(ctx, socket, "", "leave"); r.code != 0 || !strings.Contains(r.stdout, "released example-app/merge") {
+	if r := agora(ctx, socket, "", "set"); r.code != 1 || !strings.Contains(r.stderr, "nothing to change") {
+		t.Fatalf("set without flags: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "set"); r.code != 1 || !strings.Contains(r.stderr, "nothing to change") {
+		t.Fatalf("set with only --as: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "leave"); r.code != 0 || !strings.Contains(r.stdout, "released example-app/merge") ||
+		!strings.Contains(r.stdout, "commands from this session no longer act as builder") {
 		t.Fatalf("leave: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "whoami"); strings.Contains(r.stdout, "name: builder") {
+		t.Fatalf("the session still acts as builder after leaving: %+v", r)
 	}
 	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (0 active)") {
 		t.Fatalf("status after leave: %s", r.stdout)
@@ -318,6 +382,17 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (1 active)") {
 		t.Fatalf("status after rejoin: %s", r.stdout)
+	}
+}
+
+func TestLeavingByNameSaysNothingAboutTheSession(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	if r := agora(ctx, socket, "builder", "leave"); r.code != 0 || !strings.Contains(r.stdout, "builder marked as left") || strings.Contains(r.stdout, "no longer act") {
+		t.Fatalf("leave: %+v", r)
 	}
 }
 
@@ -429,7 +504,7 @@ func TestProposalsAndCharter(t *testing.T) {
 	if r := agora(ctx, socket, "builder", "propose", "Merge under the lock", "Take", "the", "merge", "lock", "first."); r.code != 0 || !strings.Contains(r.stdout, "proposal #1") {
 		t.Fatalf("propose: %+v", r)
 	}
-	if r := agora(ctx, socket, "reviewer", "vote", "#1", "yes", "makes", "sense"); r.code != 0 {
+	if r := agora(ctx, socket, "reviewer", "vote", "#1", "YES", "makes", "sense"); r.code != 0 || !strings.Contains(r.stdout, "reviewer voted yes on #1") {
 		t.Fatalf("vote: %+v", r)
 	}
 	if r := agora(ctx, socket, "builder", "status"); !strings.Contains(r.stdout, "OPEN PROPOSALS") || !strings.Contains(r.stdout, "+1/-0") {

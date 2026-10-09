@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -41,5 +44,82 @@ func TestProfilesMigrationMarksDepartedAgentsLeft(t *testing.T) {
 		if err := db.QueryRowContext(ctx, `SELECT status FROM agents WHERE name = ?`, name).Scan(&status); err != nil || status != want {
 			t.Errorf("%s: status %q err %v, want %q", name, status, err, want)
 		}
+	}
+}
+
+func TestDatabaseFilesAreOwnerOnly(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("%s: mode %o, want 600", filepath.Base(p), mode)
+		}
+	}
+}
+
+func TestExistingDatabaseFilesBecomeOwnerOnly(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	files := []string{path, path + "-wal", path + "-shm"}
+	for _, p := range files { // as left by an older agora; an empty WAL and shared-memory file are valid
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+		if err := os.Chmod(p, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, p := range files {
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("%s: mode %o, want 600", filepath.Base(p), mode)
+		}
+	}
+}
+
+func TestNewerSchemaIsRefused(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, _ := fs.Glob(migrations, "migrations/*.sql")
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", len(names)+1)); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if db, err := Open(ctx, path); err == nil || !strings.Contains(err.Error(), "newer") {
+		if db != nil {
+			db.Close()
+		}
+		t.Fatalf("err = %v, want a refusal of the newer schema", err)
 	}
 }

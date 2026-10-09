@@ -372,7 +372,9 @@ func (x *VoteRequest) GetReason() string {
 }
 
 type VoteResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The recorded choice, in lowercase.
+	Choice        string `protobuf:"bytes,1,opt,name=choice,proto3" json:"choice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -405,6 +407,13 @@ func (x *VoteResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use VoteResponse.ProtoReflect.Descriptor instead.
 func (*VoteResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_governance_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *VoteResponse) GetChoice() string {
+	if x != nil {
+		return x.Choice
+	}
+	return ""
 }
 
 type CloseProposalRequest struct {
@@ -913,8 +922,9 @@ const file_agora_v1_governance_proto_rawDesc = "" +
 	"\vproposal_id\x18\x02 \x01(\x03R\n" +
 	"proposalId\x12\x16\n" +
 	"\x06choice\x18\x03 \x01(\tR\x06choice\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x0e\n" +
-	"\fVoteResponse\"c\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"&\n" +
+	"\fVoteResponse\x12\x16\n" +
+	"\x06choice\x18\x01 \x01(\tR\x06choice\"c\n" +
 	"\x14CloseProposalRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1f\n" +
 	"\vproposal_id\x18\x02 \x01(\x03R\n" +
