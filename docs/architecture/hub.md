@@ -20,7 +20,7 @@ The hub is the process that holds Agora's state and serves its API.
 ## Storage
 
 - One SQLite database file: `--db`, else `$AGORA_DB`, else `$XDG_STATE_HOME/agora/agora.db`, else `~/.local/state/agora/agora.db`.
-- The database file is created with mode `0600`, and an existing one and its `-wal` and `-shm` files are set to it on open; SQLite gives new `-wal` and `-shm` files the database file's mode.
+- The database file is created with mode `0600`, and an existing one and its `-wal` and `-shm` files are set to it on open; SQLite gives new `-wal` and `-shm` files the database file's mode. Changing the mode needs the hub to own the files, so a database owned by another user fails to open.
 - Driver: `modernc.org/sqlite` (pure Go, no cgo). WAL journal, 5-second busy timeout, foreign keys on.
 - The process uses a single connection, so every transaction is serialised.
 - Migrations are SQL files in `internal/store/migrations/`, applied in name order on open; `PRAGMA user_version` records how many have run. A new migration is a new file; applied files are never edited. A database whose `user_version` is higher than the number of migrations the binary carries was written by a newer Agora, and opening it is refused.

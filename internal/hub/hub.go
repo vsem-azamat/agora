@@ -780,7 +780,7 @@ func (s *governanceService) Vote(ctx context.Context, req *connect.Request[agora
 	if err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), m.GetChoice(), m.GetReason()); err != nil {
 		return nil, toConnect(err)
 	}
-	return connect.NewResponse(&agorav1.VoteResponse{}), nil
+	return connect.NewResponse(&agorav1.VoteResponse{Choice: governance.Choice(m.GetChoice())}), nil
 }
 
 func (s *governanceService) CloseProposal(ctx context.Context, req *connect.Request[agorav1.CloseProposalRequest]) (*connect.Response[agorav1.CloseProposalResponse], error) {

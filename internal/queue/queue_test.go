@@ -199,6 +199,22 @@ func TestWaitingAgentJoiningAgainWithANewLeaseHoldsForIt(t *testing.T) {
 	}
 }
 
+func TestOfferedAgentJoiningAgainWithANewLeaseKeepsTheClaimDeadline(t *testing.T) {
+	q, c := newQueue(t)
+	join(t, q, "r", "holder")
+	join(t, q, "r", "a")
+	q.Release(ctx, "r", "holder", "holder", false)
+	deadline := c.now().Add(queue.ClaimWindow)
+	c.add(time.Minute)
+	e, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false)
+	if err != nil || e.State != queue.Offered || !e.Expires.Equal(deadline) || e.Lease != 2*time.Hour {
+		t.Fatalf("entry %+v, err %v", e, err)
+	}
+	if e, err = q.Renew(ctx, "r", "a"); err != nil || !e.Expires.Equal(c.now().Add(2*time.Hour)) {
+		t.Fatalf("claimed %+v, err %v", e, err)
+	}
+}
+
 func TestJoiningAgainWithoutALeaseKeepsIt(t *testing.T) {
 	q, c := newQueue(t)
 	q.Join(ctx, "r", "a", "", 2*time.Hour, false)
@@ -491,7 +507,7 @@ func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
 		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, queue.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
 			t.Errorf("lease %v: err = %v", lease, err)
 		}
-		if _, _, err := q.Join(ctx, "r", "a", "", lease, true); !errors.Is(err, queue.ErrInvalid) {
+		if _, _, err := q.Join(ctx, "r", "a", "", lease, true); !errors.Is(err, queue.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
 			t.Errorf("lock for %v: err = %v", lease, err)
 		}
 	}

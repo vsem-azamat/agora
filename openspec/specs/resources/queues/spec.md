@@ -52,6 +52,10 @@ The system SHALL let an agent join the queue of a resource with an optional note
 - **WHEN** a waiting agent joins the same queue again with a 2-hour lease and later gets the slot
 - **THEN** it holds the slot for 2 hours
 
+#### Scenario: Offered agent joins again with a new lease
+- **WHEN** an agent offered a slot joins the same queue again with a 2-hour lease
+- **THEN** its claim deadline is unchanged, and once it claims the slot it holds it for 2 hours
+
 #### Scenario: Joining again without a lease
 - **WHEN** an agent holding a slot with a 2-hour lease joins the same queue again without giving a lease
 - **THEN** its lease end and lease duration are unchanged
@@ -142,7 +146,7 @@ The system SHALL let an agent leave a queue whether it holds a slot or waits, SH
 
 ### Requirement: Locks Are Queues That Do Not Wait
 
-The system SHALL offer locks as a shorthand: taking a lock joins the resource's queue only if a slot can be held at once, and otherwise leaves the queue unchanged and reports the holders with their notes and lease ends, and any agent whose turn it is, signalling the refusal to scripts with exit code 2. Taking a lock the agent already holds renews it for the new duration; taking a lock while only waiting for it is refused. Releasing a lock leaves the queue, and releasing a lock someone else holds is refused with the holder's name unless forced.
+The system SHALL offer locks as a shorthand: taking a lock joins the resource's queue only if a slot can be held at once, and otherwise leaves the queue unchanged and reports the holders with their notes and lease ends, and any agent whose turn it is, signalling the refusal to scripts with exit code 2. A lock lasts for a duration with the same bounds as a lease, 1 second to 7 days. Taking a lock the agent already holds renews it for the new duration; taking a lock while only waiting for it is refused. Releasing a lock leaves the queue, and releasing a lock someone else holds is refused with the holder's name unless forced.
 
 #### Scenario: Free lock
 - **WHEN** an agent takes the lock `example-app/merge` for 10 minutes with the note `merging #57`
@@ -159,6 +163,10 @@ The system SHALL offer locks as a shorthand: taking a lock joins the resource's 
 #### Scenario: Locking while queued
 - **WHEN** an agent that waits in a resource's queue takes its lock
 - **THEN** the command exits with code 2 and the agent keeps its place in the queue
+
+#### Scenario: Lock duration out of bounds
+- **WHEN** an agent takes a lock for 1 millisecond or 8 days
+- **THEN** the request is refused with the allowed range in the error
 
 #### Scenario: Releasing someone else's lock
 - **WHEN** an agent releases a lock another agent holds, without force

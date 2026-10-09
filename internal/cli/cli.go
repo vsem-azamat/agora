@@ -374,7 +374,10 @@ func leaveCmd(o *options) *cobra.Command {
 			for _, k := range resp.Msg.GetReleased() {
 				fmt.Fprintf(o.out, "released %s\n", k)
 			}
-			fmt.Fprintf(o.out, "%s marked as left; commands no longer act as %s until you join again\n", name, name)
+			fmt.Fprintf(o.out, "%s marked as left\n", name)
+			if strings.TrimSpace(o.as) == "" { // the name came from this session, which no longer has one
+				fmt.Fprintf(o.out, "commands from this session no longer act as %s; `agora join %s` to come back\n", name, name)
+			}
 			return nil
 		},
 	}
@@ -669,12 +672,13 @@ func voteCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := o.governance().Vote(cmd.Context(), connect.NewRequest(&agorav1.VoteRequest{
+			resp, err := o.governance().Vote(cmd.Context(), connect.NewRequest(&agorav1.VoteRequest{
 				Agent: name, ProposalId: id, Choice: args[1], Reason: strings.Join(args[2:], " "),
-			})); err != nil {
+			}))
+			if err != nil {
 				return err
 			}
-			fmt.Fprintf(o.out, "%s voted %s on #%d\n", name, strings.ToLower(strings.TrimSpace(args[1])), id)
+			fmt.Fprintf(o.out, "%s voted %s on #%d\n", name, resp.Msg.GetChoice(), id)
 			return nil
 		},
 	}
@@ -1160,7 +1164,7 @@ func (o *options) waitTurn(ctx context.Context, key, agent string) error {
 			return err
 		}
 		if time.Since(contact) >= hubGiveUp {
-			return connect.NewError(connect.CodeUnavailable, err)
+			return err // Unavailable reads as "cannot reach the hub"; other errors stay as they are
 		}
 		select {
 		case <-ctx.Done():

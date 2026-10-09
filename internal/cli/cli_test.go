@@ -142,7 +142,7 @@ func TestWaitEndsWithAnErrorWhenRemoved(t *testing.T) {
 }
 
 func TestWaitSurvivesAHubRestart(t *testing.T) {
-	defer cli.SetHubGiveUp(2 * time.Second)()
+	defer cli.SetHubGiveUp(5 * time.Second)()
 	dir, err := os.MkdirTemp("", "agora-test-")
 	if err != nil {
 		t.Fatal(err)
@@ -150,15 +150,15 @@ func TestWaitSurvivesAHubRestart(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "hub.sock")
 	stop := runHub(t, dir)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	agora(ctx, socket, "a", "queue", "join", "r")
 	agora(ctx, socket, "b", "queue", "join", "r")
 	waited := make(chan result)
 	go func() { waited <- agora(ctx, socket, "b", "queue", "wait", "r") }()
-	time.Sleep(2500 * time.Millisecond) // a quiet wait, longer than the give-up time
+	time.Sleep(6 * time.Second) // a quiet wait, longer than the give-up time
 	stop()
-	time.Sleep(1200 * time.Millisecond) // the wait retries against a missing hub
+	time.Sleep(1500 * time.Millisecond) // the wait retries against a missing hub, well within the give-up time
 	stop = runHub(t, dir)
 	t.Cleanup(stop)
 	agora(ctx, socket, "a", "queue", "release", "r")
@@ -367,7 +367,8 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	if r := agora(ctx, socket, "builder", "set"); r.code != 1 || !strings.Contains(r.stderr, "nothing to change") {
 		t.Fatalf("set with only --as: %+v", r)
 	}
-	if r := agora(ctx, socket, "", "leave"); r.code != 0 || !strings.Contains(r.stdout, "released example-app/merge") {
+	if r := agora(ctx, socket, "", "leave"); r.code != 0 || !strings.Contains(r.stdout, "released example-app/merge") ||
+		!strings.Contains(r.stdout, "commands from this session no longer act as builder") {
 		t.Fatalf("leave: %+v", r)
 	}
 	if r := agora(ctx, socket, "", "whoami"); strings.Contains(r.stdout, "name: builder") {
@@ -381,6 +382,17 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (1 active)") {
 		t.Fatalf("status after rejoin: %s", r.stdout)
+	}
+}
+
+func TestLeavingByNameSaysNothingAboutTheSession(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	if r := agora(ctx, socket, "builder", "leave"); r.code != 0 || !strings.Contains(r.stdout, "builder marked as left") || strings.Contains(r.stdout, "no longer act") {
+		t.Fatalf("leave: %+v", r)
 	}
 }
 

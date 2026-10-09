@@ -55,7 +55,10 @@ message VoteRequest {
   string reason = 4;
 }
 
-message VoteResponse {}
+message VoteResponse {
+  // The recorded choice, in lowercase.
+  string choice = 1;
+}
 
 message CloseProposalRequest {
   string agent = 1;

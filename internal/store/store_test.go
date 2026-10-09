@@ -69,6 +69,41 @@ func TestDatabaseFilesAreOwnerOnly(t *testing.T) {
 	}
 }
 
+func TestExistingDatabaseFilesBecomeOwnerOnly(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	files := []string{path, path + "-wal", path + "-shm"}
+	for _, p := range files { // as left by an older agora; an empty WAL and shared-memory file are valid
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+		if err := os.Chmod(p, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, p := range files {
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("%s: mode %o, want 600", filepath.Base(p), mode)
+		}
+	}
+}
+
 func TestNewerSchemaIsRefused(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
