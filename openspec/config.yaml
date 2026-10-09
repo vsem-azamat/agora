@@ -1,0 +1,23 @@
+schema: spec-driven
+
+context: |
+  Agora is a self-hosted control plane for AI coding agents (Claude Code, Codex)
+  running on the owner's machines inside a private network. A hub keeps rooms,
+  messages, locks, proposals and permissions; nodes run agents and offloaded work.
+  Agora never calls model APIs: agents are official CLIs under the owner's
+  subscriptions.
+
+  Stack: one Go binary (hub, node, MCP server, CLI), SQLite, protobuf + ConnectRPC,
+  React + Vite web UI embedded in the binary.
+
+  openspec/specs/ is the source of truth for behavior and describes the current
+  state only. openspec/changes/ is not used: specs are edited in place, and the
+  reasoning for a change lives in its pull request.
+
+rules:
+  specs:
+    - Describe what Agora does today; behavior behind a flag or setting names it.
+    - One capability per top-level directory, one sub-capability per <capability>/<sub>/spec.md;
+      requirements use SHALL, scenarios use WHEN/THEN.
+    - Every directory under specs/ has a README.md index; a new sub-capability adds its index row.
+    - No real hostnames, addresses, paths or project names; use neutral placeholders.

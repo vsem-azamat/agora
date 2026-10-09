@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Repository policy
+        run: scripts/repo-policy-check.sh
+      - name: Documentation
+        run: node scripts/docs-check.mjs
+      - name: Spec layout
+        run: scripts/spec-layout-check.sh
+      - name: Spec format
+        run: npx -y @fission-ai/openspec@1.12.0 validate --specs --no-interactive

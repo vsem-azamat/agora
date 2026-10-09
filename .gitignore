@@ -1,0 +1,22 @@
+# Build output
+/dist/
+/bin/
+node_modules/
+
+# Local environment
+.env
+.env.*
+
+# Scratch and temporary files never belong in the repository
+/tmp/
+/scratch/
+*.log
+*.tmp
+
+# OpenSpec change folders are not used; specs are edited in place
+/openspec/changes/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
