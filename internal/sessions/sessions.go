@@ -153,6 +153,9 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 			return err
 		}
 		if agent != "" && r.Event != End {
+			if err := agents.ReturnTx(ctx, tx, agent, now); err != nil {
+				return err
+			}
 			if err := agents.FollowTx(ctx, tx, agent, r.CWD, now); err != nil {
 				return err
 			}

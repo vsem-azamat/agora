@@ -251,7 +251,7 @@ func (f *profileFlags) request(cmd *cobra.Command, name string) (*agorav1.Update
 func prNumbers(in []string) ([]int32, error) {
 	var out []int32
 	for _, s := range in {
-		n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(s), "#"))
+		n, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(s), "#"), 10, 32)
 		if err != nil || n <= 0 {
 			return nil, fmt.Errorf("pull request %q: use a number like 57 or #57", s)
 		}
@@ -269,18 +269,16 @@ func joinCmd(o *options) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			id := sessionID()
-			resp, err := o.sessions().JoinName(cmd.Context(), connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: id, Force: force}))
-			if err != nil {
-				return err
-			}
-			req, err := f.request(cmd, name)
+			req, err := f.request(cmd, name) // validate the flags before taking the name
 			if err != nil {
 				return err
 			}
 			if req.Status == nil {
 				working := "working"
 				req.Status = &working
+			}
+			if strings.TrimSpace(*req.Status) == "" || *req.Status == "left" {
+				return fmt.Errorf("--status: give a status like working or reviewing; to leave, use `agora leave`")
 			}
 			if req.Cwd == nil {
 				if wd, err := os.Getwd(); err == nil {
@@ -290,6 +288,10 @@ func joinCmd(o *options) *cobra.Command {
 			if req.Kind == nil && os.Getenv("CLAUDE_CODE_SESSION_ID") != "" {
 				kind := "claude-code"
 				req.Kind = &kind
+			}
+			resp, err := o.sessions().JoinName(cmd.Context(), connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: sessionID(), Force: force}))
+			if err != nil {
+				return err
 			}
 			if _, err := o.agents().UpdateProfile(cmd.Context(), connect.NewRequest(req)); err != nil {
 				return err
@@ -317,6 +319,9 @@ func setCmd(o *options) *cobra.Command {
 			name, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
+			}
+			if cmd.Flags().NFlag() == 0 {
+				return fmt.Errorf("nothing to change; pass at least one flag, e.g. --task")
 			}
 			req, err := f.request(cmd, name)
 			if err != nil {
@@ -430,19 +435,17 @@ func whoCmd(o *options) *cobra.Command {
 	return cmd
 }
 
-// looksLikePath treats a query as a directory when it is written like a path or exists on disk.
+// looksLikePath treats a query as a directory only when it is written like a path, so a name,
+// branch or number never turns into a path because a directory happens to have that name.
 func looksLikePath(q string) bool {
-	if strings.HasPrefix(q, "/") || strings.HasPrefix(q, "~") || strings.HasPrefix(q, ".") {
-		return true
-	}
-	info, err := os.Stat(q)
-	return err == nil && info.IsDir()
+	return q == "~" || q == "." || q == ".." ||
+		strings.HasPrefix(q, "/") || strings.HasPrefix(q, "~/") || strings.HasPrefix(q, "./") || strings.HasPrefix(q, "../")
 }
 
 func expandHome(p string) string {
-	if rest, ok := strings.CutPrefix(p, "~"); ok {
+	if p == "~" || strings.HasPrefix(p, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, rest)
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
 		}
 	}
 	return p

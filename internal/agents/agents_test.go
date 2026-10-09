@@ -222,3 +222,44 @@ func TestWho(t *testing.T) {
 		t.Errorf("short fragment matched %+v", got)
 	}
 }
+
+func TestResumedSessionBringsALeftAgentBack(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End})
+	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start})
+	p, _ := e.a.Get(ctx, "builder")
+	if p.Status != agents.Working || !p.Active {
+		t.Fatalf("profile %+v", p)
+	}
+}
+
+func TestSettingStatusLeftIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "")
+	if _, err := e.a.Update(ctx, "builder", agents.Update{Status: str("left")}); !errors.Is(err, agents.ErrInvalid) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRelativeDirectoryIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "")
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str("rel/dir")}); !errors.Is(err, agents.ErrInvalid) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestDetachedCommitInAnotherRepoDoesNotKeepTheOldBranch(t *testing.T) {
+	e := newEnv(t)
+	repo, _ := checkout(t)
+	other := t.TempDir()
+	os.MkdirAll(filepath.Join(other, ".git"), 0o755)
+	os.WriteFile(filepath.Join(other, ".git", "HEAD"), []byte("0123456789abcdef0123456789abcdef01234567\n"), 0o644)
+	e.join(t, "builder", "")
+	e.a.Update(ctx, "builder", agents.Update{CWD: str(repo)})
+	p, _ := e.a.Update(ctx, "builder", agents.Update{CWD: str(other)})
+	if p.Branch != "0123456789ab" {
+		t.Fatalf("branch %q", p.Branch)
+	}
+}

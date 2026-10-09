@@ -9,3 +9,7 @@ ALTER TABLE agents ADD COLUMN about TEXT NOT NULL DEFAULT '';
 ALTER TABLE agents ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
 
 UPDATE agents SET updated_at = joined_at;
+
+-- names whose sessions have all ended had left before profiles existed
+UPDATE agents SET status = 'left'
+WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.agent = agents.name AND sessions.state != 'ended');

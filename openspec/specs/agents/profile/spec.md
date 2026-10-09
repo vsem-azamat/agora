@@ -26,7 +26,7 @@ The system SHALL keep for every agent a profile with its tool kind, project, cur
 
 ### Requirement: Branch Follows The Working Directory
 
-The system SHALL derive an agent's branch from the git checkout that contains its working directory, SHALL work without git installed, and SHALL keep the previous branch while the checkout is on a detached commit.
+The system SHALL derive an agent's branch from the git checkout that contains its working directory, SHALL work without git installed, and SHALL keep the previous branch while the same checkout is on a detached commit. Directories are absolute paths.
 
 #### Scenario: Declaring a worktree
 - **WHEN** an agent sets `~/src/example-app/.worktrees/login-fix` as its directory
@@ -39,6 +39,10 @@ The system SHALL derive an agent's branch from the git checkout that contains it
 #### Scenario: Looking at an old commit
 - **WHEN** the agent's checkout is switched to a commit by its hash
 - **THEN** the profile keeps the branch it had
+
+#### Scenario: Another checkout on a detached commit
+- **WHEN** the agent moves to a different checkout that is on a detached commit
+- **THEN** the profile shows that commit, not the previous checkout's branch
 
 ### Requirement: The Directory Follows The Session
 
@@ -74,7 +78,7 @@ The system SHALL treat an agent as active unless it has left, while it has a liv
 
 ### Requirement: Leaving
 
-The system SHALL let an agent leave, marking it `left` and removing it from every resource queue in the same step, and SHALL mark an agent `left` when its session ends and it is bound to no other live session.
+The system SHALL let an agent leave, marking it `left` and removing it from every resource queue in the same step; SHALL not let the status `left` be set any other way; SHALL mark an agent `left` when its session ends and it is bound to no other live session; and SHALL mark it `working` again when a session bound to it becomes active.
 
 #### Scenario: Leaving with a held lock
 - **WHEN** `builder` holds `example-app/merge` and leaves
@@ -87,3 +91,11 @@ The system SHALL let an agent leave, marking it `left` and removing it from ever
 #### Scenario: Joining again
 - **WHEN** a `left` agent joins again
 - **THEN** its status is `working`
+
+#### Scenario: Session resumed
+- **WHEN** the session of a `left` agent is resumed
+- **THEN** the agent is `working` and active again
+
+#### Scenario: Setting the status to left
+- **WHEN** an agent sets its status to `left` without leaving
+- **THEN** the change is refused and points to leaving

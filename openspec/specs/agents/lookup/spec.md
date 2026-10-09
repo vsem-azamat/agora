@@ -22,7 +22,7 @@ The system SHALL show an overview of active agents with name, status, session st
 
 ### Requirement: Finding The Owner Of Work
 
-The system SHALL find active agents by a pull request number (`123` or `#123`), by a directory (the agent works in it, or in a directory inside it), by an agent name, by an exact branch name, or by a part of a branch name longer than two characters, and SHALL show each match with its session state.
+The system SHALL find active agents by a pull request number (`123` or `#123`), by a path (the agent works in it, in a directory inside it, or in a directory that contains it, so the owner of a file or folder is found), by an agent name, by an exact branch name, or by a part of a branch name longer than two characters, and SHALL show each match with its session state.
 
 #### Scenario: By pull request
 - **WHEN** an agent looks up `#57`
@@ -30,6 +30,10 @@ The system SHALL find active agents by a pull request number (`123` or `#123`), 
 
 #### Scenario: By directory
 - **WHEN** an agent looks up `~/src/example-app` while `builder` works in `~/src/example-app/.worktrees/login-fix`
+- **THEN** `builder` is listed
+
+#### Scenario: Owner of a path
+- **WHEN** an agent looks up `~/src/example-app/.worktrees/login-fix/src/auth.go` while `builder` works in `~/src/example-app/.worktrees/login-fix`
 - **THEN** `builder` is listed
 
 #### Scenario: By part of a branch

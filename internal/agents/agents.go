@@ -75,6 +75,12 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 	if u.Status != nil && (strings.TrimSpace(*u.Status) == "" || len(*u.Status) > 32) {
 		return Profile{}, fmt.Errorf("%w: status must be 1-32 characters", ErrInvalid)
 	}
+	if u.Status != nil && strings.TrimSpace(*u.Status) == Left {
+		return Profile{}, fmt.Errorf("%w: to leave, use `agora leave`, which also gives up your queue places", ErrInvalid)
+	}
+	if u.CWD != nil && !filepath.IsAbs(*u.CWD) {
+		return Profile{}, fmt.Errorf("%w: directory must be an absolute path", ErrInvalid)
+	}
 	for _, n := range append(slices.Clone(u.AddPRs), u.DropPRs...) {
 		if n <= 0 {
 			return Profile{}, fmt.Errorf("%w: pull request numbers are positive", ErrInvalid)
@@ -97,8 +103,9 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 		set(&p.Status, u.Status)
 		set(&p.About, u.About)
 		if u.CWD != nil {
-			p.CWD = filepath.Clean(*u.CWD)
-			p.Branch = followBranch(p.Branch, gitinfo.Branch(p.CWD))
+			dir := resolve(*u.CWD)
+			p.Branch = nextBranch(p.Branch, p.CWD, dir)
+			p.CWD = dir
 		}
 		prs := map[int]bool{}
 		for _, n := range p.PRs {
@@ -145,11 +152,18 @@ func MarkLeftTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) err
 	return err
 }
 
+// ReturnTx marks a left agent as working again, inside the caller's transaction: its session
+// is active once more, as after a resume.
+func ReturnTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `UPDATE agents SET status = ?, updated_at = ? WHERE name = ? AND status = ?`, Working, now.UnixMilli(), name, Left)
+	return err
+}
+
 // FollowTx moves the profile of name to the directory its session reports, inside the
 // caller's transaction, unless the profile's directory lies inside it (a worktree the agent
 // set). The update time changes only when the directory or branch changed.
 func FollowTx(ctx context.Context, tx *sql.Tx, name, sessionDir string, now time.Time) error {
-	if sessionDir == "" {
+	if sessionDir == "" || !filepath.IsAbs(sessionDir) {
 		return nil
 	}
 	var cwd, branch string
@@ -159,11 +173,11 @@ func FollowTx(ctx context.Context, tx *sql.Tx, name, sessionDir string, now time
 		}
 		return err
 	}
-	dir := filepath.Clean(sessionDir)
+	dir := resolve(sessionDir)
 	if cwd != "" && cwd != dir && within(cwd, dir) {
 		dir = cwd
 	}
-	next := followBranch(branch, gitinfo.Branch(dir))
+	next := nextBranch(branch, cwd, dir)
 	if dir == cwd && next == branch {
 		return nil
 	}
@@ -194,7 +208,8 @@ func (a *Agents) Get(ctx context.Context, name string) (Profile, error) {
 // List returns profiles in name order: active agents, or all agents when all is true.
 func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
 	rows, err := a.db.QueryContext(ctx, `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
-		COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'), 'offline')
+		COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
+			ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), 'offline')
 		FROM agents AS a ORDER BY a.name`)
 	if err != nil {
 		return nil, err
@@ -216,8 +231,8 @@ func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
 }
 
 // Who finds agents by pull request (`57` or `#57`), name, exact branch or a part of a branch
-// longer than two characters; with path set, query is an absolute directory and matches agents
-// working in it or in a directory inside it.
+// longer than two characters; with path set, query is a path and matches agents working in it,
+// in a directory inside it, or in a directory that contains it (the owner of a file or folder).
 func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profile, error) {
 	list, err := a.List(ctx, all)
 	if err != nil {
@@ -230,7 +245,7 @@ func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profi
 		var hit bool
 		switch {
 		case path:
-			dir := filepath.Clean(q)
+			dir := resolve(q)
 			hit = p.CWD != "" && (within(p.CWD, dir) || within(dir, p.CWD))
 		case prErr == nil:
 			hit = slices.Contains(p.PRs, pr)
@@ -279,12 +294,24 @@ func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
 	return p, err
 }
 
-// followBranch keeps the previous branch while the checkout is on a detached commit.
-func followBranch(prev, now string) string {
-	if gitinfo.Detached(now) && prev != "" {
-		return prev
+// nextBranch returns the branch for an agent moving from prevDir to dir: the branch checked out
+// in dir, except that a detached commit in the same checkout keeps the previous branch.
+func nextBranch(prevBranch, prevDir, dir string) string {
+	h := gitinfo.Read(dir)
+	if h.Detached && prevBranch != "" && prevDir != "" && h.GitDir == gitinfo.Read(prevDir).GitDir {
+		return prevBranch
 	}
-	return now
+	return h.Branch
+}
+
+// resolve cleans dir and follows symlinks when it exists, so the same directory always has the
+// same name.
+func resolve(dir string) string {
+	d := filepath.Clean(dir)
+	if r, err := filepath.EvalSymlinks(d); err == nil {
+		return r
+	}
+	return d
 }
 
 // within reports whether path is dir or lies inside it.

@@ -35,12 +35,13 @@ func TestBranchOfACheckoutAndItsWorktree(t *testing.T) {
 func TestDetachedAndOutside(t *testing.T) {
 	repo := t.TempDir()
 	write(t, filepath.Join(repo, ".git", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
-	b := gitinfo.Branch(repo)
-	if b != "0123456789ab" || !gitinfo.Detached(b) {
-		t.Fatalf("branch %q", b)
+	h := gitinfo.Read(repo)
+	if h.Branch != "0123456789ab" || !h.Detached || h.GitDir == "" {
+		t.Fatalf("head %+v", h)
 	}
-	if gitinfo.Detached("fix/login") {
-		t.Fatal("branch taken for a commit")
+	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/deadbeefcafe\n")
+	if h := gitinfo.Read(repo); h.Detached || h.Branch != "deadbeefcafe" {
+		t.Fatalf("hex-named branch taken for a commit: %+v", h)
 	}
 	if b := gitinfo.Branch(t.TempDir()); b != "" {
 		t.Fatalf("outside: %q", b)
