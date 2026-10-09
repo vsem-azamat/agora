@@ -43,14 +43,18 @@ func shortDir(t *testing.T) string {
 }
 
 type running struct {
-	client agorav1connect.ResourceServiceClient
-	clock  *clock
-	stop   context.CancelFunc
-	done   chan struct{} // closed when Serve returns
-	err    error         // what Serve returned; read after done
+	client   agorav1connect.ResourceServiceClient
+	sessions agorav1connect.SessionServiceClient
+	rooms    agorav1connect.RoomServiceClient
+	clock    *clock
+	stop     context.CancelFunc
+	done     chan struct{} // closed when Serve returns
+	err      error         // what Serve returned; read after done
 }
 
-func start(t *testing.T) *running {
+func start(t *testing.T) *running { return startWith(t, nil) }
+
+func startWith(t *testing.T, configure func(*hub.Hub)) *running {
 	t.Helper()
 	dir := shortDir(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -65,8 +69,12 @@ func start(t *testing.T) *running {
 		t.Fatal(err)
 	}
 	r := &running{clock: c, stop: cancel, done: make(chan struct{})}
+	h := hub.Open(db, c.now, nil)
+	if configure != nil {
+		configure(h)
+	}
 	go func() {
-		r.err = hub.Open(db, c.now, nil).Serve(ctx, l)
+		r.err = h.Serve(ctx, l)
 		close(r.done)
 	}()
 	t.Cleanup(func() {
@@ -79,6 +87,8 @@ func start(t *testing.T) *running {
 		return d.DialContext(ctx, "unix", socket)
 	}}
 	r.client = agorav1connect.NewResourceServiceClient(&http.Client{Transport: transport}, "http://agora")
+	r.sessions = agorav1connect.NewSessionServiceClient(&http.Client{Transport: transport}, "http://agora")
+	r.rooms = agorav1connect.NewRoomServiceClient(&http.Client{Transport: transport}, "http://agora")
 	return r
 }
 
@@ -195,5 +205,130 @@ func TestLongSocketPathIsExplained(t *testing.T) {
 	long := filepath.Join(shortDir(t), strings.Repeat("x", hub.MaxSocketPath))
 	if _, err := hub.Listen(long); err == nil || !strings.Contains(err.Error(), "unix sockets allow at most") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func (r *running) idleAgent(t *testing.T, name, session, terminal string) {
+	t.Helper()
+	bg := context.Background()
+	if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: session, Kind: "claude-code", Event: agorav1.SessionEvent_SESSION_EVENT_START, Terminal: terminal})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: session})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: session, Event: agorav1.SessionEvent_SESSION_EVENT_STOP})); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (r *running) post(t *testing.T, author, body string) {
+	t.Helper()
+	bg := context.Background()
+	r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: author}))
+	if _, err := r.rooms.Post(bg, connect.NewRequest(&agorav1.PostRequest{Author: author, Room: "general", Body: body})); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// wake starts a WaitWake stream and returns a channel with its wake text ("" for a quiet end).
+func (r *running) wake(t *testing.T, session string) <-chan string {
+	t.Helper()
+	out := make(chan string, 1)
+	stream, err := r.sessions.WaitWake(context.Background(), connect.NewRequest(&agorav1.WaitWakeRequest{SessionId: session}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stream.Receive() || !stream.Msg().GetArmed() {
+		t.Fatalf("not armed: %v", stream.Err())
+	}
+	go func() {
+		defer stream.Close()
+		text := ""
+		if stream.Receive() {
+			text = stream.Msg().GetText()
+		}
+		out <- text
+	}()
+	return out
+}
+
+func within(t *testing.T, ch <-chan string, d time.Duration) (string, bool) {
+	t.Helper()
+	select {
+	case s := <-ch:
+		return s, true
+	case <-time.After(d):
+		return "", false
+	}
+}
+
+func TestMentionWakesAWaitingSession(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	woke := r.wake(t, "session-1")
+	if _, ended := within(t, woke, 300*time.Millisecond); ended {
+		t.Fatal("wait ended with nothing to wake for")
+	}
+	r.post(t, "reviewer", "@builder can you take #57?")
+	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func TestNewPromptEndsTheWaitQuietly(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	woke := r.wake(t, "session-1")
+	r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_PROMPT}))
+	if text, ended := within(t, woke, 2*time.Second); !ended || text != "" {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func TestNewerWaitReplacesTheOlder(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	older := r.wake(t, "session-1")
+	time.Sleep(100 * time.Millisecond)
+	newer := r.wake(t, "session-1")
+	if text, ended := within(t, older, 2*time.Second); !ended || text != "" {
+		t.Fatalf("older: ended %v text %q", ended, text)
+	}
+	r.post(t, "reviewer", "@builder ping")
+	if text, ended := within(t, newer, 2*time.Second); !ended || !strings.Contains(text, "ping") {
+		t.Fatalf("newer: ended %v text %q", ended, text)
+	}
+}
+
+func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
+	log := filepath.Join(shortDir(t), "wakes")
+	var h *hub.Hub
+	r := startWith(t, func(x *hub.Hub) {
+		x.WakeCommand = `printf '%s|%s\n' "$AGORA_TERMINAL" "$AGORA_WAKE_TEXT" >> ` + log
+		h = x
+	})
+	r.idleAgent(t, "builder", "session-1", "pane-7")
+	r.post(t, "reviewer", "@builder ping")
+	if err := hub.WakeByCommand(h, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	hub.WakeByCommand(h, context.Background()) // same mention: no second run
+	b, _ := os.ReadFile(log)
+	if strings.Count(string(b), "\n") != 1 || !strings.HasPrefix(string(b), "pane-7|Agora: 1 board message(s) addressed to you (reviewer in #general)") {
+		t.Fatalf("wakes %q", b)
+	}
+	// a connector waiting for the session takes precedence over the command
+	r.idleAgent(t, "waiter", "session-2", "pane-8")
+	woke := r.wake(t, "session-2")
+	time.Sleep(100 * time.Millisecond)
+	r.post(t, "reviewer", "@waiter ping")
+	hub.WakeByCommand(h, context.Background())
+	if b, _ := os.ReadFile(log); strings.Contains(string(b), "pane-8") {
+		t.Fatalf("command ran for a waiting session: %q", b)
+	}
+	if text, ended := within(t, woke, 2*time.Second); !ended || !strings.Contains(text, "ping") {
+		t.Fatalf("connector: ended %v text %q", ended, text)
 	}
 }

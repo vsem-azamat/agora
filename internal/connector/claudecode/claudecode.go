@@ -95,3 +95,54 @@ func agentPID() int {
 	}
 	return 0
 }
+
+// ExitWake is the exit code with which an asyncRewake hook wakes Claude Code.
+const ExitWake = 2
+
+// GiveUpAfter is how long the waiting hook keeps trying to reach the hub before it ends quietly.
+const GiveUpAfter = 5 * time.Minute
+
+// Wait is the asynchronous wake hook: it waits on behalf of the idle session named in Claude
+// Code's hook input and returns the wake text when something needs the agent, or "" when the
+// wait ends without a wake (the session got busy, ended, a newer wait took over, or the hub
+// stayed unreachable for GiveUpAfter). The caller exits with code 2 and the text to wake
+// Claude Code, or 0.
+func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io.Reader) (string, error) {
+	var h hookInput
+	if err := json.NewDecoder(in).Decode(&h); err != nil {
+		return "", fmt.Errorf("read hook input: %w", err)
+	}
+	reached := time.Now()
+	for {
+		text, err := waitOnce(ctx, client, h.SessionID)
+		if err == nil {
+			return text, nil
+		}
+		code := connect.CodeOf(err)
+		if code != connect.CodeUnavailable && code != connect.CodeCanceled && code != connect.CodeUnknown {
+			return "", err
+		}
+		if time.Since(reached) > GiveUpAfter || ctx.Err() != nil {
+			return "", err
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+func waitOnce(ctx context.Context, client agorav1connect.SessionServiceClient, sessionID string) (string, error) {
+	stream, err := client.WaitWake(ctx, connect.NewRequest(&agorav1.WaitWakeRequest{SessionId: sessionID}))
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+	for stream.Receive() {
+		if !stream.Msg().GetArmed() {
+			return stream.Msg().GetText(), nil
+		}
+	}
+	return "", stream.Err()
+}

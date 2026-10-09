@@ -357,3 +357,54 @@ func TestRoomsAndMessages(t *testing.T) {
 		t.Fatalf("read general: %+v", r)
 	}
 }
+
+func TestWaitHookWakesWithExitCodeTwo(t *testing.T) {
+	socket := startHub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "session-wait")
+	hook := func(input string) (int, string) {
+		var out, errOut bytes.Buffer
+		code := cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code"}, strings.NewReader(input), &out, &errOut)
+		return code, out.String()
+	}
+	hook(`{"session_id":"session-wait","hook_event_name":"SessionStart"}`)
+	agora(ctx, socket, "", "join", "builder")
+	hook(`{"session_id":"session-wait","hook_event_name":"Stop"}`)
+	type result struct {
+		code   int
+		stderr string
+	}
+	done := make(chan result, 1)
+	go func() {
+		var out, errOut bytes.Buffer
+		code := cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code-wait"},
+			strings.NewReader(`{"session_id":"session-wait","hook_event_name":"Stop"}`), &out, &errOut)
+		done <- result{code, errOut.String()}
+	}()
+	time.Sleep(300 * time.Millisecond)
+	t.Setenv("AGORA_SESSION", "") // the reviewer is not in builder's session
+	agora(ctx, socket, "reviewer", "join", "reviewer")
+	agora(ctx, socket, "reviewer", "post", "general", "@builder", "please", "review")
+	select {
+	case r := <-done:
+		if r.code != 2 || !strings.Contains(r.stderr, "please review") {
+			t.Fatalf("%+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("hook did not wake")
+	}
+}
+
+func TestWaitHookIsQuietWithoutAHub(t *testing.T) {
+	var out, errOut bytes.Buffer
+	t.Setenv("AGORA_DEBUG", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond) // it would retry for minutes
+	defer cancel()
+	code := cli.RunWithInput(ctx, []string{"--socket", filepath.Join(t.TempDir(), "none.sock"), "hook", "claude-code-wait"},
+		strings.NewReader(`{"session_id":"session-x","hook_event_name":"Stop"}`), &out, &errOut)
+	if code != 0 || out.Len() != 0 || errOut.Len() != 0 {
+		t.Fatalf("code %d out %q err %q", code, out.String(), errOut.String())
+	}
+}

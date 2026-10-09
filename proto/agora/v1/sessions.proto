@@ -16,6 +16,10 @@ service SessionService {
   rpc Resolve(ResolveRequest) returns (ResolveResponse);
   // ListSessions returns sessions that have not ended.
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  // WaitWake waits on behalf of an idle session. The stream first sends an armed message, then
+  // one message with the wake text when something needs the agent, or ends without it when the
+  // session gets busy, ends, or a newer wait for it starts.
+  rpc WaitWake(WaitWakeRequest) returns (stream WaitWakeResponse);
 }
 
 enum SessionEvent {
@@ -93,4 +97,15 @@ message ListSessionsRequest {}
 
 message ListSessionsResponse {
   repeated Session sessions = 1;
+}
+
+message WaitWakeRequest {
+  string session_id = 1;
+}
+
+message WaitWakeResponse {
+  // The wake text; empty in the first, armed message.
+  string text = 1;
+  // The wait is registered; sent once, first.
+  bool armed = 2;
 }

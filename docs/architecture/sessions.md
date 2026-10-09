@@ -41,7 +41,7 @@ When Claude Code clears a conversation it ends the session with reason `clear` a
 
 Notes are recorded with a compare-and-set on `noted` and `checked_at`, so concurrent hooks of one session add a note once. On any error the hook prints nothing and exits 0; `AGORA_DEBUG=1` makes it report the error. `AGORA_TERMINAL`, when set, is recorded as the session's terminal.
 
-Wiring it into Claude Code (`~/.claude/settings.json`), one entry per event:
+Wiring it into Claude Code (`~/.claude/settings.json`), one entry per event; the asynchronous wake hook on `Stop` is described in [Wakeups](wakeups.md):
 
 ```json
 {

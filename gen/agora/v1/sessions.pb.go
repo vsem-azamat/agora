@@ -687,6 +687,104 @@ func (x *ListSessionsResponse) GetSessions() []*Session {
 	return nil
 }
 
+type WaitWakeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WaitWakeRequest) Reset() {
+	*x = WaitWakeRequest{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WaitWakeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WaitWakeRequest) ProtoMessage() {}
+
+func (x *WaitWakeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WaitWakeRequest.ProtoReflect.Descriptor instead.
+func (*WaitWakeRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *WaitWakeRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type WaitWakeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The wake text; empty in the first, armed message.
+	Text string `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	// The wait is registered; sent once, first.
+	Armed         bool `protobuf:"varint,2,opt,name=armed,proto3" json:"armed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WaitWakeResponse) Reset() {
+	*x = WaitWakeResponse{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WaitWakeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WaitWakeResponse) ProtoMessage() {}
+
+func (x *WaitWakeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WaitWakeResponse.ProtoReflect.Descriptor instead.
+func (*WaitWakeResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *WaitWakeResponse) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *WaitWakeResponse) GetArmed() bool {
+	if x != nil {
+		return x.Armed
+	}
+	return false
+}
+
 var File_agora_v1_sessions_proto protoreflect.FileDescriptor
 
 const file_agora_v1_sessions_proto_rawDesc = "" +
@@ -733,7 +831,13 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\"\x15\n" +
 	"\x13ListSessionsRequest\"E\n" +
 	"\x14ListSessionsResponse\x12-\n" +
-	"\bsessions\x18\x01 \x03(\v2\x11.agora.v1.SessionR\bsessions*\xa7\x01\n" +
+	"\bsessions\x18\x01 \x03(\v2\x11.agora.v1.SessionR\bsessions\"0\n" +
+	"\x0fWaitWakeRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"<\n" +
+	"\x10WaitWakeResponse\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
+	"\x05armed\x18\x02 \x01(\bR\x05armed*\xa7\x01\n" +
 	"\fSessionEvent\x12\x1d\n" +
 	"\x19SESSION_EVENT_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13SESSION_EVENT_START\x10\x01\x12\x18\n" +
@@ -745,12 +849,13 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x19SESSION_STATE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12SESSION_STATE_BUSY\x10\x01\x12\x16\n" +
 	"\x12SESSION_STATE_IDLE\x10\x02\x12\x17\n" +
-	"\x13SESSION_STATE_ENDED\x10\x032\x9f\x02\n" +
+	"\x13SESSION_STATE_ENDED\x10\x032\xe4\x02\n" +
 	"\x0eSessionService\x12;\n" +
 	"\x06Report\x12\x17.agora.v1.ReportRequest\x1a\x18.agora.v1.ReportResponse\x12A\n" +
 	"\bJoinName\x12\x19.agora.v1.JoinNameRequest\x1a\x1a.agora.v1.JoinNameResponse\x12>\n" +
 	"\aResolve\x12\x18.agora.v1.ResolveRequest\x1a\x19.agora.v1.ResolveResponse\x12M\n" +
-	"\fListSessions\x12\x1d.agora.v1.ListSessionsRequest\x1a\x1e.agora.v1.ListSessionsResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
+	"\fListSessions\x12\x1d.agora.v1.ListSessionsRequest\x1a\x1e.agora.v1.ListSessionsResponse\x12C\n" +
+	"\bWaitWake\x12\x19.agora.v1.WaitWakeRequest\x1a\x1a.agora.v1.WaitWakeResponse0\x01B3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
 	file_agora_v1_sessions_proto_rawDescOnce sync.Once
@@ -765,7 +870,7 @@ func file_agora_v1_sessions_proto_rawDescGZIP() []byte {
 }
 
 var file_agora_v1_sessions_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agora_v1_sessions_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_agora_v1_sessions_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_agora_v1_sessions_proto_goTypes = []any{
 	(SessionEvent)(0),             // 0: agora.v1.SessionEvent
 	(SessionState)(0),             // 1: agora.v1.SessionState
@@ -778,24 +883,28 @@ var file_agora_v1_sessions_proto_goTypes = []any{
 	(*ResolveResponse)(nil),       // 8: agora.v1.ResolveResponse
 	(*ListSessionsRequest)(nil),   // 9: agora.v1.ListSessionsRequest
 	(*ListSessionsResponse)(nil),  // 10: agora.v1.ListSessionsResponse
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*WaitWakeRequest)(nil),       // 11: agora.v1.WaitWakeRequest
+	(*WaitWakeResponse)(nil),      // 12: agora.v1.WaitWakeResponse
+	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
 }
 var file_agora_v1_sessions_proto_depIdxs = []int32{
 	1,  // 0: agora.v1.Session.state:type_name -> agora.v1.SessionState
-	11, // 1: agora.v1.Session.state_at:type_name -> google.protobuf.Timestamp
-	11, // 2: agora.v1.Session.started_at:type_name -> google.protobuf.Timestamp
+	13, // 1: agora.v1.Session.state_at:type_name -> google.protobuf.Timestamp
+	13, // 2: agora.v1.Session.started_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: agora.v1.ReportRequest.event:type_name -> agora.v1.SessionEvent
 	2,  // 4: agora.v1.ListSessionsResponse.sessions:type_name -> agora.v1.Session
 	3,  // 5: agora.v1.SessionService.Report:input_type -> agora.v1.ReportRequest
 	5,  // 6: agora.v1.SessionService.JoinName:input_type -> agora.v1.JoinNameRequest
 	7,  // 7: agora.v1.SessionService.Resolve:input_type -> agora.v1.ResolveRequest
 	9,  // 8: agora.v1.SessionService.ListSessions:input_type -> agora.v1.ListSessionsRequest
-	4,  // 9: agora.v1.SessionService.Report:output_type -> agora.v1.ReportResponse
-	6,  // 10: agora.v1.SessionService.JoinName:output_type -> agora.v1.JoinNameResponse
-	8,  // 11: agora.v1.SessionService.Resolve:output_type -> agora.v1.ResolveResponse
-	10, // 12: agora.v1.SessionService.ListSessions:output_type -> agora.v1.ListSessionsResponse
-	9,  // [9:13] is the sub-list for method output_type
-	5,  // [5:9] is the sub-list for method input_type
+	11, // 9: agora.v1.SessionService.WaitWake:input_type -> agora.v1.WaitWakeRequest
+	4,  // 10: agora.v1.SessionService.Report:output_type -> agora.v1.ReportResponse
+	6,  // 11: agora.v1.SessionService.JoinName:output_type -> agora.v1.JoinNameResponse
+	8,  // 12: agora.v1.SessionService.Resolve:output_type -> agora.v1.ResolveResponse
+	10, // 13: agora.v1.SessionService.ListSessions:output_type -> agora.v1.ListSessionsResponse
+	12, // 14: agora.v1.SessionService.WaitWake:output_type -> agora.v1.WaitWakeResponse
+	10, // [10:15] is the sub-list for method output_type
+	5,  // [5:10] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -812,7 +921,7 @@ func file_agora_v1_sessions_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_sessions_proto_rawDesc), len(file_agora_v1_sessions_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

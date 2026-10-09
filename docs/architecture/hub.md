@@ -29,6 +29,7 @@ The hub is the process that holds Agora's state and serves its API.
 - Every second the hub sweeps resources whose lease or claim deadline has passed and applies the result, and ends sessions whose process no longer exists on its machine.
 - Every call that may have changed a queue (any call that settles one, including listing) fires a single change signal; every streaming waiter wakes, re-reads its own entry and reports a new position or takes its slot. A spurious wake costs one small query.
 - As a safety net, each waiter also re-reads its entry once a second.
+- With a wake command configured, every 10 seconds the hub wakes idle sessions that no connector waits for (see [Wakeups](wakeups.md)).
 
 ## Shutdown
 

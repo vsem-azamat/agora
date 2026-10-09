@@ -168,6 +168,9 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 		}
 		switch r.Event {
 		case Start, Prompt:
+			if _, err := tx.ExecContext(ctx, `UPDATE sessions SET turn = turn + 1 WHERE id = ?`, r.SessionID); err != nil {
+				return err
+			}
 			return setState(ctx, tx, r.SessionID, Busy, now)
 		case End:
 			return s.endTx(ctx, tx, r.SessionID, now)
@@ -256,37 +259,154 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 
 func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Time) (Reply, error) {
 	if agent != "" && !r.StopActive {
-		var parts []string
-		if s.rooms != nil {
-			msgs, total, err := s.rooms.Take(ctx, agent, true, DeliverAtOnce)
-			if err != nil {
-				return Reply{}, err
-			}
-			if len(msgs) > 0 {
-				lines := []string{fmt.Sprintf("Agora: before you end your turn, answer what is addressed to you (%s), "+
-					"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", agent)}
-				for _, m := range msgs {
-					lines = append(lines, rooms.Format(m, DeliverChars))
-				}
-				if more := total - len(msgs); more > 0 {
-					lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
-				}
-				parts = append(parts, strings.Join(lines, "\n"))
-			}
-		}
-		entries, err := s.queue.EntriesOf(ctx, agent)
+		text, err := s.waiting(ctx, agent, "before you end your turn")
 		if err != nil {
 			return Reply{}, err
 		}
-		if hasOffer(entries) {
-			parts = append(parts, note(agent, entries, nil)+
-				" Claim or release the offered slot before you end your turn; otherwise it passes to the next agent.")
-		}
-		if len(parts) > 0 {
-			return Reply{Block: true, BlockReason: strings.Join(parts, "\n\n")}, nil
+		if text != "" {
+			return Reply{Block: true, BlockReason: text}, nil
 		}
 	}
 	return Reply{}, s.tx(ctx, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
+}
+
+// waiting returns the text for what needs the agent now (unread messages addressed to it,
+// which it marks read, and offered slots), or "" when nothing does. when says when the agent
+// should act, e.g. "before you end your turn".
+func (s *Sessions) waiting(ctx context.Context, agent, when string) (string, error) {
+	var parts []string
+	if s.rooms != nil {
+		msgs, total, err := s.rooms.Take(ctx, agent, true, DeliverAtOnce)
+		if err != nil {
+			return "", err
+		}
+		if len(msgs) > 0 {
+			lines := []string{fmt.Sprintf("Agora: %s, answer what is addressed to you (%s), "+
+				"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", when, agent)}
+			for _, m := range msgs {
+				lines = append(lines, rooms.Format(m, DeliverChars))
+			}
+			if more := total - len(msgs); more > 0 {
+				lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
+			}
+			parts = append(parts, strings.Join(lines, "\n"))
+		}
+	}
+	entries, err := s.queue.EntriesOf(ctx, agent)
+	if err != nil {
+		return "", err
+	}
+	if hasOffer(entries) {
+		parts = append(parts, note(agent, entries, nil)+
+			" Claim or release the offered slot now; otherwise it passes to the next agent.")
+	}
+	return strings.Join(parts, "\n\n"), nil
+}
+
+// Turn returns the session's turn count, which grows with every prompt and start.
+func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
+	var turn int64
+	err := s.db.QueryRowContext(ctx, `SELECT turn FROM sessions WHERE id = ?`, sessionID).Scan(&turn)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("%w: unknown session", ErrInvalid)
+	}
+	return turn, err
+}
+
+// CheckWake decides a connector's wait for a session that started at turn: done with no text
+// when the session ended or a new turn began; done with the wake text when the session is idle
+// and something needs its agent (addressed messages are then read); otherwise keep waiting.
+func (s *Sessions) CheckWake(ctx context.Context, sessionID string, turn int64) (text string, done bool, err error) {
+	var state, agent string
+	var now int64
+	err = s.db.QueryRowContext(ctx, `SELECT state, COALESCE(agent, ''), turn FROM sessions WHERE id = ?`, sessionID).Scan(&state, &agent, &now)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", true, nil
+	case err != nil:
+		return "", false, err
+	case state == string(Ended) || now != turn:
+		return "", true, nil
+	case state != string(Idle) || agent == "":
+		return "", false, nil
+	}
+	text, err = s.waiting(ctx, agent, "you were woken")
+	return text, text != "", err
+}
+
+// Pending describes what would wake a session's agent without consuming it: a key that
+// changes when something new arrives (the newest addressed message and the offered slots) and
+// a short text for a terminal prompt. key is "" when nothing needs the agent.
+func (s *Sessions) Pending(ctx context.Context, agent string) (key, text string, err error) {
+	var parts, keys []string
+	if s.rooms != nil {
+		msgs, _, err := s.rooms.Unread(ctx, agent, true, 0)
+		if err != nil {
+			return "", "", err
+		}
+		if len(msgs) > 0 {
+			from := map[string]bool{}
+			var senders []string
+			for _, m := range msgs {
+				who := fmt.Sprintf("%s in #%s", m.Author, m.Room)
+				if !from[who] {
+					from[who] = true
+					senders = append(senders, who)
+				}
+			}
+			keys = append(keys, fmt.Sprintf("m%d", msgs[len(msgs)-1].ID))
+			parts = append(parts, fmt.Sprintf("%d board message(s) addressed to you (%s)", len(msgs), strings.Join(senders, ", ")))
+		}
+	}
+	entries, err := s.queue.EntriesOf(ctx, agent)
+	if err != nil {
+		return "", "", err
+	}
+	for _, e := range entries {
+		if e.State == queue.Offered {
+			keys = append(keys, "o"+e.Key)
+			parts = append(parts, "your turn on "+e.Key)
+		}
+	}
+	if len(keys) == 0 {
+		return "", "", nil
+	}
+	return strings.Join(keys, " "), fmt.Sprintf("Agora: %s. Read them with `agora unread` and `agora queue ls`, act if needed, then carry on or end your turn.",
+		strings.Join(parts, "; ")), nil
+}
+
+// CommandWake is an idle session that a wake command may wake.
+type CommandWake struct {
+	SessionID, Agent, Terminal, WokenFor string
+	WokenAt                              time.Time
+}
+
+// IdleWithTerminal returns idle sessions with a bound agent and a known terminal.
+func (s *Sessions) IdleWithTerminal(ctx context.Context) ([]CommandWake, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, agent, terminal, woken_for, woken_at FROM sessions
+		WHERE state = 'idle' AND agent IS NOT NULL AND terminal != '' ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CommandWake
+	for rows.Next() {
+		var c CommandWake
+		var at int64
+		if err := rows.Scan(&c.SessionID, &c.Agent, &c.Terminal, &c.WokenFor, &at); err != nil {
+			return nil, err
+		}
+		c.WokenAt = time.UnixMilli(at)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RecordWake stores what a command wake was for and how it went.
+func (s *Sessions) RecordWake(ctx context.Context, sessionID, key, result string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET woken_for = ?, woken_at = ?, wake_result = ? WHERE id = ?`,
+		key, s.now().UnixMilli(), result, sessionID)
+	return err
 }
 
 // Join registers name and binds it to sessionID when that session has not ended; without

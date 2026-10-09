@@ -42,6 +42,8 @@ const (
 	// SessionServiceListSessionsProcedure is the fully-qualified name of the SessionService's
 	// ListSessions RPC.
 	SessionServiceListSessionsProcedure = "/agora.v1.SessionService/ListSessions"
+	// SessionServiceWaitWakeProcedure is the fully-qualified name of the SessionService's WaitWake RPC.
+	SessionServiceWaitWakeProcedure = "/agora.v1.SessionService/WaitWake"
 )
 
 // SessionServiceClient is a client for the agora.v1.SessionService service.
@@ -54,6 +56,10 @@ type SessionServiceClient interface {
 	Resolve(context.Context, *connect.Request[v1.ResolveRequest]) (*connect.Response[v1.ResolveResponse], error)
 	// ListSessions returns sessions that have not ended.
 	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
+	// WaitWake waits on behalf of an idle session. The stream first sends an armed message, then
+	// one message with the wake text when something needs the agent, or ends without it when the
+	// session gets busy, ends, or a newer wait for it starts.
+	WaitWake(context.Context, *connect.Request[v1.WaitWakeRequest]) (*connect.ServerStreamForClient[v1.WaitWakeResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the agora.v1.SessionService service. By default,
@@ -91,6 +97,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("ListSessions")),
 			connect.WithClientOptions(opts...),
 		),
+		waitWake: connect.NewClient[v1.WaitWakeRequest, v1.WaitWakeResponse](
+			httpClient,
+			baseURL+SessionServiceWaitWakeProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("WaitWake")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -100,6 +112,7 @@ type sessionServiceClient struct {
 	joinName     *connect.Client[v1.JoinNameRequest, v1.JoinNameResponse]
 	resolve      *connect.Client[v1.ResolveRequest, v1.ResolveResponse]
 	listSessions *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
+	waitWake     *connect.Client[v1.WaitWakeRequest, v1.WaitWakeResponse]
 }
 
 // Report calls agora.v1.SessionService.Report.
@@ -122,6 +135,11 @@ func (c *sessionServiceClient) ListSessions(ctx context.Context, req *connect.Re
 	return c.listSessions.CallUnary(ctx, req)
 }
 
+// WaitWake calls agora.v1.SessionService.WaitWake.
+func (c *sessionServiceClient) WaitWake(ctx context.Context, req *connect.Request[v1.WaitWakeRequest]) (*connect.ServerStreamForClient[v1.WaitWakeResponse], error) {
+	return c.waitWake.CallServerStream(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the agora.v1.SessionService service.
 type SessionServiceHandler interface {
 	// Report records one connector event and returns what the connector should tell the agent.
@@ -132,6 +150,10 @@ type SessionServiceHandler interface {
 	Resolve(context.Context, *connect.Request[v1.ResolveRequest]) (*connect.Response[v1.ResolveResponse], error)
 	// ListSessions returns sessions that have not ended.
 	ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error)
+	// WaitWake waits on behalf of an idle session. The stream first sends an armed message, then
+	// one message with the wake text when something needs the agent, or ends without it when the
+	// session gets busy, ends, or a newer wait for it starts.
+	WaitWake(context.Context, *connect.Request[v1.WaitWakeRequest], *connect.ServerStream[v1.WaitWakeResponse]) error
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -165,6 +187,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("ListSessions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceWaitWakeHandler := connect.NewServerStreamHandler(
+		SessionServiceWaitWakeProcedure,
+		svc.WaitWake,
+		connect.WithSchema(sessionServiceMethods.ByName("WaitWake")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceReportProcedure:
@@ -175,6 +203,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceResolveHandler.ServeHTTP(w, r)
 		case SessionServiceListSessionsProcedure:
 			sessionServiceListSessionsHandler.ServeHTTP(w, r)
+		case SessionServiceWaitWakeProcedure:
+			sessionServiceWaitWakeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -198,4 +228,8 @@ func (UnimplementedSessionServiceHandler) Resolve(context.Context, *connect.Requ
 
 func (UnimplementedSessionServiceHandler) ListSessions(context.Context, *connect.Request[v1.ListSessionsRequest]) (*connect.Response[v1.ListSessionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.SessionService.ListSessions is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) WaitWake(context.Context, *connect.Request[v1.WaitWakeRequest], *connect.ServerStream[v1.WaitWakeResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.SessionService.WaitWake is not implemented"))
 }

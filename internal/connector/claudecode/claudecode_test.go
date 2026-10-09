@@ -17,7 +17,6 @@ import (
 
 // fakeHub answers Report with a fixed reply and records the request.
 type fakeHub struct {
-	agorav1connect.UnimplementedSessionServiceHandler
 	reply *agorav1.ReportResponse
 	err   error
 	got   *agorav1.ReportRequest
@@ -42,6 +41,12 @@ func (f *fakeHub) Resolve(context.Context, *connect.Request[agorav1.ResolveReque
 func (f *fakeHub) ListSessions(context.Context, *connect.Request[agorav1.ListSessionsRequest]) (*connect.Response[agorav1.ListSessionsResponse], error) {
 	return nil, errors.New("unused")
 }
+
+func (f *fakeHub) WaitWake(context.Context, *connect.Request[agorav1.WaitWakeRequest]) (*connect.ServerStreamForClient[agorav1.WaitWakeResponse], error) {
+	return nil, errors.New("unused")
+}
+
+var _ agorav1connect.SessionServiceClient = (*fakeHub)(nil)
 
 func run(t *testing.T, hub *fakeHub, input string) (string, error) {
 	t.Helper()

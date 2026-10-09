@@ -180,7 +180,7 @@ func (o *options) rooms() agorav1connect.RoomServiceClient {
 // --- hub ------------------------------------------------------------------------
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
-	var dbPath string
+	var dbPath, wakeCommand string
 	cmd := &cobra.Command{
 		Use:   "hub",
 		Short: "Run the hub",
@@ -198,11 +198,15 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			log.Info("hub listening", "socket", o.socket, "db", dbPath)
-			return hub.Open(db, nil, log).Serve(ctx, l)
+			log.Info("hub listening", "socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "")
+			h := hub.Open(db, nil, log)
+			h.WakeCommand = wakeCommand
+			return h.Serve(ctx, l)
 		},
 	}
 	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
+	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"),
+		"shell command that wakes an idle session without a waiting connector; gets $AGORA_TERMINAL and $AGORA_WAKE_TEXT (default $AGORA_WAKE_COMMAND)")
 	return cmd
 }
 
@@ -551,13 +555,25 @@ func sessionsCmd(o *options) *cobra.Command {
 
 func hookCmd(o *options) *cobra.Command {
 	return &cobra.Command{
-		Use:    "hook <tool>",
-		Short:  "Run as an agent tool's hook (claude-code)",
+		Use:    "hook <claude-code|claude-code-wait>",
+		Short:  "Run as an agent tool's hook",
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if args[0] != "claude-code" {
-				return fmt.Errorf("unknown tool %q", args[0])
+			debug := os.Getenv("AGORA_DEBUG") != ""
+			switch args[0] {
+			case "claude-code":
+			case "claude-code-wait":
+				text, err := claudecode.Wait(cmd.Context(), o.sessions(), cmd.InOrStdin())
+				if err != nil && debug {
+					return err
+				}
+				if text != "" {
+					return &exitError{code: claudecode.ExitWake, msg: text}
+				}
+				return nil
+			default:
+				return fmt.Errorf("unknown hook %q", args[0])
 			}
 			err := claudecode.Hook(cmd.Context(), o.sessions(), cmd.InOrStdin(), o.out)
 			if err != nil && os.Getenv("AGORA_DEBUG") != "" {
