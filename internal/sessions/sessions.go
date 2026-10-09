@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
 )
 
@@ -150,6 +151,11 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(agent, '') FROM sessions WHERE id = ?`, r.SessionID).Scan(&agent); err != nil {
 			return err
+		}
+		if agent != "" && r.Event != End {
+			if err := agents.FollowTx(ctx, tx, agent, r.CWD, now); err != nil {
+				return err
+			}
 		}
 		switch r.Event {
 		case Start, Prompt:
@@ -384,6 +390,9 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 	}
 	if live > 0 {
 		return nil
+	}
+	if err := agents.MarkLeftTx(ctx, tx, agent, now); err != nil {
+		return err
 	}
 	_, err := s.queue.ReleaseAgentTx(ctx, tx, agent)
 	return err

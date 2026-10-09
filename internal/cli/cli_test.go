@@ -12,8 +12,6 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/cli"
 	"github.com/vsem-azamat/agora/internal/hub"
-	"github.com/vsem-azamat/agora/internal/queue"
-	"github.com/vsem-azamat/agora/internal/sessions"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -36,9 +34,8 @@ func startHub(t *testing.T) string {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
-	qq := queue.New(db, nil)
 	go func() {
-		hub.New(qq, sessions.New(db, qq, nil), nil).Serve(ctx, l)
+		hub.Open(db, nil, nil).Serve(ctx, l)
 		close(done)
 	}()
 	t.Cleanup(func() {
@@ -269,5 +266,48 @@ func TestHookReportsTheSession(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "", "sessions"); !strings.Contains(r.stdout, "session-hook") || !strings.Contains(r.stdout, "/src/example-app") {
 		t.Fatalf("sessions: %+v", r)
+	}
+}
+
+func TestProfilesStatusWhoAndLeave(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "session-prof")
+	t.Setenv("AGORA_NAME", "")
+	dir := t.TempDir()
+	if r := agora(ctx, socket, "", "join", "builder", "--project", "example-app", "--task", "fix login", "--cwd", dir, "--pr", "#57"); r.code != 0 {
+		t.Fatalf("join: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "set", "--task", "write tests", "--drop-pr", "57", "--pr", "58"); r.code != 0 || !strings.Contains(r.stdout, "write tests") || !strings.Contains(r.stdout, "#58") {
+		t.Fatalf("set: %+v", r)
+	}
+	agora(ctx, socket, "", "lock", "example-app/merge")
+	r := agora(ctx, socket, "", "status")
+	for _, want := range []string{"AGENTS (1 active)", "builder", "working", "example-app", "#58", "write tests", "RESOURCES", "example-app/merge"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Fatalf("status lacks %q:\n%s", want, r.stdout)
+		}
+	}
+	if r := agora(ctx, socket, "x", "who", "#58"); !strings.Contains(r.stdout, "builder") {
+		t.Fatalf("who pr: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "who", dir); !strings.Contains(r.stdout, "builder") {
+		t.Fatalf("who dir: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "who", "#99"); !strings.Contains(r.stdout, "nobody active matches") {
+		t.Fatalf("who none: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "leave"); r.code != 0 || !strings.Contains(r.stdout, "released example-app/merge") {
+		t.Fatalf("leave: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (0 active)") {
+		t.Fatalf("status after leave: %s", r.stdout)
+	}
+	if r := agora(ctx, socket, "", "join", "builder"); r.code != 0 {
+		t.Fatalf("rejoin: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (1 active)") {
+		t.Fatalf("status after rejoin: %s", r.stdout)
 	}
 }

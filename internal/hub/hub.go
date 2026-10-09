@@ -3,6 +3,7 @@ package hub
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/proc"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -32,17 +34,24 @@ const SweepEvery = time.Second
 type Hub struct {
 	queue    *queue.Queue
 	sessions *sessions.Sessions
+	agents   *agents.Agents
 	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
 }
 
-// New returns a hub over q and s.
-func New(q *queue.Queue, s *sessions.Sessions, log *slog.Logger) *Hub {
+// New returns a hub over the given domain services.
+func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, log *slog.Logger) *Hub {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, sessions: s, alive: proc.Alive, changes: newSignal(), log: log}
+	return &Hub{queue: q, sessions: s, agents: a, alive: proc.Alive, changes: newSignal(), log: log}
+}
+
+// Open builds a hub over db with the given clock (time.Now when nil).
+func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
+	q := queue.New(db, now)
+	return New(q, sessions.New(db, q, now), agents.New(db, q, now), log)
 }
 
 // Handler returns the HTTP handler with every service mounted.
@@ -50,6 +59,7 @@ func (h *Hub) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(agorav1connect.NewResourceServiceHandler(&resources{h}))
 	mux.Handle(agorav1connect.NewSessionServiceHandler(&sessionService{h}))
+	mux.Handle(agorav1connect.NewAgentServiceHandler(&agentService{h}))
 	return mux
 }
 
@@ -295,6 +305,10 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, sessions.ErrNameTaken):
 		return connect.NewError(connect.CodeAlreadyExists, err)
+	case errors.Is(err, agents.ErrInvalid):
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, agents.ErrUnknown):
+		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return connect.NewError(connect.CodeCanceled, err)
 	}
@@ -400,4 +414,69 @@ func (s *sessionService) ListSessions(ctx context.Context, _ *connect.Request[ag
 		})
 	}
 	return connect.NewResponse(out), nil
+}
+
+// --- AgentService -----------------------------------------------------------------
+
+type agentService struct{ h *Hub }
+
+func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[agorav1.UpdateProfileRequest]) (*connect.Response[agorav1.UpdateProfileResponse], error) {
+	m := req.Msg
+	u := agents.Update{Kind: m.Kind, Project: m.Project, Task: m.Task, Status: m.Status, CWD: m.Cwd, About: m.About}
+	for _, n := range m.GetAddPrs() {
+		u.AddPRs = append(u.AddPRs, int(n))
+	}
+	for _, n := range m.GetDropPrs() {
+		u.DropPRs = append(u.DropPRs, int(n))
+	}
+	p, err := s.h.agents.Update(ctx, m.GetName(), u)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.UpdateProfileResponse{Profile: profilePB(p)}), nil
+}
+
+func (s *agentService) Leave(ctx context.Context, req *connect.Request[agorav1.LeaveRequest]) (*connect.Response[agorav1.LeaveResponse], error) {
+	released, err := s.h.agents.Leave(ctx, req.Msg.GetName())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.LeaveResponse{Released: released}), nil
+}
+
+func (s *agentService) ListAgents(ctx context.Context, req *connect.Request[agorav1.ListAgentsRequest]) (*connect.Response[agorav1.ListAgentsResponse], error) {
+	list, err := s.h.agents.List(ctx, req.Msg.GetAll())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.ListAgentsResponse{}
+	for _, p := range list {
+		out.Agents = append(out.Agents, profilePB(p))
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *agentService) Who(ctx context.Context, req *connect.Request[agorav1.WhoRequest]) (*connect.Response[agorav1.WhoResponse], error) {
+	list, err := s.h.agents.Who(ctx, req.Msg.GetQuery(), req.Msg.GetPath(), req.Msg.GetAll())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.WhoResponse{}
+	for _, p := range list {
+		out.Agents = append(out.Agents, profilePB(p))
+	}
+	return connect.NewResponse(out), nil
+}
+
+func profilePB(p agents.Profile) *agorav1.Profile {
+	out := &agorav1.Profile{
+		Name: p.Name, Kind: p.Kind, Project: p.Project, Task: p.Task, Status: p.Status, Cwd: p.CWD, Branch: p.Branch,
+		About: p.About, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
+		SessionState: p.SessionState, Active: p.Active,
+	}
+	for _, n := range p.PRs {
+		out.Prs = append(out.Prs, int32(n))
+	}
+	return out
 }
