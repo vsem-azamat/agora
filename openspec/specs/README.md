@@ -15,3 +15,4 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 | [Delivery](delivery/README.md) | What is unread for an agent, who a message addresses, and waking idle agents. |
 | [Connectors](connectors/README.md) | Agent tool integrations: sessions and the Claude Code connector. |
 | [Resources](resources/README.md) | Fair queues for resources with a limited number of slots; locks are one-slot queues. |
+| [Governance](governance/README.md) | Proposals, votes and the charter. |

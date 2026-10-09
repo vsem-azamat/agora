@@ -200,9 +200,26 @@ func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int
 	if body == "" || utf8.RuneCountInString(body) > MaxBody {
 		return 0, fmt.Errorf("%w: a message is 1 to %d characters", ErrInvalid, MaxBody)
 	}
-	names, all := Mentions(body)
 	var id int64
 	err := r.tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		id, err = r.PostTx(ctx, tx, author, room, body, replyTo)
+		return err
+	})
+	return id, err
+}
+
+// PostTx is Post inside the caller's transaction, so other packages can post atomically with
+// their own changes.
+func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
+	room = strings.TrimPrefix(room, "#")
+	body = strings.TrimSpace(body)
+	if body == "" || utf8.RuneCountInString(body) > MaxBody {
+		return 0, fmt.Errorf("%w: a message is 1 to %d characters", ErrInvalid, MaxBody)
+	}
+	names, all := Mentions(body)
+	var id int64
+	err := func() error {
 		if author != Board {
 			if err := requireAgent(ctx, tx, author); err != nil {
 				return err
@@ -238,7 +255,7 @@ func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int
 			}
 		}
 		return nil
-	})
+	}()
 	return id, err
 }
 

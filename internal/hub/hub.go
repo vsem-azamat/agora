@@ -24,6 +24,7 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/proc"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
@@ -50,6 +51,7 @@ type Hub struct {
 	sessions *sessions.Sessions
 	agents   *agents.Agents
 	rooms    *rooms.Rooms
+	gov      *governance.Governance
 	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
@@ -83,7 +85,9 @@ func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms,
 func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	q := queue.New(db, now)
 	r := rooms.New(db, now)
-	return New(q, sessions.New(db, q, r, now), agents.New(db, q, now), r, log)
+	h := New(q, sessions.New(db, q, r, now), agents.New(db, q, now), r, log)
+	h.gov = governance.New(db, r, now)
+	return h
 }
 
 // Handler returns the HTTP handler with every service mounted.
@@ -93,6 +97,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.Handle(agorav1connect.NewSessionServiceHandler(&sessionService{h}))
 	mux.Handle(agorav1connect.NewAgentServiceHandler(&agentService{h}))
 	mux.Handle(agorav1connect.NewRoomServiceHandler(&roomService{h}))
+	mux.Handle(agorav1connect.NewGovernanceServiceHandler(&governanceService{h}))
 	return mux
 }
 
@@ -349,6 +354,12 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, rooms.ErrExists):
 		return connect.NewError(connect.CodeAlreadyExists, err)
+	case errors.Is(err, governance.ErrInvalid):
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, governance.ErrNotFound):
+		return connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, governance.ErrClosed):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return connect.NewError(connect.CodeCanceled, err)
 	}
@@ -749,4 +760,86 @@ func runWakeCommand(ctx context.Context, command, terminal, text string) (string
 		tail = tail[len(tail)-300:]
 	}
 	return strings.TrimSpace(err.Error() + ": " + tail), false
+}
+
+// --- GovernanceService --------------------------------------------------------------
+
+type governanceService struct{ h *Hub }
+
+func (s *governanceService) Propose(ctx context.Context, req *connect.Request[agorav1.ProposeRequest]) (*connect.Response[agorav1.ProposeResponse], error) {
+	id, err := s.h.gov.Propose(ctx, req.Msg.GetAuthor(), req.Msg.GetTitle(), req.Msg.GetBody())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.ProposeResponse{Id: id}), nil
+}
+
+func (s *governanceService) Vote(ctx context.Context, req *connect.Request[agorav1.VoteRequest]) (*connect.Response[agorav1.VoteResponse], error) {
+	m := req.Msg
+	if err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), m.GetChoice(), m.GetReason()); err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.VoteResponse{}), nil
+}
+
+func (s *governanceService) CloseProposal(ctx context.Context, req *connect.Request[agorav1.CloseProposalRequest]) (*connect.Response[agorav1.CloseProposalResponse], error) {
+	m := req.Msg
+	if err := s.h.gov.Close(ctx, m.GetAgent(), m.GetProposalId(), m.GetState()); err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.CloseProposalResponse{}), nil
+}
+
+func (s *governanceService) ListProposals(ctx context.Context, req *connect.Request[agorav1.ListProposalsRequest]) (*connect.Response[agorav1.ListProposalsResponse], error) {
+	list, err := s.h.gov.List(ctx, req.Msg.GetAll())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.ListProposalsResponse{}
+	for _, p := range list {
+		out.Proposals = append(out.Proposals, proposalPB(p))
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *governanceService) GetProposal(ctx context.Context, req *connect.Request[agorav1.GetProposalRequest]) (*connect.Response[agorav1.GetProposalResponse], error) {
+	p, err := s.h.gov.Get(ctx, req.Msg.GetId())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.GetProposalResponse{Proposal: proposalPB(p)}), nil
+}
+
+func (s *governanceService) GetCharter(ctx context.Context, _ *connect.Request[agorav1.GetCharterRequest]) (*connect.Response[agorav1.GetCharterResponse], error) {
+	c, err := s.h.gov.Charter(ctx)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.GetCharterResponse{Body: c.Body, ChangedBy: c.ChangedBy, ProposalId: c.ProposalID}
+	if !c.ChangedAt.IsZero() {
+		out.ChangedAt = timestamppb.New(c.ChangedAt)
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *governanceService) SetCharter(ctx context.Context, req *connect.Request[agorav1.SetCharterRequest]) (*connect.Response[agorav1.SetCharterResponse], error) {
+	m := req.Msg
+	if err := s.h.gov.SetCharter(ctx, m.GetAgent(), m.GetProposalId(), m.GetBody()); err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.SetCharterResponse{}), nil
+}
+
+func proposalPB(p governance.Proposal) *agorav1.Proposal {
+	out := &agorav1.Proposal{Id: p.ID, Title: p.Title, Body: p.Body, Author: p.Author, CreatedAt: timestamppb.New(p.CreatedAt), State: p.State, ClosedBy: p.ClosedBy}
+	if !p.ClosedAt.IsZero() {
+		out.ClosedAt = timestamppb.New(p.ClosedAt)
+	}
+	for _, v := range p.Votes {
+		out.Votes = append(out.Votes, &agorav1.ProposalVote{Agent: v.Agent, Choice: v.Choice, Reason: v.Reason, At: timestamppb.New(v.At)})
+	}
+	return out
 }

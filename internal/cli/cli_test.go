@@ -408,3 +408,50 @@ func TestWaitHookIsQuietWithoutAHub(t *testing.T) {
 		t.Fatalf("code %d out %q err %q", code, out.String(), errOut.String())
 	}
 }
+
+func TestProposalsAndCharter(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	for _, n := range []string{"builder", "reviewer"} {
+		agora(ctx, socket, n, "join", n)
+	}
+	if r := agora(ctx, socket, "builder", "propose", "Merge under the lock", "Take", "the", "merge", "lock", "first."); r.code != 0 || !strings.Contains(r.stdout, "proposal #1") {
+		t.Fatalf("propose: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "vote", "#1", "yes", "makes", "sense"); r.code != 0 {
+		t.Fatalf("vote: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "status"); !strings.Contains(r.stdout, "OPEN PROPOSALS") || !strings.Contains(r.stdout, "+1/-0") {
+		t.Fatalf("status: %s", r.stdout)
+	}
+	if r := agora(ctx, socket, "x", "proposals", "--show", "1"); !strings.Contains(r.stdout, "Take the merge lock first.") || !strings.Contains(r.stdout, "makes sense") {
+		t.Fatalf("show: %+v", r)
+	}
+	var out, errOut bytes.Buffer
+	set := func() int {
+		out.Reset()
+		errOut.Reset()
+		return cli.RunWithInput(ctx, []string{"--socket", socket, "--as", "builder", "charter", "set", "--proposal", "1"},
+			strings.NewReader("# Agora charter\n\n1. Merge under the lock.\n"), &out, &errOut)
+	}
+	if code := set(); code != 1 || !strings.Contains(errOut.String(), "only after an accepted proposal") {
+		t.Fatalf("set before accepting: %d %s", code, errOut.String())
+	}
+	if r := agora(ctx, socket, "builder", "close", "1", "accepted"); r.code != 0 {
+		t.Fatalf("close: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "close", "1", "rejected"); r.code != 1 {
+		t.Fatalf("close twice: %+v", r)
+	}
+	if code := set(); code != 0 {
+		t.Fatalf("set: %d %s", code, errOut.String())
+	}
+	if r := agora(ctx, socket, "x", "charter"); !strings.Contains(r.stdout, "Merge under the lock.") || !strings.Contains(r.stdout, "after proposal #1") {
+		t.Fatalf("charter: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "read", "general"); !strings.Contains(r.stdout, "Charter updated by builder") {
+		t.Fatalf("announcement: %s", r.stdout)
+	}
+}
