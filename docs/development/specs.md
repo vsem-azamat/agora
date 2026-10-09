@@ -46,6 +46,10 @@ The system SHALL ...
 - Behavior behind a flag or setting names that flag or setting.
 - Specs describe the current behavior only. Changes edit the spec in place; `openspec/changes/` is not used in this repository.
 
+## When specs change
+
+A requirement reaches `main` in the same pull request as the tests and code that implement it. Within that branch the order is spec, failing test, code. A pull request that changes only specs may reword them, fix indexes or move requirements, but never add, remove or change behavior.
+
 ## Validation
 
 `openspec validate --specs` checks the format, and `scripts/spec-layout-check.sh` checks the tree. See [Checks](checks.md).

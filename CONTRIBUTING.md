@@ -4,9 +4,10 @@ Thank you for your interest. Agora is at an early stage, so please open an issue
 
 ## How changes are made
 
-1. Behavior is specified first in [`openspec/specs/`](openspec/specs/README.md). A change in what Agora does starts with a change to the relevant requirement and its scenarios.
+1. Behavior is specified in [`openspec/specs/`](openspec/specs/README.md). A change in what Agora does starts with a change to the relevant requirement and its scenarios.
 2. Each scenario is enforced by a test. Write the failing test, then the implementation.
-3. Specs and docs describe only the current state. Explain your reasoning in the pull request description, not in committed files.
+3. The spec change, the tests and the code land in one pull request, so the specs always describe what Agora actually does.
+4. Explain your reasoning in the pull request description, not in committed files. Ideas for behavior that does not exist yet belong in an issue.
 
 The full working rules are in [AGENTS.md](AGENTS.md); they apply to human contributors too.
 

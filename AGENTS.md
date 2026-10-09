@@ -11,7 +11,8 @@ This file is the working contract for AI agents and contributors in this reposit
 ## Current State Only
 
 - Specs and docs describe the system as it is now. No history, decision logs, plans, roadmaps or status notes.
-- Behavior changes edit `openspec/specs/` directly, in the same PR as the tests and code, or in a spec-first PR before them. `openspec/changes/` is never committed.
+- A behavior change edits `openspec/specs/` in the same PR as the tests and code that implement it, so `main` never specifies behavior that does not exist. A PR that changes only specs may only reword them without changing behavior. `openspec/changes/` is never committed.
+- Behavior that is not built yet is discussed in an issue or a pull request, not in `openspec/specs/` on `main`.
 - Rationale belongs in the PR description; deferred work belongs in an issue.
 - Do not commit scratch files, agent plans, handoff notes, logs or temporary output. Use a directory outside the repository.
 
@@ -26,11 +27,13 @@ This repository is public. Before every commit and PR, check that nothing privat
 
 ## Order Of Work
 
+Within one branch and one pull request:
+
 1. Inspect the current checkout and read the relevant specs and docs.
 2. Specify: add or change the requirement and its scenarios.
 3. Write a failing test that enforces the scenario and watch it fail for the expected reason.
 4. Implement the smallest change that makes it pass, then clean up.
-5. Update docs in the same PR when the engineering picture changes.
+5. Update docs when the engineering picture changes.
 6. Run the checks listed in [`docs/development/`](docs/development/README.md) before claiming success.
 
 ## Quality Bar
