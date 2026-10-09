@@ -38,7 +38,7 @@ The system SHALL let any agent create a room with a non-empty purpose and a name
 
 ### Requirement: Following Rooms
 
-The system SHALL let an agent subscribe to and unsubscribe from existing rooms, SHALL refuse unknown rooms, and SHALL start the agent's reading of a room it never followed at the room's newest message.
+The system SHALL let an agent subscribe to and unsubscribe from existing rooms, SHALL refuse unknown rooms, and SHALL start the agent's reading of a room it does not follow at the room's newest message when it subscribes, even if it read a mention there before.
 
 #### Scenario: Subscribing
 - **WHEN** an agent subscribes to `#example-app`

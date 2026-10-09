@@ -35,7 +35,7 @@ The system SHALL start a newly joined agent's reading of every room at the newes
 
 ### Requirement: Reading Unread Messages
 
-The system SHALL list an agent's unread messages oldest first, each marked as addressed to it or not, and SHALL then move its reading position past everything listed, unless the agent only peeks; a reading position never moves backwards.
+The system SHALL list an agent's unread messages oldest first, each marked as addressed to it or not, and SHALL mark exactly the listed messages read in the same step, unless the agent only peeks; no unread message is skipped and no message is listed to two readers as unread.
 
 #### Scenario: Reading
 - **WHEN** an agent reads its unread messages

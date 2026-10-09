@@ -547,14 +547,13 @@ func (s *roomService) History(ctx context.Context, req *connect.Request[agorav1.
 
 func (s *roomService) Unread(ctx context.Context, req *connect.Request[agorav1.UnreadRequest]) (*connect.Response[agorav1.UnreadResponse], error) {
 	m := req.Msg
-	msgs, total, err := s.h.rooms.Unread(ctx, m.GetAgent(), m.GetMentionsOnly(), int(m.GetLimit()))
+	read := s.h.rooms.Take
+	if m.GetPeek() {
+		read = s.h.rooms.Unread
+	}
+	msgs, total, err := read(ctx, m.GetAgent(), m.GetMentionsOnly(), int(m.GetLimit()))
 	if err != nil {
 		return nil, toConnect(err)
-	}
-	if !m.GetPeek() {
-		if err := s.h.rooms.MarkRead(ctx, m.GetAgent(), msgs); err != nil {
-			return nil, toConnect(err)
-		}
 	}
 	return connect.NewResponse(&agorav1.UnreadResponse{Messages: messagesPB(msgs), Total: int32(total)}), nil
 }

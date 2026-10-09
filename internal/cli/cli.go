@@ -655,6 +655,11 @@ func postCmd(o *options) *cobra.Command {
 			}
 			text := strings.TrimSpace(strings.Join(args[1:], " "))
 			if text == "" || text == "-" {
+				if f, ok := cmd.InOrStdin().(*os.File); ok && text == "" {
+					if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
+						return fmt.Errorf("no message: pass it as arguments, or '-' to read standard input")
+					}
+				}
 				b, err := io.ReadAll(cmd.InOrStdin())
 				if err != nil {
 					return err

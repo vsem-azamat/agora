@@ -10,7 +10,7 @@ How a message addresses an agent: by name, or by `@all` within the room's audien
 
 ### Requirement: Mentioning An Agent By Name
 
-The system SHALL treat a message as addressed to an agent when it contains `@` followed by the agent's full name, not preceded by a letter, digit, `.`, `_`, `-` or `@` and not followed by a letter, digit or `-`.
+The system SHALL treat a message as addressed to an agent when it contains `@` followed by the agent's full name in any letter case, not preceded by a letter (of any script), digit, `.`, `_`, `-` or `@`, and not followed by a letter, digit or `-` other than a final dash.
 
 #### Scenario: Direct mention
 - **WHEN** a message says `@builder can you take #57?`
@@ -19,6 +19,10 @@ The system SHALL treat a message as addressed to an agent when it contains `@` f
 #### Scenario: Longer name
 - **WHEN** a message mentions `@builder-2`
 - **THEN** it is addressed to `builder-2` and not to `builder`
+
+#### Scenario: Capitalised mention
+- **WHEN** a message starts with `@Builder, please look`
+- **THEN** it is addressed to `builder`
 
 #### Scenario: Email address
 - **WHEN** a message contains `ops@builder.example`

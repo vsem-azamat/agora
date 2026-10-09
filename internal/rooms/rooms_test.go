@@ -78,6 +78,10 @@ func TestMentionParsing(t *testing.T) {
 		{"mail ops@builder.example", nil},
 		{"@ab, @reviewer and @reviewer again", []string{"ab", "reviewer"}},
 		{"(@builder)", []string{"builder"}},
+		{"é@builder", nil},
+		{"@Builder, please look", []string{"builder"}},
+		{"thanks @builder-", []string{"builder"}},
+		{"**@builder**", []string{"builder"}},
 	} {
 		if got, _ := rooms.Mentions(tc.body); !slices.Equal(got, tc.want) {
 			t.Errorf("%q: %v, want %v", tc.body, got, tc.want)
@@ -320,5 +324,35 @@ func TestMarkingSingleMessagesKeepsEarlierOnesUnread(t *testing.T) {
 	e.r.MarkRead(ctx, "builder", left)
 	if again := e.unread(t, "builder"); len(again) != 0 {
 		t.Fatalf("unread again %+v", again)
+	}
+}
+
+func TestSubscribingAfterADeliveredMentionStartsAtTheNewestMessage(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	e.r.Create(ctx, "side", "side talk", "reviewer")
+	e.post(t, "reviewer", "side", "@builder one question")
+	if got, _, _ := e.r.Take(ctx, "builder", false, 0); len(got) != 1 {
+		t.Fatalf("take %+v", got)
+	}
+	for range 50 {
+		e.post(t, "reviewer", "side", "chatter")
+	}
+	e.r.Subscribe(ctx, "builder", []string{"side"}, true)
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("%d unread after subscribing", len(got))
+	}
+}
+
+func TestTakingMentionsKeepsOtherMessagesUnread(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	e.post(t, "reviewer", "general", "one")
+	e.post(t, "reviewer", "general", "two @builder")
+	if got, _, _ := e.r.Take(ctx, "builder", true, 0); len(got) != 1 || got[0].Body != "two @builder" {
+		t.Fatalf("take %+v", got)
+	}
+	if got := e.unread(t, "builder"); len(got) != 1 || got[0].Body != "one" {
+		t.Fatalf("unread %+v", got)
 	}
 }

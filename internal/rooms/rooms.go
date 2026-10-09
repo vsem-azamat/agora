@@ -35,9 +35,10 @@ var (
 
 var (
 	roomRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	// A mention: @name not preceded by a name or address character. The name is matched
-	// greedily, so the character after it is never part of a name.
-	mentionRE = regexp.MustCompile(`(?:^|[^A-Za-z0-9._@-])@([a-z][a-z0-9-]*)`)
+	// A mention: @name not preceded by a letter, digit or address character, in any script. The
+	// name is matched greedily on the lowercased body, so the character after it is never part
+	// of a name.
+	mentionRE = regexp.MustCompile(`(?:^|[^\p{L}\p{N}._@-])@([a-z][a-z0-9-]*)`)
 )
 
 // Room is a room with its activity.
@@ -79,13 +80,13 @@ func New(db *sql.DB, now func() time.Time) *Rooms {
 // mentions @all.
 func Mentions(body string) (names []string, all bool) {
 	seen := map[string]bool{}
-	for _, m := range mentionRE.FindAllStringSubmatch(body, -1) {
-		name := m[1]
+	for _, m := range mentionRE.FindAllStringSubmatch(strings.ToLower(body), -1) {
+		name := strings.TrimRight(m[1], "-") // `@builder-` at the end of a phrase
 		if name == "all" {
 			all = true
 			continue
 		}
-		if len(name) > 32 || seen[name] {
+		if len(name) < 2 || len(name) > 32 || seen[name] {
 			continue
 		}
 		seen[name] = true
@@ -269,75 +270,121 @@ func (r *Rooms) Unread(ctx context.Context, agent string, mentionsOnly bool, lim
 	var out []Message
 	var total int
 	err := r.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
-			return err
-		}
-		filter := `(followed OR addressed)`
-		if mentionsOnly {
-			filter = `addressed`
-		}
-		query := `WITH candidates AS (
-			SELECT m.*,
-				(m.room = 'general' OR EXISTS (SELECT 1 FROM subscriptions WHERE agent = :a AND room = m.room)) AS followed,
-				(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a)
-					OR (m.to_all AND (m.room = 'general' OR EXISTS (SELECT 1 FROM subscriptions WHERE agent = :a AND room = m.room)))) AS addressed
-			FROM messages AS m
-			WHERE m.author != :a
-				AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room),
-					(SELECT read_from FROM agents WHERE name = :a))
-				AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id))
-			SELECT id, room, author, body, COALESCE(reply_to, 0), at, addressed FROM candidates WHERE ` + filter + ` ORDER BY id`
-		rows, err := tx.QueryContext(ctx, query, sql.Named("a", agent))
-		if err != nil {
-			return err
-		}
-		all, err := scanMessages(rows)
-		if err != nil {
-			return err
-		}
-		total = len(all)
-		if limit > 0 && len(all) > limit {
-			all = all[:limit]
-		}
-		out = all
-		return nil
+		var err error
+		out, total, err = unread(ctx, tx, agent, mentionsOnly, limit)
+		return err
 	})
 	return out, total, err
+}
+
+// Take returns what Unread returns and marks those messages read in the same transaction, so
+// concurrent readers never get the same message twice: the oldest unread messages move the
+// reading positions, mentions only get single read marks.
+func (r *Rooms) Take(ctx context.Context, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
+	var out []Message
+	var total int
+	err := r.tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		if out, total, err = unread(ctx, tx, agent, mentionsOnly, limit); err != nil {
+			return err
+		}
+		if mentionsOnly {
+			return markEach(ctx, tx, agent, out)
+		}
+		return markRead(ctx, tx, agent, out)
+	})
+	return out, total, err
+}
+
+// unreadQuery finds unread messages through the indexes: messages in followed rooms after the
+// reading position (messages_room), and messages mentioning the agent by name (mentions_agent).
+const unreadQuery = `
+WITH followed(room) AS (
+	SELECT 'general' UNION SELECT room FROM subscriptions WHERE agent = :a
+), start AS (
+	SELECT read_from FROM agents WHERE name = :a
+), candidates AS (
+	SELECT m.id, 1 AS followed FROM followed AS f
+	JOIN messages AS m ON m.room = f.room
+		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
+	UNION
+	SELECT m.id, EXISTS (SELECT 1 FROM followed WHERE room = m.room) FROM mentions AS mm
+	JOIN messages AS m ON m.id = mm.message_id
+	WHERE mm.agent = :a
+		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room), (SELECT read_from FROM start))
+)
+SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
+	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed
+FROM candidates AS c JOIN messages AS m ON m.id = c.id
+WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
+GROUP BY m.id
+ORDER BY m.id`
+
+func unread(ctx context.Context, tx *sql.Tx, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
+	if err := requireAgent(ctx, tx, agent); err != nil {
+		return nil, 0, err
+	}
+	rows, err := tx.QueryContext(ctx, unreadQuery, sql.Named("a", agent))
+	if err != nil {
+		return nil, 0, err
+	}
+	all, err := scanMessages(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	if mentionsOnly {
+		var addressed []Message
+		for _, m := range all {
+			if m.Addressed {
+				addressed = append(addressed, m)
+			}
+		}
+		all = addressed
+	}
+	total := len(all)
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+	return all, total, nil
 }
 
 // MarkEach marks single messages read without moving the reading position, so earlier unread
 // messages in the same rooms stay unread.
 func (r *Rooms) MarkEach(ctx context.Context, agent string, msgs []Message) error {
-	return r.tx(ctx, func(tx *sql.Tx) error {
-		for _, m := range msgs {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, m.ID); err != nil {
-				return err
-			}
+	return r.tx(ctx, func(tx *sql.Tx) error { return markEach(ctx, tx, agent, msgs) })
+}
+
+func markEach(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) error {
+	for _, m := range msgs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, m.ID); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // MarkRead moves agent's reading position in each message's room past that message; positions
 // never move backwards. msgs must be the oldest unread messages, as Unread returns them, so no
 // unread message is skipped.
 func (r *Rooms) MarkRead(ctx context.Context, agent string, msgs []Message) error {
+	return r.tx(ctx, func(tx *sql.Tx) error { return markRead(ctx, tx, agent, msgs) })
+}
+
+func markRead(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) error {
 	if len(msgs) == 0 {
 		return nil
 	}
-	return r.tx(ctx, func(tx *sql.Tx) error {
-		for _, m := range msgs {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO read_positions (agent, room, last_id) VALUES (?, ?, ?)
-				ON CONFLICT (agent, room) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)`, agent, m.Room, m.ID); err != nil {
-				return err
-			}
+	for _, m := range msgs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO read_positions (agent, room, last_id) VALUES (?, ?, ?)
+			ON CONFLICT (agent, room) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)`, agent, m.Room, m.ID); err != nil {
+			return err
 		}
-		// single marks behind a reading position are no longer needed
-		_, err := tx.ExecContext(ctx, `DELETE FROM read_marks WHERE agent = ? AND message_id <=
-			COALESCE((SELECT p.last_id FROM read_positions AS p JOIN messages AS m ON m.room = p.room
-				WHERE p.agent = read_marks.agent AND m.id = read_marks.message_id), 0)`, agent)
-		return err
-	})
+	}
+	// single marks behind a reading position are no longer needed
+	_, err := tx.ExecContext(ctx, `DELETE FROM read_marks WHERE agent = ? AND message_id <=
+		COALESCE((SELECT p.last_id FROM read_positions AS p JOIN messages AS m ON m.room = p.room
+			WHERE p.agent = read_marks.agent AND m.id = read_marks.message_id), 0)`, agent)
+	return err
 }
 
 // --- internals -------------------------------------------------------------------
@@ -376,14 +423,19 @@ func requireRoom(ctx context.Context, tx *sql.Tx, room string) error {
 	return nil
 }
 
-// subscribe makes agent follow room; reading of a room it never followed starts at the newest
-// message.
+// subscribe makes agent follow room. Reading of the room starts at its newest message unless
+// the agent already follows it; a position left from reading a mention there moves forward too.
 func subscribe(ctx context.Context, tx *sql.Tx, agent, room string) error {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO subscriptions (agent, room) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, room); err != nil {
+	res, err := tx.ExecContext(ctx, `INSERT INTO subscriptions (agent, room) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, room)
+	if err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `INSERT INTO read_positions (agent, room, last_id)
-		VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages WHERE room = ?)) ON CONFLICT DO NOTHING`, agent, room, room)
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil // already followed: keep reading where it is
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO read_positions (agent, room, last_id)
+		VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages WHERE room = ?))
+		ON CONFLICT (agent, room) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)`, agent, room, room)
 	return err
 }
 

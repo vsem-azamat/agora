@@ -200,11 +200,8 @@ func (s *Sessions) deliver(ctx context.Context, agent string) (string, error) {
 	if s.rooms == nil {
 		return "", nil
 	}
-	msgs, total, err := s.rooms.Unread(ctx, agent, false, DeliverAtOnce)
+	msgs, total, err := s.rooms.Take(ctx, agent, false, DeliverAtOnce)
 	if err != nil || len(msgs) == 0 {
-		return "", err
-	}
-	if err := s.rooms.MarkRead(ctx, agent, msgs); err != nil {
 		return "", err
 	}
 	lines := []string{fmt.Sprintf("Agora: new board messages for you (%s). Act on what is addressed to you "+
@@ -261,14 +258,11 @@ func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Ti
 	if agent != "" && !r.StopActive {
 		var parts []string
 		if s.rooms != nil {
-			msgs, total, err := s.rooms.Unread(ctx, agent, true, DeliverAtOnce)
+			msgs, total, err := s.rooms.Take(ctx, agent, true, DeliverAtOnce)
 			if err != nil {
 				return Reply{}, err
 			}
 			if len(msgs) > 0 {
-				if err := s.rooms.MarkEach(ctx, agent, msgs); err != nil {
-					return Reply{}, err
-				}
 				lines := []string{fmt.Sprintf("Agora: before you end your turn, answer what is addressed to you (%s), "+
 					"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", agent)}
 				for _, m := range msgs {
