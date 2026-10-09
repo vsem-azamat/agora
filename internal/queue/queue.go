@@ -349,6 +349,78 @@ func (q *Queue) List(ctx context.Context, key string) ([]Resource, error) {
 	return out, err
 }
 
+// EntriesOf returns every place agent has in any resource queue, ordered by resource key.
+func (q *Queue) EntriesOf(ctx context.Context, agent string) ([]Entry, error) {
+	var out []Entry
+	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
+		keys, err := keysOf(ctx, tx, agent)
+		if err != nil {
+			return err
+		}
+		for _, k := range keys {
+			if err := settle(ctx, tx, k, now); err != nil {
+				return err
+			}
+			r, err := load(ctx, tx, k)
+			if err != nil {
+				return err
+			}
+			if e := find(r, agent); e != nil {
+				out = append(out, *e)
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
+// ReleaseAgent removes agent from every resource queue and returns the keys it left.
+func (q *Queue) ReleaseAgent(ctx context.Context, agent string) ([]string, error) {
+	var left []string
+	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
+		var err error
+		left, err = q.ReleaseAgentTx(ctx, tx, agent)
+		return err
+	})
+	return left, err
+}
+
+// ReleaseAgentTx is ReleaseAgent inside the caller's transaction, so other packages can give
+// back an agent's places atomically with their own changes.
+func (q *Queue) ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
+	now := q.now()
+	keys, err := keysOf(ctx, tx, agent)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM entries WHERE key = ? AND agent = ?`, k, agent); err != nil {
+			return nil, err
+		}
+		if err := settle(ctx, tx, k, now); err != nil {
+			return nil, err
+		}
+	}
+	return keys, nil
+}
+
+func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT key FROM entries WHERE agent = ? ORDER BY key`, agent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
 // Sweep settles every resource with an expired lease or claim deadline and returns the keys
 // that changed. The hub calls it periodically so waiting agents advance without other traffic.
 func (q *Queue) Sweep(ctx context.Context) ([]string, error) {
