@@ -472,3 +472,108 @@ func TestMentionAndOfferBlockTogether(t *testing.T) {
 		t.Fatalf("reply %+v", r)
 	}
 }
+
+// --- wakeups ---------------------------------------------------------------------------
+
+func TestCheckWake(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.report(t, "session-1", sessions.Prompt)
+	turn, _ := e.s.Turn(ctx, "session-1")
+
+	if _, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
+		t.Fatal("busy session finished its wait")
+	}
+	e.report(t, "session-1", sessions.Stop) // idle
+	if _, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
+		t.Fatal("woken with nothing waiting")
+	}
+	e.r.Post(ctx, "reviewer", "general", "chatter", 0)
+	if _, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
+		t.Fatal("woken by chatter")
+	}
+	e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0)
+	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
+	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57") {
+		t.Fatalf("wake %+v done %v err %v", w, done, err)
+	}
+	if left, _, _ := e.r.Unread(ctx, "builder", true, 0); len(left) != 1 {
+		t.Fatal("mention consumed before the wake was delivered")
+	}
+	if err := e.s.ConfirmWake(ctx, "session-1", w); err != nil {
+		t.Fatal(err)
+	}
+	if left, _, _ := e.r.Unread(ctx, "builder", true, 0); len(left) != 0 {
+		t.Fatalf("mention still unread after the wake: %+v", left)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Busy {
+		t.Fatalf("woken session is %s", st)
+	}
+	if next, _ := e.s.Turn(ctx, "session-1"); next != turn+1 {
+		t.Fatalf("turn %d, want %d", next, turn+1)
+	}
+}
+
+func TestWaitEndsQuietlyOnANewTurn(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.report(t, "session-1", sessions.Stop)
+	turn, _ := e.s.Turn(ctx, "session-1")
+	e.report(t, "session-1", sessions.Prompt)
+	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); !done || w != nil {
+		t.Fatalf("wake %+v done %v", w, done)
+	}
+}
+
+func TestWaitEndsWhenTheSessionLosesItsAgent(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.report(t, "session-1", sessions.Stop)
+	turn, _ := e.s.Turn(ctx, "session-1")
+	e.s.Join(ctx, "builder", "session-2", true)
+	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); !done || w != nil {
+		t.Fatalf("wake %+v done %v", w, done)
+	}
+}
+
+func TestAnOfferWakesOnce(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.report(t, "session-1", sessions.Stop)
+	turn, _ := e.s.Turn(ctx, "session-1")
+	e.q.Join(ctx, "example-app/merge", "other", "", 0, false)
+	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
+	e.q.Release(ctx, "example-app/merge", "other", "other", false)
+	w, done, _ := e.s.CheckWake(ctx, "session-1", turn)
+	if !done || w == nil || !strings.Contains(w.Text, "agora queue renew example-app/merge") {
+		t.Fatalf("wake %+v done %v", w, done)
+	}
+	e.s.ConfirmWake(ctx, "session-1", w)
+	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Stop, StopActive: true}) // the woken turn ends unclaimed
+	turn, _ = e.s.Turn(ctx, "session-1")
+	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
+		t.Fatalf("woken again for the same offer: %+v", w)
+	}
+}
+
+func TestPendingKeyChangesWithNewMentions(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "")
+	e.join(t, "reviewer", "")
+	if key, _, _ := e.s.Pending(ctx, "builder"); key != "" {
+		t.Fatalf("key %q", key)
+	}
+	e.r.Post(ctx, "reviewer", "general", "@builder one", 0)
+	k1, text, _ := e.s.Pending(ctx, "builder")
+	if k1 == "" || !strings.Contains(text, "reviewer in #general") || strings.Contains(text, "`") {
+		t.Fatalf("key %q text %q", k1, text)
+	}
+	if k, _, _ := e.s.Pending(ctx, "builder"); k != k1 {
+		t.Fatal("pending consumed the mention")
+	}
+	e.r.Post(ctx, "reviewer", "general", "@builder two", 0)
+	if k2, _, _ := e.s.Pending(ctx, "builder"); k2 == k1 {
+		t.Fatal("key did not change")
+	}
+}

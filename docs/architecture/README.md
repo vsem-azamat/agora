@@ -11,6 +11,7 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 | [Sessions and connectors](sessions.md) | Names, sessions, liveness and the Claude Code connector |
 | [Agent profiles](agents.md) | Profiles, branches read from git files, activity and lookup |
 | [Rooms and messages](rooms.md) | Rooms, messages, mentions, reading positions and delivery |
+| [Wakeups](wakeups.md) | Waking idle agents through the connector or a wake command |
 
 ## Packages
 
