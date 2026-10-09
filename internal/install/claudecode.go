@@ -125,19 +125,19 @@ var errChanged = errors.New("settings changed while editing; run again")
 // result, with a backup, when it differs from what is there. When the file changes while it
 // is being edited, it starts over once.
 func editSettings(path string, now time.Time, edit func(hooks *object) ([]string, error)) (Change, error) {
-	real, err := resolve(path)
+	target, err := resolve(path)
 	if err != nil {
 		return Change{}, err
 	}
-	ch, err := editOnce(path, real, now, edit)
+	ch, err := editOnce(path, target, now, edit)
 	if errors.Is(err, errChanged) {
-		ch, err = editOnce(path, real, now, edit)
+		ch, err = editOnce(path, target, now, edit)
 	}
 	return ch, err
 }
 
-func editOnce(path, real string, now time.Time, edit func(hooks *object) ([]string, error)) (Change, error) {
-	old, mode, exists, err := readIfExists(real)
+func editOnce(path, target string, now time.Time, edit func(hooks *object) ([]string, error)) (Change, error) {
+	old, mode, exists, err := readIfExists(target)
 	if err != nil {
 		return Change{}, err
 	}
@@ -186,7 +186,7 @@ func editOnce(path, real string, now time.Time, edit func(hooks *object) ([]stri
 	if beforeWrite != nil {
 		beforeWrite()
 	}
-	cur, _, stillExists, err := readIfExists(real)
+	cur, _, stillExists, err := readIfExists(target)
 	if err != nil {
 		return Change{}, err
 	}
@@ -196,13 +196,13 @@ func editOnce(path, real string, now time.Time, edit func(hooks *object) ([]stri
 	ch := Change{Outcome: Created, Foreign: foreign}
 	if exists {
 		ch.Outcome = Updated
-		if ch.Backup, err = backup(real, old, mode, now); err != nil {
+		if ch.Backup, err = backup(target, old, mode, now); err != nil {
 			return Change{}, err
 		}
 	} else {
 		mode = 0o600
 	}
-	if err := writeAtomic(real, out, mode); err != nil {
+	if err := writeAtomic(target, out, mode); err != nil {
 		return Change{}, err
 	}
 	return ch, nil

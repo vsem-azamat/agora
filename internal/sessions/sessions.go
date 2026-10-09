@@ -601,7 +601,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 // Resolve returns the name bound to a session that has not ended, or "".
 func (s *Sessions) Resolve(ctx context.Context, sessionID string) (string, error) {
 	if checkSession(sessionID) != nil {
-		return "", nil
+		return "", nil //nolint:nilerr // a malformed session ID is bound to no name
 	}
 	var agent sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT agent FROM sessions WHERE id = ? AND state != 'ended'`, sessionID).Scan(&agent)
@@ -678,7 +678,7 @@ func (s *Sessions) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 		return err
 	}
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback() // report the error that failed the transaction
 		return err
 	}
 	return tx.Commit()
@@ -742,23 +742,25 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 	if r.PID <= 0 {
 		return nil
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id, COALESCE(agent, '') FROM sessions
-		WHERE pid = ? AND pid_start = ? AND state != 'ended' AND id != ? ORDER BY started_at DESC`, r.PID, r.PIDStart, r.SessionID)
-	if err != nil {
-		return err
-	}
 	type old struct{ id, agent string }
-	var olds []old
-	for rows.Next() {
-		var o old
-		if err := rows.Scan(&o.id, &o.agent); err != nil {
-			rows.Close()
-			return err
+	olds, err := func() ([]old, error) {
+		rows, err := tx.QueryContext(ctx, `SELECT id, COALESCE(agent, '') FROM sessions
+		WHERE pid = ? AND pid_start = ? AND state != 'ended' AND id != ? ORDER BY started_at DESC`, r.PID, r.PIDStart, r.SessionID)
+		if err != nil {
+			return nil, err
 		}
-		olds = append(olds, o)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+		defer rows.Close() // before the next statement: the database has one connection
+		var olds []old
+		for rows.Next() {
+			var o old
+			if err := rows.Scan(&o.id, &o.agent); err != nil {
+				return nil, err
+			}
+			olds = append(olds, o)
+		}
+		return olds, rows.Err()
+	}()
+	if err != nil {
 		return err
 	}
 	for _, o := range olds {

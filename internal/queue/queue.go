@@ -435,27 +435,17 @@ func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
 func (q *Queue) Sweep(ctx context.Context) ([]string, error) {
 	var changed []string
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		rows, err := tx.QueryContext(ctx, `SELECT DISTINCT key FROM entries WHERE expires_at IS NOT NULL AND expires_at <= ? ORDER BY key`, ms(now))
+		keys, err := column(ctx, tx, `SELECT DISTINCT key FROM entries WHERE expires_at IS NOT NULL AND expires_at <= ? ORDER BY key`, ms(now))
 		if err != nil {
 			return err
 		}
-		var keys []string
-		for rows.Next() {
-			var k string
-			if err := rows.Scan(&k); err != nil {
-				rows.Close()
-				return err
-			}
-			keys = append(keys, k)
-		}
-		rows.Close()
 		for _, k := range keys {
 			if err := settle(ctx, tx, k, now); err != nil {
 				return err
 			}
 		}
 		changed = keys
-		return rows.Err()
+		return nil
 	})
 	return changed, err
 }
@@ -468,10 +458,29 @@ func (q *Queue) tx(ctx context.Context, fn func(*sql.Tx, time.Time) error) error
 		return err
 	}
 	if err := fn(tx, q.now()); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback() // report the error that failed the transaction
 		return err
 	}
 	return tx.Commit()
+}
+
+// column runs a query that selects one text column and returns its values. The rows are closed
+// before it returns, so the transaction's single connection is free for the next statement.
+func column(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
 }
 
 func ensureResource(ctx context.Context, tx *sql.Tx, key string) error {
@@ -490,20 +499,10 @@ func settle(ctx context.Context, tx *sql.Tx, key string, now time.Time) error {
 		key, t, MaxMissedTurns); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
+	missed, err := column(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
 	if err != nil {
 		return err
 	}
-	var missed []string
-	for rows.Next() {
-		var a string
-		if err := rows.Scan(&a); err != nil {
-			rows.Close()
-			return err
-		}
-		missed = append(missed, a)
-	}
-	rows.Close()
 	for _, a := range missed {
 		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = 'waiting', expires_at = NULL, skips = skips + 1,
 			seq = `+nextSeq+` WHERE key = ? AND agent = ?`, key, key, a); err != nil {
@@ -524,7 +523,7 @@ func settle(ctx context.Context, tx *sql.Tx, key string, now time.Time) error {
 			return err
 		}
 	}
-	return rows.Err()
+	return nil
 }
 
 func load(ctx context.Context, tx *sql.Tx, key string) (Resource, error) {

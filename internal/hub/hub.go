@@ -91,8 +91,10 @@ func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms,
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle,
-		WatchFirst: DefaultWatchFirst, WatchEvery: DefaultWatchEvery}
+	return &Hub{
+		queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle,
+		WatchFirst: DefaultWatchFirst, WatchEvery: DefaultWatchEvery,
+	}
 }
 
 // Open builds a hub over db with the given clock (time.Now when nil).
@@ -209,7 +211,8 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)
-	base, endStreams := context.WithCancel(context.Background())
+	// Streams outlive ctx: they end on endStreams during shutdown.
+	base, endStreams := context.WithCancel(context.WithoutCancel(ctx))
 	defer endStreams()
 	srv := &http.Server{
 		Handler:           h.Handler(),
@@ -235,9 +238,9 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		defer close(stopped)
 		<-ctx.Done()
 		endStreams() // waiting streams return; clients reconnect to the next hub
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(shutdown)
+		_ = srv.Shutdown(shutdown) // past the deadline Serve has returned; what is left is closed with the process
 	}()
 	err := srv.Serve(l)
 	if errors.Is(err, http.ErrServerClosed) {
@@ -771,7 +774,7 @@ func (h *Hub) wakeByCommand(ctx context.Context) error {
 func runWakeCommand(ctx context.Context, command, terminal, text string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, WakeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd := exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // the wake command is configured by the operator who runs the hub
 	cmd.Env = append(os.Environ(), "AGORA_TERMINAL="+terminal, "AGORA_WAKE_TEXT="+text)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }

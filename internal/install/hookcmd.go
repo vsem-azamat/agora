@@ -25,7 +25,7 @@ func splitCommand(s string) (words []shellWord, ok bool) {
 		cur.Reset()
 		started, quoted = false, false
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if quote != 0 {
 			switch {

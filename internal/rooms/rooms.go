@@ -431,7 +431,7 @@ func (r *Rooms) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 		return err
 	}
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback() // report the error that failed the transaction
 		return err
 	}
 	return tx.Commit()

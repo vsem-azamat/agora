@@ -79,8 +79,10 @@ func TestGitHubLookup(t *testing.T) {
 	for _, c := range p.Checks {
 		outcomes[c.Name] = c.Outcome
 	}
-	want := map[string]forge.Outcome{"lint": forge.Succeeded, "docs": forge.Succeeded, "test": forge.Cancelled, "e2e": forge.Failed,
-		"build": forge.Unfinished, "odd": forge.Failed, "ci/legacy": forge.Failed, "ci/wait": forge.Unfinished}
+	want := map[string]forge.Outcome{
+		"lint": forge.Succeeded, "docs": forge.Succeeded, "test": forge.Cancelled, "e2e": forge.Failed,
+		"build": forge.Unfinished, "odd": forge.Failed, "ci/legacy": forge.Failed, "ci/wait": forge.Unfinished,
+	}
 	for k, v := range want {
 		if outcomes[k] != v {
 			t.Errorf("%s: %v, want %v", k, outcomes[k], v)
@@ -121,8 +123,10 @@ func TestQueriesAreDeduplicated(t *testing.T) {
 		args = a
 		return []byte(`{"data":{"repository":{"defaultBranchRef":{"name":"main"}}}}`), nil
 	}}
-	gh.Lookup(context.Background(), forge.Repo{Host: "github.com", Path: "example-org/example-app"},
-		forge.Query{Branches: []string{"a", "a", ""}, Numbers: []int{3, 3}})
+	if _, err := gh.Lookup(context.Background(), forge.Repo{Host: "github.com", Path: "example-org/example-app"},
+		forge.Query{Branches: []string{"a", "a", ""}, Numbers: []int{3, 3}}); err != nil {
+		t.Fatal(err)
+	}
 	if slices.Contains(args, "b1=a") || slices.Contains(args, "n1=3") || slices.Contains(args, "b0=") {
 		t.Fatalf("duplicates queried: %v", args)
 	}

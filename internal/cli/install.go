@@ -21,7 +21,7 @@ var goos = runtime.GOOS
 
 // systemctl runs `systemctl --user args...` and returns its combined output; tests replace it.
 var systemctl = func(ctx context.Context, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, "systemctl", append([]string{"--user"}, args...)...).CombinedOutput()
+	return exec.CommandContext(ctx, "systemctl", append([]string{"--user"}, args...)...).CombinedOutput() //nolint:gosec // fixed binary; arguments come from the install targets
 }
 
 var targets = []struct{ name, what string }{
@@ -231,13 +231,13 @@ func needLinux() error {
 // checking that the user's service manager answers.
 func (o *options) runSystemctl(ctx context.Context, cmds [][]string) error {
 	if out, err := systemctl(ctx, "show-environment"); err != nil {
-		return fmt.Errorf("the systemd user manager is not reachable (systemctl --user: %v %s); run the commands yourself where it is, or leave out --now",
+		return fmt.Errorf("the systemd user manager is not reachable (systemctl --user: %w %s); run the commands yourself where it is, or leave out --now",
 			err, strings.TrimSpace(string(out)))
 	}
 	for _, args := range cmds {
 		fmt.Fprintf(o.out, "running systemctl --user %s\n", strings.Join(args, " "))
 		if out, err := systemctl(ctx, args...); err != nil {
-			return fmt.Errorf("systemctl --user %s: %v\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+			return fmt.Errorf("systemctl --user %s: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 		}
 	}
 	return nil

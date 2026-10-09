@@ -18,16 +18,19 @@ bin/agora queue ls
 Tests need no running hub: queue tests use an in-memory database and a controllable clock, and CLI tests start their own hub on a temporary socket.
 
 ```sh
-go test -race ./...
+make test                                          # go test -race ./...
 ```
+
+Before pushing, run `make check`; see [Checks](checks.md).
 
 ## Code generation
 
 `proto/` is the source of the API; `gen/` is generated from it and committed. After changing a `.proto` file:
 
 ```sh
-go tool -modfile=tools/go.mod buf lint
-go tool -modfile=tools/go.mod buf generate
+make fmt                                           # buf format -w (and the Go formatters)
+make lint-proto                                    # buf lint and format check
+make generate                                      # buf generate
 ```
 
-The generators (`buf`, `protoc-gen-go`, `protoc-gen-connect-go`) are pinned as tools in `tools/go.mod`, a separate module so they do not add dependencies to the `agora` binary.
+The generators (`buf`, `protoc-gen-go`, `protoc-gen-connect-go`) are pinned as tools in `tools/go.mod`, a separate module so they do not add dependencies to the `agora` binary. golangci-lint is pinned the same way in `tools/lint/go.mod`.

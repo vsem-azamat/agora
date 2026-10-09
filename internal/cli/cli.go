@@ -53,7 +53,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 // RunWithInput is Run with an explicit standard input, which hooks read.
 func RunWithInput(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	root := newRoot(stdout, stderr)
+	root := newRoot(stdout, stderr) //nolint:contextcheck // commands receive ctx through ExecuteContext below
 	root.SetArgs(args)
 	root.SetIn(stdin)
 	root.SetOut(stdout)
@@ -318,7 +318,7 @@ func joinCmd(o *options) *cobra.Command {
 				req.Status = &working
 			}
 			if strings.TrimSpace(*req.Status) == "" || *req.Status == "left" {
-				return fmt.Errorf("--status: give a status like working or reviewing; to leave, use `agora leave`")
+				return errors.New("--status: give a status like working or reviewing; to leave, use `agora leave`")
 			}
 			if req.Cwd == nil {
 				if wd, err := os.Getwd(); err == nil {
@@ -359,7 +359,7 @@ func setCmd(o *options) *cobra.Command {
 			changed := false // only set's own flags count, not the inherited --as or --socket
 			cmd.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) { changed = changed || f.Changed })
 			if !changed {
-				return fmt.Errorf("nothing to change; pass at least one flag, e.g. --task")
+				return errors.New("nothing to change; pass at least one flag, e.g. --task")
 			}
 			name, err := o.agent(cmd.Context())
 			if err != nil {
@@ -650,7 +650,7 @@ func textArg(cmd *cobra.Command, args []string) (string, error) {
 	}
 	if f, ok := cmd.InOrStdin().(*os.File); ok && text == "" {
 		if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
-			return "", fmt.Errorf("no text: pass it as arguments, or '-' to read standard input")
+			return "", errors.New("no text: pass it as arguments, or '-' to read standard input")
 		}
 	}
 	b, err := io.ReadAll(cmd.InOrStdin())
@@ -956,7 +956,7 @@ func postCmd(o *options) *cobra.Command {
 			if text == "" || text == "-" {
 				if f, ok := cmd.InOrStdin().(*os.File); ok && text == "" {
 					if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
-						return fmt.Errorf("no message: pass it as arguments, or '-' to read standard input")
+						return errors.New("no message: pass it as arguments, or '-' to read standard input")
 					}
 				}
 				b, err := io.ReadAll(cmd.InOrStdin())
@@ -1156,7 +1156,7 @@ func queueCmd(o *options) *cobra.Command {
 			if err != nil || n < 1 || n > queue.MaxSlots {
 				return fmt.Errorf("slots: %q must be a number from 1 to %d", args[1], queue.MaxSlots)
 			}
-			resp, err := o.resources().SetSlots(cmd.Context(), connect.NewRequest(&agorav1.SetSlotsRequest{Key: args[0], Slots: int32(n)}))
+			resp, err := o.resources().SetSlots(cmd.Context(), connect.NewRequest(&agorav1.SetSlotsRequest{Key: args[0], Slots: int32(n)})) //nolint:gosec // n is checked against MaxSlots above
 			if err != nil {
 				return err
 			}

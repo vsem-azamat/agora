@@ -188,9 +188,15 @@ func TestDeadProcessEndsTheSessionAndGivesBackPlaces(t *testing.T) {
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
-	e.q.Join(ctx, "heavy/typecheck", "other", "", 0, false)
-	e.q.Join(ctx, "heavy/typecheck", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.q.Join(ctx, "heavy/typecheck", "other", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.q.Join(ctx, "heavy/typecheck", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	ended, err := e.s.EndDead(ctx, func(pid int, _ int64) bool { return pid != 4242 })
 	if err != nil || len(ended) != 1 {
 		t.Fatalf("ended %v, err %v", ended, err)
@@ -214,7 +220,9 @@ func TestLiveProcessesAreLeftAlone(t *testing.T) {
 func TestEndedSessionKeepsPlacesOfAnAgentThatMovedOn(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.s.Join(ctx, "builder", "session-2", true); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +235,9 @@ func TestEndedSessionKeepsPlacesOfAnAgentThatMovedOn(t *testing.T) {
 func TestSessionEndGivesBackPlaces(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	e.report(t, "session-1", sessions.End)
 	if p := e.places(t, "builder"); len(p) != 0 {
 		t.Fatalf("places %+v", p)
@@ -239,17 +249,25 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 func TestUnboundStartIsInvited(t *testing.T) {
 	e := newEnv(t)
 	repo := filepath.Join(t.TempDir(), "example-app")
-	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
-	os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
-	os.MkdirAll(filepath.Join(repo, "src"), 0o755)
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: filepath.Join(repo, "src")}
 	for range 2 { // a new session, then a resumed or compacted one
 		r, err := e.s.Report(ctx, start)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, want := range []string{"agora join <name> --project example-app --task '<what you are doing>'",
-			"(name: 2-32 lowercase letters, digits and dashes, starting with a letter)", "agora status", "agora charter", "If you"} {
+		for _, want := range []string{
+			"agora join <name> --project example-app --task '<what you are doing>'",
+			"(name: 2-32 lowercase letters, digits and dashes, starting with a letter)", "agora status", "agora charter", "If you",
+		} {
 			if !strings.Contains(r.Context, want) {
 				t.Fatalf("invitation lacks %q: %q", want, r.Context)
 			}
@@ -285,8 +303,10 @@ func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := e.report(t, "session-1", sessions.Start) // the conversation was compacted
-	for _, want := range []string{"Agora: you are builder on the Agora board.", "Task: fix login timeout.", "Status: reviewing.",
-		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "agora leave"} {
+	for _, want := range []string{
+		"Agora: you are builder on the Agora board.", "Task: fix login timeout.", "Status: reviewing.",
+		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "agora leave",
+	} {
 		if !strings.Contains(r.Context, want) {
 			t.Fatalf("reminder lacks %q: %q", want, r.Context)
 		}
@@ -301,7 +321,9 @@ func TestStartRemindsEvenWhenAConcurrentHookWonTheCheck(t *testing.T) {
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
-	e.r.Post(ctx, "reviewer", "general", "@builder please review #57", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder please review #57", 0); err != nil {
+		t.Fatal(err)
+	}
 	sessions.RaceNoteCheck(t) // a concurrent prompt records its check first
 	r := e.report(t, "session-1", sessions.Start)
 	if !strings.HasPrefix(r.Context, "Agora: you are builder on the Agora board.") || !strings.Contains(r.Context, "please review #57") {
@@ -314,7 +336,9 @@ func TestReminderCountsAddressedMessagesNotShown(t *testing.T) {
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
 	for range 7 {
-		e.r.Post(ctx, "reviewer", "general", "@builder ping", 0)
+		if _, err := e.r.Post(ctx, "reviewer", "general", "@builder ping", 0); err != nil {
+			t.Fatal(err)
+		}
 	}
 	r := e.report(t, "session-1", sessions.Start)
 	if !strings.Contains(r.Context, "7 unread messages address you (5 below).") {
@@ -325,8 +349,12 @@ func TestReminderCountsAddressedMessagesNotShown(t *testing.T) {
 func TestUnsafeRepositoryNameIsNotSuggested(t *testing.T) {
 	e := newEnv(t)
 	repo := filepath.Join(t.TempDir(), "example app;x")
-	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
-	os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start, CWD: repo})
 	if err != nil || !strings.Contains(r.Context, "--project <project>") {
 		t.Fatalf("context %q err %v", r.Context, err)
@@ -338,7 +366,9 @@ func TestUnsafeRepositoryNameIsNotSuggested(t *testing.T) {
 func TestSessionStartRemindsOfHeldSlots(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false); err != nil {
+		t.Fatal(err)
+	}
 	r := e.report(t, "session-1", sessions.Start)
 	if !strings.Contains(r.Context, "you are builder") || !strings.Contains(r.Context, "You hold db/shared until") {
 		t.Fatalf("context %q", r.Context)
@@ -348,7 +378,9 @@ func TestSessionStartRemindsOfHeldSlots(t *testing.T) {
 func TestNoNoteWhenNothingChanged(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	e.report(t, "session-1", sessions.Start)
 	if r := e.report(t, "session-1", sessions.Prompt); r.Context != "" {
 		t.Fatalf("context %q", r.Context)
@@ -358,10 +390,16 @@ func TestNoNoteWhenNothingChanged(t *testing.T) {
 func TestOfferedSlotIsAnnouncedAfterToolUse(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "example-app/merge", "other", "", 0, false)
-	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "other", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	e.report(t, "session-1", sessions.Prompt)
-	e.q.Release(ctx, "example-app/merge", "other", "other", false)
+	if _, err := e.q.Release(ctx, "example-app/merge", "other", "other", false); err != nil {
+		t.Fatal(err)
+	}
 	if r := e.report(t, "session-1", sessions.Tool); r.Context != "" {
 		t.Fatalf("tool use within 15s noted: %q", r.Context)
 	}
@@ -375,9 +413,15 @@ func TestOfferedSlotIsAnnouncedAfterToolUse(t *testing.T) {
 func TestOfferedSlotKeepsTheTurnGoingOnce(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "example-app/merge", "other", "", 0, false)
-	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
-	e.q.Release(ctx, "example-app/merge", "other", "other", false)
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "other", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.q.Release(ctx, "example-app/merge", "other", "other", false); err != nil {
+		t.Fatal(err)
+	}
 	r := e.report(t, "session-1", sessions.Stop)
 	if !r.Block || !strings.Contains(r.BlockReason, "agora queue release example-app/merge") {
 		t.Fatalf("reply %+v", r)
@@ -412,7 +456,9 @@ func TestJoiningAnEndedSessionOnlyRegistersTheName(t *testing.T) {
 func TestUnknownProcessEndsAfterSixHoursWithoutEvents(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1") // registered by join only: no process known
-	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	e.clock.add(sessions.UnknownProcessTimeout - time.Minute)
 	if ended, _ := e.s.EndDead(ctx, alwaysAlive); len(ended) != 0 {
 		t.Fatalf("ended early: %v", ended)
@@ -444,7 +490,9 @@ func TestClearKeepsTheNameAndPlaces(t *testing.T) {
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End, Reason: sessions.EndReasonClear}); err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +514,9 @@ func TestClearKeepsTheNameAndPlaces(t *testing.T) {
 func TestLostPlacesAreAnnounced(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false); err != nil {
+		t.Fatal(err)
+	}
 	e.report(t, "session-1", sessions.Start)
 	e.clock.add(10 * time.Minute)
 	r := e.report(t, "session-1", sessions.Prompt)
@@ -481,7 +531,9 @@ func TestLostPlacesAreAnnounced(t *testing.T) {
 func TestConcurrentHooksNoteOnce(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
-	e.q.Join(ctx, "db/shared", "builder", "", 0, false)
+	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	notes := 0
@@ -513,7 +565,9 @@ func TestMessagesArriveDuringTheTurn(t *testing.T) {
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
 	e.report(t, "session-1", sessions.Prompt)
-	e.r.Post(ctx, "reviewer", "general", "PR #57 is ready", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "PR #57 is ready", 0); err != nil {
+		t.Fatal(err)
+	}
 	if r := e.report(t, "session-1", sessions.Tool); r.Context != "" {
 		t.Fatalf("delivered within 15s: %q", r.Context)
 	}
@@ -533,7 +587,9 @@ func TestOnlyFiveMessagesAtOnce(t *testing.T) {
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
 	for range 8 {
-		e.r.Post(ctx, "reviewer", "general", "note", 0)
+		if _, err := e.r.Post(ctx, "reviewer", "general", "note", 0); err != nil {
+			t.Fatal(err)
+		}
 	}
 	r := e.report(t, "session-1", sessions.Prompt)
 	if strings.Count(r.Context, "#general [") != 5 || !strings.Contains(r.Context, "3 more") {
@@ -548,8 +604,12 @@ func TestMentionKeepsTheTurnGoingOnce(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
-	e.r.Post(ctx, "reviewer", "general", "chatter", 0)
-	e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "chatter", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0); err != nil {
+		t.Fatal(err)
+	}
 	r := e.report(t, "session-1", sessions.Stop)
 	if !r.Block || !strings.Contains(r.BlockReason, "can you take #57") || strings.Contains(r.BlockReason, "chatter") {
 		t.Fatalf("reply %+v", r)
@@ -566,10 +626,18 @@ func TestMentionAndOfferBlockTogether(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
-	e.q.Join(ctx, "example-app/merge", "reviewer", "", 0, false)
-	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
-	e.q.Release(ctx, "example-app/merge", "reviewer", "reviewer", false)
-	e.r.Post(ctx, "reviewer", "general", "@builder your turn to merge", 0)
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "reviewer", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.q.Release(ctx, "example-app/merge", "reviewer", "reviewer", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder your turn to merge", 0); err != nil {
+		t.Fatal(err)
+	}
 	r := e.report(t, "session-1", sessions.Stop)
 	if !r.Block || !strings.Contains(r.BlockReason, "your turn to merge") || !strings.Contains(r.BlockReason, "agora queue renew example-app/merge") {
 		t.Fatalf("reply %+v", r)
@@ -592,11 +660,15 @@ func TestCheckWake(t *testing.T) {
 	if _, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
 		t.Fatal("woken with nothing waiting")
 	}
-	e.r.Post(ctx, "reviewer", "general", "chatter", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "chatter", 0); err != nil {
+		t.Fatal(err)
+	}
 	if _, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
 		t.Fatal("woken by chatter")
 	}
-	e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0); err != nil {
+		t.Fatal(err)
+	}
 	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
 	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57") {
 		t.Fatalf("wake %+v done %v err %v", w, done, err)
@@ -634,7 +706,9 @@ func TestWaitEndsWhenTheSessionLosesItsAgent(t *testing.T) {
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.Stop)
 	turn, _ := e.s.Turn(ctx, "session-1")
-	e.s.Join(ctx, "builder", "session-2", true)
+	if _, err := e.s.Join(ctx, "builder", "session-2", true); err != nil {
+		t.Fatal(err)
+	}
 	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); !done || w != nil {
 		t.Fatalf("wake %+v done %v", w, done)
 	}
@@ -645,15 +719,26 @@ func TestAnOfferWakesOnce(t *testing.T) {
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.Stop)
 	turn, _ := e.s.Turn(ctx, "session-1")
-	e.q.Join(ctx, "example-app/merge", "other", "", 0, false)
-	e.q.Join(ctx, "example-app/merge", "builder", "", 0, false)
-	e.q.Release(ctx, "example-app/merge", "other", "other", false)
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "other", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.q.Release(ctx, "example-app/merge", "other", "other", false); err != nil {
+		t.Fatal(err)
+	}
 	w, done, _ := e.s.CheckWake(ctx, "session-1", turn)
 	if !done || w == nil || !strings.Contains(w.Text, "agora queue renew example-app/merge") {
 		t.Fatalf("wake %+v done %v", w, done)
 	}
-	e.s.ConfirmWake(ctx, "session-1", w)
-	e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Stop, StopActive: true}) // the woken turn ends unclaimed
+	if err := e.s.ConfirmWake(ctx, "session-1", w); err != nil {
+		t.Fatal(err)
+	}
+	// the woken turn ends unclaimed
+	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Stop, StopActive: true}); err != nil {
+		t.Fatal(err)
+	}
 	turn, _ = e.s.Turn(ctx, "session-1")
 	if w, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
 		t.Fatalf("woken again for the same offer: %+v", w)
@@ -667,7 +752,9 @@ func TestPendingKeyChangesWithNewMentions(t *testing.T) {
 	if key, _, _ := e.s.Pending(ctx, "builder"); key != "" {
 		t.Fatalf("key %q", key)
 	}
-	e.r.Post(ctx, "reviewer", "general", "@builder one", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder one", 0); err != nil {
+		t.Fatal(err)
+	}
 	k1, text, _ := e.s.Pending(ctx, "builder")
 	if k1 == "" || !strings.Contains(text, "reviewer in #general") || strings.Contains(text, "`") {
 		t.Fatalf("key %q text %q", k1, text)
@@ -675,7 +762,9 @@ func TestPendingKeyChangesWithNewMentions(t *testing.T) {
 	if k, _, _ := e.s.Pending(ctx, "builder"); k != k1 {
 		t.Fatal("pending consumed the mention")
 	}
-	e.r.Post(ctx, "reviewer", "general", "@builder two", 0)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder two", 0); err != nil {
+		t.Fatal(err)
+	}
 	if k2, _, _ := e.s.Pending(ctx, "builder"); k2 == k1 {
 		t.Fatal("key did not change")
 	}

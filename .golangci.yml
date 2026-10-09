@@ -1,0 +1,75 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - errorlint
+    - gosec
+    - intrange
+    - misspell
+    - nilerr
+    - perfsprint
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - usestdlibvars
+  settings:
+    gosec:
+      excludes:
+        - G104 # unchecked errors: errcheck reports these
+        - G115 # int -> int32 for protobuf fields: positions, slot counts, PIDs and PR numbers are far below the limit
+        - G304 # reading files from variable paths is the job: settings, git metadata and the database live at computed paths
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: var-declaration
+  exclusions:
+    generated: strict
+    paths:
+      - ^gen/
+    presets:
+      - std-error-handling
+    rules:
+      # Test helpers keep explicit arguments so call sites read like the scenario.
+      - path: _test\.go
+        linters: [unparam]
+      # Test fixtures mirror the permissions of the real files they stand in for.
+      - path: _test\.go
+        linters: [gosec]
+        text: G30[126]
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/vsem-azamat/agora
+  exclusions:
+    generated: strict
+    paths:
+      - ^gen/

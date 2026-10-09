@@ -101,7 +101,9 @@ func TestMoreSlotsLetMoreAgentsHold(t *testing.T) {
 
 func TestFewerSlotsKeepCurrentHolders(t *testing.T) {
 	q, _ := newQueue(t)
-	q.SetSlots(ctx, "heavy/build", 3)
+	if _, err := q.SetSlots(ctx, "heavy/build", 3); err != nil {
+		t.Fatal(err)
+	}
 	for _, a := range []string{"a", "b", "c", "d"} {
 		join(t, q, "heavy/build", a)
 	}
@@ -111,10 +113,16 @@ func TestFewerSlotsKeepCurrentHolders(t *testing.T) {
 	for _, a := range []string{"a", "b", "c"} {
 		expect(t, q, "heavy/build", a, queue.Held, 0)
 	}
-	q.Release(ctx, "heavy/build", "a", "a", false)
-	q.Release(ctx, "heavy/build", "b", "b", false)
+	if _, err := q.Release(ctx, "heavy/build", "a", "a", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Release(ctx, "heavy/build", "b", "b", false); err != nil {
+		t.Fatal(err)
+	}
 	expect(t, q, "heavy/build", "d", queue.Waiting, 1)
-	q.Release(ctx, "heavy/build", "c", "c", false)
+	if _, err := q.Release(ctx, "heavy/build", "c", "c", false); err != nil {
+		t.Fatal(err)
+	}
 	expect(t, q, "heavy/build", "d", queue.Offered, 0)
 }
 
@@ -192,7 +200,9 @@ func TestWaitingAgentJoiningAgainWithANewLeaseHoldsForIt(t *testing.T) {
 	if _, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false); err != nil {
 		t.Fatal(err)
 	}
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	e, err := q.Claim(ctx, "r", "a")
 	if err != nil || e.State != queue.Held || !e.Expires.Equal(c.now().Add(2*time.Hour)) {
 		t.Fatalf("entry %+v, err %v", e, err)
@@ -203,7 +213,9 @@ func TestOfferedAgentJoiningAgainWithANewLeaseKeepsTheClaimDeadline(t *testing.T
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	deadline := c.now().Add(queue.ClaimWindow)
 	c.add(time.Minute)
 	e, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false)
@@ -217,7 +229,9 @@ func TestOfferedAgentJoiningAgainWithANewLeaseKeepsTheClaimDeadline(t *testing.T
 
 func TestJoiningAgainWithoutALeaseKeepsIt(t *testing.T) {
 	q, c := newQueue(t)
-	q.Join(ctx, "r", "a", "", 2*time.Hour, false)
+	if _, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
 	end := c.now().Add(2 * time.Hour)
 	c.add(time.Minute)
 	e, _, err := q.Join(ctx, "r", "a", "note", 0, false)
@@ -266,7 +280,9 @@ func TestFreedSlotGoesToFirstWaiter(t *testing.T) {
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	expect(t, q, "r", "a", queue.Offered, 0)
 	expect(t, q, "r", "b", queue.Waiting, 1)
 }
@@ -277,7 +293,9 @@ func TestClaimingAnOfferHoldsForTheLease(t *testing.T) {
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	c.add(time.Minute)
 	e, err := q.Renew(ctx, "r", "a")
 	if err != nil {
@@ -293,7 +311,9 @@ func TestMissedTurnMovesToTheEnd(t *testing.T) {
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	c.add(queue.ClaimWindow)
 	expect(t, q, "r", "b", queue.Offered, 0)
 	expect(t, q, "r", "a", queue.Waiting, 1)
@@ -304,15 +324,23 @@ func TestMissingTwiceLeavesTheQueue(t *testing.T) {
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	// the hub sweeps every second; sweep after each step as it would
 	c.add(queue.ClaimWindow) // a misses, b is offered
-	q.Sweep(ctx)
+	if _, err := q.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
 	c.add(queue.ClaimWindow) // b misses, a is offered again
-	q.Sweep(ctx)
+	if _, err := q.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
 	expect(t, q, "r", "a", queue.Offered, 0)
 	c.add(queue.ClaimWindow) // a misses a second time
-	q.Sweep(ctx)
+	if _, err := q.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if s, _ := state(t, q, "r", "a"); s != "" {
 		t.Fatalf("a is still %s", s)
 	}
@@ -322,7 +350,9 @@ func TestWaitingAgentClaimsAtOnce(t *testing.T) {
 	q, _ := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
-	q.Release(ctx, "r", "holder", "holder", false)
+	if _, err := q.Release(ctx, "r", "holder", "holder", false); err != nil {
+		t.Fatal(err)
+	}
 	e, err := q.Claim(ctx, "r", "a")
 	if err != nil {
 		t.Fatal(err)
@@ -420,7 +450,9 @@ func TestLockOnAFreeResource(t *testing.T) {
 
 func TestLockOnATakenResourceDoesNotQueue(t *testing.T) {
 	q, _ := newQueue(t)
-	q.Join(ctx, "example-app/merge", "a", "merging #57", 0, true)
+	if _, _, err := q.Join(ctx, "example-app/merge", "a", "merging #57", 0, true); err != nil {
+		t.Fatal(err)
+	}
 	e, res, err := q.Join(ctx, "example-app/merge", "b", "", 0, true)
 	if err != nil || e != nil {
 		t.Fatalf("entry %+v, err %v", e, err)
@@ -437,12 +469,16 @@ func TestLockOnATakenResourceDoesNotQueue(t *testing.T) {
 
 func TestListingShowsHoldersAndWaitersAndHidesIdleResources(t *testing.T) {
 	q, _ := newQueue(t)
-	q.SetSlots(ctx, "heavy/typecheck", 3)
+	if _, err := q.SetSlots(ctx, "heavy/typecheck", 3); err != nil {
+		t.Fatal(err)
+	}
 	for _, a := range []string{"a", "b", "c", "d", "e"} {
 		join(t, q, "heavy/typecheck", a)
 	}
 	join(t, q, "gone", "x")
-	q.Release(ctx, "gone", "x", "x", false)
+	if _, err := q.Release(ctx, "gone", "x", "x", false); err != nil {
+		t.Fatal(err)
+	}
 	rs, err := q.List(ctx, "")
 	if err != nil {
 		t.Fatal(err)
@@ -493,7 +529,9 @@ func TestLockWhileWaitingIsRefused(t *testing.T) {
 
 func TestLockingAgainRenewsTheLease(t *testing.T) {
 	q, c := newQueue(t)
-	q.Join(ctx, "r", "a", "", 10*time.Minute, true)
+	if _, _, err := q.Join(ctx, "r", "a", "", 10*time.Minute, true); err != nil {
+		t.Fatal(err)
+	}
 	c.add(5 * time.Minute)
 	e, _, err := q.Join(ctx, "r", "a", "longer", 2*time.Hour, true)
 	if err != nil || e == nil || !e.Expires.Equal(c.now().Add(2*time.Hour)) || e.Note != "longer" {

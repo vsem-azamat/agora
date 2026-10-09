@@ -87,7 +87,9 @@ func TestStopCanBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got map[string]string
-	json.Unmarshal([]byte(out), &got)
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatal(err)
+	}
 	if got["decision"] != "block" || got["reason"] != "your turn on example-app/merge" {
 		t.Fatalf("output %q", out)
 	}

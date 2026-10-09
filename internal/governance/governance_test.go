@@ -30,7 +30,9 @@ func newEnv(t *testing.T) env {
 	r := rooms.New(db, nil)
 	s := sessions.New(db, queue.New(db, nil), r, nil)
 	for _, n := range []string{"builder", "reviewer", "tester"} {
-		s.Join(ctx, n, "", false)
+		if _, err := s.Join(ctx, n, "", false); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return env{g: governance.New(db, r, nil), r: r}
 }
@@ -78,7 +80,9 @@ func TestInvalidProposalsAreRefused(t *testing.T) {
 func TestLatestVoteCounts(t *testing.T) {
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "Text")
-	e.g.Cast(ctx, "reviewer", id, "no", "too strict")
+	if err := e.g.Cast(ctx, "reviewer", id, "no", "too strict"); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.g.Cast(ctx, "reviewer", id, "yes", "fine after all"); err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +98,12 @@ func TestLatestVoteCounts(t *testing.T) {
 func TestClosing(t *testing.T) {
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "Text")
-	e.g.Cast(ctx, "reviewer", id, "yes", "")
-	e.g.Cast(ctx, "tester", id, "yes", "")
+	if err := e.g.Cast(ctx, "reviewer", id, "yes", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.g.Cast(ctx, "tester", id, "yes", ""); err != nil {
+		t.Fatal(err)
+	}
 	if p, _ := e.g.Get(ctx, id); p.State != "open" {
 		t.Fatal("the board accepted a proposal by itself")
 	}
@@ -120,8 +128,12 @@ func TestClosing(t *testing.T) {
 func TestListing(t *testing.T) {
 	e := newEnv(t)
 	a, _ := e.g.Propose(ctx, "builder", "A", "x")
-	e.g.Propose(ctx, "builder", "B", "x")
-	e.g.Close(ctx, "builder", a, "withdrawn")
+	if _, err := e.g.Propose(ctx, "builder", "B", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.g.Close(ctx, "builder", a, "withdrawn"); err != nil {
+		t.Fatal(err)
+	}
 	open, _ := e.g.List(ctx, false)
 	all, _ := e.g.List(ctx, true)
 	if len(open) != 1 || open[0].Title != "B" || len(all) != 2 {
@@ -142,7 +154,9 @@ func TestCharter(t *testing.T) {
 	if err := e.g.SetCharter(ctx, "builder", 99, "# New"); !errors.Is(err, governance.ErrNotFound) {
 		t.Fatalf("missing proposal: %v", err)
 	}
-	e.g.Close(ctx, "builder", open, "accepted")
+	if err := e.g.Close(ctx, "builder", open, "accepted"); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.g.SetCharter(ctx, "builder", open, "  "); !errors.Is(err, governance.ErrInvalid) {
 		t.Fatalf("empty: %v", err)
 	}
@@ -161,7 +175,9 @@ func TestCharter(t *testing.T) {
 func TestOneCharterChangePerProposal(t *testing.T) {
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "x")
-	e.g.Close(ctx, "builder", id, "Accepted")
+	if err := e.g.Close(ctx, "builder", id, "Accepted"); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.g.SetCharter(ctx, "builder", id, "# One"); err != nil {
 		t.Fatal(err)
 	}

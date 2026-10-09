@@ -275,29 +275,31 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op once committed
 	for _, agent := range slices.Sorted(maps.Keys(follow)) {
 		nums := follow[agent]
 		type row struct {
 			found    bool
 			reported string
 		}
-		rows := map[int]row{}
-		q, err := tx.QueryContext(ctx, `SELECT number, found, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
-		if err != nil {
-			return 0, err
-		}
-		for q.Next() {
-			var n int
-			var r row
-			if err := q.Scan(&n, &r.found, &r.reported); err != nil {
-				q.Close()
-				return 0, err
+		rows, err := func() (map[int]row, error) {
+			q, err := tx.QueryContext(ctx, `SELECT number, found, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
+			if err != nil {
+				return nil, err
 			}
-			rows[n] = r
-		}
-		q.Close()
-		if err := q.Err(); err != nil {
+			defer q.Close() // before the next statement: the database has one connection
+			rows := map[int]row{}
+			for q.Next() {
+				var n int
+				var r row
+				if err := q.Scan(&n, &r.found, &r.reported); err != nil {
+					return nil, err
+				}
+				rows[n] = r
+			}
+			return rows, q.Err()
+		}()
+		if err != nil {
 			return 0, err
 		}
 		m, current := g.current[agent]

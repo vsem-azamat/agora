@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +51,9 @@ func runHub(t *testing.T, dir string, configure func(*hub.Hub)) (stop func()) {
 		configure(h)
 	}
 	go func() {
-		h.Serve(ctx, l)
+		if err := h.Serve(ctx, l); err != nil {
+			t.Error(err)
+		}
 		close(done)
 	}()
 	var once sync.Once
@@ -198,7 +199,7 @@ func TestSlotsAndListing(t *testing.T) {
 		t.Fatalf("slots: %+v", r)
 	}
 	for _, a := range []string{"a", "b", "c"} {
-		agora(ctx, socket, a, "queue", "join", "heavy/typecheck", fmt.Sprintf("check by %s", a))
+		agora(ctx, socket, a, "queue", "join", "heavy/typecheck", "check by "+a)
 	}
 	r := agora(ctx, socket, "a", "queue", "ls")
 	for _, want := range []string{"heavy/typecheck (2 slots)", "held     a", "held     b", "#1       c"} {
@@ -561,9 +562,15 @@ func TestFoundPullRequestsShowInStatusAndWho(t *testing.T) {
 		h.WatchFirst, h.WatchEvery = 10*time.Millisecond, 10*time.Millisecond
 	})
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/feat/export\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = https://github.com/example-org/example-app.git\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/feat/export\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = https://github.com/example-org/example-app.git\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	if r := agora(ctx, socket, "builder", "join", "builder", "--cwd", dir, "--pr", "61"); r.code != 0 {
 		t.Fatalf("join: %+v", r)
@@ -631,7 +638,9 @@ func hubLog(t *testing.T, args ...string) (string, int) {
 
 func TestWatchPullRequestsSetting(t *testing.T) {
 	withGH := t.TempDir()
-	os.WriteFile(filepath.Join(withGH, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0o755)
+	if err := os.WriteFile(filepath.Join(withGH, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		name, path, env string
 		args            []string

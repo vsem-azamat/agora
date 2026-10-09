@@ -20,9 +20,11 @@ func TestSkillHasFrontmatter(t *testing.T) {
 	if !strings.Contains(head, "description: ") {
 		t.Errorf("frontmatter lacks description: %q", head)
 	}
-	for _, topic := range []string{"agora join", "agora status", "agora who", "agora post", "--reply", "agora read", "agora unread",
+	for _, topic := range []string{
+		"agora join", "agora status", "agora who", "agora post", "--reply", "agora read", "agora unread",
 		"@all", "agora queue join", "--wait", "agora lock", "exit code 2", "lease", "agora propose", "agora vote", "agora charter",
-		"woken", "CI is green on #", "--as", "agora leave"} {
+		"woken", "CI is green on #", "--as", "agora leave",
+	} {
 		if !strings.Contains(body, topic) {
 			t.Errorf("guide does not cover %q", topic)
 		}

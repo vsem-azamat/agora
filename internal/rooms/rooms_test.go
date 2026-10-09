@@ -134,7 +134,9 @@ func TestCreatingRooms(t *testing.T) {
 func TestSubscribingToARoomWithHistoryStartsAtItsNewestMessage(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
-	e.r.Create(ctx, "example-app", "work", "builder")
+	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
 	for range 50 {
 		e.post(t, "builder", "example-app", "old")
 	}
@@ -228,7 +230,9 @@ func TestHistoryDoesNotChangeReadState(t *testing.T) {
 func TestWhatCountsAsUnread(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
-	e.r.Create(ctx, "side", "side talk", "reviewer")
+	if err := e.r.Create(ctx, "side", "side talk", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
 	followedMsg := e.post(t, "reviewer", "general", "hello")
 	mention := e.post(t, "reviewer", "side", "@builder look here")
 	e.post(t, "reviewer", "side", "chatter")
@@ -263,8 +267,13 @@ func TestMarkingReadAndPeeking(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatal(len(got))
 	}
-	e.r.MarkRead(ctx, "builder", got[1:])
-	e.r.MarkRead(ctx, "builder", got[:1]) // older: the position does not move back
+	if err := e.r.MarkRead(ctx, "builder", got[1:]); err != nil {
+		t.Fatal(err)
+	}
+	// older: the position does not move back
+	if err := e.r.MarkRead(ctx, "builder", got[:1]); err != nil {
+		t.Fatal(err)
+	}
 	if again := e.unread(t, "builder"); len(again) != 0 {
 		t.Fatalf("still unread %+v", again)
 	}
@@ -273,8 +282,12 @@ func TestMarkingReadAndPeeking(t *testing.T) {
 func TestAllAddressesTheRoomAudience(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "follower", "outsider")
-	e.r.Create(ctx, "example-app", "work", "builder")
-	e.r.Subscribe(ctx, "follower", []string{"example-app"}, true)
+	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Subscribe(ctx, "follower", []string{"example-app"}, true); err != nil {
+		t.Fatal(err)
+	}
 	e.post(t, "builder", "example-app", "@all heads up")
 	if got := e.unread(t, "follower"); len(got) != 1 || !got[0].Addressed {
 		t.Fatalf("follower %+v", got)
@@ -316,12 +329,16 @@ func TestMarkingSingleMessagesKeepsEarlierOnesUnread(t *testing.T) {
 	if len(mentions) != 1 {
 		t.Fatalf("mentions %+v", mentions)
 	}
-	e.r.MarkEach(ctx, "builder", mentions)
+	if err := e.r.MarkEach(ctx, "builder", mentions); err != nil {
+		t.Fatal(err)
+	}
 	left := e.unread(t, "builder")
 	if len(left) != 1 || left[0].Body != "chatter" {
 		t.Fatalf("unread %+v", left)
 	}
-	e.r.MarkRead(ctx, "builder", left)
+	if err := e.r.MarkRead(ctx, "builder", left); err != nil {
+		t.Fatal(err)
+	}
 	if again := e.unread(t, "builder"); len(again) != 0 {
 		t.Fatalf("unread again %+v", again)
 	}
@@ -330,7 +347,9 @@ func TestMarkingSingleMessagesKeepsEarlierOnesUnread(t *testing.T) {
 func TestSubscribingAfterADeliveredMentionStartsAtTheNewestMessage(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
-	e.r.Create(ctx, "side", "side talk", "reviewer")
+	if err := e.r.Create(ctx, "side", "side talk", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
 	e.post(t, "reviewer", "side", "@builder one question")
 	if got, _, _ := e.r.Take(ctx, "builder", false, 0); len(got) != 1 {
 		t.Fatalf("take %+v", got)
@@ -338,7 +357,9 @@ func TestSubscribingAfterADeliveredMentionStartsAtTheNewestMessage(t *testing.T)
 	for range 50 {
 		e.post(t, "reviewer", "side", "chatter")
 	}
-	e.r.Subscribe(ctx, "builder", []string{"side"}, true)
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"side"}, true); err != nil {
+		t.Fatal(err)
+	}
 	if got := e.unread(t, "builder"); len(got) != 0 {
 		t.Fatalf("%d unread after subscribing", len(got))
 	}

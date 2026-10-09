@@ -9,7 +9,7 @@ How the repository is organized and verified.
 | [Building](building.md) | Building and running `agora`, generating code from `proto/` |
 | [Specs](specs.md) | Layout and format of `openspec/specs/` |
 | [Documentation](documentation.md) | Structure and rules of `docs/` |
-| [Checks](checks.md) | Repository checks, how to run them locally, CI |
+| [Checks](checks.md) | `make check`, lint configuration, CI |
 
 ## Repository layout
 
@@ -17,7 +17,8 @@ How the repository is organized and verified.
 | --- | --- |
 | `cmd/`, `internal/` | Go code; see [Architecture](../architecture/README.md) |
 | `proto/` | API contract; `gen/` holds the code generated from it |
-| `tools/` | Pinned code generation tools (a separate Go module) |
+| `tools/` | Pinned development tools: code generators in `tools/go.mod`, golangci-lint in `tools/lint/go.mod` |
+| `Makefile` | Entry point for formatting, lint, tests and every CI check |
 | `openspec/specs/` | Behavior specification |
 | `docs/` | Engineering documentation |
 | `scripts/` | Repository checks |

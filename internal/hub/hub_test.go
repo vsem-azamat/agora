@@ -165,7 +165,9 @@ func TestShutdownEndsWaitsAndReturns(t *testing.T) {
 
 func TestListenNeverRemovesAFileThatIsNotASocket(t *testing.T) {
 	path := filepath.Join(shortDir(t), "notes.txt")
-	os.WriteFile(path, []byte("keep me"), 0o600)
+	if err := os.WriteFile(path, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := hub.Listen(path); err == nil {
 		t.Fatal("listened on a regular file")
 	}
@@ -220,8 +222,10 @@ func (r *running) idleAgent(t *testing.T, name, session, terminal string) {
 func (r *running) idleAgentWithPID(t *testing.T, name, session, terminal string, pid int32) {
 	t.Helper()
 	bg := context.Background()
-	if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: session, Kind: "claude-code", Event: agorav1.SessionEvent_SESSION_EVENT_START,
-		Terminal: terminal, Pid: pid, PidStart: proc.StartTime(int(pid))})); err != nil {
+	if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{
+		SessionId: session, Kind: "claude-code", Event: agorav1.SessionEvent_SESSION_EVENT_START,
+		Terminal: terminal, Pid: pid, PidStart: proc.StartTime(int(pid)),
+	})); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: session})); err != nil {
@@ -235,7 +239,9 @@ func (r *running) idleAgentWithPID(t *testing.T, name, session, terminal string,
 func (r *running) post(t *testing.T, author, body string) {
 	t.Helper()
 	bg := context.Background()
-	r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: author}))
+	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: author})); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.rooms.Post(bg, connect.NewRequest(&agorav1.PostRequest{Author: author, Room: "general", Body: body})); err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +297,9 @@ func TestNewPromptEndsTheWaitQuietly(t *testing.T) {
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	woke := r.wake(t, "session-1")
-	r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_PROMPT}))
+	if _, err := r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_PROMPT})); err != nil {
+		t.Fatal(err)
+	}
 	if text, ended := within(t, woke, 2*time.Second); !ended || text != "" {
 		t.Fatalf("ended %v text %q", ended, text)
 	}
@@ -322,10 +330,13 @@ func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
 	})
 	r.idleAgent(t, "builder", "session-1", "pane-7")
 	r.post(t, "reviewer", "@builder ping")
-	if err := hub.WakeByCommand(h, context.Background()); err != nil {
+	if err := hub.WakeByCommand(context.Background(), h); err != nil {
 		t.Fatal(err)
 	}
-	hub.WakeByCommand(h, context.Background()) // same mention: no second run
+	// same mention: no second run
+	if err := hub.WakeByCommand(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
 	b, _ := os.ReadFile(log)
 	if strings.Count(string(b), "\n") != 1 || !strings.HasPrefix(string(b), "pane-7|Agora: 1 board message(s) addressed to you (reviewer in #general)") {
 		t.Fatalf("wakes %q", b)
@@ -335,7 +346,9 @@ func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
 	woke := r.wake(t, "session-2")
 	time.Sleep(100 * time.Millisecond)
 	r.post(t, "reviewer", "@waiter ping")
-	hub.WakeByCommand(h, context.Background())
+	if err := hub.WakeByCommand(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
 	if b, _ := os.ReadFile(log); strings.Contains(string(b), "pane-8") {
 		t.Fatalf("command ran for a waiting session: %q", b)
 	}
@@ -355,14 +368,24 @@ func TestWakeCommandSkipsDeadProcessesAndRetriesFailures(t *testing.T) {
 	r.idleAgentWithPID(t, "ghost", "session-dead", "pane-dead", 999999) // no such process
 	r.idleAgent(t, "builder", "session-1", "pane-7")
 	r.post(t, "reviewer", "@ghost @builder ping")
-	hub.WakeByCommand(h, context.Background()) // fails: not ready
-	os.WriteFile(log+".ready", nil, 0o600)
-	hub.WakeByCommand(h, context.Background()) // within the gap: not retried yet
+	// fails: not ready
+	if err := hub.WakeByCommand(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log+".ready", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// within the gap: not retried yet
+	if err := hub.WakeByCommand(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
 	if b, _ := os.ReadFile(log); len(b) != 0 {
 		t.Fatalf("ran within the gap: %q", b)
 	}
 	r.clock.add(hub.WakeGap)
-	hub.WakeByCommand(h, context.Background())
+	if err := hub.WakeByCommand(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
 	if b, _ := os.ReadFile(log); string(b) != "pane-7\n" {
 		t.Fatalf("wakes %q", b)
 	}
@@ -397,9 +420,15 @@ func (f *greenForge) count() int { f.mu.Lock(); defer f.mu.Unlock(); return f.ca
 func joinIn(t *testing.T, r *running) {
 	t.Helper()
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:example-org/example-app.git\n"), 0o644)
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:example-org/example-app.git\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
