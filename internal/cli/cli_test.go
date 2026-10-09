@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -266,6 +267,14 @@ func TestHookReportsTheSession(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "", "sessions"); !strings.Contains(r.stdout, "session-hook") || !strings.Contains(r.stdout, "/src/example-app") {
 		t.Fatalf("sessions: %+v", r)
+	}
+	var hookOut struct {
+		HookSpecificOutput struct {
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &hookOut); err != nil || !strings.Contains(hookOut.HookSpecificOutput.AdditionalContext, "agora join <name>") {
+		t.Fatalf("no invitation: %q", out.String())
 	}
 }
 

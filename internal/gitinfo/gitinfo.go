@@ -1,4 +1,5 @@
-// Package gitinfo reads the branch of a git checkout from its files, without running git.
+// Package gitinfo reads the branch and repository of a git checkout from its files, without
+// running git.
 package gitinfo
 
 import (
@@ -37,6 +38,31 @@ func Read(dir string) Head {
 // Branch returns the branch checked out in the checkout that contains dir, the first 12
 // characters of the commit when detached, or "" outside any checkout.
 func Branch(dir string) string { return Read(dir).Branch }
+
+// Repo returns the name of the repository that contains dir: the directory of its main
+// checkout, also for a linked worktree, or the bare repository's name without `.git`. It
+// returns "" outside any checkout.
+func Repo(dir string) string {
+	gitDir := find(dir)
+	if gitDir == "" {
+		return ""
+	}
+	if b, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
+		common := strings.TrimSpace(string(b))
+		if !filepath.IsAbs(common) {
+			common = filepath.Join(gitDir, common)
+		}
+		gitDir = filepath.Clean(common)
+	}
+	if filepath.Base(gitDir) == ".git" {
+		gitDir = filepath.Dir(gitDir)
+	}
+	name := strings.TrimSuffix(filepath.Base(gitDir), ".git")
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
+}
 
 // find returns the git directory of the checkout that contains dir: a .git directory, or the
 // directory a worktree's .git file points to.

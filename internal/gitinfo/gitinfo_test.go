@@ -47,3 +47,23 @@ func TestDetachedAndOutside(t *testing.T) {
 		t.Fatalf("outside: %q", b)
 	}
 }
+
+func TestRepositoryName(t *testing.T) {
+	repo := filepath.Join(t.TempDir(), "example-app")
+	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
+	os.MkdirAll(filepath.Join(repo, "src"), 0o755)
+	if n := gitinfo.Repo(filepath.Join(repo, "src")); n != "example-app" {
+		t.Fatalf("repo %q", n)
+	}
+	wt := filepath.Join(t.TempDir(), "login-fix")
+	gitdir := filepath.Join(repo, ".git", "worktrees", "login-fix")
+	write(t, filepath.Join(gitdir, "HEAD"), "ref: refs/heads/fix/login-timeout\n")
+	write(t, filepath.Join(gitdir, "commondir"), "../..\n")
+	write(t, filepath.Join(wt, ".git"), "gitdir: "+gitdir+"\n")
+	if n := gitinfo.Repo(wt); n != "example-app" {
+		t.Fatalf("worktree repo %q", n)
+	}
+	if n := gitinfo.Repo(t.TempDir()); n != "" {
+		t.Fatalf("outside: %q", n)
+	}
+}
