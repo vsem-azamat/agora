@@ -1,13 +1,14 @@
 import { create } from '@bufbuild/protobuf';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { agent, message, NOW } from '../fixtures';
+import { agent, bridge, goingOut, message, NOW, outside } from '../fixtures';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { RoomSchema } from '../gen/agora/v1/rooms_pb';
 import type { Saved } from '../tape';
+import { OpenAgent } from './common';
 import { RoomView } from './room';
-import { RoomNav } from './rooms';
+import { RoomNav, Rooms } from './rooms';
 
 afterEach(() => {
   cleanup();
@@ -23,7 +24,11 @@ const agents = [
 
 type Props = ComponentProps<typeof RoomView>;
 
-function room(messages: Message[] | undefined, more: Partial<Props> = {}) {
+function room(
+  messages: Message[] | undefined,
+  more: Partial<Props> = {},
+  wrapper?: (p: { children: ReactNode }) => ReactNode,
+) {
   const props: Props = {
     name: 'example-app',
     room: create(RoomSchema, { name: 'example-app', purpose: 'Checkout and payments', messages: 12 }),
@@ -38,11 +43,13 @@ function room(messages: Message[] | undefined, more: Partial<Props> = {}) {
     onPost: vi.fn(async () => {}),
     onFollow: vi.fn(),
     onSeen: vi.fn(),
+    onDecide: vi.fn(async () => {}),
+    onPolicy: vi.fn(),
     memory: new Map<string, Saved>(),
     onArrived: vi.fn(),
     ...more,
   };
-  return { props, ...render(<RoomView {...props} />) };
+  return { props, ...render(<RoomView {...props} />, { wrapper }) };
 }
 
 const tablet = (c: HTMLElement, id: number) => c.querySelector(`[data-mid="${id}"]`) as HTMLElement;
@@ -289,5 +296,215 @@ describe('room list', () => {
     const { container } = render(<RoomNav rooms={rooms} unread={unread} followed={new Set(['example-app'])} />);
     expect(container.querySelector('em.mention')?.textContent).toBe('@2');
     expect([...container.querySelectorAll('a.followed')].map((a) => a.textContent)).toEqual(['#example-app@2']);
+  });
+});
+
+describe('bridged rooms', () => {
+  const rooms = [
+    create(RoomSchema, { name: 'example-app', purpose: 'Checkout and payments' }),
+    create(RoomSchema, { name: 'example-chat', purpose: 'A chat outside', pending: 2 }),
+  ];
+  const chat = (b = bridge('example-chat', 'running')) => new Map([['example-chat', b]]);
+  const link = (c: HTMLElement, name: string) => c.querySelector(`a[href="#/rooms/${name}"]`) as HTMLElement;
+  const bridgedRoom = (messages: Message[] | undefined, more: Partial<Props> = {}) =>
+    room(messages, {
+      name: 'example-chat',
+      room: create(RoomSchema, { name: 'example-chat', purpose: 'A chat outside' }),
+      bridge: bridge('example-chat', 'running'),
+      ...more,
+    });
+
+  it('marks a bridged room with a bridge and others with the stoa', () => {
+    const { container } = render(<RoomNav rooms={rooms} unread={new Map()} followed={new Set()} bridges={chat()} />);
+    expect(link(container, 'example-chat').querySelector('svg.br title')?.textContent).toBe('bridge running');
+    expect(link(container, 'example-app').querySelector('svg.br')).toBeNull();
+  });
+
+  it('draws a failing bridge so it shows at a glance', () => {
+    const failing = chat(bridge('example-chat', 'restarting', 'approve', 'exit status 1'));
+    const { container } = render(<RoomNav rooms={rooms} unread={new Map()} followed={new Set()} bridges={failing} />);
+    const icon = link(container, 'example-chat').querySelector('svg.br') as SVGElement;
+    expect(icon.classList).toContain('restarting');
+    expect(icon.querySelector('title')?.textContent).toBe('bridge restarting · exit status 1');
+    cleanup();
+    const view = render(<Rooms rooms={rooms} unread={new Map()} followed={new Set()} bridges={failing} />);
+    expect(link(view.container, 'example-chat').querySelector('.sum.down')?.textContent).toBe(
+      'bridge restarting · exit status 1',
+    );
+    cleanup();
+    const { container: head } = bridgedRoom([], { bridge: bridge('example-chat', 'restarting', 'approve', 'exit') });
+    expect(head.querySelector('.roomhead .brstate')?.textContent).toBe('bridge restarting');
+    expect(head.querySelector('.roomhead h2 svg.br.restarting')).not.toBeNull();
+  });
+
+  it('shows how many messages wait for the operator next to the unread count', () => {
+    const unread = new Map([['example-chat', { unread: 3, addressed: 0, pending: 2 }]]);
+    const { container } = render(<RoomNav rooms={rooms} unread={unread} followed={new Set()} bridges={chat()} />);
+    const a = link(container, 'example-chat');
+    expect(a.querySelector('em.pending')?.textContent).toBe('2 waiting for you to send');
+    expect(a.querySelector('em:not(.pending)')?.textContent).toBe('3');
+    expect(link(container, 'example-app').querySelector('em')).toBeNull();
+  });
+
+  it('changes the outbound policy only when one is picked', () => {
+    const { props } = bridgedRoom([]);
+    const button = screen.getByRole('button', { name: 'Outbound: Ask before sending' });
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    const menu = screen.getByRole('menu', { name: 'Outbound' });
+    const items = within(menu).getAllByRole('menuitemradio');
+    expect(items.map((i) => [i.textContent, i.getAttribute('aria-checked')])).toEqual([
+      ['●Ask before sending', 'true'],
+      ['Send at once', 'false'],
+      ['Read only', 'false'],
+    ]);
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(document.activeElement).toBe(button);
+    expect(props.onPolicy).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Send at once' }));
+    expect(props.onPolicy).toHaveBeenCalledWith('open');
+  });
+
+  it('has no policy control in a room without a bridge', () => {
+    room([]);
+    expect(screen.queryByRole('button', { name: /^Outbound/ })).toBeNull();
+  });
+});
+
+describe('messages from outside', () => {
+  const ms = [
+    outside(1, 'Ada', '42', 'can you look?', 9),
+    outside(2, 'Ada', '42', 'it is the login page', 8.5),
+    outside(3, 'Bob', '77', 'same here', 7.5),
+    message(4, 'secretary', 'looking', 6, { room: 'example-chat', replyTo: 3n }),
+  ];
+  const open = vi.fn();
+  const chatRoom = () =>
+    room(
+      ms,
+      {
+        name: 'example-chat',
+        bridge: bridge('example-chat', 'running'),
+        agents: [...agents, agent('secretary', 'idle')],
+      },
+      ({ children }) => <OpenAgent.Provider value={open}>{children}</OpenAgent.Provider>,
+    );
+
+  it('names the author outside with the bridge and a neutral mark', () => {
+    const { container } = chatRoom();
+    expect(header(container, 1)).toBe('Ada · example-chatreply');
+    const mark = tablet(container, 1).querySelector('.av') as HTMLElement;
+    expect(mark.classList).toContain('ext');
+    expect(mark.textContent).toBe('A');
+    expect(tablet(container, 1).querySelector('[data-sigil]')).toBeNull();
+  });
+
+  it('shows who it is outside instead of an agent drawer', () => {
+    const { container } = chatRoom();
+    const name = within(tablet(container, 1)).getByRole('button', { name: 'Ada' });
+    fireEvent.click(name);
+    expect(name.getAttribute('aria-expanded')).toBe('true');
+    const card = tablet(container, 1).querySelector('.card')?.textContent;
+    expect(card).toContain('Ada');
+    expect(card).toContain('example-chat');
+    expect(card).toContain('id there: 42');
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.keyDown(name, { key: 'Escape' });
+    expect(tablet(container, 1).querySelector('.card')).toBeNull();
+  });
+
+  it('gives each person outside a header of their own', () => {
+    const { container } = chatRoom();
+    expect(tablet(container, 2).classList).toContain('cont');
+    expect(tablet(container, 3).classList).not.toContain('cont');
+    expect(header(container, 3)).toBe('Bob · example-chatreply');
+  });
+
+  it('leaves people outside out of conversations and the room’s people', () => {
+    const { container } = chatRoom();
+    expect(header(container, 4)).toBe('secretaryreply'); // a reply to Bob addresses no one
+    expect(tablet(container, 4).querySelector('.quote .qa')?.textContent).toBe('Bob');
+    expect([...container.querySelectorAll('.rail .person .pgname')].map((p) => p.textContent)).toEqual([
+      'secretary',
+      'operator',
+    ]);
+    expect(container.querySelector('.pairs')).toBeNull();
+  });
+});
+
+describe('messages going out', () => {
+  const chatRoom = (messages: Message[], more: Partial<Props> = {}) =>
+    room(messages, { name: 'example-chat', bridge: bridge('example-chat', 'running'), ...more });
+
+  it('shows a pending message as waiting for the operator, with Send and Don’t send', () => {
+    const { container } = chatRoom([goingOut(1, 'secretary', 'looked, all fine', 5, 'pending')]);
+    const t = tablet(container, 1);
+    expect(t.classList).toContain('waiting');
+    const decide = within(t).getByRole('group', { name: 'Send the message of secretary to example-chat?' });
+    expect(decide.textContent).toContain('Waiting for you');
+    expect(within(decide).getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(within(decide).getByRole('button', { name: 'Don’t send' })).toBeTruthy();
+  });
+
+  it('sends a pending message, then shows a check', async () => {
+    let done = () => {};
+    const onDecide = vi.fn(() => new Promise<void>((r) => (done = r)));
+    const pending = goingOut(1, 'secretary', 'looked, all fine', 5, 'pending');
+    const { container, props, rerender } = chatRoom([pending], { onDecide });
+    const send = within(tablet(container, 1)).getByRole('button', { name: 'Send' }) as HTMLButtonElement;
+    fireEvent.click(send);
+    expect(onDecide).toHaveBeenCalledWith(pending, true);
+    expect(send.disabled).toBe(true);
+    await act(async () => done());
+    expect(send.disabled).toBe(false);
+    rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'looked, all fine', 5, 'sending')]} />);
+    expect(tablet(container, 1).querySelector('.dl')?.textContent).toBe('sending…');
+    rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'looked, all fine', 5, 'sent')]} />);
+    const t = tablet(container, 1);
+    expect(t.querySelector('.dl.sent svg')).not.toBeNull();
+    expect(t.querySelector('.decide')).toBeNull();
+    expect(t.classList).not.toContain('waiting');
+  });
+
+  it('declines a pending message, then shows it muted as not sent', () => {
+    const pending = goingOut(1, 'secretary', 'something rude', 5, 'pending');
+    const { container, props, rerender } = chatRoom([pending]);
+    fireEvent.click(within(tablet(container, 1)).getByRole('button', { name: 'Don’t send' }));
+    expect(props.onDecide).toHaveBeenCalledWith(pending, false);
+    rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'something rude', 5, 'declined')]} />);
+    const t = tablet(container, 1);
+    expect(t.classList).toContain('declined');
+    expect(t.querySelector('.dl')?.textContent).toBe('not sent');
+    expect(t.querySelector('.decide')).toBeNull();
+  });
+
+  it('gives every message going out a header of its own', () => {
+    const { container } = chatRoom([
+      goingOut(1, 'secretary', 'first', 5, 'sent'),
+      goingOut(2, 'secretary', 'second', 4, 'sending'),
+    ]);
+    expect(tablet(container, 2).classList).not.toContain('cont');
+    expect(tablet(container, 2).querySelector('.dl')?.textContent).toBe('sending…');
+  });
+
+  it('says why the bridge could not send a message', () => {
+    const { container } = chatRoom([goingOut(1, 'secretary', 'hello', 5, 'failed', 'chat not found')]);
+    expect(tablet(container, 1).querySelector('.dl')?.textContent).toBe('not sent');
+    expect(tablet(container, 1).querySelector('.dlerr')?.textContent).toBe('Not sent: chat not found');
+  });
+
+  it('counts a new pending message as for the operator while scrolled up', async () => {
+    layout();
+    const ms = [1, 2, 3, 4, 5, 6].map((i) =>
+      message(i, 'builder', `message ${i}`, 60 - i * 7, { room: 'example-chat' }),
+    );
+    const { container, props, rerender } = chatRoom(ms);
+    const tape = container.querySelector('.msgs') as HTMLElement;
+    tape.scrollTop = 0;
+    fireEvent.scroll(tape);
+    rerender(<RoomView {...props} messages={[...ms, goingOut(7, 'secretary', 'draft', 1, 'pending')]} />);
+    await waitFor(() => expect(container.querySelector('.pill.latest')?.textContent).toBe('1 new · 1 for you'));
   });
 });

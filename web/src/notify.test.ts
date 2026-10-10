@@ -29,6 +29,14 @@ describe('alerts', () => {
     expect(alerts(before, after, 'all', wake)).toEqual(alerts(before, after, 'all'));
     expect(alerts(before, after, 'none', wake)).toEqual([]);
   });
+  it('tells a message waiting for the operator to send it, unless Nothing', () => {
+    const was = new Map([['example-chat', { unread: 0, addressed: 0 }]]);
+    const now = new Map([['example-chat', { unread: 0, addressed: 0, pending: 1 }]]);
+    expect(alerts(was, now, 'mentions')).toEqual([{ room: 'example-chat', body: '1 waiting for you to send' }]);
+    expect(alerts(was, now, 'all')).toEqual([{ room: 'example-chat', body: '1 waiting for you to send' }]);
+    expect(alerts(was, now, 'none')).toEqual([]);
+    expect(alerts(now, was, 'all')).toEqual([]);
+  });
   it('tells nothing for Nothing or when counts fall', () => {
     expect(alerts(before, after, 'none')).toEqual([]);
     expect(alerts(after, before, 'all')).toEqual([]);

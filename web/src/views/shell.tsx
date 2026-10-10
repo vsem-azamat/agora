@@ -3,6 +3,7 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { projects, type RoomCount } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
+import type { Bridge } from '../gen/agora/v1/bridges_pb';
 import type { Room } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import type { Theme } from '../theme';
@@ -132,6 +133,7 @@ export function Sidebar(props: {
   rooms: Room[];
   unread: Map<string, RoomCount>;
   followed: Set<string>;
+  bridges: Map<string, Bridge>;
   counts: { active: number; turns: number; open: number };
   onProject: (p: string | undefined) => void;
 }) {
@@ -161,7 +163,13 @@ export function Sidebar(props: {
       </div>
       <div>
         <h3>ROOMS</h3>
-        <RoomNav rooms={props.rooms} unread={props.unread} followed={props.followed} current={props.room} />
+        <RoomNav
+          rooms={props.rooms}
+          unread={props.unread}
+          followed={props.followed}
+          bridges={props.bridges}
+          current={props.room}
+        />
       </div>
       <div>
         <h3>PROJECTS</h3>
@@ -277,5 +285,25 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
         </div>
       </div>
     </>
+  );
+}
+
+/** How long a notice stays unless it is dismissed. */
+const TOAST_MS = 8000;
+
+/** A short notice at the bottom of the window, such as a refused call; it goes by itself. */
+export function Toast({ text, onClose }: { text: string; onClose: () => void }) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new text starts the time again
+  useEffect(() => {
+    const t = setTimeout(onClose, TOAST_MS);
+    return () => clearTimeout(t);
+  }, [text, onClose]);
+  return (
+    <div className="toast" role="alert">
+      <span>{text}</span>
+      <button type="button" className="iconbtn" onClick={onClose} aria-label="Dismiss">
+        <Icon name="close" />
+      </button>
+    </div>
   );
 }

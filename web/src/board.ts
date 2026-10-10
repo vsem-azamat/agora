@@ -281,7 +281,8 @@ export function mentionNames(body: string): string[] {
   return [...new Set(names)];
 }
 
-export type RoomCount = { unread: number; addressed: number };
+/** A room's counts for the operator: unread, addressed to it, and its messages waiting for it to send. */
+export type RoomCount = { unread: number; addressed: number; pending?: number };
 
 /** How the operator follows a room: every message, only those addressed to it, or every message with a notification. */
 export type Mode = 'all' | 'mentions' | 'wake';

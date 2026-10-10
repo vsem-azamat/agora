@@ -1,18 +1,19 @@
 // Pure helpers for a room's messages: who a message is to, how the tape groups them, who talks
 // with whom, and where the tape scrolls. Kept free of React and the DOM so they are cheap to test.
 import { mentionNames, type Names, toDate } from './board';
+import { authorKey, deliveryOf } from './bridges';
 import type { Message } from './gen/agora/v1/rooms_pb';
 
 /** Who the tape is read as: the operator, and the name the board posts its own messages under. */
 export type Reader = { operator: string; board: string };
 
 /**
- * The agents a message is to: the author of the message it replies to, then the known agents its
- * body mentions (a former name counting as its agent's current one), without its author and
- * without the board.
+ * The agents a message is to: the author of the message it replies to unless it came from outside,
+ * then the known agents its body mentions (a former name counting as its agent's current one),
+ * without its author and without the board.
  */
 export function addressees(m: Message, parent: Message | undefined, known: Names, board: string): string[] {
-  const to = parent ? [parent.author] : [];
+  const to = parent && !parent.externalAuthor ? [parent.author] : [];
   for (const name of mentionNames(m.body)) {
     const current = known.get(name);
     if (current) to.push(current);
@@ -54,12 +55,16 @@ export type TapeItem =
       cont: boolean;
       toYou: boolean;
       own: boolean;
+      /** Waits for the operator to send or decline it. */
+      waiting: boolean;
     };
 
 /**
  * The tape: messages oldest first with day headings and a `NEW` line above `firstNew`. A message
- * continues the one above when the same author wrote it within 5 minutes and it neither replies
- * nor addresses anyone; a heading, the `NEW` line or a board message starts a new group.
+ * continues the one above when the same author (the same person outside, for messages from
+ * outside) wrote it within 5 minutes and it neither replies, addresses anyone nor goes out through
+ * a bridge (its header shows where it stands); a heading, the `NEW` line or a board message starts
+ * a new group.
  */
 export function tape(
   messages: Message[],
@@ -92,9 +97,10 @@ export function tape(
     const mto = to.get(m.id) ?? [];
     const cont =
       prev !== undefined &&
-      prev.author === m.author &&
+      authorKey(prev) === authorKey(m) &&
       m.replyTo === 0n &&
       mto.length === 0 &&
+      deliveryOf(m) === undefined &&
       at.getTime() - (toDate(prev.at) ?? now).getTime() < GROUP_MS;
     out.push({
       kind: 'message',
@@ -105,6 +111,7 @@ export function tape(
       cont,
       toYou: m.author !== reader.operator && mto.includes(reader.operator),
       own: m.author === reader.operator,
+      waiting: deliveryOf(m) === 'pending',
     });
     prev = m;
   }
@@ -117,6 +124,7 @@ export type Pair = { a: string; b: string; n: number };
 export function pairs(messages: Message[], to: Map<bigint, string[]>): Pair[] {
   const found = new Map<string, Pair & { last: number }>();
   messages.forEach((m, i) => {
+    if (m.externalAuthor) return; // someone outside is not an agent
     for (const other of to.get(m.id) ?? []) {
       const [a, b] = [m.author, other].sort() as [string, string];
       const key = `${a}\n${b}`;
@@ -190,7 +198,10 @@ export function seenThrough(placed: Placed[], viewBottom: number): bigint | unde
   return last;
 }
 
-/** Messages by others newer than `seen`: how many, how many are to the operator, and the first. */
+/**
+ * Messages by others newer than `seen`: how many, how many are for the operator (addressed to it,
+ * or waiting for it to send them), and the first.
+ */
 export function unseen(
   messages: Message[],
   seen: bigint,
@@ -200,7 +211,7 @@ export function unseen(
   const fresh = messages.filter((m) => m.id > seen && m.author !== operator);
   return {
     n: fresh.length,
-    forYou: fresh.filter((m) => to.get(m.id)?.includes(operator)).length,
+    forYou: fresh.filter((m) => to.get(m.id)?.includes(operator) || deliveryOf(m) === 'pending').length,
     first: fresh[0]?.id,
   };
 }

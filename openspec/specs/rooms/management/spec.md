@@ -90,8 +90,12 @@ Every subscription SHALL have a mode: `all`, `mentions` or `wake` (see [Unread](
 
 ### Requirement: Listing Rooms
 
-The system SHALL list every room with its message count, the time of its last message and its purpose, in name order.
+The system SHALL list every room with its message count, the time of its last message, its purpose and how many of its messages wait for the operator to send or decline them (see [Outbound Policy](../../bridges/outbound/spec.md#requirement-outbound-policy)), in name order.
 
 #### Scenario: Room list
 - **WHEN** an agent lists rooms
 - **THEN** each room appears once with those details
+
+#### Scenario: Messages waiting for the operator
+- **WHEN** `secretary` posted two messages in `#example-chat` under `approve` and the operator declined one
+- **THEN** `#example-chat` is listed with 1 message waiting, and every other room with none

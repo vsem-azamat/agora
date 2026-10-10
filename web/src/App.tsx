@@ -1,3 +1,4 @@
+import { ConnectError } from '@connectrpc/connect';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { makeApi, unauthenticated } from './api';
 import {
@@ -10,6 +11,7 @@ import {
   projectOf,
   subscriptionMode,
 } from './board';
+import { bridgePolicy, type Policy } from './bridges';
 import type { Profile } from './gen/agora/v1/agents_pb';
 import type { Room } from './gen/agora/v1/rooms_pb';
 import { Icon, type IconName } from './icons';
@@ -23,10 +25,11 @@ import { Board } from './views/board';
 import { Charter } from './views/charter';
 import { Avatar, OpenAgent, Profiles } from './views/common';
 import { Drawer } from './views/drawer';
+import type { Decide } from './views/message';
 import { type Arrival, RoomView } from './views/room';
 import { Rooms, roomHref } from './views/rooms';
 import { Settings } from './views/settings';
-import { AccountMenu, Bar, Palette, type PaletteItem, Sidebar, Tabs, type View } from './views/shell';
+import { AccountMenu, Bar, Palette, type PaletteItem, Sidebar, Tabs, Toast, type View } from './views/shell';
 import { SignIn } from './views/signin';
 import { Turns } from './views/turns';
 
@@ -94,7 +97,12 @@ const views: [string, string, IconName, string][] = [
   ['Settings', '#/settings', 'settings', 'settings'],
 ];
 /** What the palette finds: the listed agents, the rooms and the views. */
-function paletteItems(agents: Profile[], rooms: Room[], openAgent: (name: string) => void): PaletteItem[] {
+function paletteItems(
+  agents: Profile[],
+  rooms: Room[],
+  bridged: ReadonlySet<string>,
+  openAgent: (name: string) => void,
+): PaletteItem[] {
   return [
     ...agents.map((a) => ({
       key: `agent ${a.name}`,
@@ -106,8 +114,8 @@ function paletteItems(agents: Profile[], rooms: Room[], openAgent: (name: string
     ...rooms.map((r) => ({
       key: `room ${r.name}`,
       label: `#${r.name}`,
-      sub: 'room',
-      mark: <Icon name="room" />,
+      sub: bridged.has(r.name) ? 'bridged room' : 'room',
+      mark: <Icon name={bridged.has(r.name) ? 'bridge' : 'room'} />,
       go: () => openRoom(r.name),
     })),
     ...views.map(([label, href, icon, key]) => ({
@@ -174,6 +182,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [palette, setPalette] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [arrival, setArrival] = useState<Arrival>();
+  const [notice, setNotice] = useState<string>();
+  const closeNotice = useCallback(() => setNotice(undefined), []);
   const memory = useRef(new Map<string, Saved>()).current;
   const roomName = route.view === 'room' ? route.room : undefined;
   const { messages, error: roomError, markSeen } = useRoom(api, roomName, data?.revision, fail);
@@ -194,7 +204,29 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const known = useMemo(() => knownNames(agents ?? [], operator), [agents, operator]);
   const profiles = useMemo(() => new Map((agents ?? []).map((a) => [a.name, a])), [agents]);
   const rooms = data?.rooms;
-  const items = useMemo(() => paletteItems(listed ?? [], rooms ?? [], setDrawer), [listed, rooms]);
+  const bridges = data?.bridges;
+  const bridged = useMemo(() => new Set(bridges?.keys()), [bridges]);
+  const items = useMemo(() => paletteItems(listed ?? [], rooms ?? [], bridged, setDrawer), [listed, rooms, bridged]);
+  /** A call the operator made failed: a refused token signs out, anything else is told. */
+  const refused = useCallback(
+    (what: string) => (err: unknown) => {
+      if (unauthenticated(err)) fail(err);
+      else setNotice(`${what}: ${ConnectError.from(err).rawMessage}`);
+    },
+    [fail],
+  );
+  // the watch reports the change, which reloads the room with the message's new state
+  const decide = useCallback<Decide>(
+    async (m, send) => {
+      try {
+        if (send) await api.bridges.sendPending({ messageId: m.id });
+        else await api.bridges.declinePending({ messageId: m.id });
+      } catch (err) {
+        refused(send ? 'Not sent' : 'Not declined')(err);
+      }
+    },
+    [api, refused],
+  );
 
   const signOut = () => onSignOut(false);
   const account = data ? (
@@ -234,6 +266,12 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     if (mode === 'wake' && notify !== 'none') void askToNotify();
     api.rooms.subscribe({ rooms: [roomName], follow: on, mode: mode && subscriptionMode(mode) }).catch(fail);
   };
+  const setPolicy = (policy: Policy) => {
+    if (!roomName) return;
+    api.bridges
+      .setBridgePolicy({ name: roomName, policy: bridgePolicy(policy) })
+      .catch(refused('The policy did not change'));
+  };
   const pickProject = (p: string | undefined) => {
     setProject(p);
     if (route.view !== 'board') location.hash = '#/';
@@ -256,6 +294,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           key={roomName}
           name={roomName ?? ''}
           room={data.rooms.find((r) => r.name === roomName)}
+          bridge={data.bridges.get(roomName ?? '')}
           messages={messages}
           error={roomError}
           reader={reader}
@@ -270,6 +309,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           onPost={post}
           onFollow={follow}
           onSeen={markSeen}
+          onDecide={decide}
+          onPolicy={setPolicy}
           memory={memory}
           arrival={arrival}
           onArrived={() => setArrival(undefined)}
@@ -277,7 +318,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       );
       break;
     case 'rooms':
-      main = <Rooms rooms={data.rooms} unread={data.unread} followed={data.followed} />;
+      main = <Rooms rooms={data.rooms} unread={data.unread} followed={data.followed} bridges={data.bridges} />;
       break;
     case 'turns':
       main = <Turns resources={data.resources} now={now} />;
@@ -303,7 +344,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       main = <Board agents={listed} now={now} project={project} onProject={setProject} />;
   }
 
-  const unreadTotal = [...data.unread.values()].reduce((n, c) => n + c.unread, 0);
+  const unreadTotal = [...data.unread.values()].reduce((n, c) => n + c.unread + (c.pending ?? 0), 0);
 
   return (
     <Profiles.Provider value={profiles}>
@@ -320,6 +361,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
               rooms={data.rooms}
               unread={data.unread}
               followed={data.followed}
+              bridges={data.bridges}
               counts={{ active: active ?? 0, turns: heldTurns(data.resources), open: openProposals(data.proposals) }}
               onProject={pickProject}
             />
@@ -345,6 +387,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
             />
           )}
           {palette && <Palette items={items} onClose={() => setPalette(false)} />}
+          {notice && <Toast text={notice} onClose={closeNotice} />}
         </div>
       </OpenAgent.Provider>
     </Profiles.Provider>

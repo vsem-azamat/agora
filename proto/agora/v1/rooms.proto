@@ -39,6 +39,8 @@ message Room {
   int32 messages = 5;
   // Unset when the room has no messages.
   google.protobuf.Timestamp last_at = 6;
+  // Messages of the room's bridge that wait for the operator to send or decline them.
+  int32 pending = 7;
 }
 
 message Message {
