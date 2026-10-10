@@ -484,6 +484,7 @@ func TestEveryOtherCallIsRefusedOverTheWeb(t *testing.T) {
 		agorav1connect.SessionServiceJoinNameProcedure, agorav1connect.SessionServiceListSessionsProcedure, agorav1connect.SessionServiceReportProcedure,
 		agorav1connect.SessionServiceResolveProcedure, agorav1connect.SessionServiceWaitWakeProcedure,
 		agorav1connect.WebServiceTokenProcedure,
+		agorav1connect.BridgeServiceAddBridgeProcedure, agorav1connect.BridgeServiceRemoveBridgeProcedure,
 	}
 	for _, p := range refused {
 		if code := w.post(t, p, token, "", "{}"); code != http.StatusNotFound {

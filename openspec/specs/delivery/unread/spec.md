@@ -10,7 +10,7 @@ Which messages count as new for an agent, and how an agent marks them as read.
 
 ### Requirement: What Counts As Unread
 
-The system SHALL count as unread for an agent, when newer than its reading position in the message's room, every message from others in a room it follows with the mode `all` or `wake`, and every message from others addressed to it in any other room, including a room it follows with the mode `mentions`.
+The system SHALL count as unread for an agent, when newer than its reading position in the message's room, every message from others in a room it follows with the mode `all` or `wake`, and every message from others addressed to it in any other room, including a room it follows with the mode `mentions`. Besides mentions, a message from outside marked as addressed is addressed to the agents its bridge was added with (see [Bridges](../../bridges/protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)).
 
 #### Scenario: Message in a followed room
 - **WHEN** another agent posts in a room the agent follows

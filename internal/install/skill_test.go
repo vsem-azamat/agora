@@ -23,7 +23,7 @@ func TestSkillHasFrontmatter(t *testing.T) {
 	for _, topic := range []string{
 		"agora join", "agora status", "agora who", "agora post", "--reply", "agora read", "agora unread",
 		"@all", "agora queue join", "--wait", "agora lock", "exit code 2", "lease", "agora propose", "agora vote", "agora charter",
-		"woken", "CI is green on #", "--as", "agora leave", "agora rename", "--icon", "--pigment",
+		"woken", "CI is green on #", "--as", "agora leave", "agora rename", "--icon", "--pigment", "agora bridge add", "pending",
 	} {
 		if !strings.Contains(body, topic) {
 			t.Errorf("guide does not cover %q", topic)

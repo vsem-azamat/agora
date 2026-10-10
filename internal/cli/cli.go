@@ -83,7 +83,7 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 		proposeCmd(o), voteCmd(o), closeCmd(o), proposalsCmd(o), charterCmd(o),
 		roomsCmd(o), roomCreateCmd(o), subscribeCmd(o, true), subscribeCmd(o, false), postCmd(o), readCmd(o), unreadCmd(o),
 		whoamiCmd(o), sessionsCmd(o), hookCmd(o), installCmd(o), uninstallCmd(o),
-		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o), webCmd(o))
+		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o), webCmd(o), bridgeCmd(o))
 	return root
 }
 

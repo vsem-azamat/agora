@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/proc"
@@ -62,6 +64,7 @@ type Hub struct {
 	rooms    *rooms.Rooms
 	gov      *governance.Governance
 	tokens   *webtoken.Tokens
+	bridges  *bridges.Bridges
 	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
@@ -85,6 +88,8 @@ type Hub struct {
 	webToken    atomic.Pointer[string] // the current web token; nil until there is one
 	rotated     *signal                // fires when the web token is replaced
 
+	bridgeRuns bridgeRuns // the bridges the hub runs while it serves
+
 	waitMu  sync.Mutex
 	waiters map[string]*waiter // by session id
 	waking  map[string]bool    // sessions whose wake command runs now
@@ -99,13 +104,16 @@ func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	r := rooms.New(db, now)
 	return &Hub{
 		db: db, queue: q, sessions: sessions.New(db, q, r, now), agents: agents.New(db, now), rooms: r, gov: governance.New(db, r, now), tokens: webtoken.New(db, now),
-		alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
+		bridges: bridges.New(db, r, now),
+		alive:   proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
 		waiters: map[string]*waiter{}, waking: map[string]bool{},
 		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,
+		bridgeRuns: bridgeRuns{runs: map[string]*bridgeRun{}, minDelay: bridgeMinDelay, maxDelay: bridgeMaxDelay, steady: bridgeSteady, drain: bridgeDrain},
 	}
 }
 
-// Handler returns the HTTP handler with every service mounted.
+// Handler returns the HTTP handler with every service mounted, for the socket: the calls only
+// the operator may make are not found there.
 func (h *Hub) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(agorav1connect.NewResourceServiceHandler(&resources{h}))
@@ -114,5 +122,12 @@ func (h *Hub) Handler() http.Handler {
 	mux.Handle(agorav1connect.NewRoomServiceHandler(&roomService{h}))
 	mux.Handle(agorav1connect.NewGovernanceServiceHandler(&governanceService{h}))
 	mux.Handle(agorav1connect.NewWebServiceHandler(&webService{h}))
-	return mux
+	mux.Handle(agorav1connect.NewBridgeServiceHandler(&bridgeService{h}))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if operatorProcedures[path.Clean(r.URL.Path)] {
+			writeConnectError(w, http.StatusNotFound, "not_found", "only the web app serves this, to the operator")
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }

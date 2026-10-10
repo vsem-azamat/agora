@@ -54,16 +54,34 @@ func plural(n int32) string {
 	return "s"
 }
 
-// formatMessage renders a message: room, identifier, author, time and reply reference, then
-// the body indented. It is the same layout as rooms.Format, which the hub uses for the
-// messages it delivers into an agent's context; keep the two alike.
+// deliveryLabels follow the head of a message of a bridged room, as in rooms.Format.
+var deliveryLabels = map[agorav1.DeliveryState]string{
+	agorav1.DeliveryState_DELIVERY_STATE_PENDING:  " · pending",
+	agorav1.DeliveryState_DELIVERY_STATE_SENDING:  " · sending",
+	agorav1.DeliveryState_DELIVERY_STATE_SENT:     " · sent",
+	agorav1.DeliveryState_DELIVERY_STATE_DECLINED: " · declined",
+	agorav1.DeliveryState_DELIVERY_STATE_FAILED:   " · not sent: ",
+}
+
+// formatMessage renders a message: room, identifier, author (name@bridge for a message from
+// outside), time, reply reference and delivery state, then the body indented. It is the same
+// layout as rooms.Format, which the hub uses for the messages it delivers into an agent's
+// context; keep the two alike.
 func formatMessage(m *agorav1.Message) string {
-	head := fmt.Sprintf("#%s [%d] %s · %s", m.GetRoom(), m.GetId(), m.GetAuthor(), shortClock(m.GetAt().AsTime()))
+	author := m.GetAuthor()
+	if ext := m.GetExternalAuthor(); ext != nil {
+		author = ext.GetName() + "@" + ext.GetBridge()
+	}
+	head := fmt.Sprintf("#%s [%d] %s · %s", m.GetRoom(), m.GetId(), author, shortClock(m.GetAt().AsTime()))
 	if m.GetReplyTo() != 0 {
 		head += fmt.Sprintf(" · re %d", m.GetReplyTo())
 	}
 	if m.GetAddressed() {
 		head += " · to you"
+	}
+	head += deliveryLabels[m.GetDeliveryState()]
+	if m.GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_FAILED {
+		head += m.GetDeliveryError()
 	}
 	return head + "\n  " + strings.ReplaceAll(m.GetBody(), "\n", "\n  ")
 }

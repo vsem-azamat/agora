@@ -803,3 +803,41 @@ func TestWebToken(t *testing.T) {
 		t.Fatalf("rotate: %+v", rotated)
 	}
 }
+
+func TestBridges(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	agora(ctx, socket, "secretary", "join", "secretary")
+	r := agora(ctx, socket, "builder", "bridge", "add", "example-chat", "--command", "exec sleep 600", "--purpose", "the example chat", "--agent", "secretary")
+	if r.code != 0 || !strings.Contains(r.stdout, "created #example-chat") || !strings.Contains(r.stdout, "subscribed secretary to #example-chat with the mode wake") {
+		t.Fatalf("add: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "bridge", "add", "example-chat", "--command", "exec sleep 600"); r.code == 0 || !strings.Contains(r.stderr, "already has a bridge") {
+		t.Fatalf("add again: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "bridge", "list"); !strings.Contains(r.stdout, "#example-chat") || !strings.Contains(r.stdout, "running") ||
+		!strings.Contains(r.stdout, "policy approve") || !strings.Contains(r.stdout, "agents secretary") || !strings.Contains(r.stdout, "exec sleep 600") {
+		t.Fatalf("list: %+v", r)
+	}
+	if r := agora(ctx, socket, "secretary", "subscribe", "example-chat"); !strings.Contains(r.stdout, "#example-chat (wake)") {
+		t.Fatalf("secretary's subscriptions: %+v", r)
+	}
+	if r := agora(ctx, socket, "secretary", "post", "example-chat", "looked, all fine"); r.code != 0 {
+		t.Fatalf("post: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "read", "example-chat"); !strings.Contains(r.stdout, "secretary · ") || !strings.Contains(r.stdout, "· pending") {
+		t.Fatalf("read: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "bridge", "remove", "example-chat"); r.code != 0 || !strings.Contains(r.stdout, "the room stays") {
+		t.Fatalf("remove: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "bridge", "list"); !strings.Contains(r.stdout, "no bridges") {
+		t.Fatalf("list after removing: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "read", "example-chat"); !strings.Contains(r.stdout, "looked, all fine") || !strings.Contains(r.stdout, "no longer bridged") {
+		t.Fatalf("read after removing: %+v", r)
+	}
+}

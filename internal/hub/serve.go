@@ -59,9 +59,11 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 	var loops sync.WaitGroup
 	defer func() {
 		stopLoops()
+		h.stopBridges()
 		loops.Wait()
 	}()
 	loops.Go(func() { h.Sweep(loopCtx) })
+	h.serveBridges(loopCtx)
 	var webSrv *http.Server
 	if h.webListener != nil {
 		webSrv = &http.Server{

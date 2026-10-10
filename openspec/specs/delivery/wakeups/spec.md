@@ -10,7 +10,7 @@ Waking an idle agent when something needs it (a message addressed to it, a messa
 
 ### Requirement: What Wakes An Agent
 
-The system SHALL wake an idle agent only for unread messages addressed to it, for unread messages from others posted in a room after the agent began following it with the mode `wake` (by subscribing with it or changing to it), and for queue slots offered to it, never for other messages in rooms it follows. Messages that were already in the room when the mode became `wake` stay unread as they were but do not wake the agent.
+The system SHALL wake an idle agent only for unread messages addressed to it, for unread messages from others posted in a room after the agent began following it with the mode `wake` (by subscribing with it or changing to it), and for queue slots offered to it, never for other messages in rooms it follows. Messages that were already in the room when the mode became `wake` stay unread as they were but do not wake the agent. The board's messages that a room's bridge stopped or works again do not wake the agent either (see [Bridges](../../bridges/management/spec.md#requirement-the-hub-runs-bridges)).
 
 #### Scenario: Room chatter
 - **WHEN** messages arrive in a room the idle agent follows with the mode `all`, without addressing it

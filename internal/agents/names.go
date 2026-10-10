@@ -62,6 +62,8 @@ var renames = []string{
 	"UPDATE charter_changes SET changed_by = :new WHERE changed_by = :old",
 	"UPDATE charter SET changed_by = :new WHERE changed_by = :old",
 	"UPDATE pull_requests SET agent = :new WHERE agent = :old",
+	"UPDATE bridges SET created_by = :new WHERE created_by = :old",
+	"UPDATE bridge_agents SET agent = :new WHERE agent = :old",
 }
 
 // RenameTx gives agent the name name inside the caller's transaction: every row that names

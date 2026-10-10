@@ -78,7 +78,7 @@ The web listener SHALL refuse with HTTP 403 any request whose `Origin` header na
 
 ### Requirement: The App Reaches Only What It Needs
 
-The web listener SHALL serve only these calls: listing agents, rooms, resources and proposals; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, changing profiles, renaming, leaving, reporting sessions, taking unread messages, the web token) SHALL be refused as not found, also with the valid token. Requests larger than 1 MiB SHALL be refused.
+The web listener SHALL serve only these calls: listing agents, rooms, resources, proposals and bridges; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; changing a bridge's outbound policy; sending or declining a pending message; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, changing profiles, renaming, leaving, reporting sessions, taking unread messages, adding or removing bridges, the web token) SHALL be refused as not found, also with the valid token. Changing an outbound policy and sending or declining a pending message are served only there; the hub's socket refuses them as not found (see [Only The Operator Decides](../../bridges/outbound/spec.md#requirement-only-the-operator-decides)). Requests larger than 1 MiB SHALL be refused.
 
 #### Scenario: Releasing a lock
 - **WHEN** a request with the valid token asks the web listener to release another agent's lock
@@ -87,6 +87,14 @@ The web listener SHALL serve only these calls: listing agents, rooms, resources 
 #### Scenario: Voting
 - **WHEN** a request with the valid token asks the web listener to vote on a proposal
 - **THEN** it is refused as not found and no vote is recorded
+
+#### Scenario: Removing a bridge
+- **WHEN** a request with the valid token asks the web listener to remove a bridge
+- **THEN** it is refused as not found and the bridge keeps running
+
+#### Scenario: Deciding on a pending message
+- **WHEN** a request with the valid token asks the web listener to send a pending message
+- **THEN** the message goes out
 
 ### Requirement: The Operator Acts Under One Name
 

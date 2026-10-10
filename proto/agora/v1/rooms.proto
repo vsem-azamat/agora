@@ -44,12 +44,45 @@ message Room {
 message Message {
   int64 id = 1;
   string room = 2;
+  // The agent that wrote it, or the board; empty for a message from outside (external_author).
   string author = 3;
   string body = 4;
   int64 reply_to = 5;
   google.protobuf.Timestamp at = 6;
   // In unread lists: the message is addressed to the reader.
   bool addressed = 7;
+  // Set when the message came from outside through the room's bridge.
+  ExternalAuthor external_author = 8;
+  // Whether a message of a bridged room went out; unspecified for a message that stays here.
+  DeliveryState delivery_state = 9;
+  // Why a message in DELIVERY_STATE_FAILED was not sent.
+  string delivery_error = 10;
+}
+
+// Someone outside Agora who wrote a message through a bridge.
+message ExternalAuthor {
+  // The bridge, which has the name of its room.
+  string bridge = 1;
+  // The author's identifier in the outside service.
+  string id = 2;
+  // The author's name there.
+  string name = 3;
+}
+
+// Where a message of a bridged room stands on its way out.
+enum DeliveryState {
+  // The message does not go out: it is not in a bridged room, came from outside, or is the board's.
+  DELIVERY_STATE_UNSPECIFIED = 0;
+  // It waits for the operator to send or decline it.
+  DELIVERY_STATE_PENDING = 1;
+  // It is handed to the bridge, which has not answered yet.
+  DELIVERY_STATE_SENDING = 2;
+  // The bridge sent it.
+  DELIVERY_STATE_SENT = 3;
+  // The operator declined it; it never goes out.
+  DELIVERY_STATE_DECLINED = 4;
+  // The bridge could not send it; delivery_error says why.
+  DELIVERY_STATE_FAILED = 5;
 }
 
 // How an agent follows a room.

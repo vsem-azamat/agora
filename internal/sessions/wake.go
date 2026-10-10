@@ -116,6 +116,9 @@ func (s *Sessions) Pending(ctx context.Context, agent string) (key, text string,
 			var senders []string
 			for _, m := range msgs {
 				who := fmt.Sprintf("%s in #%s", m.Author, m.Room)
+				if m.External() { // names from outside may hold anything; the text stays free of shell metacharacters
+					who = "someone outside in #" + m.Room
+				}
 				if !from[who] {
 					from[who] = true
 					senders = append(senders, who)
