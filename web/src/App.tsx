@@ -1,6 +1,8 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { makeApi, unauthenticated } from './api';
 import { boardAgents, heldTurns, liveness, openProposals, projectOf } from './board';
+import type { Profile } from './gen/agora/v1/agents_pb';
+import type { Room } from './gen/agora/v1/rooms_pb';
 import { Icon, type IconName } from './icons';
 import { askToNotify, useNotifications } from './notify';
 import { applySize, NOTIFY_KEY, type Notify, resolveNotify, resolveSize, SIZE_KEY, useChoice } from './prefs';
@@ -75,6 +77,42 @@ const openRoom = (room: string) => {
   location.hash = roomHref(room);
 };
 
+const views: [string, string, IconName, string][] = [
+  ['Board', '#/', 'agent', 'board'],
+  ['Rooms', '#/rooms', 'room', 'rooms'],
+  ['Turns', '#/turns', 'queue', 'turns'],
+  ['Charter', '#/charter', 'charter', 'charter'],
+  ['Settings', '#/settings', 'settings', 'settings'],
+];
+/** What the palette finds: the listed agents, the rooms and the views. */
+function paletteItems(agents: Profile[], rooms: Room[], openAgent: (name: string) => void): PaletteItem[] {
+  return [
+    ...agents.map((a) => ({
+      key: `agent ${a.name}`,
+      label: a.name,
+      sub: `${projectOf(a)} · ${liveness(a)}`,
+      mark: <Avatar name={a.name} live={liveness(a)} size="sm" />,
+      go: () => openAgent(a.name),
+    })),
+    ...rooms.map((r) => ({
+      key: `room ${r.name}`,
+      label: `#${r.name}`,
+      sub: 'room',
+      mark: <Icon name="room" />,
+      go: () => openRoom(r.name),
+    })),
+    ...views.map(([label, href, icon, key]) => ({
+      key: `view ${key}`,
+      label,
+      sub: 'view',
+      mark: <Icon name={icon} />,
+      go: () => {
+        location.hash = href;
+      },
+    })),
+  ];
+}
+
 // --- the app -------------------------------------------------------------------------
 
 export function App() {
@@ -131,13 +169,17 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const roomName = route.view === 'room' ? route.room : undefined;
   const { messages, error: roomError, markSeen } = useRoom(api, roomName, data?.revision, fail);
   const listed = useMemo(() => (data ? boardAgents(data.agents, data.operator) : undefined), [data]);
-  const recent = useAgentMessages(api, drawer, data?.rooms.map((r) => r.name) ?? [], fail);
+  const recent = useAgentMessages(api, drawer, data?.rooms ?? [], fail);
   useNotifications(data?.unread, notify, openRoom);
   usePaletteKey(useCallback(() => setPalette((p) => !p), []));
   const closeDrawer = useCallback(() => setDrawer(undefined), []);
   const operator = data?.operator ?? '';
   const board = data?.board ?? '';
   const reader = useMemo(() => ({ operator, board }), [operator, board]);
+  const agents = data?.agents;
+  const known = useMemo(() => new Set([...(agents ?? []).map((a) => a.name), operator]), [agents, operator]);
+  const rooms = data?.rooms;
+  const items = useMemo(() => paletteItems(listed ?? [], rooms ?? [], setDrawer), [listed, rooms]);
 
   const signOut = () => onSignOut(false);
   const account = data ? (
@@ -180,7 +222,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     if (route.view !== 'board') location.hash = '#/';
   };
   const chooseNotifications = (n: Notify) => {
-    if (n !== 'none') askToNotify();
+    if (n !== 'none') void askToNotify();
     chooseNotify(n);
   };
   const arrive = (a: Arrival) => {
@@ -243,38 +285,6 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       main = <Board agents={listed} now={now} project={project} onProject={setProject} />;
   }
 
-  const views: [string, string, IconName, string][] = [
-    ['Board', '#/', 'agent', 'board'],
-    ['Rooms', '#/rooms', 'room', 'rooms'],
-    ['Turns', '#/turns', 'queue', 'turns'],
-    ['Charter', '#/charter', 'charter', 'charter'],
-    ['Settings', '#/settings', 'settings', 'settings'],
-  ];
-  const items: PaletteItem[] = [
-    ...listed.map((a) => ({
-      key: `agent ${a.name}`,
-      label: a.name,
-      sub: `${projectOf(a)} · ${liveness(a)}`,
-      mark: <Avatar name={a.name} live={liveness(a)} size="sm" />,
-      go: () => setDrawer(a.name),
-    })),
-    ...data.rooms.map((r) => ({
-      key: `room ${r.name}`,
-      label: `#${r.name}`,
-      sub: 'room',
-      mark: <Icon name="room" />,
-      go: () => openRoom(r.name),
-    })),
-    ...views.map(([label, href, icon, key]) => ({
-      key: `view ${key}`,
-      label,
-      sub: 'view',
-      mark: <Icon name={icon} />,
-      go: () => {
-        location.hash = href;
-      },
-    })),
-  ];
   const unreadTotal = [...data.unread.values()].reduce((n, c) => n + c.unread, 0);
 
   return (
@@ -305,7 +315,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
             rooms={data.rooms}
             general={data.general}
             recent={recent}
-            known={new Set([...data.agents.map((a) => a.name), data.operator])}
+            known={known}
             now={now}
             onClose={closeDrawer}
             onAddress={(room) => {

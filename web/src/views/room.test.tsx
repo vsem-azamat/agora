@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agent, message, NOW } from '../fixtures';
@@ -174,6 +174,31 @@ describe('reading position', () => {
   });
 });
 
+describe('a hidden page', () => {
+  const ms = [1, 2, 3, 4, 5, 6].map((i) => message(i, i % 2 ? 'builder' : 'reviewer', `message ${i}`, 60 - i * 7));
+
+  it('reads nothing that came while hidden, and puts the NEW line above it on return', async () => {
+    layout();
+    const { container, props, rerender } = room(ms);
+    const tape = container.querySelector('.msgs') as HTMLElement;
+    expect(tape.scrollTop).toBe(700); // at the bottom, following
+    vi.mocked(props.onSeen).mockClear();
+    const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const more = [...ms, message(7, 'builder', 'one more', 2), message(8, 'release', '@operator tag it', 1)];
+    rerender(<RoomView {...props} messages={more} />);
+    expect(tape.scrollTop).toBe(700); // no follow while hidden
+    expect(props.onSeen).not.toHaveBeenCalled();
+    await waitFor(() => expect(container.querySelector('.pill.latest')?.textContent).toBe('2 new · 1 for you'));
+    state.mockReturnValue('visible');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() =>
+      expect(container.querySelector('.newline')?.nextElementSibling?.getAttribute('data-mid')).toBe('7'),
+    );
+  });
+});
+
 describe('composing', () => {
   it('completes a name after @ instead of posting', () => {
     const onDraft = vi.fn();
@@ -181,7 +206,8 @@ describe('composing', () => {
     const box = screen.getByLabelText('Message #example-app') as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: '@rev', selectionStart: 4 } });
     rerender(<RoomView {...props} draft="@rev" />);
-    expect(screen.getByRole('button', { name: /reviewer/ })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /reviewer/, selected: true })).toBeTruthy();
+    expect(box.getAttribute('aria-expanded')).toBe('true');
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(onDraft).toHaveBeenLastCalledWith('@reviewer ');
     expect(props.onPost).not.toHaveBeenCalled();

@@ -97,9 +97,9 @@ describe('App with a hub', () => {
     expect(container.querySelector('em.mention')?.textContent).toBe('@1');
     expect(screen.getByText('live · 2 on the board')).toBeTruthy();
     openMenu();
-    expect(screen.getByRole('menu').textContent).toContain('@operator');
+    expect(document.getElementById('account-menu')?.textContent).toContain('@operator');
     expect(screen.getAllByRole('button', { name: /theme$/ })).toHaveLength(5);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
   });
@@ -123,7 +123,7 @@ describe('palette', () => {
   it('opens a room by name with Ctrl+K', async () => {
     await signedIn();
     fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
-    const input = screen.getByRole('textbox', { name: 'Jump to' });
+    const input = screen.getByRole('combobox', { name: 'Jump to' });
     fireEvent.change(input, { target: { value: 'gen' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(location.hash).toBe('#/rooms/general');
@@ -132,14 +132,43 @@ describe('palette', () => {
   it('moves with the arrow keys and opens an agent', async () => {
     await signedIn();
     fireEvent.click(screen.getByText('Jump to an agent, room or view'));
-    const input = screen.getByRole('textbox', { name: 'Jump to' });
+    const input = screen.getByRole('combobox', { name: 'Jump to' });
+    expect(document.activeElement).toBe(input);
     fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const option = screen.getByRole('option', { selected: true });
+    expect(option.textContent).toContain('reviewer');
+    expect(input.getAttribute('aria-activedescendant')).toBe(option.id);
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(screen.getByRole('dialog', { name: 'reviewer' })).toBeTruthy();
+  });
+  it('closes before the drawer under it on Escape', async () => {
+    const { container } = await signedIn();
+    fireEvent.click(container.querySelector('[data-agent="builder"]') as HTMLElement);
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Jump to' }), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Jump to' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'builder' })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'builder' })).toBeNull();
   });
 });
 
 describe('drawer', () => {
+  it('takes the focus, keeps Tab inside and gives the focus back', async () => {
+    const { container } = await signedIn();
+    const row = container.querySelector('[data-agent="builder"]') as HTMLElement;
+    row.focus();
+    fireEvent.click(row);
+    const dialog = screen.getByRole('dialog', { name: 'builder' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    expect(document.activeElement).toBe(close);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.click(close);
+    expect(document.activeElement).toBe(row);
+  });
   it('addresses an agent in its project room', async () => {
     const { container } = await signedIn();
     fireEvent.click(container.querySelector('[data-agent="builder"]') as HTMLElement);
@@ -164,7 +193,7 @@ describe('theme', () => {
     const ink = screen.getByRole('button', { name: 'Ink theme' });
     fireEvent.pointerEnter(ink);
     fireEvent.click(ink);
-    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    await waitFor(() => expect(document.getElementById('account-menu')).toBeNull());
     expect(document.documentElement.dataset.theme).toBe('ink');
     expect(localStorage.getItem('agora.theme')).toBe('ink');
   });

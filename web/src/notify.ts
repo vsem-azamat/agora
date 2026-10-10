@@ -27,9 +27,9 @@ export function notificationsAllowed(): boolean {
 }
 
 /** Asks the browser for permission to notify, unless it was already given or refused. */
-export function askToNotify() {
+export async function askToNotify(): Promise<void> {
   if (typeof Notification !== 'undefined' && Notification.permission === 'default')
-    void Notification.requestPermission();
+    await Notification.requestPermission();
 }
 
 /** Shows a notification per room whose counts rose while the page is hidden; clicking it opens the room. */

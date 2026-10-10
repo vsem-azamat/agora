@@ -8,6 +8,7 @@ import { Icon } from '../icons';
 import type { Theme } from '../theme';
 import type { Status } from '../useHub';
 import { Avatar } from './common';
+import { useDialog } from './dialog';
 import { RoomNav } from './rooms';
 import { ThemeDots } from './themes';
 
@@ -55,26 +56,33 @@ export function AccountMenu(props: {
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  // a disclosure popover: a press outside or Escape closes it
   useEffect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+      button.current?.focus();
+    };
     document.addEventListener('pointerdown', outside);
-    return () => document.removeEventListener('pointerdown', outside);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', onKey, true);
+    };
   }, [open]);
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || !open) return;
-    e.stopPropagation();
-    setOpen(false);
-  };
   return (
     <div className="acct" ref={root}>
       <button
         type="button"
         className="acctbtn"
-        onKeyDown={onKey}
-        aria-haspopup="menu"
+        ref={button}
+        aria-controls="account-menu"
         aria-expanded={open}
         aria-label={`Account: @${props.operator}`}
         onClick={() => setOpen(!open)}
@@ -84,13 +92,12 @@ export function AccountMenu(props: {
         <span className="chev">▾</span>
       </button>
       {open && (
-        <div className="menu" role="menu" onKeyDown={onKey}>
+        <div className="menu" id="account-menu">
           <div className="who">
             <b>@{props.operator}</b>signed in to this hub
           </div>
           <button
             type="button"
-            role="menuitem"
             onClick={() => {
               setOpen(false);
               location.hash = '#/settings';
@@ -107,7 +114,7 @@ export function AccountMenu(props: {
             }}
           />
           <hr />
-          <button type="button" role="menuitem" onClick={props.onSignOut}>
+          <button type="button" onClick={props.onSignOut}>
             <Icon name="close" />
             Sign out
           </button>
@@ -205,8 +212,9 @@ export type PaletteItem = { key: string; label: string; sub: string; mark: React
 export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => input.current?.focus(), []);
+  useDialog(root, input, onClose);
   const q = query.trim().toLowerCase();
   const shown = items.filter((x) => !q || x.label.toLowerCase().includes(q) || x.sub.includes(q));
   const at = Math.min(picked, shown.length - 1);
@@ -223,17 +231,20 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
     } else if (e.key === 'Enter') {
       e.preventDefault();
       go(shown[at]);
-    } else if (e.key === 'Escape') {
-      e.stopPropagation();
-      onClose();
     }
   };
+  const option = (i: number) => `palette-option-${i}`;
   return (
     <>
       <button type="button" className="scrim pscrim" onClick={onClose} aria-label="Close" tabIndex={-1} />
-      <div className="pal" role="dialog" aria-label="Jump to">
+      <div ref={root} className="pal" role="dialog" aria-modal="true" aria-label="Jump to">
         <input
           ref={input}
+          role="combobox"
+          aria-expanded={shown.length > 0}
+          aria-controls="palette-list"
+          aria-autocomplete="list"
+          aria-activedescendant={at >= 0 ? option(at) : undefined}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -244,18 +255,26 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
           aria-label="Jump to"
           autoComplete="off"
         />
-        <ul className="plist">
+        <div className="plist" id="palette-list" role="listbox" aria-label="Agents, rooms and views">
           {shown.map((x, i) => (
-            <li key={x.key}>
-              <button type="button" className={i === at ? 'on' : undefined} onClick={() => go(x)}>
-                {x.mark}
-                <span>{x.label}</span>
-                <small>{x.sub}</small>
-              </button>
-            </li>
+            <div
+              key={x.key}
+              id={option(i)}
+              role="option"
+              aria-selected={i === at}
+              className={i === at ? 'on' : undefined}
+              onMouseDown={(e) => e.preventDefault()} // the input keeps the focus
+              onClick={() => go(x)}
+              onKeyDown={(e) => e.key === 'Enter' && go(x)}
+              tabIndex={-1}
+            >
+              {x.mark}
+              <span>{x.label}</span>
+              <small>{x.sub}</small>
+            </div>
           ))}
-          {shown.length === 0 && <li className="empty">Nothing matches.</li>}
-        </ul>
+          {shown.length === 0 && <p className="empty">Nothing matches.</p>}
+        </div>
       </div>
     </>
   );

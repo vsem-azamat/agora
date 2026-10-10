@@ -1,7 +1,7 @@
 // Five themes, Parchment the default. The system's color scheme is not consulted. Each theme's
 // tokens live in styles.css under `:root[data-theme=...]`; the colors here draw its swatch and
 // set the browser's theme color.
-import { readPref, writePref } from './prefs';
+import { readPref } from './prefs';
 
 export const THEMES = [
   { id: 'parchment', label: 'Parchment', note: 'papyrus by daylight', bg: '#ece3d2', accent: '#6e4f37', fg: '#2a211b' },
@@ -21,10 +21,6 @@ export function resolveTheme(stored: string | null): Theme {
 
 export function storedTheme(): string | null {
   return readPref(THEME_KEY);
-}
-
-export function storeTheme(t: Theme) {
-  writePref(THEME_KEY, t);
 }
 
 /** Shows a theme on the page and makes it the browser's theme color; storing it is up to the caller. */

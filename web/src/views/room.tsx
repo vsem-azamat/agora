@@ -1,6 +1,6 @@
 // A room: its messages on the tape, who talks with whom, and the compose box. The tape follows
 // new messages only while the operator is at the bottom; see tape.ts for the decisions.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { type Liveness, liveness as livenessOf, livenessOrder, type RoomCount } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message, Room } from '../gen/agora/v1/rooms_pb';
@@ -29,8 +29,17 @@ export type Arrival = { room: string; jump?: bigint; compose?: boolean };
 
 type Pill = { n: number; forYou: number; first?: bigint; far: boolean };
 
+function pageVisible(): boolean {
+  return document.visibilityState === 'visible';
+}
+
+/** Smooth scrolling, unless the reader asked for less motion. */
+function scrollBehavior(): ScrollBehavior {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+}
+
 function scrollTape(el: HTMLElement, top: number) {
-  if (el.scrollTo) el.scrollTo({ top, behavior: 'smooth' });
+  if (el.scrollTo) el.scrollTo({ top, behavior: scrollBehavior() });
   else el.scrollTop = top;
 }
 
@@ -61,39 +70,47 @@ export function RoomView(props: {
   const [reply, setReply] = useState<Message>();
   const [backTo, setBackTo] = useState<number>();
   const [pill, setPill] = useState<Pill>({ n: 0, forYou: 0, far: false });
+  // the NEW line moves to the first message that came while the page was hidden
+  const [cameHidden, setCameHidden] = useState<bigint>();
   const list = useRef<HTMLOListElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const follow = useRef(true);
   const landed = useRef(false);
   const seen = useRef(0n);
+  const frame = useRef(0);
   // the first unread message is fixed when the room's messages first arrive
   const entry = useRef<{ firstNew?: bigint }>(undefined);
   if (!entry.current && messages)
     entry.current = { firstNew: firstUnread(messages, props.unread?.unread ?? 0, reader, props.followed) };
-  const firstNew = entry.current?.firstNew;
+  const firstNew = cameHidden ?? entry.current?.firstNew;
 
   const live = useMemo(() => new Map(props.agents.map((a) => [a.name, livenessOf(a)])), [props.agents]);
   const known = useMemo(() => new Set([...live.keys(), reader.operator]), [live, reader.operator]);
   const to = useMemo(() => addresseesById(messages ?? [], known, reader.board), [messages, known, reader.board]);
+  // the clock only matters for the day headings, so the tape is rebuilt once a day, not every tick
+  const today = props.now.toDateString();
   const items = useMemo(
-    () => tape(messages ?? [], to, reader, props.now, firstNew),
-    [messages, to, reader, props.now, firstNew],
+    () => tape(messages ?? [], to, reader, new Date(today), firstNew),
+    [messages, to, reader, today, firstNew],
   );
   const people = useMemo(() => roomPeople(messages ?? [], reader, live), [messages, reader, live]);
   const talks = useMemo(() => pairs(messages ?? [], to), [messages, to]);
 
+  /** Counts what is in view as seen (only while the page is visible) and updates the pill. */
   const read = () => {
     const el = list.current;
     if (!el || !messages) return;
-    const placed = [...el.querySelectorAll<HTMLElement>('[data-mid]')].map((li) => ({
-      id: BigInt(li.dataset.mid ?? 0),
-      top: li.offsetTop,
-      height: li.offsetHeight,
-    }));
-    const through = seenThrough(placed, el.scrollTop + el.clientHeight);
-    if (through !== undefined && through > seen.current) {
-      seen.current = through;
-      props.onSeen(through);
+    if (pageVisible()) {
+      const placed = [...el.querySelectorAll<HTMLElement>('[data-mid]')].map((li) => ({
+        id: BigInt(li.dataset.mid ?? 0),
+        top: li.offsetTop,
+        height: li.offsetHeight,
+      }));
+      const through = seenThrough(placed, el.scrollTop + el.clientHeight);
+      if (through !== undefined && through > seen.current) {
+        seen.current = through;
+        props.onSeen(through);
+      }
     }
     const next = { ...unseen(messages, seen.current, to, reader.operator), far: farFromBottom(el) };
     setPill((p) =>
@@ -101,15 +118,8 @@ export function RoomView(props: {
     );
     props.memory.set(name, { top: el.scrollTop, bottom: atBottom(el) });
   };
-
-  const flash = (id: bigint) => {
-    const li = list.current?.querySelector<HTMLElement>(`[data-mid="${id}"]`);
-    if (!li) return;
-    li.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-    li.classList.remove('flash');
-    void li.offsetWidth; // restarts the animation
-    li.classList.add('flash');
-  };
+  const reading = useRef(read);
+  reading.current = read;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: placed once per new list of messages
   useLayoutEffect(() => {
@@ -124,9 +134,46 @@ export function RoomView(props: {
       else if (how === 'saved' && saved) el.scrollTop = saved.top;
       else el.scrollTop = el.scrollHeight;
       follow.current = atBottom(el);
-    } else if (follow.current) el.scrollTop = el.scrollHeight;
+    } else if (follow.current && pageVisible()) el.scrollTop = el.scrollHeight;
     read();
   }, [messages]);
+
+  // Coming back to the page: what came meanwhile gets the NEW line, and what is in view is read.
+  const comeBack = () => {
+    const first = unseen(messages ?? [], seen.current, to, reader.operator).first;
+    if (first !== undefined) setCameHidden(first);
+    read();
+  };
+  const returning = useRef(comeBack);
+  returning.current = comeBack;
+  useEffect(() => {
+    const onChange = () => {
+      if (pageVisible()) returning.current();
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const onScroll = () => {
+    const el = list.current;
+    if (!el) return;
+    follow.current = atBottom(el);
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      reading.current();
+    });
+  };
+
+  const flash = useCallback((id: bigint) => {
+    const li = list.current?.querySelector<HTMLElement>(`[data-mid="${id}"]`);
+    if (!li) return;
+    li.scrollIntoView?.({ block: 'center', behavior: scrollBehavior() });
+    li.classList.remove('flash');
+    void li.offsetWidth; // restarts the animation
+    li.classList.add('flash');
+  }, []);
 
   // arriving from elsewhere: show the message asked for, or start writing; after the landing above
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when an arrival or the messages come
@@ -156,15 +203,18 @@ export function RoomView(props: {
     return () => document.removeEventListener('keydown', onKey);
   }, [reply, focus]);
 
-  const startReply = (m: Message) => {
+  const startReply = useCallback((m: Message) => {
     setReply(m);
     box.current?.focus();
-  };
-  const jump = (id: bigint) => {
-    setBackTo(list.current?.scrollTop);
-    setFocus(undefined);
-    flash(id);
-  };
+  }, []);
+  const jump = useCallback(
+    (id: bigint) => {
+      setBackTo(list.current?.scrollTop);
+      setFocus(undefined);
+      flash(id);
+    },
+    [flash],
+  );
   const back = () => {
     if (list.current && backTo !== undefined) scrollTape(list.current, backTo);
     setBackTo(undefined);
@@ -230,14 +280,7 @@ export function RoomView(props: {
           </p>
         )}
         <div className="tape">
-          <ol
-            className="msgs"
-            ref={list}
-            onScroll={(e) => {
-              follow.current = atBottom(e.currentTarget);
-              read();
-            }}
-          >
+          <ol className="msgs" ref={list} onScroll={onScroll}>
             {items.map((it) => {
               switch (it.kind) {
                 case 'day':

@@ -1,6 +1,7 @@
 // Settings: kept in this browser, and deliberately few.
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Icon } from '../icons';
+import { askToNotify } from '../notify';
 import { NOTIFY, type Notify, SIZES, type TextSize } from '../prefs';
 import type { Theme } from '../theme';
 import { pg } from './common';
@@ -34,10 +35,18 @@ function Segments<T extends string>(props: {
   );
 }
 
-function notifyNote(): string {
-  if (typeof Notification === 'undefined') return 'This browser cannot show notifications.';
-  if (Notification.permission === 'denied') return 'The browser blocks notifications for this page.';
-  return 'While the tab is in the background.';
+/** Whether the browser lets the page notify, with a way to allow it while it has not been asked. */
+function NotifyNote({ on }: { on: boolean }) {
+  const [, asked] = useState(0);
+  if (typeof Notification === 'undefined') return <>This browser cannot show notifications.</>;
+  if (Notification.permission === 'denied') return <>The browser blocks notifications for this page.</>;
+  if (on && Notification.permission === 'default')
+    return (
+      <button type="button" className="link" onClick={() => askToNotify().then(() => asked((n) => n + 1))}>
+        Click to allow in this browser
+      </button>
+    );
+  return <>While the tab is in the background.</>;
 }
 
 export function Settings(props: {
@@ -71,7 +80,7 @@ export function Settings(props: {
       </div>
       <div className="sgroup">
         <h3>NOTIFICATIONS</h3>
-        <Row label="Notify me" desc={notifyNote()}>
+        <Row label="Notify me" desc={<NotifyNote on={props.notify !== 'none'} />}>
           <Segments label="Notify me" options={NOTIFY} value={props.notify} onChange={props.onNotify} />
         </Row>
       </div>

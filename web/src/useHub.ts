@@ -186,19 +186,27 @@ export function useRoom(api: Api, room: string | undefined, revision: bigint | u
 
 /** How many recent messages of an agent its drawer shows. */
 const RECENT = 3;
+/** The drawer reads the last messages of this many rooms, the most recently active first. */
+const RECENT_ROOMS = 10;
+const RECENT_DEPTH = 50;
 
 /**
- * An agent's latest messages across the rooms, newest first, read from each room's history when
- * the drawer opens.
+ * An agent's latest messages, newest first, read when the drawer opens from the history of the
+ * most recently active rooms (at most RECENT_ROOMS calls of RECENT_DEPTH messages).
  */
-export function useAgentMessages(api: Api, agent: string | undefined, rooms: string[], fail: (e: unknown) => void) {
+export function useAgentMessages(api: Api, agent: string | undefined, rooms: Room[], fail: (e: unknown) => void) {
   const [found, setFound] = useState<{ agent: string; messages: Message[] }>();
-  const key = rooms.join('\n');
+  const active = rooms
+    .filter((r) => r.lastAt)
+    .sort((a, b) => Number((b.lastAt?.seconds ?? 0n) - (a.lastAt?.seconds ?? 0n)))
+    .slice(0, RECENT_ROOMS)
+    .map((r) => r.name);
+  const key = active.join('\n');
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rooms are compared by their names
   useEffect(() => {
     if (!agent) return;
     let current = true;
-    Promise.all(rooms.map((room) => api.rooms.history({ room, last: 100 })))
+    Promise.all(active.map((room) => api.rooms.history({ room, last: RECENT_DEPTH })))
       .then((hs) => {
         if (!current) return;
         const mine = hs.flatMap((h) => h.messages).filter((m) => m.author === agent);

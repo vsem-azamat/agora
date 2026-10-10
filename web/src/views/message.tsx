@@ -1,5 +1,5 @@
 // One message on the tape: a tablet edged in its author's pigment, or the board's own thin line.
-import { Fragment } from 'react';
+import { Fragment, memo } from 'react';
 import { clock, toDate } from '../board';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
@@ -13,7 +13,7 @@ function Time({ m }: { m: Message }) {
   return <time title={at?.toLocaleString('en-GB')}>{clock(at)}</time>;
 }
 
-export function BoardLine({ m, dim, ...ctx }: Context & { m: Message; dim: boolean }) {
+export const BoardLine = memo(function BoardLine({ m, dim, ...ctx }: Context & { m: Message; dim: boolean }) {
   return (
     <li className={dim ? 'sys dim' : 'sys'} data-mid={String(m.id)}>
       <Icon name="hub" title="the board" />
@@ -23,9 +23,10 @@ export function BoardLine({ m, dim, ...ctx }: Context & { m: Message; dim: boole
       <Time m={m} />
     </li>
   );
-}
+});
 
-export function Tablet({
+/** A tablet; memoized, so the tape re-renders only what changed. */
+export const Tablet = memo(function Tablet({
   item,
   dim,
   onReply,
@@ -97,4 +98,4 @@ export function Tablet({
       </div>
     </li>
   );
-}
+});

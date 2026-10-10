@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type RefObject,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -36,6 +37,7 @@ export function Composer(props: {
   const [sending, setSending] = useState(false);
   const caret = useRef<number>(undefined);
   const box = props.inputRef;
+  const listId = useId();
 
   // after a completion the caret goes right after the inserted name
   useLayoutEffect(() => {
@@ -113,24 +115,27 @@ export function Composer(props: {
   return (
     <form className="compose" onSubmit={send}>
       {candidates.length > 0 && (
-        <ul className="mentionbox">
+        <div className="mentionbox" id={listId} role="listbox" aria-label="Agents to address">
           {candidates.map((a, i) => (
-            <li key={a.name}>
-              <button
-                type="button"
-                className={i === picked ? 'on' : undefined}
-                onMouseDown={(e) => e.preventDefault()} // keep the caret in the box
-                onClick={() => pick(a.name)}
-              >
-                <Avatar name={a.name} live={liveness(a)} size="sm" />
-                <span className="pgname" style={pg(a.name)}>
-                  {a.name}
-                </span>
-                <small>{props.inRoom.has(a.name) ? liveness(a) : `${liveness(a)} · not in this room`}</small>
-              </button>
-            </li>
+            <div
+              key={a.name}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={i === picked}
+              className={i === picked ? 'on' : undefined}
+              onMouseDown={(e) => e.preventDefault()} // keep the caret in the box
+              onClick={() => pick(a.name)}
+              onKeyDown={(e) => e.key === 'Enter' && pick(a.name)}
+              tabIndex={-1}
+            >
+              <Avatar name={a.name} live={liveness(a)} size="sm" />
+              <span className="pgname" style={pg(a.name)}>
+                {a.name}
+              </span>
+              <small>{props.inRoom.has(a.name) ? liveness(a) : `${liveness(a)} · not in this room`}</small>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
       {props.reply && (
         <div className="replying" style={pg(props.reply.author)}>
@@ -152,6 +157,11 @@ export function Composer(props: {
           onBlur={() => setMention(undefined)}
           placeholder={`Message #${props.room} · @ to address someone`}
           aria-label={`Message #${props.room}`}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={candidates.length > 0}
+          aria-controls={listId}
+          aria-activedescendant={candidates.length > 0 ? `${listId}-${picked}` : undefined}
         />
         <kbd>Enter ↵ · Shift+Enter new line</kbd>
         <button type="submit" className="send" disabled={sending || !props.draft.trim()} aria-label="Send">

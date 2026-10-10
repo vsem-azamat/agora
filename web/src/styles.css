@@ -1081,7 +1081,8 @@ button.pgname:hover {
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
-.mentionbox button {
+.mentionbox [role="option"] {
+  cursor: pointer;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -1089,8 +1090,8 @@ button.pgname:hover {
   padding: 4px 10px;
   text-align: left;
 }
-.mentionbox button:hover,
-.mentionbox button.on {
+.mentionbox [role="option"]:hover,
+.mentionbox .on {
   background: var(--sel);
 }
 .mentionbox small {
@@ -1285,6 +1286,11 @@ button.pgname:hover {
 }
 .setting.wide {
   grid-template-columns: minmax(0, 1fr);
+}
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .setting .lbl {
   font-weight: 500;
@@ -1604,7 +1610,8 @@ button.pgname:hover {
   overflow: auto;
   padding: 6px 0;
 }
-.plist button {
+.plist [role="option"] {
+  cursor: pointer;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1612,7 +1619,7 @@ button.pgname:hover {
   padding: 6px 16px;
   text-align: left;
 }
-.plist button.on {
+.plist .on {
   background: var(--sel);
 }
 .plist small {

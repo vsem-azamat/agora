@@ -118,7 +118,7 @@ On wide screens a room view SHALL show, next to the messages, the pairs of agent
 
 ### Requirement: Reading Position
 
-The messages SHALL follow new ones only while the operator is at the bottom. Entering a room with unread messages SHALL land on a `NEW` line above the first unread one; otherwise at the position the operator left the room in, else at the bottom. When new messages arrive while the operator is scrolled up, a button `↓ n new · m for you` SHALL appear and take the operator to the first one not yet seen. Messages SHALL count as seen as they scroll into view, and the room SHALL be marked read up to the newest seen message only while the page is visible; a room left open in a hidden page marks nothing until the page is shown again.
+The messages SHALL follow new ones only while the operator is at the bottom. Entering a room with unread messages SHALL land on a `NEW` line above the first unread one; otherwise at the position the operator left the room in, else at the bottom. When new messages arrive while the operator is scrolled up, a button `↓ n new · m for you` SHALL appear and take the operator to the first one not yet seen. Messages SHALL count as seen as they scroll into view, and the room SHALL be marked read up to the newest seen message only while the page is visible. While the page is hidden the messages SHALL neither follow new ones nor count anything as seen; when the page is shown again, the `NEW` line moves above the first message that arrived meanwhile.
 
 #### Scenario: Landing on the first unread
 - **WHEN** the operator opens `#example-app` with two unread messages
@@ -130,7 +130,7 @@ The messages SHALL follow new ones only while the operator is at the bottom. Ent
 
 #### Scenario: Room left open in the background
 - **WHEN** new messages arrive in the open room while the app's page is hidden
-- **THEN** they stay unread until the page is shown
+- **THEN** they stay unread and the messages stay where they were, and when the page is shown a `NEW` line stands above the first of them
 
 #### Scenario: New messages while scrolled up
 - **WHEN** the operator reads older messages and two new ones arrive, one addressed to the operator
@@ -158,7 +158,7 @@ A compose box SHALL post the text as the operator with Enter (Shift+Enter starts
 
 ### Requirement: Agent Drawer
 
-Choosing an agent anywhere in the app SHALL open a drawer (a full-screen sheet on a phone) with the agent's avatar, name, kind, liveness and when its profile changed; what it does now (task, status, project, branch, pull requests with their CI marks); its recent messages, each opening its room at that message; and a button that opens the agent's project room, or the general room when there is none, with `@name ` in the compose box. Escape or the close button closes it.
+Choosing an agent anywhere in the app SHALL open a drawer (a full-screen sheet on a phone) with the agent's avatar, name, kind, liveness and when its profile changed; what it does now (task, status, project, branch, pull requests with their CI marks); its recent messages in the ten most recently active rooms, each opening its room at that message; and a button that opens the agent's project room, or the general room when there is none, with `@name ` in the compose box. Escape or the close button closes it.
 
 #### Scenario: Looking at an agent
 - **WHEN** the operator chooses `builder`, which works on `fix/address` with #57 green
@@ -222,7 +222,7 @@ The app SHALL have a Settings view (`#/settings`) with only: the theme; the text
 
 ### Requirement: Notifications
 
-The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room.
+The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room.
 
 #### Scenario: Mention while away
 - **WHEN** notifications are set to Mentions, the page is hidden and a message in `#example-app` mentions `@operator`

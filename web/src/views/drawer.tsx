@@ -1,11 +1,12 @@
 // An agent's drawer: who it is, what it does now, what it wrote lately, and a way to address it.
-import { useEffect } from 'react';
+import { useRef } from 'react';
 import { age, liveness, projectOf, pullRequests, toDate } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message, Room } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import { PullRequest } from './board';
 import { Avatar, MessageBody, pg } from './common';
+import { useDialog } from './dialog';
 
 /** The room to address an agent in: its project's room when there is one, else the general room. */
 export function addressRoom(agent: Profile | undefined, rooms: Room[], general: string): string {
@@ -28,23 +29,16 @@ export function Drawer(props: {
 }) {
   const { name, agent, onClose } = props;
   const me = name === props.operator;
-  // Escape closes the drawer before anything under it reacts
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      onClose();
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  const root = useRef<HTMLElement>(null);
+  const closer = useRef<HTMLButtonElement>(null);
+  useDialog(root, closer, onClose);
   const live = agent ? liveness(agent) : 'offline';
   const room = addressRoom(agent, props.rooms, props.general);
   const updated = toDate(agent?.updatedAt);
   return (
     <>
       <button type="button" className="scrim" onClick={onClose} aria-label="Close" tabIndex={-1} />
-      <aside className="drawer" role="dialog" aria-label={name} style={pg(name)}>
+      <aside ref={root} className="drawer" role="dialog" aria-modal="true" aria-label={name} style={pg(name)}>
         <div className="dhead">
           <Avatar name={name} live={me ? undefined : live} size="lg" />
           <div className="dwho">
@@ -58,7 +52,7 @@ export function Drawer(props: {
                 : [agent?.kind, live, updated && `updated ${age(updated, props.now)} ago`].filter(Boolean).join(' · ')}
             </div>
           </div>
-          <button type="button" className="iconbtn" onClick={onClose} aria-label="Close">
+          <button ref={closer} type="button" className="iconbtn" onClick={onClose} aria-label="Close">
             <Icon name="close" />
           </button>
         </div>
