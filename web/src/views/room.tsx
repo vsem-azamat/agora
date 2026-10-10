@@ -29,6 +29,7 @@ import { FollowControls } from './follow';
 import { BoardLine, type Decide, Tablet } from './message';
 import { OutsiderAvatar, OutsiderName } from './outside';
 import { RoomIcon } from './rooms';
+import { Notice } from './shell';
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
 export type Arrival = { room: string; jump?: bigint; compose?: boolean };
@@ -74,6 +75,9 @@ export function RoomView(props: {
   onDecide: Decide;
   /** Changes what goes out through the room's bridge. */
   onPolicy: (p: Policy) => void;
+  /** A refused call to tell under the header, numbered so a repeat shows for its full time. */
+  notice?: { text: string; n: number };
+  onCloseNotice?: () => void;
   /** Where each room was left, kept while the app is open. */
   memory: Map<string, Saved>;
   arrival?: Arrival;
@@ -294,6 +298,9 @@ export function RoomView(props: {
             onFollow={props.onFollow}
           />
         </div>
+        {props.notice && props.onCloseNotice && (
+          <Notice key={props.notice.n} text={props.notice.text} onClose={props.onCloseNotice} />
+        )}
         {focus && (
           <FocusBar
             pair={focus}

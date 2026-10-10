@@ -166,7 +166,7 @@ A room connected to a chat outside Agora through a bridge (see [Bridges](../../b
 
 #### Scenario: A refused policy change
 - **WHEN** the operator picks Read only for `#example-chat` and the hub answers that there is no bridge `example-chat`
-- **THEN** a notice says `The policy did not change: no bridge example-chat`
+- **THEN** a notice under the room's header says `The policy did not change: no bridge example-chat`, and the Outbound control can be opened again
 
 ### Requirement: Messages From Outside
 
@@ -194,7 +194,7 @@ A message that came from outside through a bridge SHALL be shown under the autho
 
 ### Requirement: Messages Going Out
 
-In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A pending message SHALL be tinted and say `Waiting for you`, with the buttons Send and Don’t send, which send or decline it and are disabled while the call runs and, once the hub took the decision, until the message stops waiting (a refused decision turns them on again); while the room's policy is `read`, Send SHALL be disabled with the hint `read only — switch Outbound to send`, and Don’t send stays; a message handed to the bridge says `sending…`; a sent message shows a check; a declined message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses to send or decline a message, a short notice SHALL say why; it goes by itself and can be dismissed. A new pending message by others SHALL count as for the operator in the button for new messages.
+In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A pending message SHALL be tinted and say `Waiting for you`, with the buttons Send and Don’t send, which send or decline it and are disabled while the call runs and, once the hub took the decision, until the message stops waiting (a refused decision turns them on again); while the room's policy is `read`, Send SHALL be disabled with the hint `read only — switch Outbound to send`, and Don’t send stays; a message handed to the bridge says `sending…`; a sent message shows a check; a declined message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses to send or decline a message, a short notice SHALL say why, as a band under the room's header that covers no control; it goes by itself and can be dismissed. A new pending message by others SHALL count as for the operator in the button for new messages.
 
 #### Scenario: Waiting for the operator
 - **WHEN** `secretary` posts `looked, all fine` in `#example-chat` under `approve`
@@ -371,6 +371,10 @@ The operator SHALL choose per browser what the app notifies about while its page
 #### Scenario: A waiting message that mentions the operator
 - **WHEN** the page is hidden and a message of `secretary` that mentions `@operator` starts waiting in `#example-chat`
 - **THEN** the notification for `#example-chat` reads `1 waiting for you to send`
+
+#### Scenario: A waiting message among others
+- **WHEN** notifications are set to Everything, the page is hidden, and in `#example-chat` a message of `secretary` starts waiting while `Ada` writes `@operator are you there?`
+- **THEN** the notification for `#example-chat` reads `1 new · 1 for you · 1 waiting for you to send`
 
 #### Scenario: Asking permission
 - **WHEN** the operator chooses Everything

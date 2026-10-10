@@ -289,17 +289,20 @@ export function Palette({ items, onClose }: { items: PaletteItem[]; onClose: () 
 }
 
 /** How long a notice stays unless it is dismissed. */
-const TOAST_MS = 8000;
+const NOTICE_MS = 8000;
 
-/** A short notice at the bottom of the window, such as a refused call; it goes by itself. */
-export function Toast({ text, onClose }: { text: string; onClose: () => void }) {
-  // a notice told again is a new Toast (keyed by its number), so its time starts again
+/**
+ * A short notice, such as a refused call, in the page's flow (a room shows it under its header,
+ * where it covers nothing); it goes by itself.
+ */
+export function Notice({ text, onClose }: { text: string; onClose: () => void }) {
+  // a notice told again is a new Notice (keyed by its number), so its time starts again
   useEffect(() => {
-    const t = setTimeout(onClose, TOAST_MS);
+    const t = setTimeout(onClose, NOTICE_MS);
     return () => clearTimeout(t);
   }, [onClose]);
   return (
-    <div className="toast" role="alert">
+    <div className="notice" role="alert">
       <span>{text}</span>
       <button type="button" className="iconbtn" onClick={onClose} aria-label="Dismiss">
         <Icon name="close" />

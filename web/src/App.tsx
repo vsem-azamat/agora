@@ -30,7 +30,7 @@ import type { Decide } from './views/message';
 import { type Arrival, RoomView } from './views/room';
 import { Rooms, roomHref } from './views/rooms';
 import { Settings } from './views/settings';
-import { AccountMenu, Bar, Palette, type PaletteItem, Sidebar, Tabs, Toast, type View } from './views/shell';
+import { AccountMenu, Bar, Palette, type PaletteItem, Sidebar, Tabs, type View } from './views/shell';
 import { SignIn } from './views/signin';
 import { Turns } from './views/turns';
 
@@ -315,6 +315,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           onSeen={markSeen}
           onDecide={decide}
           onPolicy={setPolicy}
+          notice={notice}
+          onCloseNotice={closeNotice}
           memory={memory}
           arrival={arrival}
           onArrived={() => setArrival(undefined)}
@@ -391,7 +393,6 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
             />
           )}
           {palette && <Palette items={items} onClose={() => setPalette(false)} />}
-          {notice && <Toast key={notice.n} text={notice.text} onClose={closeNotice} />}
         </div>
       </OpenAgent.Provider>
     </Profiles.Provider>

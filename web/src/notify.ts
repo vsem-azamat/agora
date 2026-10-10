@@ -27,8 +27,8 @@ export function alerts(
     // a waiting message may also be new and mention the operator: it is told once, as waiting,
     // and the other counts only when they are more than the waiting ones
     const parts: string[] = [];
-    if ((pref === 'all' || wake.has(room)) && fresh > waiting) parts.push(`${fresh} new`);
-    if (forYou > waiting) parts.push(`${forYou} for you`);
+    if ((pref === 'all' || wake.has(room)) && fresh > waiting) parts.push(`${fresh - waiting} new`);
+    if (forYou > waiting) parts.push(`${forYou - waiting} for you`);
     if (waiting > 0) parts.push(`${waiting} waiting for you to send`);
     if (parts.length > 0) out.push({ room, body: parts.join(' · ') });
   }

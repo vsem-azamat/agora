@@ -259,6 +259,11 @@ describe('bridged rooms', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Read only' }));
     const notice = await screen.findByRole('alert');
     expect(notice.textContent).toBe('The policy did not change: no bridge example-chat');
+    // a band in the room under its header: the Outbound control stays free to try again
+    expect(notice.previousElementSibling?.classList).toContain('roomhead');
+    expect(notice.closest('.room')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    expect(screen.getByRole('menu', { name: 'Outbound' })).toBeTruthy();
   });
 
   it('counts a waiting message once on the phone’s Rooms tab', async () => {

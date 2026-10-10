@@ -1652,24 +1652,20 @@ button.pgname:hover {
   font-style: italic;
 }
 
-/* a short notice, such as a refused call */
-.toast {
-  position: fixed;
-  left: 50%;
-  top: 70px;
-  z-index: 30;
-  transform: translateX(-50%);
+/* a short notice, such as a refused call: a band under the room's header that covers nothing */
+.notice {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: max-content;
-  max-width: min(560px, calc(100vw - 32px));
-  padding: 6px 6px 6px 14px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  padding: 4px 16px 4px 22px;
+  background: var(--tome);
+  border-bottom: 1px solid var(--line);
   border-left: 3px solid var(--bad);
-  box-shadow: var(--shadow);
   font-size: 0.9em;
+}
+.notice span {
+  flex: 1;
+  min-width: 0;
 }
 
 /* --- the agent drawer ------------------------------------------------------------------- */
@@ -1979,6 +1975,7 @@ button.pgname:hover {
     padding: 14px 16px 90px;
   }
   .roomhead,
+  .notice,
   .msgs,
   .compose,
   .focusbar {
