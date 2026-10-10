@@ -164,11 +164,12 @@ const waitRetry = time.Second
 
 // waitTurn streams the agent's position until it holds the slot. When the hub restarts, the
 // queue survives, so the wait reconnects instead of failing; once the hub has not answered for
-// hubGiveUp, the wait fails as unreachable.
+// hubGiveUp, the wait fails as unreachable. When the agent renames itself meanwhile, the hub
+// keeps the wait going under the new name, which the wait then says and uses from then on.
 func (o *options) waitTurn(ctx context.Context, key, agent string) error {
 	contact := time.Now()
 	for {
-		err := o.waitOnce(ctx, key, agent, &contact)
+		err := o.waitOnce(ctx, key, &agent, &contact)
 		if err == nil || ctx.Err() != nil {
 			return err
 		}
@@ -189,8 +190,8 @@ func (o *options) waitTurn(ctx context.Context, key, agent string) error {
 
 // waitOnce runs one wait stream. The hub answers at the start of a stream, and a stream it
 // answered keeps contact until it ends, so contact is set then.
-func (o *options) waitOnce(ctx context.Context, key, agent string, contact *time.Time) error {
-	stream, err := o.resources().Wait(ctx, connect.NewRequest(&agorav1.WaitRequest{Key: key, Agent: agent}))
+func (o *options) waitOnce(ctx context.Context, key string, agent *string, contact *time.Time) error {
+	stream, err := o.resources().Wait(ctx, connect.NewRequest(&agorav1.WaitRequest{Key: key, Agent: *agent}))
 	if err != nil {
 		return err
 	}
@@ -204,6 +205,10 @@ func (o *options) waitOnce(ctx context.Context, key, agent string, contact *time
 	for stream.Receive() {
 		answered = true
 		e := stream.Msg().GetEntry()
+		if name := e.GetAgent(); name != "" && name != *agent {
+			*agent = name
+			fmt.Fprintf(o.out, "now waiting as %s\n", name)
+		}
 		printEntry(o.out, e)
 		held = e.GetState() == agorav1.EntryState_ENTRY_STATE_HELD
 	}

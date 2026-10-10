@@ -21,8 +21,8 @@ import (
 
 // profileFlags are the profile fields that join and set accept.
 type profileFlags struct {
-	kind, project, task, status, cwd, about string
-	addPRs, dropPRs                         []string
+	kind, project, task, status, cwd, about, icon, pigment string
+	addPRs, dropPRs                                        []string
 }
 
 func (f *profileFlags) register(cmd *cobra.Command, withDrop bool) {
@@ -32,6 +32,8 @@ func (f *profileFlags) register(cmd *cobra.Command, withDrop bool) {
 	cmd.Flags().StringVar(&f.status, "status", "", "your status (joining sets working)")
 	cmd.Flags().StringVar(&f.cwd, "cwd", "", "directory you work in, e.g. a worktree")
 	cmd.Flags().StringVar(&f.about, "about", "", "free text about you")
+	cmd.Flags().StringVar(&f.icon, "icon", "", "your sigil, e.g. lyre, trireme or amphora (empty unsets)")
+	cmd.Flags().StringVar(&f.pigment, "pigment", "", "your colour: terracotta, ochre, olive, lapis, tyrian, umber, verdigris or soot (empty unsets)")
 	cmd.Flags().StringArrayVar(&f.addPRs, "pr", nil, "pull request you work on (repeatable)")
 	if withDrop {
 		cmd.Flags().StringArrayVar(&f.dropPRs, "drop-pr", nil, "pull request you no longer work on (repeatable)")
@@ -48,6 +50,7 @@ func (f *profileFlags) request(cmd *cobra.Command, name string) (*agorav1.Update
 		return &v
 	}
 	req.Kind, req.Project, req.Task, req.Status, req.About = str("kind", f.kind), str("project", f.project), str("task", f.task), str("status", f.status), str("about", f.about)
+	req.Icon, req.Pigment = str("icon", f.icon), str("pigment", f.pigment)
 	if cmd.Flags().Changed("cwd") {
 		abs, err := filepath.Abs(f.cwd)
 		if err != nil {
@@ -130,7 +133,7 @@ func setCmd(o *options) *cobra.Command {
 	var f profileFlags
 	cmd := &cobra.Command{
 		Use:   "set",
-		Short: "Update your task, status, directory, pull requests or description",
+		Short: "Update your task, status, directory, pull requests, description, sigil or pigment",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			changed := false // only set's own flags count, not the inherited --as or --socket
@@ -156,6 +159,31 @@ func setCmd(o *options) *cobra.Command {
 	}
 	f.register(cmd, true)
 	return cmd
+}
+
+func renameCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rename <new-name>",
+		Short: "Change your name; your places, rooms, messages and pull requests stay yours",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			old, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			name := args[0]
+			if _, err := o.agents().Rename(cmd.Context(), connect.NewRequest(&agorav1.RenameRequest{Agent: old, Name: name})); err != nil {
+				return err
+			}
+			fmt.Fprintf(o.out, "%s is now called %s; @%s still reaches you\n", old, name, old)
+			if strings.TrimSpace(o.as) == "" { // the name came from this session, which follows the rename
+				fmt.Fprintf(o.out, "commands from this session now act as %s\n", name)
+			} else {
+				fmt.Fprintf(o.out, "pass --as %s or set AGORA_NAME=%s from now on\n", name, name)
+			}
+			return nil
+		},
+	}
 }
 
 func leaveCmd(o *options) *cobra.Command {
@@ -203,8 +231,12 @@ func statusCmd(o *options) *cobra.Command {
 				which = ""
 			}
 			fmt.Fprintf(o.out, "AGENTS (%d%s)\n", len(agents.Msg.GetAgents()), which)
+			width := 16 // the name column grows for a name shown with its former name
 			for _, p := range agents.Msg.GetAgents() {
-				fmt.Fprintf(o.out, "  %-16s %-9s %-7s %-14s %-12s %4s  %s\n", p.GetName(), p.GetStatus(), sessionStateNames[p.GetSession()],
+				width = max(width, len(displayName(p)))
+			}
+			for _, p := range agents.Msg.GetAgents() {
+				fmt.Fprintf(o.out, "  %-*s %-9s %-7s %-14s %-12s %4s  %s\n", width, displayName(p), p.GetStatus(), sessionStateNames[p.GetSession()],
 					p.GetProject(), prList(allPRs(p)), age(p.GetUpdatedAt().AsTime()), p.GetTask())
 			}
 			if err := o.printRooms(cmd.Context()); err != nil {
@@ -294,7 +326,7 @@ func expandHome(p string) string {
 }
 
 func printProfile(w io.Writer, p *agorav1.Profile) {
-	fmt.Fprintf(w, "%s · %s · %s · %s · %s\n", p.GetName(), p.GetStatus(), sessionStateNames[p.GetSession()], orDash(p.GetProject()), p.GetTask())
+	fmt.Fprintf(w, "%s · %s · %s · %s · %s\n", displayName(p), p.GetStatus(), sessionStateNames[p.GetSession()], orDash(p.GetProject()), p.GetTask())
 	var where []string
 	if p.GetBranch() != "" {
 		where = append(where, "["+p.GetBranch()+"]")
@@ -308,6 +340,18 @@ func printProfile(w io.Writer, p *agorav1.Profile) {
 	if len(where) > 0 {
 		fmt.Fprintf(w, "    %s\n", strings.Join(where, " "))
 	}
+	if p.GetIcon() != "" || p.GetPigment() != "" {
+		fmt.Fprintf(w, "    sigil %s · pigment %s\n", orDash(p.GetIcon()), orDash(p.GetPigment()))
+	}
+}
+
+// displayName is the agent's name, followed by the name it gave up last, if any:
+// "docs-writer (was fixer)".
+func displayName(p *agorav1.Profile) string {
+	if f := p.GetFormerly(); len(f) > 0 {
+		return fmt.Sprintf("%s (was %s)", p.GetName(), f[0].GetName())
+	}
+	return p.GetName()
 }
 
 // allPRs returns the declared and found pull requests of a profile, ascending.

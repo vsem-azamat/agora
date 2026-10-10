@@ -262,6 +262,17 @@ func TestTheAppActsAsTheOperator(t *testing.T) {
 	}
 }
 
+func TestTheOperatorIsNotRenamed(t *testing.T) {
+	w := startWeb(t, "owner")
+	_, err := w.agents.Rename(context.Background(), connect.NewRequest(&agorav1.RenameRequest{Agent: "owner", Name: "admin"}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "--web-as") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := w.agents.Rename(context.Background(), connect.NewRequest(&agorav1.RenameRequest{Agent: "admin", Name: "owner"})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("admin exists after the refused rename: %v", err)
+	}
+}
+
 func TestInvalidOperatorNameIsRefused(t *testing.T) {
 	db, err := store.Open(context.Background(), ":memory:")
 	if err != nil {
@@ -453,7 +464,7 @@ func TestEveryOtherCallIsRefusedOverTheWeb(t *testing.T) {
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	refused := []string{
-		agorav1connect.AgentServiceLeaveProcedure, agorav1connect.AgentServiceUpdateProfileProcedure, agorav1connect.AgentServiceWhoProcedure,
+		agorav1connect.AgentServiceLeaveProcedure, agorav1connect.AgentServiceRenameProcedure, agorav1connect.AgentServiceUpdateProfileProcedure, agorav1connect.AgentServiceWhoProcedure,
 		agorav1connect.GovernanceServiceCloseProposalProcedure, agorav1connect.GovernanceServiceProposeProcedure,
 		agorav1connect.GovernanceServiceSetCharterProcedure, agorav1connect.GovernanceServiceVoteProcedure,
 		agorav1connect.ResourceServiceJoinProcedure, agorav1connect.ResourceServiceReleaseProcedure, agorav1connect.ResourceServiceRenewProcedure,

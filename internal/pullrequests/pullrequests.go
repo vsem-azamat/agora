@@ -227,7 +227,10 @@ func (w *Watcher) lookup(ctx context.Context, g *group) (forge.Result, error) {
 }
 
 // apply stores which pull requests each agent of the group follows and posts CI messages, in
-// one transaction.
+// one transaction. The agents are the ones groups read before the forge lookup: when one of
+// them renamed itself meanwhile, storing under its old name fails the agents' foreign key, the
+// transaction rolls back with nothing stored or posted, and the next round, which reads the new
+// name, reports the same CI states.
 func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, error) {
 	open, gone := split(res)
 	follow := following(g, res.DefaultBranch, open)

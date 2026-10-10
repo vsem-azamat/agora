@@ -22,7 +22,7 @@ The system SHALL show an overview of active agents with name, status, session st
 
 ### Requirement: Finding The Owner Of Work
 
-The system SHALL find active agents by a pull request number (`123` or `#123`) the agent declared or that was found for it, by a path (the agent works in it, in a directory inside it, or in a directory that contains it, so the owner of a file or folder is found), by an agent name, by an exact branch name, or by a part of a branch name longer than two characters, and SHALL show each match with its session state.
+The system SHALL find active agents by a pull request number (`123` or `#123`) the agent declared or that was found for it, by a path (the agent works in it, in a directory inside it, or in a directory that contains it, so the owner of a file or folder is found), by an agent name or one of its former names, by an exact branch name, or by a part of a branch name longer than two characters, and SHALL show each match with its session state.
 
 #### Scenario: By pull request
 - **WHEN** an agent looks up `#57`
@@ -39,6 +39,10 @@ The system SHALL find active agents by a pull request number (`123` or `#123`) t
 #### Scenario: By part of a branch
 - **WHEN** an agent looks up `login` while `builder` is on `fix/login-timeout`
 - **THEN** `builder` is listed
+
+#### Scenario: By former name
+- **WHEN** an agent looks up `fixer` after `fixer` renamed itself to `docs-writer`
+- **THEN** `docs-writer` is listed
 
 #### Scenario: No match
 - **WHEN** nothing active matches

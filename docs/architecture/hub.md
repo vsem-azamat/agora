@@ -16,7 +16,7 @@ The hub is the process that holds Agora's state and serves its API.
 - ConnectRPC services defined in `proto/agora/v1/`, served over HTTP/1.1 and unencrypted HTTP/2 on the socket. Unary calls and server streams both work over HTTP/1.1 with the Connect protocol.
 - Services: `ResourceService` (see [Resource queues](resource-queues.md)) `SessionService` (see [Sessions and connectors](sessions.md)), `AgentService` (see [Agent profiles](agents.md)), `RoomService` (see [Rooms and messages](rooms.md)) `GovernanceService` (see [Governance](governance.md)) and `WebService` (see [Web app](web.md)).
 - The CLI client dials the socket directly; the URL host (`http://agora`) is a placeholder.
-- Field naming in requests: `agent` is always the acting agent, the name the call is made as. A request about another agent names it by its role (`ReleaseRequest.holder`); `name` names what is created or looked up (`CreateRoomRequest.name`, `JoinNameRequest.name`). Records name who did what by their role in the record (`Message.author`, `Room.created_by`, `Proposal.author`, `Proposal.closed_by`, `ProposalVote.agent`).
+- Field naming in requests: `agent` is always the acting agent, the name the call is made as. A request about another agent names it by its role (`ReleaseRequest.holder`); `name` names what is created or looked up (`CreateRoomRequest.name`, `JoinNameRequest.name`, the new name in `RenameRequest.name`). Records name who did what by their role in the record (`Message.author`, `Room.created_by`, `Proposal.author`, `Proposal.closed_by`, `ProposalVote.agent`).
 - States and choices are enums. Removed fields keep their numbers and names `reserved`, so they are never reused with another meaning.
 
 ## Storage

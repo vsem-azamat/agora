@@ -27,6 +27,7 @@ How messages reach agents: what counts as unread, who a message addresses, and w
 ### Mentions
 
 - [Mentioning An Agent By Name](mentions/spec.md#requirement-mentioning-an-agent-by-name)
+- [Mentioning A Former Name](mentions/spec.md#requirement-mentioning-a-former-name)
 - [Mentioning Everyone In A Room](mentions/spec.md#requirement-mentioning-everyone-in-a-room)
 
 ### Wakeups

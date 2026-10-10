@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/agents.proto.
  */
 export const file_agora_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIswDCgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRInCgdzZXNzaW9uGBAgASgOMhYuYWdvcmEudjEuU2Vzc2lvblN0YXRlEjAKCGNpX3N0YXRlGBEgAygLMh4uYWdvcmEudjEuUHJvZmlsZS5DaVN0YXRlRW50cnkaQQoMQ2lTdGF0ZUVudHJ5EgsKA2tleRgBIAEoBRIgCgV2YWx1ZRgCIAEoDjIRLmFnb3JhLnYxLkNpU3RhdGU6AjgBSgQIDBANSgQIDxAQUg1zZXNzaW9uX3N0YXRlUgJjaSL6AQoUVXBkYXRlUHJvZmlsZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSEQoEa2luZBgCIAEoCUgAiAEBEhQKB3Byb2plY3QYAyABKAlIAYgBARIRCgR0YXNrGAQgASgJSAKIAQESEwoGc3RhdHVzGAUgASgJSAOIAQESEAoDY3dkGAYgASgJSASIAQESEgoFYWJvdXQYByABKAlIBYgBARIPCgdhZGRfcHJzGAggAygFEhAKCGRyb3BfcHJzGAkgAygFQgcKBV9raW5kQgoKCF9wcm9qZWN0QgcKBV90YXNrQgkKB19zdGF0dXNCBgoEX2N3ZEIICgZfYWJvdXQiOwoVVXBkYXRlUHJvZmlsZVJlc3BvbnNlEiIKB3Byb2ZpbGUYASABKAsyES5hZ29yYS52MS5Qcm9maWxlIh0KDExlYXZlUmVxdWVzdBINCgVhZ2VudBgBIAEoCSIhCg1MZWF2ZVJlc3BvbnNlEhAKCHJlbGVhc2VkGAEgAygJIiAKEUxpc3RBZ2VudHNSZXF1ZXN0EgsKA2FsbBgBIAEoCCI3ChJMaXN0QWdlbnRzUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSI2CgpXaG9SZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEgwKBHBhdGgYAiABKAgSCwoDYWxsGAMgASgIIjAKC1dob1Jlc3BvbnNlEiEKBmFnZW50cxgBIAMoCzIRLmFnb3JhLnYxLlByb2ZpbGUqYAoHQ2lTdGF0ZRIYChRDSV9TVEFURV9VTlNQRUNJRklFRBAAEhIKDkNJX1NUQVRFX0dSRUVOEAESEAoMQ0lfU1RBVEVfUkVEEAISFQoRQ0lfU1RBVEVfQ09ORkxJQ1QQAzKXAgoMQWdlbnRTZXJ2aWNlElAKDVVwZGF0ZVByb2ZpbGUSHi5hZ29yYS52MS5VcGRhdGVQcm9maWxlUmVxdWVzdBofLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXNwb25zZRI4CgVMZWF2ZRIWLmFnb3JhLnYxLkxlYXZlUmVxdWVzdBoXLmFnb3JhLnYxLkxlYXZlUmVzcG9uc2USRwoKTGlzdEFnZW50cxIbLmFnb3JhLnYxLkxpc3RBZ2VudHNSZXF1ZXN0GhwuYWdvcmEudjEuTGlzdEFnZW50c1Jlc3BvbnNlEjIKA1dobxIULmFnb3JhLnYxLldob1JlcXVlc3QaFS5hZ29yYS52MS5XaG9SZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
+  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIpMECgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRInCgdzZXNzaW9uGBAgASgOMhYuYWdvcmEudjEuU2Vzc2lvblN0YXRlEjAKCGNpX3N0YXRlGBEgAygLMh4uYWdvcmEudjEuUHJvZmlsZS5DaVN0YXRlRW50cnkSDAoEaWNvbhgSIAEoCRIPCgdwaWdtZW50GBMgASgJEiYKCGZvcm1lcmx5GBQgAygLMhQuYWdvcmEudjEuRm9ybWVyTmFtZRpBCgxDaVN0YXRlRW50cnkSCwoDa2V5GAEgASgFEiAKBXZhbHVlGAIgASgOMhEuYWdvcmEudjEuQ2lTdGF0ZToCOAFKBAgMEA1KBAgPEBBSDXNlc3Npb25fc3RhdGVSAmNpIkoKCkZvcm1lck5hbWUSDAoEbmFtZRgBIAEoCRIuCgpyZW5hbWVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCK4AgoUVXBkYXRlUHJvZmlsZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSEQoEa2luZBgCIAEoCUgAiAEBEhQKB3Byb2plY3QYAyABKAlIAYgBARIRCgR0YXNrGAQgASgJSAKIAQESEwoGc3RhdHVzGAUgASgJSAOIAQESEAoDY3dkGAYgASgJSASIAQESEgoFYWJvdXQYByABKAlIBYgBARIPCgdhZGRfcHJzGAggAygFEhAKCGRyb3BfcHJzGAkgAygFEhEKBGljb24YCiABKAlIBogBARIUCgdwaWdtZW50GAsgASgJSAeIAQFCBwoFX2tpbmRCCgoIX3Byb2plY3RCBwoFX3Rhc2tCCQoHX3N0YXR1c0IGCgRfY3dkQggKBl9hYm91dEIHCgVfaWNvbkIKCghfcGlnbWVudCI7ChVVcGRhdGVQcm9maWxlUmVzcG9uc2USIgoHcHJvZmlsZRgBIAEoCzIRLmFnb3JhLnYxLlByb2ZpbGUiHQoMTGVhdmVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJIiEKDUxlYXZlUmVzcG9uc2USEAoIcmVsZWFzZWQYASADKAkiIAoRTGlzdEFnZW50c1JlcXVlc3QSCwoDYWxsGAEgASgIIjcKEkxpc3RBZ2VudHNSZXNwb25zZRIhCgZhZ2VudHMYASADKAsyES5hZ29yYS52MS5Qcm9maWxlIjYKCldob1JlcXVlc3QSDQoFcXVlcnkYASABKAkSDAoEcGF0aBgCIAEoCBILCgNhbGwYAyABKAgiMAoLV2hvUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSIsCg1SZW5hbWVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkiNAoOUmVuYW1lUmVzcG9uc2USIgoHcHJvZmlsZRgBIAEoCzIRLmFnb3JhLnYxLlByb2ZpbGUqYAoHQ2lTdGF0ZRIYChRDSV9TVEFURV9VTlNQRUNJRklFRBAAEhIKDkNJX1NUQVRFX0dSRUVOEAESEAoMQ0lfU1RBVEVfUkVEEAISFQoRQ0lfU1RBVEVfQ09ORkxJQ1QQAzLUAgoMQWdlbnRTZXJ2aWNlElAKDVVwZGF0ZVByb2ZpbGUSHi5hZ29yYS52MS5VcGRhdGVQcm9maWxlUmVxdWVzdBofLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXNwb25zZRI4CgVMZWF2ZRIWLmFnb3JhLnYxLkxlYXZlUmVxdWVzdBoXLmFnb3JhLnYxLkxlYXZlUmVzcG9uc2USRwoKTGlzdEFnZW50cxIbLmFnb3JhLnYxLkxpc3RBZ2VudHNSZXF1ZXN0GhwuYWdvcmEudjEuTGlzdEFnZW50c1Jlc3BvbnNlEjIKA1dobxIULmFnb3JhLnYxLldob1JlcXVlc3QaFS5hZ29yYS52MS5XaG9SZXNwb25zZRI7CgZSZW5hbWUSFy5hZ29yYS52MS5SZW5hbWVSZXF1ZXN0GhguYWdvcmEudjEuUmVuYW1lUmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Profile
@@ -103,6 +103,27 @@ export type Profile = Message<"agora.v1.Profile"> & {
    * @generated from field: map<int32, agora.v1.CiState> ci_state = 17;
    */
   ciState: { [key: number]: CiState };
+
+  /**
+   * The agent's sigil, one of a fixed list (helmet, lyre, trireme, ...); empty when unset.
+   *
+   * @generated from field: string icon = 18;
+   */
+  icon: string;
+
+  /**
+   * The agent's pigment, one of a fixed list (terracotta, ochre, olive, ...); empty when unset.
+   *
+   * @generated from field: string pigment = 19;
+   */
+  pigment: string;
+
+  /**
+   * Names the agent gave up by renaming itself, newest first.
+   *
+   * @generated from field: repeated agora.v1.FormerName formerly = 20;
+   */
+  formerly: FormerName[];
 };
 
 /**
@@ -111,6 +132,30 @@ export type Profile = Message<"agora.v1.Profile"> & {
  */
 export const ProfileSchema: GenMessage<Profile> = /*@__PURE__*/
   messageDesc(file_agora_v1_agents, 0);
+
+/**
+ * FormerName is a name an agent gave up, and when.
+ *
+ * @generated from message agora.v1.FormerName
+ */
+export type FormerName = Message<"agora.v1.FormerName"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp renamed_at = 2;
+   */
+  renamedAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message agora.v1.FormerName.
+ * Use `create(FormerNameSchema)` to create a new message.
+ */
+export const FormerNameSchema: GenMessage<FormerName> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 1);
 
 /**
  * @generated from message agora.v1.UpdateProfileRequest
@@ -162,6 +207,20 @@ export type UpdateProfileRequest = Message<"agora.v1.UpdateProfileRequest"> & {
    * @generated from field: repeated int32 drop_prs = 9;
    */
   dropPrs: number[];
+
+  /**
+   * A sigil from the fixed list; empty unsets it.
+   *
+   * @generated from field: optional string icon = 10;
+   */
+  icon?: string | undefined;
+
+  /**
+   * A pigment from the fixed list; empty unsets it.
+   *
+   * @generated from field: optional string pigment = 11;
+   */
+  pigment?: string | undefined;
 };
 
 /**
@@ -169,7 +228,7 @@ export type UpdateProfileRequest = Message<"agora.v1.UpdateProfileRequest"> & {
  * Use `create(UpdateProfileRequestSchema)` to create a new message.
  */
 export const UpdateProfileRequestSchema: GenMessage<UpdateProfileRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 1);
+  messageDesc(file_agora_v1_agents, 2);
 
 /**
  * @generated from message agora.v1.UpdateProfileResponse
@@ -186,7 +245,7 @@ export type UpdateProfileResponse = Message<"agora.v1.UpdateProfileResponse"> & 
  * Use `create(UpdateProfileResponseSchema)` to create a new message.
  */
 export const UpdateProfileResponseSchema: GenMessage<UpdateProfileResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 2);
+  messageDesc(file_agora_v1_agents, 3);
 
 /**
  * @generated from message agora.v1.LeaveRequest
@@ -205,7 +264,7 @@ export type LeaveRequest = Message<"agora.v1.LeaveRequest"> & {
  * Use `create(LeaveRequestSchema)` to create a new message.
  */
 export const LeaveRequestSchema: GenMessage<LeaveRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 3);
+  messageDesc(file_agora_v1_agents, 4);
 
 /**
  * @generated from message agora.v1.LeaveResponse
@@ -224,7 +283,7 @@ export type LeaveResponse = Message<"agora.v1.LeaveResponse"> & {
  * Use `create(LeaveResponseSchema)` to create a new message.
  */
 export const LeaveResponseSchema: GenMessage<LeaveResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 4);
+  messageDesc(file_agora_v1_agents, 5);
 
 /**
  * @generated from message agora.v1.ListAgentsRequest
@@ -241,7 +300,7 @@ export type ListAgentsRequest = Message<"agora.v1.ListAgentsRequest"> & {
  * Use `create(ListAgentsRequestSchema)` to create a new message.
  */
 export const ListAgentsRequestSchema: GenMessage<ListAgentsRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 5);
+  messageDesc(file_agora_v1_agents, 6);
 
 /**
  * @generated from message agora.v1.ListAgentsResponse
@@ -258,7 +317,7 @@ export type ListAgentsResponse = Message<"agora.v1.ListAgentsResponse"> & {
  * Use `create(ListAgentsResponseSchema)` to create a new message.
  */
 export const ListAgentsResponseSchema: GenMessage<ListAgentsResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 6);
+  messageDesc(file_agora_v1_agents, 7);
 
 /**
  * @generated from message agora.v1.WhoRequest
@@ -287,7 +346,7 @@ export type WhoRequest = Message<"agora.v1.WhoRequest"> & {
  * Use `create(WhoRequestSchema)` to create a new message.
  */
 export const WhoRequestSchema: GenMessage<WhoRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 7);
+  messageDesc(file_agora_v1_agents, 8);
 
 /**
  * @generated from message agora.v1.WhoResponse
@@ -304,7 +363,52 @@ export type WhoResponse = Message<"agora.v1.WhoResponse"> & {
  * Use `create(WhoResponseSchema)` to create a new message.
  */
 export const WhoResponseSchema: GenMessage<WhoResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_agents, 8);
+  messageDesc(file_agora_v1_agents, 9);
+
+/**
+ * @generated from message agora.v1.RenameRequest
+ */
+export type RenameRequest = Message<"agora.v1.RenameRequest"> & {
+  /**
+   * The acting agent, which renames itself.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * The new name.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message agora.v1.RenameRequest.
+ * Use `create(RenameRequestSchema)` to create a new message.
+ */
+export const RenameRequestSchema: GenMessage<RenameRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 10);
+
+/**
+ * @generated from message agora.v1.RenameResponse
+ */
+export type RenameResponse = Message<"agora.v1.RenameResponse"> & {
+  /**
+   * The agent's profile under its new name.
+   *
+   * @generated from field: agora.v1.Profile profile = 1;
+   */
+  profile?: Profile | undefined;
+};
+
+/**
+ * Describes the message agora.v1.RenameResponse.
+ * Use `create(RenameResponseSchema)` to create a new message.
+ */
+export const RenameResponseSchema: GenMessage<RenameResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 11);
 
 /**
  * CiState is the CI state of a pull request as the board reports it.
@@ -383,7 +487,7 @@ export const AgentService: GenService<{
     output: typeof ListAgentsResponseSchema;
   },
   /**
-   * Who finds agents by pull request, directory, name or branch.
+   * Who finds agents by pull request, directory, name, former name or branch.
    *
    * @generated from rpc agora.v1.AgentService.Who
    */
@@ -391,6 +495,17 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof WhoRequestSchema;
     output: typeof WhoResponseSchema;
+  },
+  /**
+   * Rename gives the agent a new name. Everything that is the agent's moves with it, and its
+   * old name becomes a former name, reserved for it.
+   *
+   * @generated from rpc agora.v1.AgentService.Rename
+   */
+  rename: {
+    methodKind: "unary";
+    input: typeof RenameRequestSchema;
+    output: typeof RenameResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_agora_v1_agents, 0);

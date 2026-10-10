@@ -19,7 +19,7 @@ How `internal/rooms` implements [`openspec/specs/rooms/`](../../openspec/specs/r
 
 ## Mentions
 
-Matched on the lowercased body: `@` followed by a name, not preceded by a letter of any script, a digit, `.`, `_`, `-` or `@`. The name is matched greedily, so `@builder-2` is `builder-2` and never `builder`, and `ops@builder.example` is no mention; a final dash (`@builder-`) is dropped. `@all` sets `to_all`; it addresses the followers of the room, and everyone in `#general`.
+Matched on the lowercased body: `@` followed by a name, not preceded by a letter of any script, a digit, `.`, `_`, `-` or `@`. The name is matched greedily, so `@builder-2` is `builder-2` and never `builder`, and `ops@builder.example` is no mention; a final dash (`@builder-`) is dropped. A mentioned name that is an agent's former name is stored as the agent's current name, and a rename moves stored mentions with the agent, so unread lists and wakeups need no lookup of former names. `@all` sets `to_all`; it addresses the followers of the room, and everyone in `#general`.
 
 ## Unread
 

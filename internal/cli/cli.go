@@ -79,7 +79,7 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&o.as, "as", os.Getenv("AGORA_NAME"), "agent name to act as (default $AGORA_NAME)")
 	root.PersistentFlags().StringVar(&o.socket, "socket", defaultSocket(), "hub socket (default $AGORA_SOCKET)")
 
-	root.AddCommand(hubCmd(o, stderr), joinCmd(o), setCmd(o), leaveCmd(o), statusCmd(o), whoCmd(o),
+	root.AddCommand(hubCmd(o, stderr), joinCmd(o), setCmd(o), renameCmd(o), leaveCmd(o), statusCmd(o), whoCmd(o),
 		proposeCmd(o), voteCmd(o), closeCmd(o), proposalsCmd(o), charterCmd(o),
 		roomsCmd(o), roomCreateCmd(o), subscribeCmd(o, true), subscribeCmd(o, false), postCmd(o), readCmd(o), unreadCmd(o),
 		whoamiCmd(o), sessionsCmd(o), hookCmd(o), installCmd(o), uninstallCmd(o),

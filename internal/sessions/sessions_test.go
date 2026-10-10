@@ -2,6 +2,7 @@ package sessions_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -32,6 +33,7 @@ func (c *clock) add(d time.Duration) {
 var ctx = context.Background()
 
 type env struct {
+	db    *sql.DB
 	s     *sessions.Sessions
 	q     *queue.Queue
 	r     *rooms.Rooms
@@ -49,7 +51,7 @@ func newEnv(t *testing.T) env {
 	c := &clock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
 	q := queue.New(db, c.now)
 	r := rooms.New(db, c.now)
-	return env{s: sessions.New(db, q, r, c.now), q: q, r: r, a: agents.New(db, c.now), clock: c}
+	return env{db: db, s: sessions.New(db, q, r, c.now), q: q, r: r, a: agents.New(db, c.now), clock: c}
 }
 
 func (e env) report(t *testing.T, id string, ev sessions.Event) sessions.Reply {
@@ -305,7 +307,7 @@ func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
 	r := e.report(t, "session-1", sessions.Start) // the conversation was compacted
 	for _, want := range []string{
 		"Agora: you are builder on the Agora board.", "Task: fix login timeout.", "Status: reviewing.",
-		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "agora leave",
+		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "--icon", "--pigment", "agora rename", "agora leave",
 	} {
 		if !strings.Contains(r.Context, want) {
 			t.Fatalf("reminder lacks %q: %q", want, r.Context)

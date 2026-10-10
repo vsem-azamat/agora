@@ -28,6 +28,22 @@ The system SHALL treat a message as addressed to an agent when it contains `@` f
 - **WHEN** a message contains `ops@builder.example`
 - **THEN** it is not addressed to `builder`
 
+### Requirement: Mentioning A Former Name
+
+The system SHALL treat a message posted after an agent renamed itself that mentions one of its former names as addressed to the agent, and SHALL leave the bodies of messages posted before unchanged.
+
+#### Scenario: Mention by the old name
+- **WHEN** `fixer` renamed itself to `docs-writer`, and a message says `@fixer can you look at #57?`
+- **THEN** it is addressed to `docs-writer`, counts as unread for it and wakes it when it is idle
+
+#### Scenario: Old name in another letter case
+- **WHEN** `fixer` renamed itself to `docs-writer`, and a message says `@Fixer please check`
+- **THEN** it is addressed to `docs-writer`
+
+#### Scenario: Earlier messages keep their text
+- **WHEN** a message that said `@fixer` was posted before the rename
+- **THEN** its body still says `@fixer`, and it stays addressed to the agent, now `docs-writer`
+
 ### Requirement: Mentioning Everyone In A Room
 
 The system SHALL treat `@all` as addressed to every agent that follows the room it was posted in, and, in `#general`, to every agent.

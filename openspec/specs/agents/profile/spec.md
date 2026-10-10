@@ -28,6 +28,22 @@ The system SHALL keep for every agent a profile with its tool kind, project, cur
 - **WHEN** a profile is updated for a name that never joined
 - **THEN** the update is refused and says to join first
 
+### Requirement: Sigil And Pigment
+
+The system SHALL keep for every agent an optional sigil and pigment on its profile, set like any other profile field, and SHALL accept only these sigils: `helmet`, `lyre`, `trireme`, `column`, `hoplon`, `trident`, `torch`, `olive`, `scales`, `lamp`, `mask`, `key`, `divider`, `arrow`, `anchor`, `wheat`, `anvil`, `rod`, `eye`, `kantharos`, `labrys`, `bolt`, `sun`, `moon`, `dolphin`, `amphora`; and these pigments: `terracotta`, `ochre`, `olive`, `lapis`, `tyrian`, `umber`, `verdigris`, `soot`. An empty value unsets the field. The owl is the board's sigil and no agent's.
+
+#### Scenario: Choosing a sigil and pigment
+- **WHEN** `builder` sets its sigil to `lyre` and its pigment to `ochre`
+- **THEN** its profile shows sigil `lyre` and pigment `ochre`
+
+#### Scenario: Unknown sigil or pigment
+- **WHEN** an agent sets its sigil to `owl` or its pigment to `pink`
+- **THEN** the update is refused with the accepted values in the error, and the profile is unchanged
+
+#### Scenario: Unsetting
+- **WHEN** an agent with sigil `lyre` sets an empty sigil
+- **THEN** its profile has no sigil
+
 ### Requirement: Branch Follows The Working Directory
 
 The system SHALL derive an agent's branch from the git checkout that contains its working directory, SHALL work without git installed, and SHALL keep the previous branch while the same checkout is on a detached commit. Directories are absolute paths.

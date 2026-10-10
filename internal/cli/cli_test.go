@@ -131,6 +131,34 @@ func TestWaitEndsWhenTheTurnComes(t *testing.T) {
 	}
 }
 
+func TestWaitSaysTheNewNameAfterARename(t *testing.T) {
+	socket := startHub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Setenv("AGORA_SESSION", "")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	agora(ctx, socket, "fixer", "join", "fixer")
+	agora(ctx, socket, "a", "queue", "join", "heavy/typecheck")
+	agora(ctx, socket, "fixer", "queue", "join", "heavy/typecheck")
+	waited := make(chan result)
+	go func() { waited <- agora(ctx, socket, "fixer", "queue", "wait", "heavy/typecheck") }()
+	time.Sleep(200 * time.Millisecond) // let the wait start streaming
+	if r := agora(ctx, socket, "fixer", "rename", "docs-writer"); r.code != 0 {
+		t.Fatalf("rename: %+v", r)
+	}
+	time.Sleep(200 * time.Millisecond)
+	agora(ctx, socket, "a", "queue", "release", "heavy/typecheck")
+	select {
+	case r := <-waited:
+		if r.code != 0 || strings.Count(r.stdout, "now waiting as docs-writer") != 1 || !strings.Contains(r.stdout, "holding heavy/typecheck") ||
+			strings.Index(r.stdout, "now waiting as") > strings.Index(r.stdout, "holding") {
+			t.Fatalf("wait: %+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("wait did not end")
+	}
+}
+
 func TestWaitEndsWithAnErrorWhenRemoved(t *testing.T) {
 	socket := startHub(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -392,6 +420,42 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (1 active)") {
 		t.Fatalf("status after rejoin: %s", r.stdout)
+	}
+}
+
+func TestRenameAndSigil(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "session-rename")
+	t.Setenv("AGORA_NAME", "")
+	if r := agora(ctx, socket, "", "join", "fixer", "--project", "example-app"); r.code != 0 {
+		t.Fatalf("join: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "set", "--icon", "lyre", "--pigment", "ochre"); r.code != 0 || !strings.Contains(r.stdout, "lyre") || !strings.Contains(r.stdout, "ochre") {
+		t.Fatalf("set sigil: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "set", "--icon", "owl"); r.code != 1 || !strings.Contains(r.stderr, "one of") {
+		t.Fatalf("set the board's sigil: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "rename", "docs-writer"); r.code != 0 || !strings.Contains(r.stdout, "fixer is now called docs-writer") ||
+		!strings.Contains(r.stdout, "commands from this session now act as docs-writer") {
+		t.Fatalf("rename: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "whoami"); !strings.Contains(r.stdout, "name: docs-writer") {
+		t.Fatalf("whoami after rename: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "docs-writer (was fixer)") {
+		t.Fatalf("status lacks the former name:\n%s", r.stdout)
+	}
+	if r := agora(ctx, socket, "x", "who", "fixer"); !strings.Contains(r.stdout, "docs-writer (was fixer)") {
+		t.Fatalf("who by the former name: %+v", r)
+	}
+	if r := agora(ctx, socket, "docs-writer", "rename", "reviewer"); r.code != 0 || !strings.Contains(r.stdout, "pass --as reviewer") {
+		t.Fatalf("rename by name: %+v", r)
+	}
+	if r := agora(ctx, socket, "fixer", "post", "general", "hello"); r.code != 1 || !strings.Contains(r.stderr, `now called "reviewer"`) {
+		t.Fatalf("posting as a former name: %+v", r)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -308,6 +309,9 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 	now := s.now()
 	bound := false
 	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := agents.NotFormerTx(ctx, tx, name); err != nil {
+			return err
+		}
 		if err := agents.RegisterTx(ctx, tx, name, now); err != nil {
 			return err
 		}
@@ -346,6 +350,49 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 		return nil
 	})
 	return bound, err
+}
+
+// Rename gives agent the name name, keeping everything that is the agent's, records the old
+// name as a former name and announces the change, in one step.
+func (s *Sessions) Rename(ctx context.Context, agent, name string) error {
+	if err := checkName(name); err != nil {
+		return err
+	}
+	if name == agent {
+		return fmt.Errorf("%w: you are already called %s", store.ErrInvalid, name)
+	}
+	now := s.now()
+	return store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+			return err
+		}
+		if err := agents.FreeForTx(ctx, tx, agent, name); err != nil {
+			return err
+		}
+		if err := agents.RenameTx(ctx, tx, agent, name, now); err != nil {
+			return err
+		}
+		return s.announceRename(ctx, tx, agent, name)
+	})
+}
+
+// announceRename posts the rename as the board in #general and in the room where the board
+// tells the agent about its own work.
+func (s *Sessions) announceRename(ctx context.Context, tx *sql.Tx, old, name string) error {
+	if s.rooms == nil {
+		return nil
+	}
+	room, err := rooms.NoticeRoomTx(ctx, tx, name)
+	if err != nil {
+		return err
+	}
+	text := fmt.Sprintf("%s is now called %s", old, name)
+	for _, r := range slices.Compact([]string{rooms.General, room}) {
+		if _, err := s.rooms.PostTx(ctx, tx, rooms.Board, r, text, 0); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Leave marks name as left, removes it from every resource queue and unbinds it from every

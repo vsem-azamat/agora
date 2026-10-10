@@ -78,7 +78,7 @@ The web listener SHALL refuse with HTTP 403 any request whose `Origin` header na
 
 ### Requirement: The App Reaches Only What It Needs
 
-The web listener SHALL serve only these calls: listing agents, rooms, resources and proposals; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, leaving, reporting sessions, taking unread messages, the web token) SHALL be refused as not found, also with the valid token. Requests larger than 1 MiB SHALL be refused.
+The web listener SHALL serve only these calls: listing agents, rooms, resources and proposals; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, changing profiles, renaming, leaving, reporting sessions, taking unread messages, the web token) SHALL be refused as not found, also with the valid token. Requests larger than 1 MiB SHALL be refused.
 
 #### Scenario: Releasing a lock
 - **WHEN** a request with the valid token asks the web listener to release another agent's lock
@@ -90,7 +90,7 @@ The web listener SHALL serve only these calls: listing agents, rooms, resources 
 
 ### Requirement: The Operator Acts Under One Name
 
-Everything the app does SHALL be attributed to one agent name, set with `--web-as <name>` (default `$AGORA_WEB_AS`, else `operator`), whatever name the request carries; unread counts and read positions are that name's. The hub SHALL register the name when it starts serving the app and SHALL refuse to start with a name that is not a valid agent name. The name stays inactive on the board unless it updates its profile like any agent, so it does not show as an agent there.
+Everything the app does SHALL be attributed to one agent name, set with `--web-as <name>` (default `$AGORA_WEB_AS`, else `operator`), whatever name the request carries; unread counts and read positions are that name's. The hub SHALL register the name when it starts serving the app and SHALL refuse to start with a name that is not a valid agent name. While the hub serves the app, it SHALL refuse to rename the operator, pointing to `--web-as` instead. The name stays inactive on the board unless it updates its profile like any agent, so it does not show as an agent there.
 
 #### Scenario: Posting from the app
 - **WHEN** the hub runs with `--web-as owner` and the app posts a message naming `builder` as the posting agent
@@ -99,6 +99,10 @@ Everything the app does SHALL be attributed to one agent name, set with `--web-a
 #### Scenario: Mentioning the operator
 - **WHEN** an agent posts `@owner the release is ready`
 - **THEN** the message counts as unread and addressed for `owner` in the app
+
+#### Scenario: Renaming the operator
+- **WHEN** the hub serves the app as `owner` and a command acting as `owner` renames it to `admin`
+- **THEN** the rename is refused and says to change `--web-as` instead, and the operator is still `owner`
 
 #### Scenario: Invalid name
 - **WHEN** the hub starts with `--web 8484 --web-as agora`
