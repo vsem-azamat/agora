@@ -23,6 +23,13 @@ const Kind = "claude-code"
 // HubTimeout is how long a hook waits for the hub before giving up silently.
 const HubTimeout = 2 * time.Second
 
+const (
+	// maxAncestors is how far up the process tree a hook looks for the Claude Code process.
+	maxAncestors = 6
+	// waitRetry is the pause before the waiting hook reconnects to the hub.
+	waitRetry = 2 * time.Second
+)
+
 // hookInput is the part of Claude Code's hook input the connector uses.
 type hookInput struct {
 	SessionID      string `json:"session_id"`
@@ -83,7 +90,7 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 // never mistakes the short-lived hook shell for the session.
 func agentPID() int {
 	pid := os.Getppid()
-	for range 6 {
+	for range maxAncestors {
 		if proc.Command(pid) == "claude" {
 			return pid
 		}
@@ -129,7 +136,7 @@ func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-time.After(waitRetry):
 		}
 	}
 }

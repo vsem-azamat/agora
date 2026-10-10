@@ -204,9 +204,15 @@ func (r *Rooms) Followed(ctx context.Context, agent string) ([]string, error) {
 	return out, err
 }
 
-// FollowedTx is Followed inside the caller's transaction.
-func (r *Rooms) FollowedTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	return followed(ctx, tx, agent)
+// NoticeRoomTx returns the room where the board tells agent about its own work, inside the
+// caller's transaction: the alphabetically first room it follows other than #general, else
+// #general.
+func NoticeRoomTx(ctx context.Context, tx *sql.Tx, agent string) (string, error) {
+	rooms, err := followed(ctx, tx, agent)
+	if err != nil || len(rooms) < 2 {
+		return General, err
+	}
+	return rooms[1], nil
 }
 
 // Post stores a message from author (a joined agent, or the board itself) and returns its
@@ -310,7 +316,7 @@ func (r *Rooms) UnreadCount(ctx context.Context, agent string, mentionsOnly bool
 			return err
 		}
 		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE addressed OR NOT :m`,
-			sql.Named("a", agent), sql.Named("m", mentionsOnly)).Scan(&n)
+			sql.Named("a", agent), sql.Named("m", mentionsOnly), sql.Named("general", General)).Scan(&n)
 	})
 	return n, err
 }
@@ -336,9 +342,10 @@ func (r *Rooms) Take(ctx context.Context, agent string, mentionsOnly bool, limit
 
 // unreadQuery finds unread messages through the indexes: messages in followed rooms after the
 // reading position (messages_room), and messages mentioning the agent by name (mentions_agent).
+// It takes the agent as :a and General as :general.
 const unreadQuery = `
 WITH followed(room) AS (
-	SELECT 'general' UNION SELECT room FROM subscriptions WHERE agent = :a
+	SELECT :general UNION SELECT room FROM subscriptions WHERE agent = :a
 ), start AS (
 	SELECT read_from FROM agents WHERE name = :a
 ), candidates AS (
@@ -362,7 +369,7 @@ func unread(ctx context.Context, tx *sql.Tx, agent string, mentionsOnly bool, li
 	if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 		return nil, 0, err
 	}
-	rows, err := tx.QueryContext(ctx, unreadQuery, sql.Named("a", agent))
+	rows, err := tx.QueryContext(ctx, unreadQuery, sql.Named("a", agent), sql.Named("general", General))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -402,7 +409,7 @@ func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, e
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT room, COUNT(*), SUM(addressed) FROM (`+unreadQuery+`) GROUP BY room ORDER BY room`,
-			sql.Named("a", agent))
+			sql.Named("a", agent), sql.Named("general", General))
 		if err != nil {
 			return err
 		}

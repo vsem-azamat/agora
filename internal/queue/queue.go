@@ -27,6 +27,8 @@ const (
 	MaxLease = 7 * 24 * time.Hour
 	// MaxSlots is the largest number of slots a resource may have.
 	MaxSlots = 1000
+	// DefaultSlots is how many slots a resource has until they are set.
+	DefaultSlots = 1
 )
 
 // State of an agent in a resource's queue.
@@ -151,8 +153,8 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 					note, lease.Milliseconds(), ms(now.Add(lease)), key, agent)
 			case given:
 				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ?, lease_ms = ?,
-					expires_at = CASE WHEN state = 'held' THEN ? ELSE expires_at END WHERE key = ? AND agent = ?`,
-					note, lease.Milliseconds(), ms(now.Add(lease)), key, agent)
+					expires_at = CASE WHEN state = ? THEN ? ELSE expires_at END WHERE key = ? AND agent = ?`,
+					note, lease.Milliseconds(), Held, ms(now.Add(lease)), key, agent)
 			default:
 				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ? WHERE key = ? AND agent = ?`, note, key, agent)
 			}
@@ -168,13 +170,13 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 		switch {
 		case free:
 			_, err = tx.ExecContext(ctx, `INSERT INTO entries (key, agent, note, state, seq, lease_ms, joined_at, expires_at)
-				VALUES (?, ?, ?, 'held', `+nextSeq+`, ?, ?, ?)`, key, agent, note, key, lease.Milliseconds(), ms(now), ms(now.Add(lease)))
+				VALUES (?, ?, ?, ?, `+nextSeq+`, ?, ?, ?)`, key, agent, note, Held, key, lease.Milliseconds(), ms(now), ms(now.Add(lease)))
 		case noWait:
 			res = r
 			return nil
 		default:
 			_, err = tx.ExecContext(ctx, `INSERT INTO entries (key, agent, note, state, seq, lease_ms, joined_at)
-				VALUES (?, ?, ?, 'waiting', `+nextSeq+`, ?, ?)`, key, agent, note, key, lease.Milliseconds(), ms(now))
+				VALUES (?, ?, ?, ?, `+nextSeq+`, ?, ?)`, key, agent, note, Waiting, key, lease.Milliseconds(), ms(now))
 		}
 		if err != nil {
 			return err
@@ -231,8 +233,8 @@ func (q *Queue) touch(ctx context.Context, key, agent string, renew bool) (*Entr
 			out = e
 			return nil
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = 'held', expires_at = ?, skips = 0 WHERE key = ? AND agent = ?`,
-			ms(now.Add(e.Lease)), key, agent); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = ?, expires_at = ?, skips = 0 WHERE key = ? AND agent = ?`,
+			Held, ms(now.Add(e.Lease)), key, agent); err != nil {
 			return err
 		}
 		r, err = load(ctx, tx, key)
@@ -451,34 +453,34 @@ func settled(ctx context.Context, tx *sql.Tx, key string, now time.Time) (bool, 
 		changed = changed || n > 0
 		return err
 	}
-	if err := exec(`DELETE FROM entries WHERE key = ? AND state = 'held' AND expires_at <= ?`, key, t); err != nil {
+	if err := exec(`DELETE FROM entries WHERE key = ? AND state = ? AND expires_at <= ?`, key, Held, t); err != nil {
 		return false, err
 	}
-	if err := exec(`DELETE FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? AND skips + 1 >= ?`,
-		key, t, MaxMissedTurns); err != nil {
+	if err := exec(`DELETE FROM entries WHERE key = ? AND state = ? AND expires_at <= ? AND skips + 1 >= ?`,
+		key, Offered, t, MaxMissedTurns); err != nil {
 		return false, err
 	}
-	missed, err := store.Strings(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
+	missed, err := store.Strings(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = ? AND expires_at <= ? ORDER BY seq`, key, Offered, t)
 	if err != nil {
 		return false, err
 	}
 	for _, a := range missed {
-		if err := exec(`UPDATE entries SET state = 'waiting', expires_at = NULL, skips = skips + 1,
-			seq = `+nextSeq+` WHERE key = ? AND agent = ?`, key, key, a); err != nil {
+		if err := exec(`UPDATE entries SET state = ?, expires_at = NULL, skips = skips + 1,
+			seq = `+nextSeq+` WHERE key = ? AND agent = ?`, Waiting, key, key, a); err != nil {
 			return false, err
 		}
 	}
 	var slots, active int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), 1)`, key).Scan(&slots); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), ?)`, key, DefaultSlots).Scan(&slots); err != nil {
 		return false, err
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE key = ? AND state IN ('held', 'offered')`, key).Scan(&active); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE key = ? AND state IN (?, ?)`, key, Held, Offered).Scan(&active); err != nil {
 		return false, err
 	}
 	if free := slots - active; free > 0 {
-		if err := exec(`UPDATE entries SET state = 'offered', expires_at = ?
-			WHERE key = ? AND agent IN (SELECT agent FROM entries WHERE key = ? AND state = 'waiting' ORDER BY seq LIMIT ?)`,
-			ms(now.Add(ClaimWindow)), key, key, free); err != nil {
+		if err := exec(`UPDATE entries SET state = ?, expires_at = ?
+			WHERE key = ? AND agent IN (SELECT agent FROM entries WHERE key = ? AND state = ? ORDER BY seq LIMIT ?)`,
+			Offered, ms(now.Add(ClaimWindow)), key, key, Waiting, free); err != nil {
 			return false, err
 		}
 	}
@@ -486,12 +488,12 @@ func settled(ctx context.Context, tx *sql.Tx, key string, now time.Time) (bool, 
 }
 
 func load(ctx context.Context, tx *sql.Tx, key string) (Resource, error) {
-	r := Resource{Key: key, Slots: 1}
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), 1)`, key).Scan(&r.Slots); err != nil {
+	r := Resource{Key: key, Slots: DefaultSlots}
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), ?)`, key, DefaultSlots).Scan(&r.Slots); err != nil {
 		return r, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT agent, note, state, lease_ms, joined_at, expires_at FROM entries WHERE key = ?
-		ORDER BY CASE state WHEN 'held' THEN 0 WHEN 'offered' THEN 1 ELSE 2 END, seq`, key)
+		ORDER BY CASE state WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, seq`, key, Held, Offered)
 	if err != nil {
 		return r, err
 	}
