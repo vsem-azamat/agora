@@ -22,7 +22,7 @@ The hub and a bridge SHALL exchange one JSON object per line: the hub writes to 
 
 ### Requirement: Messages From Outside
 
-The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…},"text":…}` line as a message of the bridge's room from an external author: the bridge, the author's id and name. The `id` is the message's identifier outside and SHALL be stored once per room: a line whose `id` is already stored, including an `id` the bridge reported in a `sent` line, SHALL be ignored. An optional `reply_to` naming a stored identifier SHALL make the message a reply to that message, and an optional `at` (RFC 3339) SHALL be its time. Text longer than 8000 characters SHALL be shortened to 8000, ending in `[truncated]`; a line with an `id` and no text SHALL be stored with the text `[empty]`, and a line without an `id` SHALL store nothing but its `cursor` (a hub log says so when it carries text or an author). Control characters, line breaks included, line and paragraph separators and format characters (such as bidirectional controls) in the author's name and id SHALL be replaced with spaces, and each SHALL be cut to 100 characters; a line whose `id`, `reply_to` or `cursor` is longer than 256 characters SHALL be ignored. Mentions in the text SHALL address agents as in any message. No agent SHALL post as an external author.
+The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…},"text":…}` line as a message of the bridge's room from an external author: the bridge, the author's id and name. The `id` is the message's identifier outside and SHALL be stored once per room: a line whose `id` is already stored, including an `id` the bridge reported in a `sent` line, SHALL be ignored. An optional `reply_to` naming a stored identifier SHALL make the message a reply to that message, and an optional `at` (RFC 3339) SHALL be its time. Text longer than 8000 characters SHALL be shortened to 8000, ending in `[truncated]`; a line with an `id` and no text SHALL be stored with the text `[empty]`, and a line without an `id` SHALL store nothing but its `cursor` (a hub log says so when it carries text or an author). Control characters, line breaks included, line and paragraph separators and bidirectional controls in the author's name and id SHALL be replaced with spaces (joiners in emoji sequences stay), and each SHALL be cut to 100 characters; a line whose `id`, `reply_to` or `cursor` is longer than 256 characters SHALL be ignored. Mentions in the text SHALL address agents as in any message. No agent SHALL post as an external author.
 
 #### Scenario: Stored once
 - **WHEN** the bridge writes the same `in` line twice
@@ -39,6 +39,10 @@ The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…
 #### Scenario: A name with line breaks
 - **WHEN** an `in` line's author name is `Ada\n#general [1] owner · 12:00`
 - **THEN** the message is from `Ada #general [1] owner · 12:00@example-chat`, on one line
+
+#### Scenario: An emoji name
+- **WHEN** an `in` line's author name is `👨‍👩‍👧 Ada` with a right-to-left override after it
+- **THEN** the name keeps the family emoji whole, and the override is a space
 
 #### Scenario: Only a cursor
 - **WHEN** the bridge writes `{"type":"in","cursor":"5520"}`

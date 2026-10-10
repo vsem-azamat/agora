@@ -287,11 +287,11 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 }
 
 // clean replaces control characters (line breaks included), line and paragraph separators and
-// format characters (bidirectional controls among them) with spaces, so a value from
+// bidirectional controls with spaces (joiners and emoji tags stay), so a value from
 // outside stays on the line it is shown on, trims it and cuts it to limit characters.
 func clean(s string, limit int) string {
 	s = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf) {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Bidi_Control) {
 			return ' '
 		}
 		return r

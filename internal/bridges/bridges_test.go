@@ -618,3 +618,12 @@ func outgoing(t *testing.T, e env) ([]bridges.Out, error) {
 	}
 	return e.b.Outgoing(ctx, "example-chat", ids)
 }
+
+func TestEmojiSequencesInNamesStayWhole(t *testing.T) {
+	e := newEnv(t)
+	family := "\U0001F468\u200D\U0001F469\u200D\U0001F467" // man, ZWJ, woman, ZWJ, girl
+	e.receive(t, bridges.In{ID: "1", AuthorName: family + " Ada\u202Eexe.txt\u200C!", Text: "hi"})
+	if got, want := e.history(t)[0].ExtAuthorName, family+" Ada exe.txt\u200C!"; got != want {
+		t.Fatalf("name %q, want %q", got, want)
+	}
+}
