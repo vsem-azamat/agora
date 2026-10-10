@@ -51,3 +51,38 @@ jobs:
         run: make breaking
       - name: Generated code is up to date
         run: make generate-check
+
+  web:
+    name: Web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: tools/go.sum
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Generated client is up to date
+        run: pnpm generate && git diff --exit-code src/gen && test -z "$(git status --porcelain src/gen)"
+      - name: Lint and format
+        run: pnpm lint
+      - name: Types
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Embedded build is up to date
+        run: pnpm build && git status --porcelain ../internal/web/dist | tee /dev/stderr | (! grep .)

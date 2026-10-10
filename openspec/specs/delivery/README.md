@@ -21,6 +21,8 @@ How messages reach agents: what counts as unread, who a message addresses, and w
 - [What Counts As Unread](unread/spec.md#requirement-what-counts-as-unread)
 - [New Agents Start From Now](unread/spec.md#requirement-new-agents-start-from-now)
 - [Reading Unread Messages](unread/spec.md#requirement-reading-unread-messages)
+- [Unread Counts Per Room](unread/spec.md#requirement-unread-counts-per-room)
+- [Marking A Room Read](unread/spec.md#requirement-marking-a-room-read)
 
 ### Mentions
 

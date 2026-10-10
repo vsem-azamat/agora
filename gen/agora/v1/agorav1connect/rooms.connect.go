@@ -45,6 +45,12 @@ const (
 	RoomServiceHistoryProcedure = "/agora.v1.RoomService/History"
 	// RoomServiceUnreadProcedure is the fully-qualified name of the RoomService's Unread RPC.
 	RoomServiceUnreadProcedure = "/agora.v1.RoomService/Unread"
+	// RoomServiceUnreadByRoomProcedure is the fully-qualified name of the RoomService's UnreadByRoom
+	// RPC.
+	RoomServiceUnreadByRoomProcedure = "/agora.v1.RoomService/UnreadByRoom"
+	// RoomServiceMarkRoomReadProcedure is the fully-qualified name of the RoomService's MarkRoomRead
+	// RPC.
+	RoomServiceMarkRoomReadProcedure = "/agora.v1.RoomService/MarkRoomRead"
 )
 
 // RoomServiceClient is a client for the agora.v1.RoomService service.
@@ -58,6 +64,10 @@ type RoomServiceClient interface {
 	History(context.Context, *connect.Request[v1.HistoryRequest]) (*connect.Response[v1.HistoryResponse], error)
 	// Unread returns the agent's unread messages and, unless peek, marks the returned ones read.
 	Unread(context.Context, *connect.Request[v1.UnreadRequest]) (*connect.Response[v1.UnreadResponse], error)
+	// UnreadByRoom counts the agent's unread messages per room without changing read state.
+	UnreadByRoom(context.Context, *connect.Request[v1.UnreadByRoomRequest]) (*connect.Response[v1.UnreadByRoomResponse], error)
+	// MarkRoomRead moves the agent's reading position in a room up to a message.
+	MarkRoomRead(context.Context, *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error)
 }
 
 // NewRoomServiceClient constructs a client for the agora.v1.RoomService service. By default, it
@@ -107,17 +117,31 @@ func NewRoomServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(roomServiceMethods.ByName("Unread")),
 			connect.WithClientOptions(opts...),
 		),
+		unreadByRoom: connect.NewClient[v1.UnreadByRoomRequest, v1.UnreadByRoomResponse](
+			httpClient,
+			baseURL+RoomServiceUnreadByRoomProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("UnreadByRoom")),
+			connect.WithClientOptions(opts...),
+		),
+		markRoomRead: connect.NewClient[v1.MarkRoomReadRequest, v1.MarkRoomReadResponse](
+			httpClient,
+			baseURL+RoomServiceMarkRoomReadProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("MarkRoomRead")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // roomServiceClient implements RoomServiceClient.
 type roomServiceClient struct {
-	createRoom *connect.Client[v1.CreateRoomRequest, v1.CreateRoomResponse]
-	listRooms  *connect.Client[v1.ListRoomsRequest, v1.ListRoomsResponse]
-	subscribe  *connect.Client[v1.SubscribeRequest, v1.SubscribeResponse]
-	post       *connect.Client[v1.PostRequest, v1.PostResponse]
-	history    *connect.Client[v1.HistoryRequest, v1.HistoryResponse]
-	unread     *connect.Client[v1.UnreadRequest, v1.UnreadResponse]
+	createRoom   *connect.Client[v1.CreateRoomRequest, v1.CreateRoomResponse]
+	listRooms    *connect.Client[v1.ListRoomsRequest, v1.ListRoomsResponse]
+	subscribe    *connect.Client[v1.SubscribeRequest, v1.SubscribeResponse]
+	post         *connect.Client[v1.PostRequest, v1.PostResponse]
+	history      *connect.Client[v1.HistoryRequest, v1.HistoryResponse]
+	unread       *connect.Client[v1.UnreadRequest, v1.UnreadResponse]
+	unreadByRoom *connect.Client[v1.UnreadByRoomRequest, v1.UnreadByRoomResponse]
+	markRoomRead *connect.Client[v1.MarkRoomReadRequest, v1.MarkRoomReadResponse]
 }
 
 // CreateRoom calls agora.v1.RoomService.CreateRoom.
@@ -150,6 +174,16 @@ func (c *roomServiceClient) Unread(ctx context.Context, req *connect.Request[v1.
 	return c.unread.CallUnary(ctx, req)
 }
 
+// UnreadByRoom calls agora.v1.RoomService.UnreadByRoom.
+func (c *roomServiceClient) UnreadByRoom(ctx context.Context, req *connect.Request[v1.UnreadByRoomRequest]) (*connect.Response[v1.UnreadByRoomResponse], error) {
+	return c.unreadByRoom.CallUnary(ctx, req)
+}
+
+// MarkRoomRead calls agora.v1.RoomService.MarkRoomRead.
+func (c *roomServiceClient) MarkRoomRead(ctx context.Context, req *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error) {
+	return c.markRoomRead.CallUnary(ctx, req)
+}
+
 // RoomServiceHandler is an implementation of the agora.v1.RoomService service.
 type RoomServiceHandler interface {
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
@@ -161,6 +195,10 @@ type RoomServiceHandler interface {
 	History(context.Context, *connect.Request[v1.HistoryRequest]) (*connect.Response[v1.HistoryResponse], error)
 	// Unread returns the agent's unread messages and, unless peek, marks the returned ones read.
 	Unread(context.Context, *connect.Request[v1.UnreadRequest]) (*connect.Response[v1.UnreadResponse], error)
+	// UnreadByRoom counts the agent's unread messages per room without changing read state.
+	UnreadByRoom(context.Context, *connect.Request[v1.UnreadByRoomRequest]) (*connect.Response[v1.UnreadByRoomResponse], error)
+	// MarkRoomRead moves the agent's reading position in a room up to a message.
+	MarkRoomRead(context.Context, *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error)
 }
 
 // NewRoomServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -206,6 +244,18 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(roomServiceMethods.ByName("Unread")),
 		connect.WithHandlerOptions(opts...),
 	)
+	roomServiceUnreadByRoomHandler := connect.NewUnaryHandler(
+		RoomServiceUnreadByRoomProcedure,
+		svc.UnreadByRoom,
+		connect.WithSchema(roomServiceMethods.ByName("UnreadByRoom")),
+		connect.WithHandlerOptions(opts...),
+	)
+	roomServiceMarkRoomReadHandler := connect.NewUnaryHandler(
+		RoomServiceMarkRoomReadProcedure,
+		svc.MarkRoomRead,
+		connect.WithSchema(roomServiceMethods.ByName("MarkRoomRead")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.RoomService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RoomServiceCreateRoomProcedure:
@@ -220,6 +270,10 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 			roomServiceHistoryHandler.ServeHTTP(w, r)
 		case RoomServiceUnreadProcedure:
 			roomServiceUnreadHandler.ServeHTTP(w, r)
+		case RoomServiceUnreadByRoomProcedure:
+			roomServiceUnreadByRoomHandler.ServeHTTP(w, r)
+		case RoomServiceMarkRoomReadProcedure:
+			roomServiceMarkRoomReadHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -251,4 +305,12 @@ func (UnimplementedRoomServiceHandler) History(context.Context, *connect.Request
 
 func (UnimplementedRoomServiceHandler) Unread(context.Context, *connect.Request[v1.UnreadRequest]) (*connect.Response[v1.UnreadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.Unread is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) UnreadByRoom(context.Context, *connect.Request[v1.UnreadByRoomRequest]) (*connect.Response[v1.UnreadByRoomResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.UnreadByRoom is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) MarkRoomRead(context.Context, *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.MarkRoomRead is not implemented"))
 }

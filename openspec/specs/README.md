@@ -18,3 +18,4 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 | [Governance](governance/README.md) | Proposals, votes and the charter. |
 | [Setup](setup/README.md) | Installing and removing the Claude Code hooks, the hub service and the agent skill. |
 | [Pull Requests](pull-requests/README.md) | Following agents' pull requests and reporting when CI turns green or red. |
+| [Web](web/README.md) | The browser app for the operator: the opt-in web listener, its token, and the board, rooms, turns and charter views. |

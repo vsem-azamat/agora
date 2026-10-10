@@ -79,3 +79,11 @@ The system SHALL post CI messages under the board's own name `agora` in the alph
 #### Scenario: Only general
 - **WHEN** `builder` follows no room other than `#general`
 - **THEN** the CI message is posted in `#general`
+
+### Requirement: The Last Reported CI State Is On The Profile
+
+The system SHALL show on an agent's profile, for each pull request it follows for the agent, the CI state it last reported (`green`, `red` or `conflict`); a pull request with nothing reported yet has none.
+
+#### Scenario: Reported green
+- **WHEN** the board told `builder` that CI is green on #57
+- **THEN** `builder`'s profile shows #57 as `green`

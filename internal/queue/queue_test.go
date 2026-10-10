@@ -49,7 +49,7 @@ func join(t *testing.T, q *queue.Queue, key, agent string) *queue.Entry {
 
 func state(t *testing.T, q *queue.Queue, key, agent string) (queue.State, int) {
 	t.Helper()
-	rs, err := q.List(ctx, key)
+	rs, _, err := q.List(ctx, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestSimultaneousJoinsGrantExactlyOne(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	rs, _ := q.List(ctx, "r")
+	rs, _, _ := q.List(ctx, "r")
 	held, positions := 0, map[int]bool{}
 	for _, e := range rs[0].Entries {
 		if e.State == queue.Held {
@@ -479,7 +479,7 @@ func TestListingShowsHoldersAndWaitersAndHidesIdleResources(t *testing.T) {
 	if _, err := q.Release(ctx, "gone", "x", "x", false); err != nil {
 		t.Fatal(err)
 	}
-	rs, err := q.List(ctx, "")
+	rs, _, err := q.List(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,5 +553,21 @@ func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
 		if _, err := q.SetSlots(ctx, "r", n); !errors.Is(err, queue.ErrInvalid) {
 			t.Errorf("slots %d: err = %v", n, err)
 		}
+	}
+}
+
+func TestListingReportsWhetherItSettledAQueue(t *testing.T) {
+	q, c := newQueue(t)
+	join(t, q, "example-app/merge", "builder")
+	join(t, q, "example-app/merge", "reviewer")
+	if _, settled, err := q.List(ctx, ""); err != nil || settled {
+		t.Fatalf("nothing to settle: settled %v, err %v", settled, err)
+	}
+	c.add(11 * time.Minute) // builder's lease ends: reviewer is offered the lock
+	if _, settled, err := q.List(ctx, ""); err != nil || !settled {
+		t.Fatalf("expired lease: settled %v, err %v", settled, err)
+	}
+	if _, settled, _ := q.List(ctx, ""); settled {
+		t.Fatal("listing again settled something")
 	}
 }

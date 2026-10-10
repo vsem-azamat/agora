@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -663,5 +664,68 @@ func TestWatchPullRequestsSetting(t *testing.T) {
 				t.Fatalf("exit %d, log: %s", code, log)
 			}
 		})
+	}
+}
+
+func TestWebSetting(t *testing.T) {
+	cases := []struct {
+		name, env string
+		args      []string
+		want      []string // in the log
+		code      int
+	}{
+		{"off by default", "", nil, []string{`web=""`}, 0},
+		{"only a port", "", []string{"--web", "0"}, []string{"web=127.0.0.1:", "web_as=operator"}, 0},
+		{"from the environment", "0", nil, []string{"web=127.0.0.1:"}, 0},
+		{"named operator", "", []string{"--web", "127.0.0.1:0", "--web-as", "owner"}, []string{"web=127.0.0.1:", "web_as=owner"}, 0},
+		{"another interface", "", []string{"--web", "0.0.0.0:0"}, []string{"not a loopback address"}, 0},
+		{"invalid operator", "", []string{"--web", "0", "--web-as", "agora"}, []string{`"agora" is reserved`}, 1},
+		{"invalid address", "", []string{"--web", "example:port"}, []string{"--web"}, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("AGORA_WEB", c.env)
+			t.Setenv("AGORA_WEB_AS", "")
+			log, code := hubLog(t, c.args...)
+			if code != c.code {
+				t.Fatalf("exit %d, log: %s", code, log)
+			}
+			for _, w := range c.want {
+				if !strings.Contains(log, w) {
+					t.Fatalf("log lacks %q: %s", w, log)
+				}
+			}
+		})
+	}
+}
+
+func TestWebToken(t *testing.T) {
+	ctx := context.Background()
+	plain := startHub(t)
+	r := agora(ctx, plain, "", "web", "token")
+	if r.code != 0 || !strings.Contains(r.stdout, "serves no web app") {
+		t.Fatalf("hub without web: %+v", r)
+	}
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := startHubWith(t, func(h *hub.Hub) {
+		if err := h.EnableWeb(ctx, l, "operator"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	r = agora(ctx, socket, "", "web", "token")
+	token := strings.TrimSpace(strings.SplitN(r.stdout, "\n", 2)[0])
+	if r.code != 0 || len(token) != 43 || !strings.Contains(r.stdout, "http://"+l.Addr().String()+"/#token="+token) {
+		t.Fatalf("web token: %+v", r)
+	}
+	if again := agora(ctx, socket, "", "web", "token"); !strings.HasPrefix(again.stdout, token+"\n") {
+		t.Fatalf("token changed: %+v", again)
+	}
+	rotated := agora(ctx, socket, "", "web", "token", "--rotate")
+	if rotated.code != 0 || strings.Contains(rotated.stdout, token) || !strings.Contains(rotated.stdout, "#token=") {
+		t.Fatalf("rotate: %+v", rotated)
 	}
 }

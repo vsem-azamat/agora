@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -534,5 +535,31 @@ func TestDetachedHeadIsNotMatchedByBranch(t *testing.T) {
 	e.w.Round(ctx)
 	if p := e.profile(t, "builder"); p.Branch != "feat/export" || len(p.FoundPRs) != 0 {
 		t.Fatalf("branch %q found %v", p.Branch, p.FoundPRs)
+	}
+}
+
+func TestLastReportedCIIsOnTheProfile(t *testing.T) {
+	e := newEnv(t)
+	dir := repo(t, "git@github.com:example-org/example-app.git")
+	e.agent(t, "builder", worktree(t, dir, "login-fix", "fix/login-timeout"), 58)
+	e.fake.set(app, green(57, "fix/login-timeout", "a1"))
+	e.fake.set(app, forge.PR{
+		Number: 58, Branch: "fix/other", Head: "b1", Open: true, Merge: forge.Mergeable,
+		Checks: []forge.Check{{Name: "test", Outcome: forge.Failed}},
+	})
+	if p := e.profile(t, "builder"); len(p.CI) != 0 {
+		t.Fatalf("CI before any report: %v", p.CI)
+	}
+	e.w.Round(ctx)
+	want := map[int]string{57: "green", 58: "red"}
+	if p := e.profile(t, "builder"); !maps.Equal(p.CI, want) {
+		t.Fatalf("profile CI %v, want %v", p.CI, want)
+	}
+	list, err := e.a.List(ctx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || !maps.Equal(list[0].CI, want) {
+		t.Fatalf("listed CI %+v", list)
 	}
 }

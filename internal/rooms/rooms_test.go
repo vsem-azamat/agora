@@ -391,3 +391,71 @@ func TestCountingUnreadMessages(t *testing.T) {
 		t.Fatalf("addressed: %d %v", n, err)
 	}
 }
+
+// --- unread per room and marking a room read ------------------------------------------
+
+func TestUnreadCountsPerRoom(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	if err := e.r.Create(ctx, "example-app", "the app", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	e.post(t, "reviewer", "example-app", "first")
+	e.post(t, "reviewer", "example-app", "@builder second")
+	e.post(t, "reviewer", "example-app", "third")
+	e.post(t, "builder", "general", "my own message")
+	counts, err := e.r.UnreadByRoom(ctx, "builder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []rooms.RoomUnread{{Room: "example-app", Unread: 3, Addressed: 1}}; !slices.Equal(counts, want) {
+		t.Fatalf("counts %+v, want %+v", counts, want)
+	}
+	if n := len(e.unread(t, "builder")); n != 3 {
+		t.Fatalf("counting changed read state: %d unread", n)
+	}
+}
+
+func TestMarkingARoomRead(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	if err := e.r.Create(ctx, "example-app", "the app", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	e.post(t, "reviewer", "example-app", "one")
+	second := e.post(t, "reviewer", "example-app", "two")
+	third := e.post(t, "reviewer", "example-app", "three")
+	other := e.post(t, "reviewer", "general", "elsewhere")
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", other); !errors.Is(err, rooms.ErrInvalid) {
+		t.Fatalf("message from another room: %v", err)
+	}
+	if got := ids(e.unread(t, "builder")); len(got) != 4 {
+		t.Fatalf("refused mark changed read state: %v", got)
+	}
+	if moved, err := e.r.MarkRoomRead(ctx, "builder", "#example-app", second); err != nil || !moved {
+		t.Fatalf("moved %v, err %v", moved, err)
+	}
+	if got := ids(e.unread(t, "builder")); !slices.Equal(got, []int64{third, other}) {
+		t.Fatalf("unread %v", got)
+	}
+	if moved, err := e.r.MarkRoomRead(ctx, "builder", "example-app", second-1); err != nil || moved {
+		t.Fatalf("moved %v, err %v", moved, err)
+	}
+	if got := ids(e.unread(t, "builder")); !slices.Equal(got, []int64{third, other}) {
+		t.Fatalf("position moved backwards: unread %v", got)
+	}
+}
+
+func TestMarkingARoomReadNeverReachesBehindTheJoin(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "reviewer")
+	old := e.post(t, "reviewer", "general", "before builder joined")
+	e.post(t, "reviewer", "general", "also before")
+	e.join(t, "builder")
+	if moved, err := e.r.MarkRoomRead(ctx, "builder", "general", old); err != nil || moved {
+		t.Fatalf("moved %v, err %v", moved, err)
+	}
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("messages from before the join became unread: %v", ids(got))
+	}
+}

@@ -45,14 +45,15 @@ func shortDir(t *testing.T) string {
 }
 
 type running struct {
-	client   agorav1connect.ResourceServiceClient
-	sessions agorav1connect.SessionServiceClient
-	rooms    agorav1connect.RoomServiceClient
-	agents   agorav1connect.AgentServiceClient
-	clock    *clock
-	stop     context.CancelFunc
-	done     chan struct{} // closed when Serve returns
-	err      error         // what Serve returned; read after done
+	httpClient *http.Client // over the socket
+	client     agorav1connect.ResourceServiceClient
+	sessions   agorav1connect.SessionServiceClient
+	rooms      agorav1connect.RoomServiceClient
+	agents     agorav1connect.AgentServiceClient
+	clock      *clock
+	stop       context.CancelFunc
+	done       chan struct{} // closed when Serve returns
+	err        error         // what Serve returned; read after done
 }
 
 func start(t *testing.T) *running { return startWith(t, nil) }
@@ -89,6 +90,7 @@ func startWith(t *testing.T, configure func(*hub.Hub)) *running {
 		var d net.Dialer
 		return d.DialContext(ctx, "unix", socket)
 	}}
+	r.httpClient = &http.Client{Transport: transport}
 	r.client = agorav1connect.NewResourceServiceClient(&http.Client{Transport: transport}, "http://agora")
 	r.sessions = agorav1connect.NewSessionServiceClient(&http.Client{Transport: transport}, "http://agora")
 	r.rooms = agorav1connect.NewRoomServiceClient(&http.Client{Transport: transport}, "http://agora")
@@ -454,6 +456,13 @@ func TestHubWatchesPullRequestsAndPostsCI(t *testing.T) {
 		if msgs := resp.Msg.GetMessages(); len(msgs) == 1 {
 			if m := msgs[0]; m.GetAuthor() != "agora" || m.GetBody() != "@builder CI is green on #57." || !m.GetAddressed() {
 				t.Fatalf("message %+v", m)
+			}
+			list, err := r.agents.ListAgents(context.Background(), connect.NewRequest(&agorav1.ListAgentsRequest{}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if a := list.Msg.GetAgents(); len(a) != 1 || a[0].GetCi()[57] != "green" {
+				t.Fatalf("the profile lacks the reported CI state: %v", a)
 			}
 			break
 		}

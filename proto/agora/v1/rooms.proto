@@ -17,6 +17,10 @@ service RoomService {
   rpc History(HistoryRequest) returns (HistoryResponse);
   // Unread returns the agent's unread messages and, unless peek, marks the returned ones read.
   rpc Unread(UnreadRequest) returns (UnreadResponse);
+  // UnreadByRoom counts the agent's unread messages per room without changing read state.
+  rpc UnreadByRoom(UnreadByRoomRequest) returns (UnreadByRoomResponse);
+  // MarkRoomRead moves the agent's reading position in a room up to a message.
+  rpc MarkRoomRead(MarkRoomReadRequest) returns (MarkRoomReadResponse);
 }
 
 message Room {
@@ -100,3 +104,29 @@ message UnreadResponse {
   // How many unread messages there are in all.
   int32 total = 2;
 }
+
+message UnreadByRoomRequest {
+  string agent = 1;
+}
+
+message RoomUnread {
+  string room = 1;
+  // Unread messages in the room.
+  int32 unread = 2;
+  // How many of them are addressed to the agent.
+  int32 addressed = 3;
+}
+
+message UnreadByRoomResponse {
+  // Rooms with at least one unread message, in name order.
+  repeated RoomUnread rooms = 1;
+}
+
+message MarkRoomReadRequest {
+  string agent = 1;
+  string room = 2;
+  // The newest message read; it must be in the room.
+  int64 through_id = 3;
+}
+
+message MarkRoomReadResponse {}

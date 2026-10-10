@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -75,6 +76,12 @@ type Hub struct {
 	// WatchFirst and WatchEvery time the pull request rounds: the first after start, then the gap.
 	WatchFirst, WatchEvery time.Duration
 
+	// webListener, when set, serves the web app acting as webAs (see EnableWeb).
+	webListener net.Listener
+	webAs       string
+	webToken    atomic.Pointer[string] // the current web token; nil until there is one
+	rotated     *signal                // fires when the web token is replaced
+
 	waitMu  sync.Mutex
 	waiters map[string]*waiter // by session id
 	waking  map[string]bool    // sessions whose wake command runs now
@@ -92,7 +99,7 @@ func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms,
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Hub{
-		queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle,
+		queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle,
 		WatchFirst: DefaultWatchFirst, WatchEvery: DefaultWatchEvery,
 	}
 }
@@ -115,6 +122,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.Handle(agorav1connect.NewAgentServiceHandler(&agentService{h}))
 	mux.Handle(agorav1connect.NewRoomServiceHandler(&roomService{h}))
 	mux.Handle(agorav1connect.NewGovernanceServiceHandler(&governanceService{h}))
+	mux.Handle(agorav1connect.NewWebServiceHandler(&webService{h}))
 	return mux
 }
 
@@ -227,6 +235,21 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		watching.Wait() // a pull request round writes to the database the caller closes next
 	}()
 	go h.Sweep(sweepCtx)
+	var webSrv *http.Server
+	if h.webListener != nil {
+		webSrv = &http.Server{
+			Handler:           h.WebHandler(),
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       2 * time.Minute,
+			MaxHeaderBytes:    64 << 10,
+			BaseContext:       func(net.Listener) context.Context { return base },
+		}
+		go func() {
+			if err := webSrv.Serve(h.webListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				h.log.Error("web listener", "err", err)
+			}
+		}()
+	}
 	if h.WakeCommand != "" {
 		go h.wakeLoop(sweepCtx)
 	}
@@ -240,9 +263,15 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		endStreams() // waiting streams return; clients reconnect to the next hub
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
+		if webSrv != nil {
+			_ = webSrv.Shutdown(shutdown) // like the socket server below
+		}
 		_ = srv.Shutdown(shutdown) // past the deadline Serve has returned; what is left is closed with the process
 	}()
 	err := srv.Serve(l)
+	if webSrv != nil && !errors.Is(err, http.ErrServerClosed) {
+		_ = webSrv.Close() // the socket failed: the caller closes the database next
+	}
 	if errors.Is(err, http.ErrServerClosed) {
 		<-stopped
 		return nil
@@ -250,10 +279,11 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 	return err
 }
 
-// signal lets any number of goroutines wait for the next change.
+// signal lets any number of goroutines wait for the next change; rev counts the changes.
 type signal struct {
-	mu sync.Mutex
-	ch chan struct{}
+	mu  sync.Mutex
+	ch  chan struct{}
+	rev int64
 }
 
 func newSignal() *signal { return &signal{ch: make(chan struct{})} }
@@ -264,8 +294,16 @@ func (s *signal) wait() <-chan struct{} {
 	return s.ch
 }
 
+// waitRevision is wait, also returning how many changes there were before.
+func (s *signal) waitRevision() (<-chan struct{}, int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ch, s.rev
+}
+
 func (s *signal) fire() {
 	s.mu.Lock()
+	s.rev++
 	close(s.ch)
 	s.ch = make(chan struct{})
 	s.mu.Unlock()
@@ -335,11 +373,13 @@ func (s *resources) Release(ctx context.Context, req *connect.Request[agorav1.Re
 }
 
 func (s *resources) List(ctx context.Context, req *connect.Request[agorav1.ListRequest]) (*connect.Response[agorav1.ListResponse], error) {
-	rs, err := s.h.queue.List(ctx, req.Msg.GetKey())
+	rs, settled, err := s.h.queue.List(ctx, req.Msg.GetKey())
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	s.h.changes.fire() // listing settles queues and may have offered a slot
+	if settled {
+		s.h.changes.fire() // listing settled a queue and may have offered a slot
+	}
 	out := &agorav1.ListResponse{}
 	for _, r := range rs {
 		out.Resources = append(out.Resources, resourcePB(r))
@@ -459,6 +499,7 @@ func (s *sessionService) JoinName(ctx context.Context, req *connect.Request[agor
 	if err != nil {
 		return nil, toConnect(err)
 	}
+	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.JoinNameResponse{Bound: bound}), nil
 }
 
@@ -509,6 +550,7 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 	if err != nil {
 		return nil, toConnect(err)
 	}
+	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.UpdateProfileResponse{Profile: profilePB(p)}), nil
 }
 
@@ -557,6 +599,12 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	for _, n := range p.FoundPRs {
 		out.FoundPrs = append(out.FoundPrs, int32(n))
 	}
+	if len(p.CI) > 0 {
+		out.Ci = make(map[int32]string, len(p.CI))
+		for n, state := range p.CI {
+			out.Ci[int32(n)] = state
+		}
+	}
 	return out
 }
 
@@ -568,6 +616,7 @@ func (s *roomService) CreateRoom(ctx context.Context, req *connect.Request[agora
 	if err := s.h.rooms.Create(ctx, req.Msg.GetName(), req.Msg.GetPurpose(), req.Msg.GetCreator()); err != nil {
 		return nil, toConnect(err)
 	}
+	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.CreateRoomResponse{}), nil
 }
 
@@ -591,6 +640,9 @@ func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav
 	followed, err := s.h.rooms.Subscribe(ctx, req.Msg.GetAgent(), req.Msg.GetRooms(), req.Msg.GetFollow())
 	if err != nil {
 		return nil, toConnect(err)
+	}
+	if len(req.Msg.GetRooms()) > 0 { // no rooms only asks which rooms are followed
+		s.h.changes.fire()
 	}
 	return connect.NewResponse(&agorav1.SubscribeResponse{Rooms: followed}), nil
 }
@@ -627,6 +679,30 @@ func (s *roomService) Unread(ctx context.Context, req *connect.Request[agorav1.U
 		return nil, toConnect(err)
 	}
 	return connect.NewResponse(&agorav1.UnreadResponse{Messages: messagesPB(msgs), Total: int32(total)}), nil
+}
+
+func (s *roomService) UnreadByRoom(ctx context.Context, req *connect.Request[agorav1.UnreadByRoomRequest]) (*connect.Response[agorav1.UnreadByRoomResponse], error) {
+	counts, err := s.h.rooms.UnreadByRoom(ctx, req.Msg.GetAgent())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.UnreadByRoomResponse{}
+	for _, c := range counts {
+		out.Rooms = append(out.Rooms, &agorav1.RoomUnread{Room: c.Room, Unread: int32(c.Unread), Addressed: int32(c.Addressed)})
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *roomService) MarkRoomRead(ctx context.Context, req *connect.Request[agorav1.MarkRoomReadRequest]) (*connect.Response[agorav1.MarkRoomReadResponse], error) {
+	m := req.Msg
+	moved, err := s.h.rooms.MarkRoomRead(ctx, m.GetAgent(), m.GetRoom(), m.GetThroughId())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	if moved {
+		s.h.changes.fire()
+	}
+	return connect.NewResponse(&agorav1.MarkRoomReadResponse{}), nil
 }
 
 func messagesPB(msgs []rooms.Message) []*agorav1.Message {
@@ -793,7 +869,7 @@ func runWakeCommand(ctx context.Context, command, terminal, text string) (string
 // --- pull requests ------------------------------------------------------------------
 
 // watchLoop looks up the pull requests of active agents WatchFirst after start and then every
-// WatchEvery, and wakes waiters when it posted CI messages.
+// WatchEvery, and fires the change signal after each round.
 func (h *Hub) watchLoop(ctx context.Context) {
 	w := pullrequests.New(h.db, h.agents, h.rooms, h.Forges, h.log)
 	t := time.NewTimer(h.WatchFirst)
@@ -803,9 +879,8 @@ func (h *Hub) watchLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if w.Round(ctx) > 0 {
-				h.changes.fire()
-			}
+			w.Round(ctx)
+			h.changes.fire() // found pull requests and CI states may have changed even without a message
 			t.Reset(h.WatchEvery)
 		}
 	}
@@ -829,6 +904,7 @@ func (s *governanceService) Vote(ctx context.Context, req *connect.Request[agora
 	if err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), m.GetChoice(), m.GetReason()); err != nil {
 		return nil, toConnect(err)
 	}
+	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.VoteResponse{Choice: governance.Choice(m.GetChoice())}), nil
 }
 
