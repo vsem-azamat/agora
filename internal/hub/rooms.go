@@ -2,13 +2,11 @@ package hub
 
 import (
 	"context"
-	"errors"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
-	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 type roomService struct{ h *Hub }
@@ -50,9 +48,6 @@ func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav
 
 func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
 	m := req.Msg
-	if m.GetAuthor() == rooms.Board {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the board itself posts as agora"))
-	}
 	id, err := s.h.rooms.Post(ctx, m.GetAuthor(), m.GetRoom(), m.GetBody(), m.GetReplyTo())
 	if err != nil {
 		return nil, toConnect(err)

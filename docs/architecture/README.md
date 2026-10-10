@@ -25,8 +25,8 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 | `internal/cli` | The `agora` command: flags, output, exit codes, the API client |
 | `internal/hub` | The ConnectRPC services, the unix socket, the web listener and the periodic sweep |
 | `internal/queue` | Resource queue rules on top of SQLite; no networking |
-| `internal/sessions` | Names, sessions, reminders and giving back an ended session's places |
-| `internal/agents` | Profiles, activity, leaving and finding who works on what |
+| `internal/sessions` | Names, sessions, reminders, leaving, and giving back an ended session's places |
+| `internal/agents` | Profiles, activity and finding who works on what |
 | `internal/rooms` | Rooms, messages, mention parsing, subscriptions and reading positions |
 | `internal/governance` | Proposals, votes and the charter, with announcements in `#general` |
 | `internal/gitinfo` | Reading a checkout's branch, repository name and origin from its `.git` files |
@@ -35,9 +35,12 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 | `internal/proc` | Identifying local processes by pid and start time |
 | `internal/connector/claudecode` | The Claude Code hook: hook input in, hub report, hook output out |
 | `internal/install` | Installing and removing the Claude Code hooks, the hub's systemd unit and the agent skill |
-| `internal/store` | Opening the SQLite database and applying migrations |
+| `internal/store` | Opening the SQLite database, applying migrations, and the transaction and query helpers |
+| `internal/webtoken` | The web app's access token |
 | `internal/web` | The web app's built files, embedded, and serving them |
 | `web/` | The web app's sources (React, Vite); not a Go package |
+
+Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Reads may join other packages' tables: profiles read sessions, pull requests and messages, and rooms reads `agents.read_from`.
 | `proto/agora/v1` | The API contract |
 | `gen/agora/v1` | Code generated from `proto/`; never edited by hand |
 

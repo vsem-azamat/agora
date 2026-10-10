@@ -179,6 +179,9 @@ func TestPostingAndReplying(t *testing.T) {
 	if _, err := e.r.Post(ctx, "ghost", "general", "hi", 0); !errors.Is(err, agents.ErrUnknown) {
 		t.Fatalf("unknown author: %v", err)
 	}
+	if _, err := e.r.Post(ctx, rooms.Board, "general", "hi", 0); !errors.Is(err, rooms.ErrBoardOnly) {
+		t.Fatalf("posting as the board: %v", err)
+	}
 }
 
 func TestConcurrentPostsAllLand(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
+	"github.com/vsem-azamat/agora/internal/webtoken"
 )
 
 const (
@@ -60,6 +61,7 @@ type Hub struct {
 	agents   *agents.Agents
 	rooms    *rooms.Rooms
 	gov      *governance.Governance
+	tokens   *webtoken.Tokens
 	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
@@ -96,7 +98,7 @@ func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	q := queue.New(db, now)
 	r := rooms.New(db, now)
 	return &Hub{
-		db: db, queue: q, sessions: sessions.New(db, q, r, now), agents: agents.New(db, now), rooms: r, gov: governance.New(db, r, now),
+		db: db, queue: q, sessions: sessions.New(db, q, r, now), agents: agents.New(db, now), rooms: r, gov: governance.New(db, r, now), tokens: webtoken.New(db, now),
 		alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
 		waiters: map[string]*waiter{}, waking: map[string]bool{},
 		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,

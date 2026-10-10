@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
-	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 func (o *options) printRooms(ctx context.Context) error {
@@ -163,11 +162,4 @@ func unreadCmd(o *options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&peek, "peek", false, "show without marking read")
 	return cmd
-}
-
-func formatMessage(m *agorav1.Message) string {
-	return rooms.Format(rooms.Message{
-		ID: m.GetId(), Room: m.GetRoom(), Author: m.GetAuthor(), Body: m.GetBody(),
-		ReplyTo: m.GetReplyTo(), At: m.GetAt().AsTime(), Addressed: m.GetAddressed(),
-	}, 0)
 }

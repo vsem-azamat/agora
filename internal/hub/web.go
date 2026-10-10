@@ -2,11 +2,7 @@ package hub
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
-	"database/sql"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -55,12 +51,12 @@ func (h *Hub) EnableWeb(ctx context.Context, l net.Listener, operator string) er
 	if _, err := h.sessions.Join(ctx, operator, "", false); err != nil {
 		return fmt.Errorf("--web-as: %w", err)
 	}
-	var token string
-	switch err := h.db.QueryRowContext(ctx, `SELECT token FROM web_token WHERE id = 1`).Scan(&token); {
-	case err == nil:
-		h.webToken.Store(&token)
-	case !errors.Is(err, sql.ErrNoRows):
+	token, err := h.tokens.Get(ctx)
+	if err != nil {
 		return err
+	}
+	if token != "" {
+		h.webToken.Store(&token)
 	}
 	h.webListener, h.webAs = l, operator
 	return nil
@@ -69,22 +65,7 @@ func (h *Hub) EnableWeb(ctx context.Context, l net.Listener, operator string) er
 // WebToken returns the web token, creating one when there is none; with rotate it replaces it
 // and ends every web call made with the old one.
 func (h *Hub) WebToken(ctx context.Context, rotate bool) (string, error) {
-	var token string
-	err := h.dbTx(ctx, func(tx *sql.Tx) error {
-		err := tx.QueryRowContext(ctx, `SELECT token FROM web_token WHERE id = 1`).Scan(&token)
-		if err == nil && !rotate {
-			return nil
-		}
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		b := make([]byte, 32)
-		rand.Read(b) // never fails; see crypto/rand
-		token = base64.RawURLEncoding.EncodeToString(b)
-		_, err = tx.ExecContext(ctx, `INSERT INTO web_token (id, token, created_at) VALUES (1, ?, ?)
-			ON CONFLICT (id) DO UPDATE SET token = excluded.token, created_at = excluded.created_at`, token, time.Now().UnixMilli())
-		return err
-	})
+	token, err := h.tokens.Ensure(ctx, rotate)
 	if err != nil {
 		return "", err
 	}
@@ -93,18 +74,6 @@ func (h *Hub) WebToken(ctx context.Context, rotate bool) (string, error) {
 		h.rotated.fire()
 	}
 	return token, nil
-}
-
-func (h *Hub) dbTx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := h.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
 }
 
 // validToken reports whether presented is the current web token, comparing in constant time.
