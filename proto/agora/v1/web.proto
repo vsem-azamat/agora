@@ -10,7 +10,7 @@ service WebService {
   // replaces the token, so browsers holding the old one must sign in again. Only the hub's
   // socket serves it, never the web listener.
   rpc Token(TokenRequest) returns (TokenResponse);
-  // Whoami returns the name the web app acts as.
+  // Whoami returns the name the web app acts as, with the board's own name and the general room.
   rpc Whoami(WhoamiRequest) returns (WhoamiResponse);
   // Watch sends a message at once and then whenever the board may have changed, at most
   // once a second, until the client goes away or the hub stops.
@@ -32,6 +32,10 @@ message WhoamiRequest {}
 message WhoamiResponse {
   // The operator name; empty when the hub serves no web app.
   string name = 1;
+  // The author name of the messages the board posts itself.
+  string board = 2;
+  // The room every agent follows.
+  string general_room = 3;
 }
 
 message WatchRequest {}

@@ -6,10 +6,7 @@ import { type Proposal, ProposalState, VoteChoice } from './gen/agora/v1/governa
 import { type Entry, EntryState, type Resource } from './gen/agora/v1/resources_pb';
 import { SessionState } from './gen/agora/v1/sessions_pb';
 
-/** The board posts its own messages under this name. */
-export const BOARD = 'agora';
-
-type Liveness = 'busy' | 'idle' | 'offline';
+export type Liveness = 'busy' | 'idle' | 'offline';
 
 export function liveness(p: Pick<Profile, 'session'>): Liveness {
   switch (p.session) {
@@ -22,13 +19,45 @@ export function liveness(p: Pick<Profile, 'session'>): Liveness {
   }
 }
 
-const order: Record<Liveness, number> = { busy: 0, idle: 1, offline: 2 };
+/** The eight pigments agents are drawn in; each has a `--pg-<name>` token in every theme. */
+export const PIGMENTS = ['terracotta', 'ochre', 'olive', 'lapis', 'tyrian', 'umber', 'verdigris', 'soot'] as const;
+
+export type Pigment = (typeof PIGMENTS)[number];
+
+/** An agent's pigment: a hash of its name (FNV-1a), so a name always gets the same one. */
+export function pigment(name: string): Pigment {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193);
+  return PIGMENTS[(h >>> 0) % PIGMENTS.length] as Pigment;
+}
+
+export const livenessOrder: Record<Liveness, number> = { busy: 0, idle: 1, offline: 2 };
 
 /** The agents the board lists: everyone but the operator, busy first, then idle, then offline, by name. */
 export function boardAgents(agents: Profile[], operator: string): Profile[] {
   return agents
     .filter((a) => a.name !== operator)
-    .sort((a, b) => order[liveness(a)] - order[liveness(b)] || a.name.localeCompare(b.name));
+    .sort((a, b) => livenessOrder[liveness(a)] - livenessOrder[liveness(b)] || a.name.localeCompare(b.name));
+}
+
+/** How many names the `@` completion offers. */
+const COMPLETIONS = 6;
+
+/**
+ * Agents whose names start with what follows `@`: those in the room first, then by liveness and
+ * name; the operator does not address itself.
+ */
+export function mentionCandidates(agents: Profile[], prefix: string, inRoom: Set<string>, operator: string): Profile[] {
+  const p = prefix.toLowerCase();
+  return agents
+    .filter((a) => a.name !== operator && a.name.startsWith(p))
+    .sort(
+      (a, b) =>
+        Number(inRoom.has(b.name)) - Number(inRoom.has(a.name)) ||
+        livenessOrder[liveness(a)] - livenessOrder[liveness(b)] ||
+        a.name.localeCompare(b.name),
+    )
+    .slice(0, COMPLETIONS);
 }
 
 /** Declared and found pull requests, once each, in order. */
@@ -124,6 +153,11 @@ export function turns(r: Resource, now: Date): Turn[] {
   });
 }
 
+/** How many turns are held across every queue and lock. */
+export function heldTurns(rs: Resource[]): number {
+  return rs.reduce((n, r) => n + r.entries.filter((e) => e.state === EntryState.HELD).length, 0);
+}
+
 /** Resources with one slot are locks; the rest are queues. */
 export function splitResources(rs: Resource[]): { locks: Resource[]; queues: Resource[] } {
   return { locks: rs.filter((r) => r.slots <= 1), queues: rs.filter((r) => r.slots > 1) };
@@ -156,6 +190,10 @@ export function pebbles(p: Pick<Proposal, 'votes'>): { agent: string; choice: Pe
 export function proposalOrder(ps: Proposal[]): Proposal[] {
   const open = (p: Proposal) => Number(p.proposalState === ProposalState.OPEN);
   return [...ps].sort((a, b) => open(b) - open(a) || Number(b.id - a.id));
+}
+
+export function openProposals(ps: Proposal[]): number {
+  return ps.filter((p) => p.proposalState === ProposalState.OPEN).length;
 }
 
 const stateNames: Record<ProposalState, string> = {
@@ -193,6 +231,14 @@ export function parts(body: string): Part[] {
   return out;
 }
 
+/** The names a body mentions, lowercased, once each, in order. */
+export function mentionNames(body: string): string[] {
+  const names = parts(body)
+    .filter((p) => p.kind === 'mention')
+    .map((p) => p.text.slice(1).toLowerCase());
+  return [...new Set(names)];
+}
+
 export type RoomCount = { unread: number; addressed: number };
 
 /** What a room shows in the list: `@n` for messages addressed to the operator, else the unread count. */
@@ -201,11 +247,7 @@ export function roomBadge(c: RoomCount | undefined): { text: string; mention: bo
   return c.addressed > 0 ? { text: `@${c.addressed}`, mention: true } : { text: String(c.unread), mention: false };
 }
 
-/** A clock time for a message: `22:41`, or the date when it is not from today. */
-export function clock(at: Date | undefined, now: Date): string {
-  if (!at) return '';
-  const hm = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return at.toDateString() === now.toDateString()
-    ? hm
-    : `${at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${hm}`;
+/** A clock time for a message, `22:41`; the tape's day headings give the date. */
+export function clock(at: Date | undefined): string {
+  return at ? at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
 }

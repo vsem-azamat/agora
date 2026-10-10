@@ -4,10 +4,16 @@ import {
   boardAgents,
   ciMark,
   filterCounts,
+  heldTurns,
   lockState,
   matches,
+  mentionCandidates,
+  mentionNames,
+  openProposals,
+  PIGMENTS,
   parts,
   pebbles,
+  pigment,
   projects,
   proposalOrder,
   pullRequests,
@@ -139,5 +145,40 @@ describe('messages', () => {
     expect(roomBadge({ unread: 7, addressed: 2 })).toEqual({ text: '@2', mention: true });
     expect(roomBadge({ unread: 5, addressed: 0 })).toEqual({ text: '5', mention: false });
     expect(roomBadge({ unread: 0, addressed: 0 })).toBeUndefined();
+  });
+});
+
+describe('pigments', () => {
+  it('give a name the same pigment every time', () => {
+    expect(pigment('builder')).toBe(pigment('builder'));
+    expect(PIGMENTS).toContain(pigment('builder'));
+  });
+  it('spread names over the eight pigments', () => {
+    const used = new Set(Array.from({ length: 64 }, (_, i) => pigment(`agent-${i}`)));
+    expect(used.size).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('mentions', () => {
+  it('reads the names a body mentions, lowercased, once each', () => {
+    expect(mentionNames('@Builder and @reviewer, @builder again; ops@site.example')).toEqual(['builder', 'reviewer']);
+  });
+  it('completes names: the room first, then by liveness and name, never the operator', () => {
+    const agents = [
+      agent('release', 'idle'),
+      agent('reviewer', 'busy'),
+      agent('restorer', 'offline'),
+      agent('reader', 'busy'),
+      agent('builder', 'busy'),
+    ];
+    const names = mentionCandidates(agents, 're', new Set(['restorer']), 'reader').map((a) => a.name);
+    expect(names).toEqual(['restorer', 'reviewer', 'release']);
+  });
+});
+
+describe('counts', () => {
+  it('count held turns and open proposals', () => {
+    expect(heldTurns([queue('heavy-tests', 2, [['builder', 5]], ['reviewer']), lock('merge', 'release')])).toBe(2);
+    expect(openProposals([proposal(1, 'a', 'open', []), proposal(2, 'b', 'accepted', [])])).toBe(1);
   });
 });

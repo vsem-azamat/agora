@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/web.proto.
  */
 export const file_agora_v1_web: GenFile = /*@__PURE__*/
-  fileDesc("ChJhZ29yYS92MS93ZWIucHJvdG8SCGFnb3JhLnYxIh4KDFRva2VuUmVxdWVzdBIOCgZyb3RhdGUYASABKAgiMwoNVG9rZW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRITCgt3ZWJfYWRkcmVzcxgCIAEoCSIPCg1XaG9hbWlSZXF1ZXN0Ih4KDldob2FtaVJlc3BvbnNlEgwKBG5hbWUYASABKAkiDgoMV2F0Y2hSZXF1ZXN0IiEKDVdhdGNoUmVzcG9uc2USEAoIcmV2aXNpb24YASABKAMyvwEKCldlYlNlcnZpY2USOAoFVG9rZW4SFi5hZ29yYS52MS5Ub2tlblJlcXVlc3QaFy5hZ29yYS52MS5Ub2tlblJlc3BvbnNlEjsKBldob2FtaRIXLmFnb3JhLnYxLldob2FtaVJlcXVlc3QaGC5hZ29yYS52MS5XaG9hbWlSZXNwb25zZRI6CgVXYXRjaBIWLmFnb3JhLnYxLldhdGNoUmVxdWVzdBoXLmFnb3JhLnYxLldhdGNoUmVzcG9uc2UwAUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM");
+  fileDesc("ChJhZ29yYS92MS93ZWIucHJvdG8SCGFnb3JhLnYxIh4KDFRva2VuUmVxdWVzdBIOCgZyb3RhdGUYASABKAgiMwoNVG9rZW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRITCgt3ZWJfYWRkcmVzcxgCIAEoCSIPCg1XaG9hbWlSZXF1ZXN0IkMKDldob2FtaVJlc3BvbnNlEgwKBG5hbWUYASABKAkSDQoFYm9hcmQYAiABKAkSFAoMZ2VuZXJhbF9yb29tGAMgASgJIg4KDFdhdGNoUmVxdWVzdCIhCg1XYXRjaFJlc3BvbnNlEhAKCHJldmlzaW9uGAEgASgDMr8BCgpXZWJTZXJ2aWNlEjgKBVRva2VuEhYuYWdvcmEudjEuVG9rZW5SZXF1ZXN0GhcuYWdvcmEudjEuVG9rZW5SZXNwb25zZRI7CgZXaG9hbWkSFy5hZ29yYS52MS5XaG9hbWlSZXF1ZXN0GhguYWdvcmEudjEuV2hvYW1pUmVzcG9uc2USOgoFV2F0Y2gSFi5hZ29yYS52MS5XYXRjaFJlcXVlc3QaFy5hZ29yYS52MS5XYXRjaFJlc3BvbnNlMAFCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z");
 
 /**
  * @generated from message agora.v1.TokenRequest
@@ -76,6 +76,20 @@ export type WhoamiResponse = Message<"agora.v1.WhoamiResponse"> & {
    * @generated from field: string name = 1;
    */
   name: string;
+
+  /**
+   * The author name of the messages the board posts itself.
+   *
+   * @generated from field: string board = 2;
+   */
+  board: string;
+
+  /**
+   * The room every agent follows.
+   *
+   * @generated from field: string general_room = 3;
+   */
+  generalRoom: string;
 };
 
 /**
@@ -136,7 +150,7 @@ export const WebService: GenService<{
     output: typeof TokenResponseSchema;
   },
   /**
-   * Whoami returns the name the web app acts as.
+   * Whoami returns the name the web app acts as, with the board's own name and the general room.
    *
    * @generated from rpc agora.v1.WebService.Whoami
    */

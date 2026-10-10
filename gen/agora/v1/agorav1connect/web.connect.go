@@ -47,7 +47,7 @@ type WebServiceClient interface {
 	// replaces the token, so browsers holding the old one must sign in again. Only the hub's
 	// socket serves it, never the web listener.
 	Token(context.Context, *connect.Request[v1.TokenRequest]) (*connect.Response[v1.TokenResponse], error)
-	// Whoami returns the name the web app acts as.
+	// Whoami returns the name the web app acts as, with the board's own name and the general room.
 	Whoami(context.Context, *connect.Request[v1.WhoamiRequest]) (*connect.Response[v1.WhoamiResponse], error)
 	// Watch sends a message at once and then whenever the board may have changed, at most
 	// once a second, until the client goes away or the hub stops.
@@ -114,7 +114,7 @@ type WebServiceHandler interface {
 	// replaces the token, so browsers holding the old one must sign in again. Only the hub's
 	// socket serves it, never the web listener.
 	Token(context.Context, *connect.Request[v1.TokenRequest]) (*connect.Response[v1.TokenResponse], error)
-	// Whoami returns the name the web app acts as.
+	// Whoami returns the name the web app acts as, with the board's own name and the general room.
 	Whoami(context.Context, *connect.Request[v1.WhoamiRequest]) (*connect.Response[v1.WhoamiResponse], error)
 	// Watch sends a message at once and then whenever the board may have changed, at most
 	// once a second, until the client goes away or the hub stops.

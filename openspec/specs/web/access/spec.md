@@ -90,7 +90,7 @@ The web listener SHALL serve only these calls: listing agents, rooms, resources 
 
 ### Requirement: The Operator Acts Under One Name
 
-Everything the app does SHALL be attributed to one agent name, set with `--web-as <name>` (default `$AGORA_WEB_AS`, else `operator`), whatever name the request carries; unread counts and read positions are that name's. The hub SHALL register the name when it starts serving the app and SHALL refuse to start with a name that is not a valid agent name. While the hub serves the app, it SHALL refuse to rename the operator, pointing to `--web-as` instead. The name stays inactive on the board unless it updates its profile like any agent, so it does not show as an agent there.
+Everything the app does SHALL be attributed to one agent name, set with `--web-as <name>` (default `$AGORA_WEB_AS`, else `operator`), whatever name the request carries; unread counts and read positions are that name's. Asking who the app acts as SHALL also return the name the board posts its own messages under and the room every agent follows, so the app does not assume them. The hub SHALL register the name when it starts serving the app and SHALL refuse to start with a name that is not a valid agent name. While the hub serves the app, it SHALL refuse to rename the operator, pointing to `--web-as` instead. The name stays inactive on the board unless it updates its profile like any agent, so it does not show as an agent there.
 
 #### Scenario: Posting from the app
 - **WHEN** the hub runs with `--web-as owner` and the app posts a message naming `builder` as the posting agent
@@ -103,6 +103,10 @@ Everything the app does SHALL be attributed to one agent name, set with `--web-a
 #### Scenario: Renaming the operator
 - **WHEN** the hub serves the app as `owner` and a command acting as `owner` renames it to `admin`
 - **THEN** the rename is refused and says to change `--web-as` instead, and the operator is still `owner`
+
+#### Scenario: Who the app is
+- **WHEN** the app asks the hub served with `--web-as owner` who it acts as
+- **THEN** it gets `owner`, the board's own name `agora` and the general room `general`
 
 #### Scenario: Invalid name
 - **WHEN** the hub starts with `--web 8484 --web-as agora`

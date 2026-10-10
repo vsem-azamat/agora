@@ -157,7 +157,11 @@ func (*WhoamiRequest) Descriptor() ([]byte, []int) {
 type WhoamiResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The operator name; empty when the hub serves no web app.
-	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// The author name of the messages the board posts itself.
+	Board string `protobuf:"bytes,2,opt,name=board,proto3" json:"board,omitempty"`
+	// The room every agent follows.
+	GeneralRoom   string `protobuf:"bytes,3,opt,name=general_room,json=generalRoom,proto3" json:"general_room,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -195,6 +199,20 @@ func (*WhoamiResponse) Descriptor() ([]byte, []int) {
 func (x *WhoamiResponse) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *WhoamiResponse) GetBoard() string {
+	if x != nil {
+		return x.Board
+	}
+	return ""
+}
+
+func (x *WhoamiResponse) GetGeneralRoom() string {
+	if x != nil {
+		return x.GeneralRoom
 	}
 	return ""
 }
@@ -291,9 +309,11 @@ const file_agora_v1_web_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1f\n" +
 	"\vweb_address\x18\x02 \x01(\tR\n" +
 	"webAddress\"\x0f\n" +
-	"\rWhoamiRequest\"$\n" +
+	"\rWhoamiRequest\"]\n" +
 	"\x0eWhoamiResponse\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"\x0e\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05board\x18\x02 \x01(\tR\x05board\x12!\n" +
+	"\fgeneral_room\x18\x03 \x01(\tR\vgeneralRoom\"\x0e\n" +
 	"\fWatchRequest\"+\n" +
 	"\rWatchResponse\x12\x1a\n" +
 	"\brevision\x18\x01 \x01(\x03R\brevision2\xbf\x01\n" +

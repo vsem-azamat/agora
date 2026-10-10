@@ -10,6 +10,7 @@ import {
   VoteChoice,
 } from './gen/agora/v1/governance_pb';
 import { EntrySchema, EntryState, type Resource, ResourceSchema } from './gen/agora/v1/resources_pb';
+import { type Message, MessageSchema } from './gen/agora/v1/rooms_pb';
 import { SessionState } from './gen/agora/v1/sessions_pb';
 
 const sessions: Record<string, SessionState> = {
@@ -31,7 +32,7 @@ export function ci(states: Record<number, string>): Record<number, CiState> {
   return Object.fromEntries(Object.entries(states).map(([n, s]) => [n, ciStates[s] ?? CiState.UNSPECIFIED]));
 }
 
-export const NOW = new Date('2026-10-09T22:50:00Z');
+export const NOW = new Date('2026-10-09T12:00:00Z'); // midday, so the examples stay on one day in any time zone
 const ago = (min: number) => timestampFromDate(new Date(NOW.getTime() - min * 60_000));
 const inMin = (min: number) => timestampFromDate(new Date(NOW.getTime() + min * 60_000));
 
@@ -81,4 +82,15 @@ export function proposal(id: number, title: string, state: string, votes: [strin
       create(ProposalVoteSchema, { agent, voteChoice: choices[choice] ?? VoteChoice.UNSPECIFIED }),
     ),
   });
+}
+
+/** A message in `#example-app`, posted `min` minutes before NOW. */
+export function message(
+  id: number,
+  author: string,
+  body: string,
+  min: number,
+  more: MessageInitShape<typeof MessageSchema> = {},
+): Message {
+  return create(MessageSchema, { id: BigInt(id), room: 'example-app', author, body, at: ago(min), ...more });
 }
