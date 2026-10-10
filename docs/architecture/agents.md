@@ -22,7 +22,7 @@ An agent is active unless its status is `left`, while it has a session that has 
 
 ## Leaving
 
-`Leave` and the end of an agent's last session mark it `left` and remove it from every resource queue in one transaction. `Leave` also clears `sessions.agent` for every session bound to the name, ended ones included, so later events of a live session and a resumed session do not mark it `working` again; the session acts under no name until `agora join` binds one.
+Leaving (`sessions.Leave`, behind `agora leave`) and the end of an agent's last session mark it `left` (`agents.MarkLeftTx`) and remove it from every resource queue (`queue.ReleaseAgentTx`) in one transaction. Leaving also clears `sessions.agent` for every session bound to the name, ended ones included, so later events of a live session and a resumed session do not mark it `working` again; the session acts under no name until `agora join` binds one.
 
 ## Lookup
 

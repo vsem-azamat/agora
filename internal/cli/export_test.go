@@ -32,3 +32,6 @@ func SetGOOS(s string) func() {
 	goos = s
 	return func() { goos = old }
 }
+
+// FormatMessage renders a message as the read and unread commands print it, for tests.
+var FormatMessage = formatMessage

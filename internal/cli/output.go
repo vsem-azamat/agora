@@ -55,7 +55,8 @@ func plural(n int32) string {
 }
 
 // formatMessage renders a message: room, identifier, author, time and reply reference, then
-// the body indented.
+// the body indented. It is the same layout as rooms.Format, which the hub uses for the
+// messages it delivers into an agent's context; keep the two alike.
 func formatMessage(m *agorav1.Message) string {
 	head := fmt.Sprintf("#%s [%d] %s · %s", m.GetRoom(), m.GetId(), m.GetAuthor(), shortClock(m.GetAt().AsTime()))
 	if m.GetReplyTo() != 0 {

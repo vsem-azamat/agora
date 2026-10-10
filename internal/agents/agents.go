@@ -136,12 +136,6 @@ func RegisterTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) err
 	return err
 }
 
-// ProfileTx returns what name published, inside the caller's transaction: the stored fields,
-// without its session state (Offline), found pull requests or activity.
-func ProfileTx(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
-	return load(ctx, tx, name)
-}
-
 // ExistsTx returns ErrUnknown, saying how to join, when name has not joined.
 func ExistsTx(ctx context.Context, tx *sql.Tx, name string) error {
 	var n int

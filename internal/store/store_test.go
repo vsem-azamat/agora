@@ -80,7 +80,10 @@ func TestCIColumnsMigrationSplitsReported(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, reported) VALUES
 		('builder', 'github.com/example-org/example-app', 57, 1, 'green a1b2'),
-		('builder', 'github.com/example-org/example-app', 58, 0, '')`); err != nil {
+		('builder', 'github.com/example-org/example-app', 58, 0, ''),
+		('builder', 'github.com/example-org/example-app', 59, 1, 'red c3d4'),
+		('builder', 'github.com/example-org/example-app', 60, 1, 'conflict e5f6'),
+		('builder', 'github.com/example-org/example-app', 61, 1, 'green ')`); err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
@@ -90,7 +93,7 @@ func TestCIColumnsMigrationSplitsReported(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for n, want := range map[int][2]string{57: {"green", "a1b2"}, 58: {"", ""}} {
+	for n, want := range map[int][2]string{57: {"green", "a1b2"}, 58: {"", ""}, 59: {"red", "c3d4"}, 60: {"conflict", "e5f6"}, 61: {"green", ""}} {
 		var state, head string
 		if err := db.QueryRowContext(ctx, `SELECT ci_state, ci_head FROM pull_requests WHERE number = ?`, n).Scan(&state, &head); err != nil || [2]string{state, head} != want {
 			t.Errorf("#%d: %q %q err %v, want %q", n, state, head, err, want)
