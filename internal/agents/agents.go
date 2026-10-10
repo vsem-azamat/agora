@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/vsem-azamat/agora/internal/gitinfo"
-	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -129,27 +128,18 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 	return a.Get(ctx, name)
 }
 
-// Leave marks name as left, removes it from every resource queue and unbinds it from every
-// session, in one step, so later events of its sessions do not bring it back. It returns the
-// resources it left.
-func (a *Agents) Leave(ctx context.Context, name string) ([]string, error) {
-	var left []string
-	now := a.now()
-	err := store.InTx(ctx, a.db, func(tx *sql.Tx) error {
-		if err := ExistsTx(ctx, tx, name); err != nil {
-			return err
-		}
-		if err := MarkLeftTx(ctx, tx, name, now); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL WHERE agent = ?`, name); err != nil {
-			return err
-		}
-		var err error
-		left, err = queue.ReleaseAgentTx(ctx, tx, name, now)
-		return err
-	})
-	return left, err
+// RegisterTx registers name if it has not joined before, inside the caller's transaction; its
+// reading starts after the newest message.
+func RegisterTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO agents (name, joined_at, read_from) VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages))
+		ON CONFLICT (name) DO NOTHING`, name, now.UnixMilli())
+	return err
+}
+
+// ProfileTx returns what name published, inside the caller's transaction: the stored fields,
+// without its session state (Offline), found pull requests or activity.
+func ProfileTx(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
+	return load(ctx, tx, name)
 }
 
 // ExistsTx returns ErrUnknown, saying how to join, when name has not joined.
@@ -291,10 +281,9 @@ func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profi
 
 type scanner interface{ Scan(...any) error }
 
-// ciColumn lists the CI states last reported for agent a's pull requests as "57:green 58:red";
-// pull_requests.reported holds the state and the head commit.
-const ciColumn = `COALESCE((SELECT group_concat(p.number || ':' || substr(p.reported, 1, instr(p.reported, ' ') - 1), ' ')
-	FROM pull_requests AS p WHERE p.agent = a.name AND p.reported != ''), '')`
+// ciColumn lists the CI states last reported for agent a's pull requests as "57:green 58:red".
+const ciColumn = `COALESCE((SELECT group_concat(p.number || ':' || p.ci_state, ' ')
+	FROM pull_requests AS p WHERE p.agent = a.name AND p.ci_state != ''), '')`
 
 func parseCI(s string) map[int]string {
 	var out map[int]string

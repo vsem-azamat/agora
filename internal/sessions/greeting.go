@@ -2,13 +2,16 @@ package sessions
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/gitinfo"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 // The texts in this file greet a starting session. They name only `agora` commands, so any
@@ -40,10 +43,15 @@ func invitation(cwd string) string {
 // it published, where it listens, what waits for it and its places in queues. addressed is how
 // many unread messages address the agent, shown how many of them are delivered below it.
 func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.Entry, lost []string, addressed, shown int) (string, error) {
-	var task, status string
-	if err := s.db.QueryRowContext(ctx, `SELECT task, status FROM agents WHERE name = ?`, agent).Scan(&task, &status); err != nil {
+	var p agents.Profile
+	if err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		var err error
+		p, err = agents.ProfileTx(ctx, tx, agent)
+		return err
+	}); err != nil {
 		return "", err
 	}
+	task, status := p.Task, p.Status
 	if task == "" {
 		task = "not set"
 	}

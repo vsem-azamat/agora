@@ -26,7 +26,7 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, queue.ErrNotYourTurn):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
-	case errors.As(err, &forbidden):
+	case errors.As(err, &forbidden), errors.Is(err, rooms.ErrBoardOnly):
 		return connect.NewError(connect.CodePermissionDenied, err)
 	case errors.Is(err, sessions.ErrNameTaken):
 		return connect.NewError(connect.CodeAlreadyExists, err)

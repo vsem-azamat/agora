@@ -2,7 +2,7 @@
 
 [Docs](../README.md) / [Architecture](README.md) / **Web app**
 
-How the hub serves the browser app specified in [`openspec/specs/web/`](../../openspec/specs/web/README.md): the listener and its access rules in `internal/hub/web.go`, the embedded files in `internal/web`, the app's sources in `web/`.
+How the hub serves the browser app specified in [`openspec/specs/web/`](../../openspec/specs/web/README.md): the listener and its access rules in `internal/hub/web.go`, the token in `internal/webtoken`, the embedded files in `internal/web`, the app's sources in `web/`.
 
 ```sh
 agora hub --web 8484 [--web-as owner]     # or AGORA_WEB, AGORA_WEB_AS; off when empty

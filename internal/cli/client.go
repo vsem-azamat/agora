@@ -12,6 +12,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 )
 
 // baseURL is the URL the RPC clients call; the client dials the socket, so the host is a
@@ -20,12 +21,10 @@ const baseURL = "http://agora"
 
 // sessionID is the agent session this command runs in, as the agent tool exposes it.
 func sessionID() string {
-	for _, v := range []string{"CLAUDE_CODE_SESSION_ID", "AGORA_SESSION"} {
-		if id := os.Getenv(v); id != "" {
-			return id
-		}
+	if id := claudecode.SessionID(); id != "" {
+		return id
 	}
-	return ""
+	return os.Getenv("AGORA_SESSION")
 }
 
 // agent resolves who runs the command: --as, else $AGORA_NAME, else the name bound to the

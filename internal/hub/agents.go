@@ -29,7 +29,7 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 }
 
 func (s *agentService) Leave(ctx context.Context, req *connect.Request[agorav1.LeaveRequest]) (*connect.Response[agorav1.LeaveResponse], error) {
-	released, err := s.h.agents.Leave(ctx, req.Msg.GetName())
+	released, err := s.h.sessions.Leave(ctx, req.Msg.GetName())
 	if err != nil {
 		return nil, toConnect(err)
 	}

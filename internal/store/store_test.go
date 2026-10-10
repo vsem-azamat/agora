@@ -53,6 +53,51 @@ func TestProfilesMigrationMarksDepartedAgentsLeft(t *testing.T) {
 	}
 }
 
+// TestCIColumnsMigrationSplitsReported applies the migrations before it, stores a reported CI
+// state, then opens the database so the migration moves it into its own columns.
+func TestCIColumnsMigrationSplitsReported(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, _ := fs.Glob(migrations, "migrations/*.sql")
+	for i, name := range names {
+		if strings.HasSuffix(name, "0009_ci_columns.sql") {
+			break
+		}
+		body, _ := migrations.ReadFile(name)
+		if _, err := db.ExecContext(ctx, string(body)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, reported) VALUES
+		('builder', 'github.com/example-org/example-app', 57, 1, 'green a1b2'),
+		('builder', 'github.com/example-org/example-app', 58, 0, '')`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for n, want := range map[int][2]string{57: {"green", "a1b2"}, 58: {"", ""}} {
+		var state, head string
+		if err := db.QueryRowContext(ctx, `SELECT ci_state, ci_head FROM pull_requests WHERE number = ?`, n).Scan(&state, &head); err != nil || [2]string{state, head} != want {
+			t.Errorf("#%d: %q %q err %v, want %q", n, state, head, err, want)
+		}
+	}
+}
+
 func TestDatabaseFilesAreOwnerOnly(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")

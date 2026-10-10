@@ -308,8 +308,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 	now := s.now()
 	bound := false
 	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (name, joined_at, read_from) VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages))
-			ON CONFLICT (name) DO NOTHING`, name, now.UnixMilli()); err != nil {
+		if err := agents.RegisterTx(ctx, tx, name, now); err != nil {
 			return err
 		}
 		if sessionID == "" {
@@ -347,6 +346,29 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 		return nil
 	})
 	return bound, err
+}
+
+// Leave marks name as left, removes it from every resource queue and unbinds it from every
+// session, in one step, so later events of its sessions do not bring it back. It returns the
+// resources it left.
+func (s *Sessions) Leave(ctx context.Context, name string) ([]string, error) {
+	var left []string
+	now := s.now()
+	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, name); err != nil {
+			return err
+		}
+		if err := agents.MarkLeftTx(ctx, tx, name, now); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL WHERE agent = ?`, name); err != nil {
+			return err
+		}
+		var err error
+		left, err = queue.ReleaseAgentTx(ctx, tx, name, now)
+		return err
+	})
+	return left, err
 }
 
 // Resolve returns the name bound to a session that has not ended, or "".

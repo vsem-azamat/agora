@@ -102,8 +102,8 @@ func joinCmd(o *options) *cobra.Command {
 					req.Cwd = &wd
 				}
 			}
-			if req.Kind == nil && os.Getenv("CLAUDE_CODE_SESSION_ID") != "" {
-				kind := "claude-code"
+			if req.Kind == nil && claudecode.SessionID() != "" {
+				kind := claudecode.Kind
 				req.Kind = &kind
 			}
 			resp, err := o.sessions().JoinName(cmd.Context(), connect.NewRequest(&agorav1.JoinNameRequest{Name: name, SessionId: sessionID(), Force: force}))

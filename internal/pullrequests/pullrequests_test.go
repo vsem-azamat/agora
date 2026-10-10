@@ -439,7 +439,7 @@ func TestMessageIsAddressedInTheFirstFollowedRoom(t *testing.T) {
 func TestInactiveAgentsAreNotLookedUp(t *testing.T) {
 	e := newEnv(t)
 	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
-	if _, err := e.a.Leave(ctx, "builder"); err != nil {
+	if _, err := e.s.Leave(ctx, "builder"); err != nil {
 		t.Fatal(err)
 	}
 	e.w.Round(ctx)

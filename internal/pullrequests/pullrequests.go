@@ -307,8 +307,9 @@ func following(g *group, defaultBranch string, open map[int]forge.PR) map[string
 
 // followed is a stored pull request row of one agent in one repository.
 type followed struct {
-	found    bool
-	reported string // the state and head commit last reported, "green <sha>"
+	found bool
+	state State  // the CI state last reported; "" until one is
+	head  string // the head commit state was reported for
 }
 
 // sync stores the pull requests agent follows in the group's repository, drops the ones it no
@@ -344,17 +345,17 @@ func (w *Watcher) sync(ctx context.Context, tx *sql.Tx, g *group, agent string, 
 	for _, n := range slices.Sorted(maps.Keys(nums)) {
 		pr := open[n]
 		state, failed := CI(pr)
-		report := stored[n].reported
+		reported := stored[n]
 		var body string
 		if state == Green || state == Red || state == Conflict {
-			if k := string(state) + " " + pr.Head; k != report {
-				report = k
+			if state != reported.state || pr.Head != reported.head {
+				reported.state, reported.head = state, pr.Head
 				body = Message(agent, n, state, failed, pr.Merge == forge.Conflicting)
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, reported) VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT (agent, repo, number) DO UPDATE SET found = excluded.found, reported = excluded.reported`,
-			agent, key, n, nums[n], report); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, ci_state, ci_head) VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT (agent, repo, number) DO UPDATE SET found = excluded.found, ci_state = excluded.ci_state, ci_head = excluded.ci_head`,
+			agent, key, n, nums[n], reported.state, reported.head); err != nil {
 			return nil, err
 		}
 		if body == "" {
@@ -374,7 +375,7 @@ func (w *Watcher) sync(ctx context.Context, tx *sql.Tx, g *group, agent string, 
 
 // storedPRs returns the pull requests stored for agent in the repository with key, by number.
 func storedPRs(ctx context.Context, tx *sql.Tx, agent, key string) (map[int]followed, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT number, found, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
+	rows, err := tx.QueryContext(ctx, `SELECT number, found, ci_state, ci_head FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +384,7 @@ func storedPRs(ctx context.Context, tx *sql.Tx, agent, key string) (map[int]foll
 	for rows.Next() {
 		var n int
 		var r followed
-		if err := rows.Scan(&n, &r.found, &r.reported); err != nil {
+		if err := rows.Scan(&n, &r.found, &r.state, &r.head); err != nil {
 			return nil, err
 		}
 		out[n] = r

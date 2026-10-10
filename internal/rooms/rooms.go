@@ -47,6 +47,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrExists means the room name is taken.
 	ErrExists = errors.New("room exists")
+	// ErrBoardOnly refuses a post that claims to come from the board.
+	ErrBoardOnly = errors.New("only the board itself posts as agora")
 )
 
 // A mention: @name not preceded by a letter, digit or address character, in any script. The
@@ -216,9 +218,12 @@ func NoticeRoomTx(ctx context.Context, tx *sql.Tx, agent string) (string, error)
 	return rooms[1], nil
 }
 
-// Post stores a message from author (a joined agent, or the board itself) and returns its
-// identifier.
+// Post stores a message from author, a joined agent, and returns its identifier. Only the
+// board posts as Board, through PostTx.
 func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
+	if author == Board {
+		return 0, ErrBoardOnly
+	}
 	var id int64
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
@@ -228,8 +233,8 @@ func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int
 	return id, err
 }
 
-// PostTx is Post inside the caller's transaction, so other packages can post atomically with
-// their own changes.
+// PostTx stores a message from author (a joined agent, or the board itself) inside the caller's
+// transaction, so other packages can post atomically with their own changes.
 func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
 	room = strings.TrimPrefix(room, "#")
 	body = strings.TrimSpace(body)

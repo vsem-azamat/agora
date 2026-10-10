@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
@@ -51,4 +52,17 @@ func plural(n int32) string {
 		return ""
 	}
 	return "s"
+}
+
+// formatMessage renders a message: room, identifier, author, time and reply reference, then
+// the body indented.
+func formatMessage(m *agorav1.Message) string {
+	head := fmt.Sprintf("#%s [%d] %s · %s", m.GetRoom(), m.GetId(), m.GetAuthor(), shortClock(m.GetAt().AsTime()))
+	if m.GetReplyTo() != 0 {
+		head += fmt.Sprintf(" · re %d", m.GetReplyTo())
+	}
+	if m.GetAddressed() {
+		head += " · to you"
+	}
+	return head + "\n  " + strings.ReplaceAll(m.GetBody(), "\n", "\n  ")
 }

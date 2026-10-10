@@ -196,7 +196,7 @@ func TestLeavingReleasesPlaces(t *testing.T) {
 	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
 		t.Fatal(err)
 	}
-	left, err := e.a.Leave(ctx, "builder")
+	left, err := e.s.Leave(ctx, "builder")
 	if err != nil || len(left) != 1 {
 		t.Fatalf("left %v err %v", left, err)
 	}
@@ -219,7 +219,7 @@ func TestLeavingInALiveSessionSticks(t *testing.T) {
 	}
 	report(sessions.Start)
 	e.join(t, "builder", "session-1")
-	if _, err := e.a.Leave(ctx, "builder"); err != nil {
+	if _, err := e.s.Leave(ctx, "builder"); err != nil {
 		t.Fatal(err)
 	}
 	for _, ev := range []sessions.Event{sessions.Tool, sessions.Stop, sessions.Prompt} {

@@ -20,6 +20,13 @@ import (
 // Kind is how Claude Code sessions are labelled.
 const Kind = "claude-code"
 
+// sessionEnv is the environment variable in which Claude Code gives the commands it runs its
+// session identifier.
+const sessionEnv = "CLAUDE_CODE_SESSION_ID"
+
+// SessionID returns the Claude Code session this process runs in, or "" outside Claude Code.
+func SessionID() string { return os.Getenv(sessionEnv) }
+
 // HubTimeout is how long a hook waits for the hub before giving up silently.
 const HubTimeout = 2 * time.Second
 
