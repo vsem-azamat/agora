@@ -34,7 +34,9 @@ func (s *resources) Wait(ctx context.Context, req *connect.Request[agorav1.WaitR
 		e, err := s.h.queue.Claim(ctx, key, agent)
 		var renamed *agents.FormerNameError
 		if errors.As(err, &renamed) {
-			agent = renamed.Current // the agent renamed itself while it waits: its place moved with it
+			// the agent renamed itself while it waits: its place moved with it, and the next
+			// message tells the client the new name
+			agent, last = renamed.Current, nil
 			continue
 		}
 		if err != nil {

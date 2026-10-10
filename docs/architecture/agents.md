@@ -20,7 +20,7 @@ A test classifies every `TEXT` column of the schema as holding an agent's name o
 
 The hub refuses to rename the agent its web listener acts as (`--web-as`); that name changes with the hub's configuration.
 
-Former names stay reserved for their agent: `agents.NotFormerTx` refuses them when joining and in every queue call that acts (join, claim, renew, release, for both the holder and the acting agent), and `agents.ExistsTx` refuses a command acting under one; both return `agents.FormerNameError`, which carries the current name. A `Wait` stream that gets this error continues under the current name, so a wait that runs through a rename keeps its place. Profiles carry former names as `Formerly`, newest first; the CLI shows the latest as `docs-writer (was fixer)`.
+Former names stay reserved for their agent: `agents.NotFormerTx` refuses them when joining and in every queue call that acts (join, claim, renew, release, for both the holder and the acting agent), and `agents.ExistsTx` refuses a command acting under one; both return `agents.FormerNameError`, which carries the current name and which the API reports as `FailedPrecondition`. A `Wait` stream that gets this error continues under the current name and sends the entry again, so a wait that runs through a rename keeps its place and the CLI prints `now waiting as <name>` once and uses the new name when it reconnects. Profiles carry former names as `Formerly`, newest first; the CLI shows the latest as `docs-writer (was fixer)`.
 
 The pull request watcher reads agent names before its forge lookup; a rename in between makes that round's update for the repository fail on the foreign key and roll back, and the next round reports under the new name.
 

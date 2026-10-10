@@ -620,34 +620,60 @@ func TestMentionOfAFormerNameWakesTheAgent(t *testing.T) {
 	}
 }
 
-func TestWaitFollowsARename(t *testing.T) {
+func TestWaitFollowsRenames(t *testing.T) {
 	r := start(t)
 	r.post(t, "fixer", "hello")
 	join(t, r, "example-app/merge", "builder", time.Minute)
 	join(t, r, "example-app/merge", "fixer", time.Minute)
-	ended := waitFor(t, r, "example-app/merge", "fixer")
+	first := waitFor(t, r, "example-app/merge", "fixer")
 	bg := context.Background()
-	if _, err := r.agents.Rename(bg, connect.NewRequest(&agorav1.RenameRequest{Agent: "fixer", Name: "docs-writer"})); err != nil {
-		t.Fatal(err)
+	for _, names := range [][2]string{{"fixer", "docs-writer"}, {"docs-writer", "reviewer"}} {
+		if _, err := r.agents.Rename(bg, connect.NewRequest(&agorav1.RenameRequest{Agent: names[0], Name: names[1]})); err != nil {
+			t.Fatal(err)
+		}
 	}
+	reopened := waitFor(t, r, "example-app/merge", "fixer") // a client that reconnects under the old name
 	if _, err := r.client.Release(bg, connect.NewRequest(&agorav1.ReleaseRequest{Key: "example-app/merge", Agent: "builder"})); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case err := <-ended:
-		if err != nil {
-			t.Fatalf("wait ended with %v", err)
+	for i, ended := range []<-chan error{first, reopened} {
+		select {
+		case err := <-ended:
+			if err != nil {
+				t.Fatalf("wait %d ended with %v", i, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("wait %d did not end", i)
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("the wait did not end")
 	}
 	res, err := r.client.ListResources(bg, connect.NewRequest(&agorav1.ListResourcesRequest{}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if list := res.Msg.GetResources(); len(list) != 1 || len(list[0].GetEntries()) != 1 || list[0].GetEntries()[0].GetAgent() != "docs-writer" ||
+	if list := res.Msg.GetResources(); len(list) != 1 || len(list[0].GetEntries()) != 1 || list[0].GetEntries()[0].GetAgent() != "reviewer" ||
 		list[0].GetEntries()[0].GetState() != agorav1.EntryState_ENTRY_STATE_HELD {
 		t.Fatalf("resources %+v", list)
+	}
+}
+
+func TestActingUnderAFormerNameIsFailedPrecondition(t *testing.T) {
+	r := start(t)
+	r.post(t, "fixer", "hello")
+	bg := context.Background()
+	if _, err := r.agents.Rename(bg, connect.NewRequest(&agorav1.RenameRequest{Agent: "fixer", Name: "docs-writer"})); err != nil {
+		t.Fatal(err)
+	}
+	_, err := r.rooms.Post(bg, connect.NewRequest(&agorav1.PostRequest{Agent: "fixer", Room: "general", Body: "hi"}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("posting as a former name: %v", err)
+	}
+	_, err = r.client.Join(bg, connect.NewRequest(&agorav1.JoinRequest{Key: "example-app/merge", Agent: "fixer"}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("queueing as a former name: %v", err)
+	}
+	_, err = r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "fixer"}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("joining as a former name: %v", err)
 	}
 }
 

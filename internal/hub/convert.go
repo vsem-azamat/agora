@@ -20,7 +20,10 @@ import (
 
 func toConnect(err error) error {
 	var forbidden *queue.ForbiddenError
+	var former *agents.FormerNameError
 	switch {
+	case errors.As(err, &former): // before ErrTaken and ErrUnknown, which it wraps
+		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, store.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, queue.ErrNotQueued):

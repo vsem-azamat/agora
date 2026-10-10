@@ -131,6 +131,34 @@ func TestWaitEndsWhenTheTurnComes(t *testing.T) {
 	}
 }
 
+func TestWaitSaysTheNewNameAfterARename(t *testing.T) {
+	socket := startHub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Setenv("AGORA_SESSION", "")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	agora(ctx, socket, "fixer", "join", "fixer")
+	agora(ctx, socket, "a", "queue", "join", "heavy/typecheck")
+	agora(ctx, socket, "fixer", "queue", "join", "heavy/typecheck")
+	waited := make(chan result)
+	go func() { waited <- agora(ctx, socket, "fixer", "queue", "wait", "heavy/typecheck") }()
+	time.Sleep(200 * time.Millisecond) // let the wait start streaming
+	if r := agora(ctx, socket, "fixer", "rename", "docs-writer"); r.code != 0 {
+		t.Fatalf("rename: %+v", r)
+	}
+	time.Sleep(200 * time.Millisecond)
+	agora(ctx, socket, "a", "queue", "release", "heavy/typecheck")
+	select {
+	case r := <-waited:
+		if r.code != 0 || strings.Count(r.stdout, "now waiting as docs-writer") != 1 || !strings.Contains(r.stdout, "holding heavy/typecheck") ||
+			strings.Index(r.stdout, "now waiting as") > strings.Index(r.stdout, "holding") {
+			t.Fatalf("wait: %+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("wait did not end")
+	}
+}
+
 func TestWaitEndsWithAnErrorWhenRemoved(t *testing.T) {
 	socket := startHub(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
