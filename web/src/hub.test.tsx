@@ -50,7 +50,10 @@ const answers: Record<string, unknown> = {
   },
   'RoomService/History': { messages: [{ id: '1', room: 'general', author: 'builder', body: 'hello' }] },
   'RoomService/UnreadByRoom': { rooms: [{ room: 'general', unread: 2, addressed: 1 }] },
-  'RoomService/ListSubscriptions': { rooms: ['general'] },
+  'RoomService/ListSubscriptions': {
+    rooms: ['general'],
+    subscriptions: [{ room: 'general', mode: 'SUBSCRIPTION_MODE_MENTIONS' }],
+  },
   'ResourceService/ListResources': {},
   'GovernanceService/ListProposals': {},
   'GovernanceService/GetCharter': { body: 'Be kind.' },
@@ -105,6 +108,31 @@ describe('App with a hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
+  });
+});
+
+describe('following', () => {
+  it('shows the mode of a room and changes it', async () => {
+    const bodies: string[] = [];
+    const hub = fakeHub([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith('RoomService/Subscribe'))
+          bodies.push(typeof init?.body === 'string' ? init.body : new TextDecoder().decode(init?.body as Uint8Array));
+        return hub(input, init);
+      }),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'granted') });
+    location.hash = '#/rooms/general';
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow mode: Mentions only' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Every message notifies' }));
+    expect(Notification.requestPermission).toHaveBeenCalledOnce();
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(JSON.parse(bodies[0] ?? '{}')).toEqual({ rooms: ['general'], follow: true, mode: 'SUBSCRIPTION_MODE_WAKE' });
   });
 });
 

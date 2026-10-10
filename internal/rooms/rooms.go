@@ -75,6 +75,48 @@ type Message struct {
 	ReplyTo   int64 // 0 when the message replies to nothing
 	At        time.Time
 	Addressed bool // set in unread lists: the message is addressed to the reader
+	Wakes     bool // set in unread lists: the message wakes the reader (addressed, or in a room it follows with ModeWake)
+}
+
+// Mode is how an agent follows a room.
+type Mode string
+
+const (
+	// ModeAll makes every message from others unread; only addressed ones wake the agent.
+	ModeAll Mode = "all"
+	// ModeMentions makes only messages addressed to the agent unread, as in a room it does not follow.
+	ModeMentions Mode = "mentions"
+	// ModeWake makes every message from others unread and wake the agent.
+	ModeWake Mode = "wake"
+)
+
+// Subscription is a room an agent follows and how.
+type Subscription struct {
+	Room string
+	Mode Mode
+}
+
+// Filter narrows an agent's unread messages.
+type Filter int
+
+const (
+	// Everything is every unread message.
+	Everything Filter = iota
+	// Addressed is the unread messages addressed to the agent.
+	Addressed
+	// Waking is the unread messages that wake the agent: those addressed to it and those in
+	// rooms it follows with ModeWake.
+	Waking
+)
+
+func (f Filter) keeps(m Message) bool {
+	switch f {
+	case Addressed:
+		return m.Addressed
+	case Waking:
+		return m.Wakes
+	}
+	return true
 }
 
 // Rooms keeps rooms and messages in the hub database.
@@ -134,7 +176,7 @@ func (r *Rooms) Create(ctx context.Context, name, purpose, creator string) error
 			name, purpose, creator, r.now().UnixMilli()); err != nil {
 			return err
 		}
-		return subscribe(ctx, tx, creator, name)
+		return subscribe(ctx, tx, creator, name, "")
 	})
 }
 
@@ -164,12 +206,21 @@ func (r *Rooms) List(ctx context.Context) ([]Room, error) {
 }
 
 // Subscribe makes agent follow (add) or stop following rooms, at least one; #general stays
-// followed. It returns the rooms the agent follows afterwards.
-func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add bool) ([]string, error) {
+// followed. Following with a mode sets it; without one ("") a new subscription gets ModeAll and
+// an existing one keeps its mode. mode is ignored when stopping. It returns the rooms the agent
+// follows afterwards.
+func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add bool, mode Mode) ([]Subscription, error) {
 	if len(rooms) == 0 {
 		return nil, fmt.Errorf("%w: name at least one room", store.ErrInvalid)
 	}
-	var out []string
+	switch {
+	case !add:
+		mode = ""
+	case mode == "", mode == ModeAll, mode == ModeMentions, mode == ModeWake:
+	default:
+		return nil, fmt.Errorf("%w: mode %q: all, mentions or wake", store.ErrInvalid, mode)
+	}
+	var out []Subscription
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
@@ -179,13 +230,13 @@ func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add
 			if err := requireRoom(ctx, tx, room); err != nil {
 				return err
 			}
-			if room == General {
-				continue
-			}
 			var err error
-			if add {
-				err = subscribe(ctx, tx, agent, room)
-			} else {
+			switch {
+			case add:
+				err = subscribe(ctx, tx, agent, room, mode)
+			case room == General:
+				// always followed; unsubscribing keeps it and its mode
+			default:
 				_, err = tx.ExecContext(ctx, `DELETE FROM subscriptions WHERE agent = ? AND room = ?`, agent, room)
 			}
 			if err != nil {
@@ -193,21 +244,21 @@ func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add
 			}
 		}
 		var err error
-		out, err = followed(ctx, tx, agent)
+		out, err = subscriptions(ctx, tx, agent)
 		return err
 	})
 	return out, err
 }
 
-// Followed returns the rooms agent follows, #general first.
-func (r *Rooms) Followed(ctx context.Context, agent string) ([]string, error) {
-	var out []string
+// Subscriptions returns the rooms agent follows with their modes, #general first.
+func (r *Rooms) Subscriptions(ctx context.Context, agent string) ([]Subscription, error) {
+	var out []Subscription
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		var err error
-		out, err = followed(ctx, tx, agent)
+		out, err = subscriptions(ctx, tx, agent)
 		return err
 	})
 	return out, err
@@ -298,7 +349,7 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 		if err := requireRoom(ctx, tx, room); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT id, room, author, body, COALESCE(reply_to, 0), at, 0 FROM
+		rows, err := tx.QueryContext(ctx, `SELECT id, room, author, body, COALESCE(reply_to, 0), at, 0, 0 FROM
 			(SELECT * FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?) ORDER BY id`, room, last)
 		if err != nil {
 			return err
@@ -309,45 +360,46 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 	return out, err
 }
 
-// Unread returns up to limit of agent's unread messages, oldest first, and how many there are
-// in all; with mentionsOnly, only messages addressed to it. limit <= 0 means no limit.
-func (r *Rooms) Unread(ctx context.Context, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
+// Unread returns up to limit of agent's unread messages that pass filter, oldest first, and how
+// many there are in all. limit <= 0 means no limit.
+func (r *Rooms) Unread(ctx context.Context, agent string, filter Filter, limit int) ([]Message, int, error) {
 	var out []Message
 	var total int
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
-		out, total, err = unread(ctx, tx, agent, mentionsOnly, limit)
+		out, total, err = unread(ctx, tx, agent, filter, limit)
 		return err
 	})
 	return out, total, err
 }
 
-// UnreadCount returns how many unread messages agent has; with mentionsOnly, only those
-// addressed to it.
-func (r *Rooms) UnreadCount(ctx context.Context, agent string, mentionsOnly bool) (int, error) {
+// UnreadCount returns how many of agent's unread messages pass filter.
+func (r *Rooms) UnreadCount(ctx context.Context, agent string, filter Filter) (int, error) {
 	var n int
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
-		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE addressed OR NOT :m`,
-			sql.Named("a", agent), sql.Named("m", mentionsOnly), sql.Named("general", General)).Scan(&n)
+		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`)
+			WHERE CASE :f WHEN :addressed THEN addressed WHEN :waking THEN addressed OR wake_room ELSE 1 END`,
+			sql.Named("a", agent), sql.Named("general", General), sql.Named("f", filter),
+			sql.Named("addressed", Addressed), sql.Named("waking", Waking)).Scan(&n)
 	})
 	return n, err
 }
 
 // Take returns what Unread returns and marks those messages read in the same transaction, so
 // concurrent readers never get the same message twice: the oldest unread messages move the
-// reading positions, mentions only get single read marks.
-func (r *Rooms) Take(ctx context.Context, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
+// reading positions, a filtered selection only gets single read marks.
+func (r *Rooms) Take(ctx context.Context, agent string, filter Filter, limit int) ([]Message, int, error) {
 	var out []Message
 	var total int
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
-		if out, total, err = unread(ctx, tx, agent, mentionsOnly, limit); err != nil {
+		if out, total, err = unread(ctx, tx, agent, filter, limit); err != nil {
 			return err
 		}
-		if mentionsOnly {
+		if filter != Everything {
 			return markEach(ctx, tx, agent, out)
 		}
 		return markRead(ctx, tx, agent, out)
@@ -355,18 +407,29 @@ func (r *Rooms) Take(ctx context.Context, agent string, mentionsOnly bool, limit
 	return out, total, err
 }
 
-// unreadQuery finds unread messages through the indexes: messages in followed rooms after the
-// reading position (messages_room), and messages mentioning the agent by name (mentions_agent).
-// It takes the agent as :a and General as :general.
+// unreadQuery finds unread messages through the indexes: messages in rooms followed with ModeAll
+// or ModeWake after the reading position (messages_room), @all messages in rooms followed with
+// ModeMentions after the position (messages_to_all, so their chatter is never walked), and
+// messages mentioning the agent by name (mentions_agent). It takes the agent as :a and General
+// as :general. wake_room says the message is in a room the agent follows with ModeWake and
+// came after the mode became ModeWake.
 const unreadQuery = `
-WITH followed(room) AS (
-	SELECT :general UNION SELECT room FROM subscriptions WHERE agent = :a
+WITH followed(room, mode, wake_from) AS (
+	SELECT room, mode, wake_from FROM subscriptions WHERE agent = :a
+	UNION ALL
+	SELECT :general, 'all', 0 WHERE NOT EXISTS (SELECT 1 FROM subscriptions WHERE agent = :a AND room = :general)
 ), start AS (
 	SELECT read_from FROM agents WHERE name = :a
 ), candidates AS (
 	SELECT m.id, 1 AS followed FROM followed AS f
 	JOIN messages AS m ON m.room = f.room
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
+	WHERE f.mode != 'mentions'
+	UNION
+	SELECT m.id, 1 FROM followed AS f
+	JOIN messages AS m INDEXED BY messages_to_all ON m.room = f.room AND m.to_all
+		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
+	WHERE f.mode = 'mentions'
 	UNION
 	SELECT m.id, EXISTS (SELECT 1 FROM followed WHERE room = m.room) FROM mentions AS mm
 	JOIN messages AS m ON m.id = mm.message_id
@@ -374,13 +437,14 @@ WITH followed(room) AS (
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room), (SELECT read_from FROM start))
 )
 SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
-	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed
-FROM candidates AS c JOIN messages AS m ON m.id = c.id
+	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed,
+	EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from) AS wake_room
+FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
 GROUP BY m.id
 ORDER BY m.id`
 
-func unread(ctx context.Context, tx *sql.Tx, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
+func unread(ctx context.Context, tx *sql.Tx, agent string, filter Filter, limit int) ([]Message, int, error) {
 	if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 		return nil, 0, err
 	}
@@ -392,14 +456,14 @@ func unread(ctx context.Context, tx *sql.Tx, agent string, mentionsOnly bool, li
 	if err != nil {
 		return nil, 0, err
 	}
-	if mentionsOnly {
-		var addressed []Message
+	if filter != Everything {
+		var kept []Message
 		for _, m := range all {
-			if m.Addressed {
-				addressed = append(addressed, m)
+			if filter.keeps(m) {
+				kept = append(kept, m)
 			}
 		}
-		all = addressed
+		all = kept
 	}
 	total := len(all)
 	if limit > 0 && len(all) > limit {
@@ -524,20 +588,71 @@ func requireRoom(ctx context.Context, tx *sql.Tx, room string) error {
 	return nil
 }
 
-// subscribe makes agent follow room. Reading of the room starts at its newest message unless
-// the agent already follows it; a position left from reading a mention there moves forward too.
-func subscribe(ctx context.Context, tx *sql.Tx, agent, room string) error {
-	res, err := tx.ExecContext(ctx, `INSERT INTO subscriptions (agent, room) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, room)
-	if err != nil {
+// subscribe makes agent follow room with mode ("" keeps the mode of a followed room, else
+// ModeAll). Reading of a room the agent does not follow starts at its newest message; a
+// position left from reading a mention there moves forward too. #general is always followed:
+// its row only records a mode. Changing to ModeWake records the newest message, so only later
+// ones wake the agent; changing from ModeMentions to another mode moves the position forward
+// to just before the oldest unread message addressed to the agent there (the newest message
+// when there is none), so chatter from the mentions time does not become unread.
+func subscribe(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode) error {
+	var newest int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(id), 0) FROM messages WHERE room = ?`, room).Scan(&newest); err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return nil // already followed: keep reading where it is
+	var old Mode
+	err := tx.QueryRowContext(ctx, `SELECT mode FROM subscriptions WHERE agent = ? AND room = ?`, agent, room).Scan(&old)
+	switch {
+	case errors.Is(err, sql.ErrNoRows) && room == General:
+		old = ModeAll // followed implicitly
+	case errors.Is(err, sql.ErrNoRows):
+		if mode == "" {
+			mode = ModeAll
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO subscriptions (agent, room, mode, wake_from) VALUES (?, ?, ?, ?)`,
+			agent, room, mode, newest); err != nil {
+			return err
+		}
+		return markRead(ctx, tx, agent, []Message{{ID: newest, Room: room}})
+	case err != nil:
+		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO read_positions (agent, room, last_id)
-		VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages WHERE room = ?))
-		ON CONFLICT (agent, room) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)`, agent, room, room)
+	if mode == "" || mode == old {
+		return nil // already followed this way: keep reading where it is
+	}
+	if old == ModeMentions {
+		addressed, _, err := unread(ctx, tx, agent, Addressed, 0)
+		if err != nil {
+			return err
+		}
+		through := newest
+		for _, m := range addressed {
+			if m.Room == room {
+				through = m.ID - 1
+				break
+			}
+		}
+		if err := moveForward(ctx, tx, agent, room, through); err != nil {
+			return err
+		}
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO subscriptions (agent, room, mode, wake_from) VALUES (?, ?, ?, ?)
+		ON CONFLICT (agent, room) DO UPDATE SET mode = excluded.mode, wake_from = excluded.wake_from`, agent, room, mode, newest)
 	return err
+}
+
+// moveForward moves agent's reading position in room up to the message id through, only if
+// that is beyond where it reads now.
+func moveForward(ctx context.Context, tx *sql.Tx, agent, room string, through int64) error {
+	var pos int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT last_id FROM read_positions WHERE agent = ? AND room = ?),
+		(SELECT read_from FROM agents WHERE name = ?))`, agent, room, agent).Scan(&pos); err != nil {
+		return err
+	}
+	if through <= pos {
+		return nil
+	}
+	return markRead(ctx, tx, agent, []Message{{ID: through, Room: room}})
 }
 
 func followed(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
@@ -548,16 +663,40 @@ func followed(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
 	return append([]string{General}, rooms...), nil
 }
 
+// subscriptions returns the rooms agent follows with their modes, #general first.
+func subscriptions(ctx context.Context, tx *sql.Tx, agent string) ([]Subscription, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT room, mode FROM (
+		SELECT :general AS room, COALESCE((SELECT mode FROM subscriptions WHERE agent = :a AND room = :general), 'all') AS mode
+		UNION ALL SELECT room, mode FROM subscriptions WHERE agent = :a AND room != :general
+	) ORDER BY room != :general, room`,
+		sql.Named("a", agent), sql.Named("general", General))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Subscription
+	for rows.Next() {
+		var s Subscription
+		if err := rows.Scan(&s.Room, &s.Mode); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 func scanMessages(rows *sql.Rows) ([]Message, error) {
 	defer rows.Close()
 	var out []Message
 	for rows.Next() {
 		var m Message
 		var at int64
-		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed); err != nil {
+		var wakeRoom bool
+		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom); err != nil {
 			return nil, err
 		}
 		m.At = time.UnixMilli(at)
+		m.Wakes = m.Addressed || wakeRoom
 		out = append(out, m)
 	}
 	return out, rows.Err()

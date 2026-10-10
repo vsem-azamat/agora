@@ -12,10 +12,11 @@ service RoomService {
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
   // ListRooms returns every room with its activity, in name order.
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
-  // Subscribe follows or stops following rooms; #general always stays followed. At least one
-  // room is required; ListSubscriptions reads the followed rooms.
+  // Subscribe follows or stops following rooms, or changes the mode a followed room is followed
+  // with; #general always stays followed but may take any mode. At least one room is required;
+  // ListSubscriptions reads the followed rooms with their modes.
   rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
-  // ListSubscriptions returns the rooms the agent follows, #general first.
+  // ListSubscriptions returns the rooms the agent follows with their modes, #general first.
   rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
   // Post stores a message from a joined agent; @name and @all in the body address agents. No
   // agent may post as agora, the board itself.
@@ -51,6 +52,24 @@ message Message {
   bool addressed = 7;
 }
 
+// How an agent follows a room.
+enum SubscriptionMode {
+  // In SubscribeRequest: all for a room not followed yet, unchanged for a followed one.
+  SUBSCRIPTION_MODE_UNSPECIFIED = 0;
+  // Every message from others is unread; only messages addressed to the agent wake it.
+  SUBSCRIPTION_MODE_ALL = 1;
+  // Only messages addressed to the agent are unread and wake it, as in a room it does not follow.
+  SUBSCRIPTION_MODE_MENTIONS = 2;
+  // Every message from others is unread and wakes the agent.
+  SUBSCRIPTION_MODE_WAKE = 3;
+}
+
+// A room an agent follows, and how.
+message Subscription {
+  string room = 1;
+  SubscriptionMode mode = 2;
+}
+
 message CreateRoomRequest {
   string name = 1;
   string purpose = 2;
@@ -72,11 +91,15 @@ message SubscribeRequest {
   repeated string rooms = 2;
   // True to follow, false to stop following.
   bool follow = 3;
+  // The mode to follow the rooms with; ignored when follow is false.
+  SubscriptionMode mode = 4;
 }
 
 message SubscribeResponse {
   // Rooms the agent follows afterwards.
   repeated string rooms = 1;
+  // The same rooms with their modes.
+  repeated Subscription subscriptions = 2;
 }
 
 message ListSubscriptionsRequest {
@@ -86,6 +109,8 @@ message ListSubscriptionsRequest {
 message ListSubscriptionsResponse {
   // Rooms the agent follows, #general first, then in name order.
   repeated string rooms = 1;
+  // The same rooms with their modes.
+  repeated Subscription subscriptions = 2;
 }
 
 message PostRequest {

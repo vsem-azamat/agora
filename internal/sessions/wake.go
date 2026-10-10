@@ -23,7 +23,7 @@ func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
 	return turn, err
 }
 
-// Wake is what a connector wait delivers: the text, the addressed messages it shows (marked
+// Wake is what a connector wait delivers: the text, the messages that wake the agent it shows (marked
 // read only once the wake is delivered) and a key of what it woke for.
 type Wake struct {
 	Text     string
@@ -34,7 +34,7 @@ type Wake struct {
 
 // CheckWake decides a connector's wait for a session that started at turn: done with no wake
 // when the session ended, a new turn began or the session lost its agent; done with a wake when
-// the session is idle and something new needs its agent (an addressed message, or an offered slot
+// the session is idle and something new needs its agent (a message that wakes it, or an offered slot
 // it was not already woken for); otherwise keep waiting. Nothing is consumed until ConfirmWake.
 func (s *Sessions) CheckWake(ctx context.Context, sessionID string, turn int64) (w *Wake, done bool, err error) {
 	var state, agent, wokenFor string
@@ -55,7 +55,7 @@ func (s *Sessions) CheckWake(ctx context.Context, sessionID string, turn int64) 
 	}
 	var msgs []rooms.Message
 	if s.rooms != nil {
-		if msgs, _, err = s.rooms.Unread(ctx, agent, true, DeliverAtOnce); err != nil {
+		if msgs, _, err = s.rooms.Unread(ctx, agent, rooms.Waking, DeliverAtOnce); err != nil {
 			return nil, false, err
 		}
 	}
@@ -102,12 +102,12 @@ func offerKey(entries []queue.Entry) string {
 }
 
 // Pending describes what would wake a session's agent without consuming it: a key that
-// changes when something new arrives (the newest addressed message and the offered slots) and
+// changes when something new arrives (the newest message that wakes it and the offered slots) and
 // a short text for a terminal prompt. key is "" when nothing needs the agent.
 func (s *Sessions) Pending(ctx context.Context, agent string) (key, text string, err error) {
 	var parts, keys []string
 	if s.rooms != nil {
-		msgs, _, err := s.rooms.Unread(ctx, agent, true, 0)
+		msgs, _, err := s.rooms.Unread(ctx, agent, rooms.Waking, 0)
 		if err != nil {
 			return "", "", err
 		}
@@ -122,7 +122,11 @@ func (s *Sessions) Pending(ctx context.Context, agent string) (key, text string,
 				}
 			}
 			keys = append(keys, fmt.Sprintf("m%d", msgs[len(msgs)-1].ID))
-			parts = append(parts, fmt.Sprintf("%d board message(s) addressed to you (%s)", len(msgs), strings.Join(senders, ", ")))
+			what := "addressed to you"
+			if !allAddressed(msgs) {
+				what = "for you"
+			}
+			parts = append(parts, fmt.Sprintf("%d board message(s) %s (%s)", len(msgs), what, strings.Join(senders, ", ")))
 		}
 	}
 	entries, err := s.queue.EntriesOf(ctx, agent)

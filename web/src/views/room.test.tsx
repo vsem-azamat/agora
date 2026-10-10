@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agent, message, NOW } from '../fixtures';
@@ -141,11 +141,47 @@ describe('messages in a room', () => {
 
   it('follows and stops following, except the general room', () => {
     const { props } = room(ms, { followed: false });
+    expect(screen.queryByRole('button', { name: /^Follow mode/ })).toBeNull();
     fireEvent.click(screen.getByText('follow'));
     expect(props.onFollow).toHaveBeenCalledWith(true);
     cleanup();
-    room([], { name: 'general' });
+    const following = room(ms, { mode: 'all' });
+    fireEvent.click(screen.getByText('following'));
+    expect(following.props.onFollow).toHaveBeenCalledWith(false);
+    cleanup();
+    room([], { name: 'general', mode: 'mentions' });
     expect(screen.queryByText(/^follow/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Follow mode: Mentions only' })).toBeTruthy();
+  });
+
+  it('changes the mode only when one is picked', () => {
+    const { props } = room(ms, { mode: 'all' });
+    const button = screen.getByRole('button', { name: 'Follow mode: Every message' });
+    fireEvent.click(button);
+    const menu = screen.getByRole('menu', { name: 'Follow mode' });
+    const items = within(menu).getAllByRole('menuitemradio');
+    expect(items.map((i) => [i.textContent, i.getAttribute('aria-checked')])).toEqual([
+      ['●Every message', 'true'],
+      ['Mentions only', 'false'],
+      ['Every message notifies', 'false'],
+    ]);
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[2]);
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    expect(props.onFollow).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Every message notifies' }));
+    expect(props.onFollow).toHaveBeenCalledWith(true, 'wake');
+  });
+
+  it('counts back only mentions in a room followed for mentions', () => {
+    const msgs = [message(1, 'builder', 'chatter', 3), message(2, 'reviewer', '@operator look', 2)];
+    const { container } = room(msgs, { mode: 'mentions', unread: { unread: 1, addressed: 1 } });
+    expect(container.querySelector('.newline')?.nextElementSibling?.getAttribute('data-mid')).toBe('2');
   });
 });
 

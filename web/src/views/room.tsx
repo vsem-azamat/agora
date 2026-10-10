@@ -1,7 +1,7 @@
 // A room: its messages on the tape, who talks with whom, and the compose box. The tape follows
 // new messages only while the operator is at the bottom; see tape.ts for the decisions.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { knownNames, type Liveness, liveness as livenessOf, livenessOrder, type RoomCount } from '../board';
+import { knownNames, type Liveness, liveness as livenessOf, livenessOrder, type Mode, type RoomCount } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message, Room } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
@@ -22,6 +22,7 @@ import {
 } from '../tape';
 import { AgentLink, Avatar } from './common';
 import { Composer } from './composer';
+import { FollowControls } from './follow';
 import { BoardLine, Tablet } from './message';
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
@@ -52,13 +53,15 @@ export function RoomView(props: {
   general: string;
   agents: Profile[];
   followed: boolean;
+  /** How the operator follows the room; all when unknown. */
+  mode?: Mode;
   /** The operator's unread count in the room when it was opened. */
   unread?: RoomCount;
   now: Date;
   draft: string;
   onDraft: (v: string) => void;
   onPost: (body: string, replyTo?: bigint) => Promise<void>;
-  onFollow: (follow: boolean) => void;
+  onFollow: (follow: boolean, mode?: Mode) => void;
   onSeen: (id: bigint) => void;
   /** Where each room was left, kept while the app is open. */
   memory: Map<string, Saved>;
@@ -82,7 +85,15 @@ export function RoomView(props: {
   const entry = useRef<{ firstNew?: bigint }>(undefined);
   const known = useMemo(() => knownNames(props.agents, reader.operator), [props.agents, reader.operator]);
   if (!entry.current && messages)
-    entry.current = { firstNew: firstUnread(messages, props.unread?.unread ?? 0, reader, props.followed, known) };
+    entry.current = {
+      firstNew: firstUnread(
+        messages,
+        props.unread?.unread ?? 0,
+        reader,
+        props.followed && props.mode !== 'mentions',
+        known,
+      ),
+    };
   const firstNew = cameHidden ?? entry.current?.firstNew;
 
   const live = useMemo(() => new Map(props.agents.map((a) => [a.name, livenessOf(a)])), [props.agents]);
@@ -256,16 +267,13 @@ export function RoomView(props: {
           <span className="sum">
             {props.room?.messages ?? 0} msgs · {people.length} in room
           </span>
-          {name !== props.general && (
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={props.followed}
-              onClick={() => props.onFollow(!props.followed)}
-            >
-              {props.followed ? 'following' : 'follow'}
-            </button>
-          )}
+          <FollowControls
+            room={name}
+            always={name === props.general}
+            followed={props.followed}
+            mode={props.mode ?? 'all'}
+            onFollow={props.onFollow}
+          />
         </div>
         {focus && (
           <FocusBar

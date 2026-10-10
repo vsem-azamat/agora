@@ -422,7 +422,7 @@ func TestMessageIsAddressedInTheFirstFollowedRoom(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := e.r.Subscribe(ctx, "builder", []string{"reviews", "example-app"}, true); err != nil {
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"reviews", "example-app"}, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	e.fake.set(app, green(57, "x", "h"))
@@ -430,7 +430,7 @@ func TestMessageIsAddressedInTheFirstFollowedRoom(t *testing.T) {
 	if b := e.board(t); !slices.Equal(b, []string{"example-app: @builder CI is green on #57."}) {
 		t.Fatalf("messages %v", b)
 	}
-	unread, _, err := e.r.Unread(ctx, "builder", true, 10)
+	unread, _, err := e.r.Unread(ctx, "builder", rooms.Addressed, 10)
 	if err != nil || len(unread) != 1 || !unread[0].Addressed {
 		t.Fatalf("not addressed to builder: %+v %v", unread, err)
 	}

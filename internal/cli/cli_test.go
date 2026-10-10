@@ -483,6 +483,16 @@ func TestRoomsAndMessages(t *testing.T) {
 	if r := agora(ctx, socket, "reviewer", "subscribe", "example-app"); !strings.Contains(r.stdout, "#general #example-app") {
 		t.Fatalf("subscribe: %+v", r)
 	}
+	if r := agora(ctx, socket, "builder", "subscribe", "example-app", "--mode", "wake"); r.code != 0 || !strings.Contains(r.stdout, "#general #example-app (wake)") {
+		t.Fatalf("subscribe with a mode: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "subscribe", "general", "--mode", "mentions"); !strings.Contains(r.stdout, "#general (mentions) #example-app (wake)") {
+		t.Fatalf("mode of general: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "subscribe", "example-app", "--mode", "loud"); r.code == 0 {
+		t.Fatalf("unknown mode accepted: %+v", r)
+	}
+	agora(ctx, socket, "builder", "subscribe", "general", "--mode", "all")
 	r := agora(ctx, socket, "builder", "post", "example-app", "@reviewer", "PR", "#57", "is", "ready")
 	if r.code != 0 || strings.TrimSpace(r.stdout) == "" {
 		t.Fatalf("post: %+v", r)

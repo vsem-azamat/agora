@@ -142,6 +142,42 @@ func TestNamesMigrationAddsSigilsAndFormerNames(t *testing.T) {
 	}
 }
 
+// TestSubscriptionModesMigrationKeepsSubscriptions applies the migrations before it to a
+// database with a subscription, then opens it: the subscription follows with the mode all, and
+// an unknown mode is refused.
+func TestSubscriptionModesMigrationKeepsSubscriptions(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0011_subscription_modes.sql")
+	for _, q := range []string{
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('example-app', 'work', 'builder', 1)`,
+		`INSERT INTO subscriptions (agent, room) VALUES ('builder', 'example-app')`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var mode string
+	if err := db.QueryRowContext(ctx, `SELECT mode FROM subscriptions WHERE agent = 'builder' AND room = 'example-app'`).Scan(&mode); err != nil || mode != "all" {
+		t.Errorf("mode %q err %v", mode, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE subscriptions SET mode = 'loud'`); err == nil {
+		t.Error("an unknown mode was stored")
+	}
+}
+
 func TestDatabaseFilesAreOwnerOnly(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")

@@ -714,6 +714,22 @@ button.pgname:hover {
   padding: 1px 9px;
   font-size: 0.8em;
 }
+.follow {
+  position: relative;
+  display: inline-flex;
+  gap: 6px;
+}
+.follow .chev {
+  color: var(--mute);
+  font-size: 0.8em;
+}
+.follow .menu {
+  min-width: 200px;
+}
+.follow .menu .check {
+  width: 0.8em;
+  color: var(--accent);
+}
 .strip {
   display: none;
   gap: 3px;
