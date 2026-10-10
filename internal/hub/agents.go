@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"fmt"
 
 	"connectrpc.com/connect"
 
@@ -29,6 +30,10 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 }
 
 func (s *agentService) Rename(ctx context.Context, req *connect.Request[agorav1.RenameRequest]) (*connect.Response[agorav1.RenameResponse], error) {
+	if s.h.webAs != "" && req.Msg.GetAgent() == s.h.webAs {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+			"%s is the web app's operator; to rename it, restart the hub with another --web-as (or $AGORA_WEB_AS)", s.h.webAs))
+	}
 	if err := s.h.sessions.Rename(ctx, req.Msg.GetAgent(), req.Msg.GetName()); err != nil {
 		return nil, toConnect(err)
 	}

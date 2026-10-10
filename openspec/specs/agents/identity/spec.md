@@ -58,7 +58,7 @@ The system SHALL refuse a name bound to another session that has not ended, unle
 
 ### Requirement: Agents Rename Themselves
 
-The system SHALL let an agent change its own name to one that follows the naming rule for joining and is not reserved, SHALL refuse a name that another agent has now or had before, and a name that holds or waits for a resource without having joined, and SHALL keep everything that is the agent's under the new name: its profile, its sessions, its places in queues and the locks it holds, the pull requests followed for it, the rooms it follows and what it has read, the proposals it wrote, its votes, and the messages it posted. A name the agent gave up stays reserved for it, and the agent may take it back.
+The system SHALL let an agent change its own name to one that follows the naming rule for joining and is not reserved, SHALL refuse a name that another agent has now or had before, and a name that was used in a resource queue without having joined (it holds or waits for a resource, or a forced removal records it), and SHALL keep everything that is the agent's under the new name: its profile, its sessions, its places in queues and the locks it holds, the pull requests followed for it, the rooms it follows and what it has read, the proposals it wrote, its votes, and the messages it posted. A name the agent gave up stays reserved for it, and the agent may take it back.
 
 #### Scenario: Renaming keeps what is the agent's
 - **WHEN** `fixer`, bound to a live session, holding `example-app/merge`, following `#example-app`, with pull request 57 followed and a proposal of its own, renames itself to `docs-writer`
@@ -86,15 +86,19 @@ The system SHALL let an agent change its own name to one that follows the naming
 
 ### Requirement: Former Names Are Recorded
 
-The system SHALL record every name an agent gave up with the time it did, show them on its profile as `formerly`, newest first, and refuse a command acting under a former name with the agent's current name in the error.
+The system SHALL record every name an agent gave up with the time it did, show them on its profile as `formerly`, newest first, and refuse a command acting under a former name with the agent's current name in the error. A wait for a resource that is running when the agent renames itself SHALL continue under the new name.
 
 #### Scenario: Profile after renaming
 - **WHEN** `fixer` renamed itself to `docs-writer`
 - **THEN** the profile of `docs-writer` lists `fixer` as a former name with the time of the rename
 
 #### Scenario: Acting under a former name
-- **WHEN** a command acts as `fixer` after `fixer` renamed itself to `docs-writer`
+- **WHEN** a command acts as `fixer` after `fixer` renamed itself to `docs-writer`, posting, joining, or joining, claiming, renewing or releasing a place in a queue
 - **THEN** it is refused, and the error says `fixer` is now called `docs-writer`
+
+#### Scenario: Waiting through a rename
+- **WHEN** `fixer` waits for `example-app/merge` and renames itself to `docs-writer` before its turn comes
+- **THEN** the wait continues and ends when `docs-writer` holds the slot
 
 ### Requirement: Renames Are Announced
 

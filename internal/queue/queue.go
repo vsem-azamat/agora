@@ -215,6 +215,9 @@ func (q *Queue) touch(ctx context.Context, key, agent string, renew bool) (*Entr
 	}
 	var out *Entry
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
+		if err := agents.NotFormerTx(ctx, tx, agent); err != nil {
+			return err
+		}
 		if err := settle(ctx, tx, key, now); err != nil {
 			return err
 		}
@@ -266,6 +269,11 @@ func (q *Queue) Release(ctx context.Context, key, agent, actor string, force boo
 	}
 	released := false
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
+		for _, name := range []string{agent, actor} {
+			if err := agents.NotFormerTx(ctx, tx, name); err != nil {
+				return err
+			}
+		}
 		if err := settle(ctx, tx, key, now); err != nil {
 			return err
 		}

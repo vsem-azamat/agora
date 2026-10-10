@@ -2,12 +2,14 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/store"
 )
@@ -30,6 +32,11 @@ func (s *resources) Wait(ctx context.Context, req *connect.Request[agorav1.WaitR
 	for {
 		changed := s.h.changes.wait() // before reading state, so no change is missed
 		e, err := s.h.queue.Claim(ctx, key, agent)
+		var renamed *agents.FormerNameError
+		if errors.As(err, &renamed) {
+			agent = renamed.Current // the agent renamed itself while it waits: its place moved with it
+			continue
+		}
 		if err != nil {
 			return toConnect(err)
 		}

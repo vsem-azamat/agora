@@ -89,11 +89,13 @@ func RenameTx(ctx context.Context, tx *sql.Tx, agent, name string, now time.Time
 }
 
 // FreeForTx returns ErrTaken when agent may not rename itself to name: another agent has the
-// name or gave it up, or the name holds or waits for a resource without having joined.
+// name or gave it up, or the name was used in a resource queue without having joined (it holds
+// or waits for a resource, or appears in the record of forced removals), whose records would
+// otherwise pass to the agent.
 func FreeForTx(ctx context.Context, tx *sql.Tx, agent, name string) error {
 	var used int
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE name = :n) OR EXISTS (SELECT 1 FROM entries WHERE agent = :n)`,
-		sql.Named("n", name)).Scan(&used); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE name = :n) OR EXISTS (SELECT 1 FROM entries WHERE agent = :n)
+		OR EXISTS (SELECT 1 FROM removals WHERE agent = :n OR actor = :n)`, sql.Named("n", name)).Scan(&used); err != nil {
 		return err
 	}
 	if used != 0 {
@@ -126,8 +128,21 @@ func formerOwner(ctx context.Context, tx *sql.Tx, name string) (string, error) {
 	return owner, err
 }
 
+// FormerNameError refuses a name an agent gave up, saying what the agent is called now. It
+// wraps ErrTaken or ErrUnknown.
+type FormerNameError struct {
+	Name, Current string
+	sentinel      error
+}
+
+func (e *FormerNameError) Error() string {
+	return fmt.Sprintf("%v: %q is now called %q; use %s", e.sentinel, e.Name, e.Current, e.Current)
+}
+
+func (e *FormerNameError) Unwrap() error { return e.sentinel }
+
 func nowCalled(sentinel error, name, owner string) error {
-	return fmt.Errorf("%w: %q is now called %q; use %s", sentinel, name, owner, owner)
+	return &FormerNameError{Name: name, Current: owner, sentinel: sentinel}
 }
 
 // formerlyColumn lists agent a's former names, newest first, as "fixer:1760000000000 ...".

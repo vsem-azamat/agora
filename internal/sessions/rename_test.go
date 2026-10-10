@@ -122,6 +122,15 @@ func TestRenamingRefusesTakenNames(t *testing.T) {
 	if err := e.s.Rename(ctx, "fixer", "deployer"); !errors.Is(err, agents.ErrTaken) {
 		t.Errorf("a name in a queue: %v", err)
 	}
+	if _, _, err := e.q.Join(ctx, "example-app/db", "migrator", "", 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.q.Release(ctx, "example-app/db", "migrator", "builder", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.Rename(ctx, "fixer", "migrator"); !errors.Is(err, agents.ErrTaken) {
+		t.Errorf("a name in the record of forced removals: %v", err)
+	}
 	if err := e.s.Rename(ctx, "ghost", "spirit"); !errors.Is(err, agents.ErrUnknown) {
 		t.Errorf("unknown agent: %v", err)
 	}
@@ -188,12 +197,38 @@ func TestFormerNamesAreRecordedNewestFirst(t *testing.T) {
 func TestActingUnderAFormerNameNamesTheNewOne(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "fixer", "")
-	e.rename(t, "fixer", "docs-writer")
-	if _, err := e.r.Post(ctx, "fixer", "general", "hello", 0); err == nil || !strings.Contains(err.Error(), `now called "docs-writer"`) {
-		t.Errorf("posting as a former name: %v", err)
+	e.join(t, "builder", "")
+	if _, _, err := e.q.Join(ctx, "example-app/merge", "fixer", "", 0, true); err != nil {
+		t.Fatal(err)
 	}
-	if _, _, err := e.q.Join(ctx, "example-app/merge", "fixer", "", 0, true); err == nil || !strings.Contains(err.Error(), `now called "docs-writer"`) {
-		t.Errorf("locking as a former name: %v", err)
+	if _, _, err := e.q.Join(ctx, "example-app/db", "builder", "", 0, true); err != nil {
+		t.Fatal(err)
+	}
+	e.rename(t, "fixer", "docs-writer")
+	refused := func(what string, err error) {
+		t.Helper()
+		var former *agents.FormerNameError
+		if !errors.As(err, &former) || former.Current != "docs-writer" || !strings.Contains(err.Error(), `now called "docs-writer"`) {
+			t.Errorf("%s as a former name: %v", what, err)
+		}
+	}
+	_, err := e.r.Post(ctx, "fixer", "general", "hello", 0)
+	refused("posting", err)
+	_, _, err = e.q.Join(ctx, "example-app/deploy", "fixer", "", 0, true)
+	refused("locking", err)
+	_, err = e.q.Claim(ctx, "example-app/merge", "fixer")
+	refused("claiming", err)
+	_, err = e.q.Renew(ctx, "example-app/merge", "fixer")
+	refused("renewing", err)
+	_, err = e.q.Release(ctx, "example-app/merge", "fixer", "fixer", false)
+	refused("releasing", err)
+	_, err = e.q.Release(ctx, "example-app/db", "builder", "fixer", true)
+	refused("force-releasing", err)
+	if p := e.places(t, "docs-writer"); len(p) != 1 || p[0].State != queue.Held {
+		t.Errorf("places after the refusals: %+v", p)
+	}
+	if p := e.places(t, "builder"); len(p) != 1 {
+		t.Errorf("builder lost its place: %+v", p)
 	}
 }
 
@@ -235,6 +270,7 @@ func TestMentioningAFormerName(t *testing.T) {
 	before := e.post(t, "builder", "general", "@fixer before the rename")
 	e.rename(t, "fixer", "docs-writer")
 	after := e.post(t, "builder", "general", "@fixer can you look at #57?")
+	capital := e.post(t, "builder", "general", "@Fixer please check")
 	msgs, _, err := e.r.Unread(ctx, "docs-writer", true, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +282,7 @@ func TestMentioningAFormerName(t *testing.T) {
 			t.Errorf("earlier body rewritten: %q", m.Body)
 		}
 	}
-	if !slices.Contains(ids, before) || !slices.Contains(ids, after) {
-		t.Errorf("addressed to docs-writer: %v, want %d and %d", ids, before, after)
+	if !slices.Contains(ids, before) || !slices.Contains(ids, after) || !slices.Contains(ids, capital) {
+		t.Errorf("addressed to docs-writer: %v, want %d, %d and %d", ids, before, after, capital)
 	}
 }

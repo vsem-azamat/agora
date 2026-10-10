@@ -620,6 +620,37 @@ func TestMentionOfAFormerNameWakesTheAgent(t *testing.T) {
 	}
 }
 
+func TestWaitFollowsARename(t *testing.T) {
+	r := start(t)
+	r.post(t, "fixer", "hello")
+	join(t, r, "example-app/merge", "builder", time.Minute)
+	join(t, r, "example-app/merge", "fixer", time.Minute)
+	ended := waitFor(t, r, "example-app/merge", "fixer")
+	bg := context.Background()
+	if _, err := r.agents.Rename(bg, connect.NewRequest(&agorav1.RenameRequest{Agent: "fixer", Name: "docs-writer"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.client.Release(bg, connect.NewRequest(&agorav1.ReleaseRequest{Key: "example-app/merge", Agent: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-ended:
+		if err != nil {
+			t.Fatalf("wait ended with %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the wait did not end")
+	}
+	res, err := r.client.ListResources(bg, connect.NewRequest(&agorav1.ListResourcesRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list := res.Msg.GetResources(); len(list) != 1 || len(list[0].GetEntries()) != 1 || list[0].GetEntries()[0].GetAgent() != "docs-writer" ||
+		list[0].GetEntries()[0].GetState() != agorav1.EntryState_ENTRY_STATE_HELD {
+		t.Fatalf("resources %+v", list)
+	}
+}
+
 func TestRenamingToATakenNameIsAlreadyExists(t *testing.T) {
 	r := start(t)
 	r.post(t, "fixer", "hello")
