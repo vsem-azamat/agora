@@ -16,6 +16,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/web"
 )
 
@@ -200,7 +201,7 @@ func (s *webService) Token(ctx context.Context, req *connect.Request[agorav1.Tok
 }
 
 func (s *webService) Whoami(context.Context, *connect.Request[agorav1.WhoamiRequest]) (*connect.Response[agorav1.WhoamiResponse], error) {
-	return connect.NewResponse(&agorav1.WhoamiResponse{Name: s.h.webAs}), nil
+	return connect.NewResponse(&agorav1.WhoamiResponse{Name: s.h.webAs, Board: rooms.Board, GeneralRoom: rooms.General}), nil
 }
 
 func (s *webService) Watch(ctx context.Context, _ *connect.Request[agorav1.WatchRequest], stream *connect.ServerStream[agorav1.WatchResponse]) error {

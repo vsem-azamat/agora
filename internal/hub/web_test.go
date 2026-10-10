@@ -273,6 +273,17 @@ func TestTheOperatorIsNotRenamed(t *testing.T) {
 	}
 }
 
+func TestWhoamiNamesTheOperatorTheBoardAndGeneral(t *testing.T) {
+	w := startWeb(t, "owner")
+	who, err := agorav1connect.NewWebServiceClient(w.client(w.token(t, false)), w.base).Whoami(context.Background(), connect.NewRequest(&agorav1.WhoamiRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if who.Msg.GetName() != "owner" || who.Msg.GetBoard() != "agora" || who.Msg.GetGeneralRoom() != "general" {
+		t.Fatalf("whoami: %v", who.Msg)
+	}
+}
+
 func TestInvalidOperatorNameIsRefused(t *testing.T) {
 	db, err := store.Open(context.Background(), ":memory:")
 	if err != nil {
