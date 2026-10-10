@@ -106,12 +106,14 @@ describe('pairs', () => {
       message(4, 'builder', '@reviewer fixed', 7),
     ];
     const to = addresseesById(ms, known, 'agora');
-    expect(pairs(ms, to)).toEqual([
+    expect(pairs(ms, to, 'agora')).toEqual([
       { a: 'builder', b: 'reviewer', n: 3 },
       { a: 'operator', b: 'release', n: 1 },
     ]);
     const renamed = [message(1, 'builder', '@fixer PR is up', 10), message(2, 'builder', '@docs-writer fixed', 9)];
-    expect(pairs(renamed, addresseesById(renamed, known, 'agora'))).toEqual([{ a: 'builder', b: 'docs-writer', n: 2 }]);
+    expect(pairs(renamed, addresseesById(renamed, known, 'agora'), 'agora')).toEqual([
+      { a: 'builder', b: 'docs-writer', n: 2 },
+    ]);
     const [, answer, other] = ms;
     expect(answer && between(answer, ['builder'], ['builder', 'reviewer'])).toBe(true);
     expect(other && between(other, ['operator'], ['builder', 'reviewer'])).toBe(false);

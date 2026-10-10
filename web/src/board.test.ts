@@ -22,6 +22,7 @@ import {
   proposalOrder,
   pullRequests,
   roomBadge,
+  roomsTabCount,
   sigilName,
   splitResources,
   timeLeft,
@@ -229,5 +230,16 @@ describe('counts', () => {
   it('count held turns and open proposals', () => {
     expect(heldTurns([queue('heavy-tests', 2, [['builder', 5]], ['reviewer']), lock('merge', 'release')])).toBe(2);
     expect(openProposals([proposal(1, 'a', 'open', []), proposal(2, 'b', 'accepted', [])])).toBe(1);
+  });
+});
+
+describe('roomsTabCount', () => {
+  it('counts per room the unread or the waiting messages, whichever is more', () => {
+    const counts = new Map([
+      ['example-chat', { unread: 1, addressed: 0, pending: 1 }], // one waiting message, also unread
+      ['example-group', { unread: 0, addressed: 0, pending: 2 }],
+      ['general', { unread: 3, addressed: 1 }],
+    ]);
+    expect(roomsTabCount(counts)).toBe(6);
   });
 });

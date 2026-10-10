@@ -136,6 +136,143 @@ describe('following', () => {
   });
 });
 
+describe('bridged rooms', () => {
+  /** The fake hub with #example-chat bridged under `policy`, one message from outside and one waiting. */
+  function bridgedHub(policy: string, calls: [string, unknown][]) {
+    const hub = fakeHub([]);
+    const reply = (json: unknown, status = 200) =>
+      new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const proc = String(input).replace(/^.*\/agora\.v1\./, '');
+      const raw = typeof init?.body === 'string' ? init.body : new TextDecoder().decode(init?.body as Uint8Array);
+      switch (proc) {
+        case 'BridgeService/ListBridges':
+          return reply({ bridges: [{ name: 'example-chat', policy, state: 'BRIDGE_STATE_RUNNING' }] });
+        case 'RoomService/ListRooms':
+          return reply({
+            rooms: [
+              { name: 'example-chat', messages: 2, pending: 1 },
+              { name: 'general', messages: 2 },
+            ],
+          });
+        case 'RoomService/History':
+          return reply({
+            messages: [
+              {
+                id: '6',
+                room: 'example-chat',
+                body: 'can you look?',
+                externalAuthor: { bridge: 'example-chat', id: '42', name: 'Ada' },
+              },
+              {
+                id: '7',
+                room: 'example-chat',
+                author: 'builder',
+                body: 'looked, all fine',
+                replyTo: '6',
+                deliveryState: 'DELIVERY_STATE_PENDING',
+              },
+            ],
+          });
+        case 'BridgeService/SendPending':
+          calls.push([proc, JSON.parse(raw)]);
+          // the fake has the message pending only under approve; another policy stands for a
+          // decision taken meanwhile
+          return policy === 'BRIDGE_POLICY_APPROVE'
+            ? reply({})
+            : reply({ code: 'not_found', message: 'message 7 is not pending' }, 404);
+        case 'BridgeService/SetBridgePolicy': {
+          const body = JSON.parse(raw);
+          calls.push([proc, body]);
+          // the fake stands for a bridge removed meanwhile when asked for read only
+          return body.policy === 'BRIDGE_POLICY_READ'
+            ? reply({ code: 'not_found', message: 'no bridge example-chat' }, 404)
+            : reply({});
+        }
+      }
+      return hub(input, init);
+    });
+  }
+
+  const waiting = (c: HTMLElement) => c.querySelector('[data-mid="7"]') as HTMLElement;
+
+  async function openChat(policy: string, calls: [string, unknown][]) {
+    vi.stubGlobal('fetch', bridgedHub(policy, calls));
+    history.replaceState(null, '', '/#token=good-token');
+    const r = render(<App />);
+    await waitFor(() => expect(r.container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    location.hash = '#/rooms/example-chat';
+    await waitFor(() => expect(r.container.querySelector('[data-mid="7"]')).not.toBeNull());
+    return r;
+  }
+
+  it('shows the waiting message in the room list and sends it', async () => {
+    const calls: [string, unknown][] = [];
+    const { container } = await openChat('BRIDGE_POLICY_APPROVE', calls);
+    const link = container.querySelector('.side a[href="#/rooms/example-chat"]') as HTMLElement;
+    expect(link.querySelector('svg.br title')?.textContent).toBe('bridge running');
+    expect(link.querySelector('em.pending')?.textContent).toBe('1 waiting for you to send');
+    expect(container.querySelector('[data-mid="6"] .mh')?.textContent).toContain('Ada · example-chat');
+    fireEvent.click(within(waiting(container)).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(calls).toEqual([['BridgeService/SendPending', { messageId: '7' }]]));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('keeps Send from a read-only room and says why', async () => {
+    const { container } = await openChat('BRIDGE_POLICY_READ', []);
+    const t = waiting(container);
+    expect((within(t).getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(t.querySelector('.decide .hint')?.textContent).toBe('read only — switch Outbound to send');
+    expect((within(t).getByRole('button', { name: 'Don’t send' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says why the hub refused to send a message', async () => {
+    const calls: [string, unknown][] = [];
+    const { container } = await openChat('BRIDGE_POLICY_OPEN', calls);
+    fireEvent.click(within(waiting(container)).getByRole('button', { name: 'Send' }));
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toBe('Not sent: message 7 is not pending');
+    await waitFor(() =>
+      expect((within(waiting(container)).getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    ); // it still waits
+    fireEvent.click(within(notice).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('changes the outbound policy', async () => {
+    const calls: [string, unknown][] = [];
+    await openChat('BRIDGE_POLICY_APPROVE', calls);
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Send at once' }));
+    await waitFor(() =>
+      expect(calls).toEqual([
+        ['BridgeService/SetBridgePolicy', { name: 'example-chat', policy: 'BRIDGE_POLICY_OPEN' }],
+      ]),
+    );
+  });
+
+  it('says why the policy did not change', async () => {
+    await openChat('BRIDGE_POLICY_APPROVE', []);
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Read only' }));
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toBe('The policy did not change: no bridge example-chat');
+    // a band in the room under its header: the Outbound control stays free to try again
+    expect(notice.previousElementSibling?.classList).toContain('roomhead');
+    expect(notice.closest('.room')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    expect(screen.getByRole('menu', { name: 'Outbound' })).toBeTruthy();
+  });
+
+  it('counts a waiting message once on the phone’s Rooms tab', async () => {
+    await openChat('BRIDGE_POLICY_APPROVE', []);
+    // general has 2 unread; #example-chat 1 waiting, which is not unread here
+    expect(document.querySelector('.tabs em')?.textContent).toBe('3');
+  });
+});
+
 describe('sigils', () => {
   it('draws agents and the operator as they chose, everywhere', async () => {
     const { container } = await signedIn();

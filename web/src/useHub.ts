@@ -6,6 +6,7 @@ import type { Api } from './api';
 import { unauthenticated } from './api';
 import { type Mode, modeOf, type RoomCount } from './board';
 import type { Profile } from './gen/agora/v1/agents_pb';
+import type { Bridge } from './gen/agora/v1/bridges_pb';
 import type { GetCharterResponse, Proposal } from './gen/agora/v1/governance_pb';
 import type { Resource } from './gen/agora/v1/resources_pb';
 import type { Message, Room } from './gen/agora/v1/rooms_pb';
@@ -20,7 +21,10 @@ type HubData = {
   general: string;
   agents: Profile[];
   rooms: Room[];
+  /** Per room: the operator's unread and addressed counts, and the messages waiting for the operator to send. */
   unread: Map<string, RoomCount>;
+  /** The bridges by the name of their room. */
+  bridges: Map<string, Bridge>;
   followed: Set<string>;
   /** The mode of each followed room. */
   modes: Map<string, Mode>;
@@ -31,6 +35,18 @@ type HubData = {
 };
 
 const RETRY_MS = 2000;
+
+/** The counts per room: unread and addressed from the hub's unread counts, pending from the rooms. */
+export function roomCounts(
+  unread: { room: string; unread: number; addressed: number }[],
+  rooms: Pick<Room, 'name' | 'pending'>[],
+): Map<string, RoomCount> {
+  const out = new Map<string, RoomCount>(unread.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }]));
+  for (const r of rooms) {
+    if (r.pending > 0) out.set(r.name, { ...(out.get(r.name) ?? { unread: 0, addressed: 0 }), pending: r.pending });
+  }
+  return out;
+}
 
 export function useHub(api: Api, onUnauthenticated: () => void) {
   const [data, setData] = useState<HubData>();
@@ -48,7 +64,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
   );
 
   const loadOnce = useCallback(async () => {
-    const [who, agents, rooms, unread, followed, resources, proposals, charter] = await Promise.all([
+    const [who, agents, rooms, unread, followed, resources, proposals, charter, bridges] = await Promise.all([
       api.web.whoami({}),
       api.agents.listAgents({}),
       api.rooms.listRooms({}),
@@ -57,6 +73,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.resources.listResources({}),
       api.governance.listProposals({ all: true }),
       api.governance.getCharter({}),
+      api.bridges.listBridges({}),
     ]);
     setData({
       operator: who.name,
@@ -64,7 +81,8 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       general: who.generalRoom,
       agents: agents.agents,
       rooms: rooms.rooms,
-      unread: new Map(unread.rooms.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }])),
+      unread: roomCounts(unread.rooms, rooms.rooms),
+      bridges: new Map(bridges.bridges.map((b) => [b.name, b])),
       followed: new Set(followed.rooms),
       modes: new Map(followed.subscriptions.map((s) => [s.room, modeOf(s.mode)])),
       resources: resources.resources,

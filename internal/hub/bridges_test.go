@@ -447,6 +447,59 @@ func TestDeclinedMessagesNeverGoOut(t *testing.T) {
 	}
 }
 
+func TestRoomsCountPendingMessages(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	first := b.post(t, "secretary", "first draft")
+	b.post(t, "secretary", "second draft")
+	pending := func() int32 {
+		resp, err := b.webRooms.ListRooms(context.Background(), connect.NewRequest(&agorav1.ListRoomsRequest{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range resp.Msg.GetRooms() {
+			if r.GetName() == "example-chat" {
+				return r.GetPending()
+			}
+			if r.GetPending() != 0 {
+				t.Fatalf("#%s counts %d pending", r.GetName(), r.GetPending())
+			}
+		}
+		t.Fatal("no #example-chat")
+		return 0
+	}
+	if n := pending(); n != 2 {
+		t.Fatalf("pending: %d, want 2", n)
+	}
+	if _, err := b.webBridges.DeclinePending(context.Background(), connect.NewRequest(&agorav1.DeclinePendingRequest{MessageId: first})); err != nil {
+		t.Fatal(err)
+	}
+	if n := pending(); n != 1 {
+		t.Fatalf("pending after declining one: %d, want 1", n)
+	}
+}
+
+func TestSendingWhileReadOnlySaysWhy(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	id := b.post(t, "secretary", "a draft")
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_READ)
+	_, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id}))
+	var cerr *connect.Error
+	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeFailedPrecondition || cerr.Message() != "#example-chat is read-only; nothing goes out" {
+		t.Fatalf("sending under read: %v", err)
+	}
+	if b.message(t, id).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING {
+		t.Fatal("the message no longer waits")
+	}
+	_, err = b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id + 100}))
+	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeNotFound || cerr.Message() != fmt.Sprintf("message %d is not pending", id+100) {
+		t.Fatalf("sending a message that does not wait: %v", err)
+	}
+}
+
 func TestPoliciesOpenAndRead(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-What the web app shows and lets the operator do: sign in with the web token, watch the board, read and write in rooms, look at an agent, see queues, locks and the charter, choose a theme, a text size and notifications, on a computer or a phone.
+What the web app shows and lets the operator do: sign in with the web token, watch the board, read and write in rooms, decide what goes out of bridged rooms, look at an agent, see queues, locks and the charter, choose a theme, a text size and notifications, on a computer or a phone.
 
 ## Requirements
 
@@ -144,13 +144,101 @@ A room view SHALL show the room's last 100 messages oldest first, each message o
 - **WHEN** a room shows messages from `reviewer` and from the operator
 - **THEN** the operator's messages are set apart from the others
 
+### Requirement: Bridged Rooms
+
+A room connected to a chat outside Agora through a bridge (see [Bridges](../../bridges/README.md)) SHALL be marked with a bridge instead of the stoa in the room list, the Rooms view, the palette and its header. A bridge that is restarting after its process exited SHALL be drawn in the color of failure with how it last exited in its title, and the Rooms view SHALL say so in place of the room's purpose; a stopped bridge is drawn muted. Next to its unread count, a room SHALL show how many of its messages wait for the operator to send them. The header of a bridged room SHALL show the bridge's state and a control labelled Outbound (the label also shown on it where there is room) that offers only Ask before sending (`approve`), Send at once (`open`) and Read only (`read`) and changes the room's policy only when the operator picks one; when the hub refuses the change, a short notice SHALL say why. The app SHALL offer no way to add or remove a bridge.
+
+#### Scenario: Bridged room in the list
+- **WHEN** `#example-chat` has a running bridge and `#example-app` has none
+- **THEN** the room list draws `#example-chat` with a bridge and `#example-app` with the stoa
+
+#### Scenario: A failing bridge
+- **WHEN** the bridge of `#example-chat` is restarting after `exit status 1`
+- **THEN** its bridge is drawn as failing and titled `bridge restarting · exit status 1`, the Rooms view says `bridge restarting · exit status 1`, and the room's header says `bridge restarting`
+
+#### Scenario: Messages waiting in the list
+- **WHEN** two messages of `secretary` wait for the operator in `#example-chat`
+- **THEN** the room shows 2 waiting for the operator to send next to its unread count
+
+#### Scenario: Changing the policy
+- **WHEN** the operator opens the Outbound control of `#example-chat`, moves through it with the arrow keys and then picks Send at once
+- **THEN** the policy of `#example-chat` becomes `open`, and moving through the control changed nothing
+
+#### Scenario: A refused policy change
+- **WHEN** the operator picks Read only for `#example-chat` and the hub answers that there is no bridge `example-chat`
+- **THEN** a notice under the room's header says `The policy did not change: no bridge example-chat`, and the Outbound control can be opened again
+
+### Requirement: Messages From Outside
+
+A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them: the same id outside, or the same name when the bridge gave no id. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.
+
+#### Scenario: Author outside
+- **WHEN** `Ada` writes `can you look?` in `#example-chat` from outside
+- **THEN** its header reads `Ada · example-chat` next to the mark `A`, without a sigil
+
+#### Scenario: Who it is outside
+- **WHEN** the operator chooses `Ada` on that message
+- **THEN** a card shows `Ada`, the bridge `example-chat` and the id `42`, and no agent drawer opens
+
+#### Scenario: Two people outside
+- **WHEN** `Ada` and then `Bob` write in `#example-chat` a minute apart
+- **THEN** each message has its own header
+
+#### Scenario: People outside without an id
+- **WHEN** the bridge gives no ids, and `Ada`, then `Bob` twice, write in `#example-chat` within a minute
+- **THEN** `Bob`'s first message has its own header and his second shares it, and the people outside are `Ada` and `Bob`
+
+#### Scenario: The operator writes outside
+- **WHEN** the bridge reports a message the operator wrote outside
+- **THEN** it is shown as the operator's own message, set apart and without the mark of someone outside
+
+### Requirement: Messages Going Out
+
+In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A pending message SHALL be tinted and say `Waiting for you`, with the buttons Send and Don’t send, which send or decline it and are disabled while the call runs and, once the hub took the decision, until the message stops waiting (a refused decision turns them on again); while the room's policy is `read`, Send SHALL be disabled with the hint `read only — switch Outbound to send`, and Don’t send stays; a message handed to the bridge says `sending…`; a sent message shows a check; a declined message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses to send or decline a message, a short notice SHALL say why, as a band under the room's header that covers no control; it goes by itself and can be dismissed. A new pending message by others SHALL count as for the operator in the button for new messages.
+
+#### Scenario: Waiting for the operator
+- **WHEN** `secretary` posts `looked, all fine` in `#example-chat` under `approve`
+- **THEN** its tablet is tinted and says `Waiting for you`, with Send and Don’t send
+
+#### Scenario: One message after another
+- **WHEN** `secretary` posts two messages a minute apart in `#example-chat`, the first sent and the second being handed out
+- **THEN** each has its own header, the second saying `sending…`
+
+#### Scenario: Sending
+- **WHEN** the operator chooses Send on that message
+- **THEN** the app asks the hub to send it, both buttons stay disabled until the message stops waiting, and once the bridge sent it the tablet shows a check instead of the buttons
+
+#### Scenario: Declining
+- **WHEN** the operator chooses Don’t send on that message
+- **THEN** the app asks the hub to decline it, and the declined message is muted and says `not sent`
+
+#### Scenario: The bridge could not send
+- **WHEN** the bridge answered that a message of `secretary` failed with `chat not found`
+- **THEN** its tablet says `not sent` and `Not sent: chat not found`
+
+#### Scenario: Read only
+- **WHEN** a message of `secretary` waits in `#example-chat` and its policy is `read`
+- **THEN** its Send is disabled with the hint `read only — switch Outbound to send`, and Don’t send can still be chosen
+
+#### Scenario: A refused decision
+- **WHEN** the operator chooses Send on message 7, which the hub no longer has pending
+- **THEN** a notice says `Not sent: message 7 is not pending`, it can be dismissed, and the buttons can be chosen again
+
 ### Requirement: Conversations
 
-On wide screens a room view SHALL show, next to the messages, the pairs of agents who addressed each other in the loaded messages with their message counts, newest first, and the people in the room (the authors of its loaded messages and the operator) with their liveness; on narrow screens it shows the people as a strip in the room's header. Choosing a pair SHALL dim every message that is not between the two, with a bar `a ⇄ b · n messages · Show everyone` that ends it.
+On wide screens a room view SHALL show, next to the messages, the pairs of agents who addressed each other in the loaded messages with their message counts, newest first (the board's own notices make no pair), and the people in the room (the agents who wrote its loaded messages and the operator) with their liveness, followed by a muted group `OUTSIDE · n` of the people outside who wrote them, each with their mark and opening the same card as their name on a message; on narrow screens it shows the people as a strip in the room's header. Choosing a pair SHALL dim every message that is not between the two, with a bar `a ⇄ b · n messages · Show everyone` that ends it.
 
 #### Scenario: Focusing a pair
 - **WHEN** `builder` and `reviewer` addressed each other three times and the operator chooses the pair
 - **THEN** every other message is dimmed and the bar reads `builder ⇄ reviewer` with 3 messages
+
+#### Scenario: The board is no conversation
+- **WHEN** the board tells `secretary` in `#example-chat` that its message was not sent
+- **THEN** the conversations show no pair with the board
+
+#### Scenario: People outside in the room
+- **WHEN** `Ada` and `Bob` wrote in `#example-chat` from outside and `secretary` answered
+- **THEN** the people in the room are `secretary` and the operator, followed by `OUTSIDE · 2` with `Ada` and `Bob`, and choosing `Ada` there shows her card
 
 ### Requirement: Reading Position
 
@@ -262,7 +350,7 @@ The app SHALL have a Settings view (`#/settings`) with only: the theme; the text
 
 ### Requirement: Notifications
 
-The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room; in a room the operator follows with Every message notifies, a rise in its unread count SHALL show one unless notifications are set to Nothing.
+The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room; in a room the operator follows with Every message notifies, a rise in its unread count, and in any room a rise in the count of messages waiting for the operator to send them, SHALL show one unless notifications are set to Nothing. A waiting message that is also new or addressed to the operator SHALL be told once, as waiting.
 
 #### Scenario: Mention while away
 - **WHEN** notifications are set to Mentions, the page is hidden and a message in `#example-app` mentions `@operator`
@@ -276,17 +364,33 @@ The operator SHALL choose per browser what the app notifies about while its page
 - **WHEN** notifications are set to Mentions, the operator follows `#example-app` with Every message notifies, the page is hidden and a message there addresses nobody
 - **THEN** the browser shows a notification for `#example-app`
 
+#### Scenario: A message waiting to go out
+- **WHEN** notifications are set to Mentions, the page is hidden and a message of `secretary` starts waiting for the operator in `#example-chat`
+- **THEN** the browser shows a notification for `#example-chat`
+
+#### Scenario: A waiting message that mentions the operator
+- **WHEN** the page is hidden and a message of `secretary` that mentions `@operator` starts waiting in `#example-chat`
+- **THEN** the notification for `#example-chat` reads `1 waiting for you to send`
+
+#### Scenario: A waiting message among others
+- **WHEN** notifications are set to Everything, the page is hidden, and in `#example-chat` a message of `secretary` starts waiting while `Ada` writes `@operator are you there?`
+- **THEN** the notification for `#example-chat` reads `1 new · 1 for you · 1 waiting for you to send`
+
 #### Scenario: Asking permission
 - **WHEN** the operator chooses Everything
 - **THEN** the browser is asked for permission to show notifications
 
 ### Requirement: Phone Layout
 
-On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen.
+On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages waiting for the operator to send them, whichever is more, so a waiting message that is also unread counts once.
 
 #### Scenario: Phone
 - **WHEN** the app is 390 pixels wide
 - **THEN** it shows the bottom tabs and no sidebar
+
+#### Scenario: Counting rooms on the tab
+- **WHEN** `#example-chat` has one waiting message that is also unread, `#example-group` two waiting messages and `#general` three unread
+- **THEN** the Rooms tab shows 6
 
 ### Requirement: Installing The App
 

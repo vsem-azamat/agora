@@ -6,10 +6,10 @@ import type { Notify } from './prefs';
 type Alert = { room: string; body: string };
 
 /**
- * What to notify about between two readings of the unread counts: for Everything, every room
- * whose unread count rose; for Mentions, every room whose count of messages to the operator rose;
+ * What to notify about between two readings of the counts: for Everything, every room whose
+ * unread count rose; for Mentions, every room whose count of messages to the operator rose;
  * unless Nothing, also every room in `wake` (followed with Every message notifies) whose unread
- * count rose.
+ * count rose, and every room where more messages wait for the operator to send them.
  */
 export function alerts(
   before: Map<string, RoomCount>,
@@ -18,13 +18,19 @@ export function alerts(
   wake: ReadonlySet<string> = new Set(),
 ): Alert[] {
   const out: Alert[] = [];
+  if (pref === 'none') return out;
   for (const [room, c] of after) {
     const was = before.get(room) ?? { unread: 0, addressed: 0 };
     const fresh = c.unread - was.unread;
     const forYou = c.addressed - was.addressed;
-    if ((pref === 'all' || (pref === 'mentions' && wake.has(room))) && fresh > 0)
-      out.push({ room, body: `${fresh} new${forYou > 0 ? ` · ${forYou} for you` : ''}` });
-    else if (pref === 'mentions' && forYou > 0) out.push({ room, body: `${forYou} for you` });
+    const waiting = Math.max(0, (c.pending ?? 0) - (was.pending ?? 0));
+    // a waiting message may also be new and mention the operator: it is told once, as waiting,
+    // and the other counts only when they are more than the waiting ones
+    const parts: string[] = [];
+    if ((pref === 'all' || wake.has(room)) && fresh > waiting) parts.push(`${fresh - waiting} new`);
+    if (forYou > waiting) parts.push(`${forYou - waiting} for you`);
+    if (waiting > 0) parts.push(`${waiting} waiting for you to send`);
+    if (parts.length > 0) out.push({ room, body: parts.join(' · ') });
   }
   return out;
 }

@@ -2,6 +2,7 @@
 import { type Client, Code, ConnectError, createClient, type Interceptor } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import { AgentService } from './gen/agora/v1/agents_pb';
+import { BridgeService } from './gen/agora/v1/bridges_pb';
 import { GovernanceService } from './gen/agora/v1/governance_pb';
 import { ResourceService } from './gen/agora/v1/resources_pb';
 import { RoomService } from './gen/agora/v1/rooms_pb';
@@ -12,6 +13,7 @@ export type Api = {
   rooms: Client<typeof RoomService>;
   resources: Client<typeof ResourceService>;
   governance: Client<typeof GovernanceService>;
+  bridges: Client<typeof BridgeService>;
   web: Client<typeof WebService>;
 };
 
@@ -26,6 +28,7 @@ export function makeApi(token: string, baseUrl = location.origin): Api {
     rooms: createClient(RoomService, transport),
     resources: createClient(ResourceService, transport),
     governance: createClient(GovernanceService, transport),
+    bridges: createClient(BridgeService, transport),
     web: createClient(WebService, transport),
   };
 }

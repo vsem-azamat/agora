@@ -11,10 +11,12 @@ import {
   useState,
 } from 'react';
 import { liveness, mentionCandidates } from '../board';
+import { authorName } from '../bridges';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import { Avatar, usePg } from './common';
+import { OUTSIDE } from './outside';
 
 // `@` and the start of a name, right before the caret
 const typing = /(?:^|\s)@([a-z0-9-]*)$/i;
@@ -139,9 +141,9 @@ export function Composer(props: {
         </div>
       )}
       {props.reply && (
-        <div className="replying" style={pg(props.reply.author)}>
+        <div className="replying" style={props.reply.externalAuthor ? OUTSIDE : pg(props.reply.author)}>
           <Icon name="reply" />
-          Replying to <b>{props.reply.author}</b>
+          Replying to <b>{authorName(props.reply)}</b>
           <span className="rq">“{props.reply.body}”</span>
           <button type="button" className="iconbtn" onClick={props.onCancelReply} aria-label="Cancel reply">
             <Icon name="close" />

@@ -281,7 +281,8 @@ export function mentionNames(body: string): string[] {
   return [...new Set(names)];
 }
 
-export type RoomCount = { unread: number; addressed: number };
+/** A room's counts for the operator: unread, addressed to it, and its messages waiting for it to send. */
+export type RoomCount = { unread: number; addressed: number; pending?: number };
 
 /** How the operator follows a room: every message, only those addressed to it, or every message with a notification. */
 export type Mode = 'all' | 'mentions' | 'wake';
@@ -298,6 +299,15 @@ export function modeOf(m: SubscriptionMode): Mode {
 
 export function subscriptionMode(m: Mode): SubscriptionMode {
   return MODES[m];
+}
+
+/**
+ * What the phone's Rooms tab counts: per room its unread messages or the messages waiting for the
+ * operator to send them, whichever is more; a waiting message of a followed room is also unread,
+ * so the two are not added.
+ */
+export function roomsTabCount(counts: Map<string, RoomCount>): number {
+  return [...counts.values()].reduce((n, c) => n + Math.max(c.unread, c.pending ?? 0), 0);
 }
 
 /** What a room shows in the list: `@n` for messages addressed to the operator, else the unread count. */

@@ -2,8 +2,10 @@
 // new messages only while the operator is at the bottom; see tape.ts for the decisions.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { knownNames, type Liveness, liveness as livenessOf, livenessOrder, type Mode, type RoomCount } from '../board';
+import { authorKey, POLICY_LABELS, type Policy, policyOf, runningOf, runningText } from '../bridges';
 import type { Profile } from '../gen/agora/v1/agents_pb';
-import type { Message, Room } from '../gen/agora/v1/rooms_pb';
+import type { Bridge } from '../gen/agora/v1/bridges_pb';
+import type { ExternalAuthor, Message, Room } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import {
   addresseesById,
@@ -20,10 +22,14 @@ import {
   tape,
   unseen,
 } from '../tape';
+import { ChoiceMenu } from './choice';
 import { AgentLink, Avatar } from './common';
 import { Composer } from './composer';
 import { FollowControls } from './follow';
-import { BoardLine, Tablet } from './message';
+import { BoardLine, type Decide, Tablet } from './message';
+import { OutsiderAvatar, OutsiderName } from './outside';
+import { RoomIcon } from './rooms';
+import { Notice } from './shell';
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
 export type Arrival = { room: string; jump?: bigint; compose?: boolean };
@@ -47,6 +53,8 @@ function scrollTape(el: HTMLElement, top: number) {
 export function RoomView(props: {
   name: string;
   room?: Room;
+  /** The room's bridge, when it has one. */
+  bridge?: Bridge;
   messages?: Message[];
   error?: string;
   reader: Reader;
@@ -63,6 +71,13 @@ export function RoomView(props: {
   onPost: (body: string, replyTo?: bigint) => Promise<void>;
   onFollow: (follow: boolean, mode?: Mode) => void;
   onSeen: (id: bigint) => void;
+  /** Sends or declines a pending message. */
+  onDecide: Decide;
+  /** Changes what goes out through the room's bridge. */
+  onPolicy: (p: Policy) => void;
+  /** A refused call to tell under the header, numbered so a repeat shows for its full time. */
+  notice?: { text: string; n: number };
+  onCloseNotice?: () => void;
   /** Where each room was left, kept while the app is open. */
   memory: Map<string, Saved>;
   arrival?: Arrival;
@@ -105,7 +120,8 @@ export function RoomView(props: {
     [messages, to, reader, today, firstNew],
   );
   const people = useMemo(() => roomPeople(messages ?? [], reader, live), [messages, reader, live]);
-  const talks = useMemo(() => pairs(messages ?? [], to), [messages, to]);
+  const outsiders = useMemo(() => roomOutsiders(messages ?? []), [messages]);
+  const talks = useMemo(() => pairs(messages ?? [], to, reader.board), [messages, to, reader.board]);
 
   /** Counts what is in view as seen (only while the page is visible) and updates the pill. */
   const read = () => {
@@ -214,6 +230,11 @@ export function RoomView(props: {
     return () => document.removeEventListener('keydown', onKey);
   }, [reply, focus]);
 
+  // the tablets are memoized: they get one callback that always calls the latest onDecide
+  const deciding = useRef(props.onDecide);
+  deciding.current = props.onDecide;
+  const decide = useCallback<Decide>((m, send) => deciding.current(m, send), []);
+
   const startReply = useCallback((m: Message) => {
     setReply(m);
     box.current?.focus();
@@ -243,6 +264,7 @@ export function RoomView(props: {
     setReply(undefined);
   };
 
+  const readOnly = props.bridge !== undefined && policyOf(props.bridge.policy) === 'read';
   const dimmed = (m: Message) => focus !== undefined && !between(m, to.get(m.id) ?? [], focus);
   const ctx = { known, operator: reader.operator };
   const inRoom = new Set(people.map((p) => p.name));
@@ -252,7 +274,7 @@ export function RoomView(props: {
       <section className="room" aria-label={`#${name}`}>
         <div className="roomhead">
           <h2>
-            <Icon name="room" />#{name}
+            <RoomIcon bridge={props.bridge} />#{name}
           </h2>
           <p className="purpose" title={props.room?.purpose}>
             {props.room?.purpose}
@@ -267,6 +289,7 @@ export function RoomView(props: {
           <span className="sum">
             {props.room?.messages ?? 0} msgs · {people.length} in room
           </span>
+          {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
           <FollowControls
             room={name}
             always={name === props.general}
@@ -275,6 +298,9 @@ export function RoomView(props: {
             onFollow={props.onFollow}
           />
         </div>
+        {props.notice && props.onCloseNotice && (
+          <Notice key={props.notice.n} text={props.notice.text} onClose={props.onCloseNotice} />
+        )}
         {focus && (
           <FocusBar
             pair={focus}
@@ -314,6 +340,8 @@ export function RoomView(props: {
                       onReply={startReply}
                       onFocus={setFocus}
                       onJump={jump}
+                      onDecide={decide}
+                      readOnly={readOnly}
                       {...ctx}
                     />
                   );
@@ -373,22 +401,72 @@ export function RoomView(props: {
             ))}
           </div>
         </div>
+        {outsiders.length > 0 && (
+          <div className="outsiders">
+            <h3>OUTSIDE · {outsiders.length}</h3>
+            <div className="people">
+              {outsiders.map((who) => (
+                <OutsiderName
+                  key={authorKey({ author: '', externalAuthor: who })}
+                  who={who}
+                  className="person"
+                  via={false}
+                >
+                  <OutsiderAvatar who={who} size="sm" />
+                  <span className="pgname">{who.name || who.id}</span>
+                </OutsiderName>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
     </div>
   );
+}
+
+/** The people outside who wrote the loaded messages, by name. */
+function roomOutsiders(messages: Message[]): ExternalAuthor[] {
+  const found = new Map<string, ExternalAuthor>();
+  for (const m of messages) if (m.externalAuthor) found.set(authorKey(m), m.externalAuthor);
+  return [...found.values()].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
 }
 
 type Person = { name: string; live?: Liveness };
 
 /** Who is in the room: the authors of its loaded messages and the operator, by liveness and name, the operator last. */
 function roomPeople(messages: Message[], reader: Reader, live: Map<string, Liveness>): Person[] {
-  const names = new Set(messages.map((m) => m.author).filter((a) => a !== reader.board && a !== reader.operator));
+  const names = new Set(
+    messages
+      .filter((m) => !m.externalAuthor) // people outside are not agents
+      .map((m) => m.author)
+      .filter((a) => a !== reader.board && a !== reader.operator),
+  );
   const rank = (n: string) => livenessOrder[live.get(n) ?? 'offline'];
   const agents = [...names].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   return [...agents, reader.operator].map((name) => ({
     name,
     live: name === reader.operator ? undefined : (live.get(name) ?? 'offline'),
   }));
+}
+
+/** A bridged room's state and its outbound policy, which only the operator changes. */
+function BridgeControls(props: { room: string; bridge: Bridge; onPolicy: (p: Policy) => void }) {
+  const running = runningOf(props.bridge);
+  return (
+    <div className="bridge">
+      <span className={`brstate ${running}`} title={`Bridge ${runningText(props.bridge)}`}>
+        {running === 'running' ? 'bridged' : `bridge ${running}`}
+      </span>
+      <ChoiceMenu
+        name="Outbound"
+        shown
+        id={`outbound-${props.room}`}
+        labels={POLICY_LABELS}
+        value={policyOf(props.bridge.policy)}
+        onChoose={props.onPolicy}
+      />
+    </div>
+  );
 }
 
 function FocusBar({ pair, n, onEnd }: { pair: [string, string]; n: number; onEnd: () => void }) {

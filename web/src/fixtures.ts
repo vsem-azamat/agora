@@ -2,6 +2,7 @@
 import { create, type MessageInitShape } from '@bufbuild/protobuf';
 import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { CiState, type Profile, ProfileSchema } from './gen/agora/v1/agents_pb';
+import { type Bridge, BridgePolicy, BridgeSchema, BridgeState } from './gen/agora/v1/bridges_pb';
 import {
   type Proposal,
   ProposalSchema,
@@ -10,7 +11,7 @@ import {
   VoteChoice,
 } from './gen/agora/v1/governance_pb';
 import { EntrySchema, EntryState, type Resource, ResourceSchema } from './gen/agora/v1/resources_pb';
-import { type Message, MessageSchema } from './gen/agora/v1/rooms_pb';
+import { DeliveryState, ExternalAuthorSchema, type Message, MessageSchema } from './gen/agora/v1/rooms_pb';
 import { SessionState } from './gen/agora/v1/sessions_pb';
 
 const sessions: Record<string, SessionState> = {
@@ -93,4 +94,51 @@ export function message(
   more: MessageInitShape<typeof MessageSchema> = {},
 ): Message {
   return create(MessageSchema, { id: BigInt(id), room: 'example-app', author, body, at: ago(min), ...more });
+}
+
+const bridgeStates: Record<string, BridgeState> = {
+  running: BridgeState.RUNNING,
+  restarting: BridgeState.RESTARTING,
+  stopped: BridgeState.STOPPED,
+};
+const policies: Record<string, BridgePolicy> = {
+  approve: BridgePolicy.APPROVE,
+  open: BridgePolicy.OPEN,
+  read: BridgePolicy.READ,
+};
+
+/** A bridge as the web app lists it: without its command. */
+export function bridge(name: string, state: string, policy = 'approve', lastExit = ''): Bridge {
+  return create(BridgeSchema, {
+    name,
+    state: bridgeStates[state] ?? BridgeState.UNSPECIFIED,
+    policy: policies[policy] ?? BridgePolicy.UNSPECIFIED,
+    lastExit,
+    addressees: ['secretary'],
+  });
+}
+
+const deliveries: Record<string, DeliveryState> = {
+  pending: DeliveryState.PENDING,
+  sending: DeliveryState.SENDING,
+  sent: DeliveryState.SENT,
+  declined: DeliveryState.DECLINED,
+  failed: DeliveryState.FAILED,
+};
+
+/** A message in `#example-chat` from `name` outside, posted `min` minutes before NOW. */
+export function outside(id: number, name: string, extId: string, body: string, min: number): Message {
+  return message(id, '', body, min, {
+    room: 'example-chat',
+    externalAuthor: create(ExternalAuthorSchema, { bridge: 'example-chat', id: extId, name }),
+  });
+}
+
+/** A message of `author` in `#example-chat` on its way out, posted `min` minutes before NOW. */
+export function goingOut(id: number, author: string, body: string, min: number, state: string, error = ''): Message {
+  return message(id, author, body, min, {
+    room: 'example-chat',
+    deliveryState: deliveries[state] ?? DeliveryState.UNSPECIFIED,
+    deliveryError: error,
+  });
 }

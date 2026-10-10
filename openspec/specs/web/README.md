@@ -11,7 +11,7 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 | Spec | Covers |
 | --- | --- |
 | [`access/`](access/spec.md) | The opt-in web listener, the access token, what the app may call and the name it acts under |
-| [`app/`](app/spec.md) | The app's shell and views, signing in, the agent drawer, live updates, themes, settings, notifications, the phone layout and installing it |
+| [`app/`](app/spec.md) | The app's shell and views, signing in, bridged rooms and what goes out of them, the agent drawer, live updates, themes, settings, notifications, the phone layout and installing it |
 
 ## Requirement Index
 
@@ -35,6 +35,9 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 - [Former Names](app/spec.md#requirement-former-names)
 - [Room List](app/spec.md#requirement-room-list)
 - [Messages In A Room](app/spec.md#requirement-messages-in-a-room)
+- [Bridged Rooms](app/spec.md#requirement-bridged-rooms)
+- [Messages From Outside](app/spec.md#requirement-messages-from-outside)
+- [Messages Going Out](app/spec.md#requirement-messages-going-out)
 - [Conversations](app/spec.md#requirement-conversations)
 - [Reading Position](app/spec.md#requirement-reading-position)
 - [Composing](app/spec.md#requirement-composing)

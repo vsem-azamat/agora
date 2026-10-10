@@ -152,7 +152,9 @@ type Room struct {
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	Messages  int32                  `protobuf:"varint,5,opt,name=messages,proto3" json:"messages,omitempty"`
 	// Unset when the room has no messages.
-	LastAt        *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
+	LastAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
+	// Messages of the room's bridge that wait for the operator to send or decline them.
+	Pending       int32 `protobuf:"varint,7,opt,name=pending,proto3" json:"pending,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -227,6 +229,13 @@ func (x *Room) GetLastAt() *timestamppb.Timestamp {
 		return x.LastAt
 	}
 	return nil
+}
+
+func (x *Room) GetPending() int32 {
+	if x != nil {
+		return x.Pending
+	}
+	return 0
 }
 
 type Message struct {
@@ -1451,7 +1460,7 @@ var File_agora_v1_rooms_proto protoreflect.FileDescriptor
 
 const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\n" +
-	"\x14agora/v1/rooms.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdf\x01\n" +
+	"\x14agora/v1/rooms.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x01\n" +
 	"\x04Room\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x1d\n" +
@@ -1460,7 +1469,8 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1a\n" +
 	"\bmessages\x18\x05 \x01(\x05R\bmessages\x123\n" +
-	"\alast_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\"\xe8\x02\n" +
+	"\alast_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x18\n" +
+	"\apending\x18\a \x01(\x05R\apending\"\xe8\x02\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x16\n" +

@@ -550,6 +550,16 @@ kbd {
   width: 0.95em;
   height: 0.95em;
 }
+/* someone outside Agora: the first letter of the name on a dashed ring, in no agent's pigment */
+.av.ext {
+  border-style: dashed;
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1;
+}
+.av.ext .l {
+  font-size: 0.9em;
+}
 .av[data-state]::after {
   content: "";
   position: absolute;
@@ -655,6 +665,11 @@ button.pgname:hover {
   padding: 10px 6px;
   border-bottom: 1px solid var(--line2);
 }
+.roomlist .cs {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
 .roomlist .sum {
   display: block;
   overflow: hidden;
@@ -715,20 +730,19 @@ button.pgname:hover {
   font-size: 0.8em;
 }
 .follow {
-  position: relative;
   display: inline-flex;
   gap: 6px;
 }
-.follow .chev {
+.choice {
+  position: relative;
+  display: inline-flex;
+}
+.choice .chev {
   color: var(--mute);
   font-size: 0.8em;
 }
-.follow .menu {
-  min-width: 200px;
-}
-.follow .menu .check {
-  width: 0.8em;
-  color: var(--accent);
+.choice .pre {
+  color: var(--mute);
 }
 .strip {
   display: none;
@@ -914,6 +928,7 @@ button.pgname:hover {
   color: var(--mute);
   font-size: 0.8em;
 }
+
 .quote {
   display: flex;
   gap: 6px;
@@ -1486,6 +1501,172 @@ button.pgname:hover {
 .menu .dots .dot {
   padding: 0;
 }
+.choice .menu {
+  min-width: 200px;
+}
+.choice .menu .check {
+  width: 0.8em;
+  color: var(--accent);
+}
+
+/* --- bridged rooms: their mark, people outside and what goes out ------------------------ */
+
+.nav em.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--warn);
+  border-color: var(--warn);
+  color: var(--bg);
+}
+.nav em .ic {
+  width: 0.95em;
+  height: 0.95em;
+}
+.ic.br.restarting {
+  color: var(--bad);
+}
+.ic.br.stopped {
+  color: var(--mute);
+}
+.roomlist .sum.down {
+  color: var(--bad);
+}
+.bridge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.brstate {
+  color: var(--mute);
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+.brstate.restarting {
+  color: var(--bad);
+}
+.msg.waiting .mb {
+  background: var(--tome);
+  border-color: var(--warn);
+}
+.msg.declined .tx {
+  color: var(--mute);
+}
+.outsider {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.via {
+  color: var(--mute);
+  font-size: 0.86em;
+  white-space: pre;
+}
+.outsider .card {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 25;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: min(320px, 80vw);
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  color: var(--fg);
+  font-size: 0.88em;
+}
+.outsider .card .xid {
+  color: var(--mute);
+}
+.dl {
+  color: var(--mute);
+  font-size: 0.8em;
+}
+.dl.sending {
+  font-style: italic;
+}
+.dl.sent {
+  align-self: center;
+  display: inline-flex;
+  color: var(--ok);
+}
+.dl.sent .ic {
+  width: 1.05em;
+  height: 1.05em;
+}
+.dl.failed {
+  color: var(--bad);
+}
+.decide {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dotted color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.decide .why {
+  margin-right: auto;
+  font-family: var(--display);
+  font-size: 0.66em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+.decide .btn {
+  padding: 2px 12px;
+}
+.decide .hint {
+  color: var(--mute);
+  font-size: 0.82em;
+  font-style: italic;
+}
+.outsiders .outsider {
+  display: flex;
+}
+.outsiders .pgname {
+  color: var(--mute);
+}
+.outsiders .card {
+  left: auto;
+  right: 0;
+  max-width: 230px;
+}
+.decide .btn .ic {
+  width: 1em;
+  height: 1em;
+}
+.btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.dlerr {
+  margin: 4px 0 0;
+  color: var(--bad);
+  font-size: 0.86em;
+  font-style: italic;
+}
+
+/* a short notice, such as a refused call: a band under the room's header that covers nothing */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 16px 4px 22px;
+  background: var(--tome);
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--bad);
+  font-size: 0.9em;
+}
+.notice span {
+  flex: 1;
+  min-width: 0;
+}
 
 /* --- the agent drawer ------------------------------------------------------------------- */
 
@@ -1794,6 +1975,7 @@ button.pgname:hover {
     padding: 14px 16px 90px;
   }
   .roomhead,
+  .notice,
   .msgs,
   .compose,
   .focusbar {
@@ -1801,8 +1983,19 @@ button.pgname:hover {
     padding-right: 16px;
   }
   .roomhead .purpose,
-  .roomhead .sum {
+  .roomhead .sum,
+  .roomhead .brstate.running {
     display: none;
+  }
+  .roomhead {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .roomhead .choice .pre {
+    display: none;
+  }
+  .decide .why {
+    flex-basis: 100%;
   }
   .roomhead .strip {
     margin-left: auto;

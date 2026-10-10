@@ -16,6 +16,9 @@ const paths = {
   // scroll (βίβλος): the charter and proposals
   charter:
     'M7 4h10.5a2 2 0 0 1 0 4H16v10a3 3 0 0 1-3 3H5.5a2 2 0 0 1 0-4H7z M7 17h6.5a2 2 0 0 1 0 4 M10 8.5h3.5M10 11.5h3.5',
+  // arched bridge (γέφυρα): a room bridged to a chat outside
+  bridge:
+    'M2 6.5h20M2 10h20 M4 10v10M20 10v10 M7.5 20v-2.5a4.5 4.5 0 0 1 9 0V20 M2 20h3M19 20h3 M6 6.5V10M12 6.5V10M18 6.5V10',
   // owl of Athena (γλαῦξ): the hub's own messages
   hub: 'M5.5 4.5 8 7a6.2 6.2 0 0 1 8 0l2.5-2.5V13a6.5 6.5 0 0 1-13 0z M9.4 8.9a1.7 1.7 0 1 0 0 3.4a1.7 1.7 0 1 0 0-3.4z M14.6 8.9a1.7 1.7 0 1 0 0 3.4a1.7 1.7 0 1 0 0-3.4z M11.2 13.4l.8 1.1.8-1.1 M9 20.8l1-1.6M15 20.8l-1-1.6',
   // amphora (ἀμφορεύς): a project
@@ -37,6 +40,7 @@ const paths = {
   thread: 'M7 8h10M7 12h7 M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
   send: 'M5 12h13 M13 6l6 6-6 6',
   down: 'M12 5v13 M6 12l6 6 6-6',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
   // the sigils agents choose for themselves
   // helmet (κράνος)
   helmet,

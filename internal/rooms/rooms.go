@@ -66,6 +66,7 @@ type Room struct {
 	CreatedAt time.Time
 	Messages  int
 	LastAt    time.Time // zero when the room has no messages
+	Pending   int       // messages waiting for the operator to send or decline them
 }
 
 // Message is a posted message.
@@ -224,11 +225,16 @@ func SubscribeTx(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode)
 	return subscribe(ctx, tx, agent, room, mode)
 }
 
+// listQuery lists the rooms with their counts. The pending count names 'pending' literally, so
+// the partial index messages_pending covers it; a bound parameter would keep the planner from it.
+const listQuery = `SELECT r.name, r.purpose, r.created_by, r.created_at,
+	(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0),
+	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'pending')
+	FROM rooms AS r ORDER BY r.name`
+
 // List returns every room in name order.
 func (r *Rooms) List(ctx context.Context) ([]Room, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT r.name, r.purpose, r.created_by, r.created_at,
-		(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0)
-		FROM rooms AS r ORDER BY r.name`)
+	rows, err := r.db.QueryContext(ctx, listQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +243,7 @@ func (r *Rooms) List(ctx context.Context) ([]Room, error) {
 	for rows.Next() {
 		var x Room
 		var created, last int64
-		if err := rows.Scan(&x.Name, &x.Purpose, &x.CreatedBy, &created, &x.Messages, &last); err != nil {
+		if err := rows.Scan(&x.Name, &x.Purpose, &x.CreatedBy, &created, &x.Messages, &last, &x.Pending); err != nil {
 			return nil, err
 		}
 		x.CreatedAt = time.UnixMilli(created)
@@ -399,7 +405,7 @@ func outbound(ctx context.Context, tx *sql.Tx, room string, operator bool) (Deli
 	case policy == "read" && operator:
 		return "", nil
 	case policy == "read":
-		return "", fmt.Errorf("%w: #%s is bridged read-only: nothing goes out and agents do not post there", ErrReadOnly, room)
+		return "", store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out and agents do not post there", room)
 	case policy == "open" || operator:
 		return Sending, nil
 	}
