@@ -780,3 +780,36 @@ func TestACrashWakesNoOne(t *testing.T) {
 		t.Fatalf("unread: %v %v", unread, err)
 	}
 }
+
+func TestOutputWrittenJustBeforeTheExitIsRead(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	dir := shortDir(t)
+	text := strings.Repeat("x", 200)
+	// once: 1000 lines (about 270 KB, far beyond a pipe's buffer), then exit; later runs only wait
+	cmd := fmt.Sprintf(`[ -e '%[1]s/done' ] && exec sleep 600; touch '%[1]s/done'
+i=0; while [ $i -lt 1000 ]; do i=$((i+1)); echo '{"type":"in","id":"'$i'","author":{"name":"Ada"},"text":"%[2]s"}'; done`, dir, text)
+	hub.SetBridgeDrain(b.hub, time.Millisecond) // storing the lines takes far longer: only an idle pipe may end the reading
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: cmd})); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int { // messages from outside; the board's notices are not counted
+		resp, err := b.rooms.History(context.Background(), connect.NewRequest(&agorav1.HistoryRequest{Room: "example-chat", Last: 2000}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, m := range resp.Msg.GetMessages() {
+			if m.GetExternalAuthor() != nil {
+				n++
+			}
+		}
+		return n
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for count() < 1000 && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if n := count(); n != 1000 {
+		t.Fatalf("%d messages stored, want 1000", n)
+	}
+}

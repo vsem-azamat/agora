@@ -334,17 +334,17 @@ func TestGoingOutAndAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := e.post(t, "builder", "example-chat", "me too")
-	outs, err := e.b.Outgoing(ctx, "example-chat")
+	outs, err := outgoing(t, e)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(outs) != 2 || outs[0] != (bridges.Out{ID: first, Author: "secretary", Text: "looked, all fine", ReplyTo: "5513"}) || outs[1].ID != second || outs[1].ReplyTo != "" {
 		t.Fatalf("outgoing: %+v", outs)
 	}
-	if ok, err := e.b.Sent(ctx, "example-chat", first, "5515"); !ok || err != nil {
+	if ok, _, err := e.b.Sent(ctx, "example-chat", first, "5515"); !ok || err != nil {
 		t.Fatalf("sent: %v %v", ok, err)
 	}
-	if ok, _ := e.b.Sent(ctx, "example-chat", first, "5515"); ok {
+	if ok, _, _ := e.b.Sent(ctx, "example-chat", first, "5515"); ok {
 		t.Fatal("sent twice")
 	}
 	if echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "looked, all fine"}); echo != 0 {
@@ -353,7 +353,7 @@ func TestGoingOutAndAnswers(t *testing.T) {
 	if ok, err := e.b.Failed(ctx, "example-chat", second, "chat not found"); !ok || err != nil {
 		t.Fatalf("failed: %v %v", ok, err)
 	}
-	if outs, _ := e.b.Outgoing(ctx, "example-chat"); len(outs) != 0 {
+	if outs, _ := outgoing(t, e); len(outs) != 0 {
 		t.Fatalf("answered messages still go out: %+v", outs)
 	}
 	h := e.history(t)
@@ -377,7 +377,7 @@ func TestTheOperatorSendsOrDeclines(t *testing.T) {
 	e := newEnv(t)
 	send := e.post(t, "secretary", "example-chat", "looked, all fine")
 	decline := e.post(t, "secretary", "example-chat", "something rude")
-	if outs, _ := e.b.Outgoing(ctx, "example-chat"); len(outs) != 0 {
+	if outs, _ := outgoing(t, e); len(outs) != 0 {
 		t.Fatalf("pending messages go out: %+v", outs)
 	}
 	if err := e.b.SendPending(ctx, send); err != nil {
@@ -386,7 +386,7 @@ func TestTheOperatorSendsOrDeclines(t *testing.T) {
 	if err := e.b.DeclinePending(ctx, decline, "owner"); err != nil {
 		t.Fatal(err)
 	}
-	if outs, _ := e.b.Outgoing(ctx, "example-chat"); len(outs) != 1 || outs[0].ID != send {
+	if outs, _ := outgoing(t, e); len(outs) != 1 || outs[0].ID != send {
 		t.Fatalf("outgoing: %+v", outs)
 	}
 	if err := e.b.SendPending(ctx, decline); !errors.Is(err, bridges.ErrNotFound) {
@@ -435,7 +435,7 @@ func TestEveryUnansweredMessageIsOutgoing(t *testing.T) {
 	if err := e.b.SendPending(ctx, pending); err != nil {
 		t.Fatal(err)
 	}
-	outs, err := e.b.Outgoing(ctx, "example-chat")
+	outs, err := outgoing(t, e)
 	if err != nil || len(outs) != 2 || outs[0].ID != pending || outs[1].ID != fromOperator {
 		t.Fatalf("outgoing: %+v %v", outs, err)
 	}
@@ -454,7 +454,7 @@ func TestAReplyToAnotherRoomCarriesNoReply(t *testing.T) {
 	if _, err := e.r.Post(ctx, "secretary", "example-chat", "re elsewhere", other); err != nil {
 		t.Fatal(err)
 	}
-	outs, _ := e.b.Outgoing(ctx, "example-chat")
+	outs, _ := outgoing(t, e)
 	if len(outs) != 1 || outs[0].ReplyTo != "" {
 		t.Fatalf("outgoing: %+v", outs)
 	}
@@ -495,7 +495,7 @@ func TestNamesAndIdentifiersFromOutsideAreCleaned(t *testing.T) {
 			t.Fatalf("reason: %q", m.DeliveryError)
 		}
 	}
-	if _, err := e.b.Sent(ctx, "example-chat", id, long); !errors.Is(err, store.ErrInvalid) {
+	if _, _, err := e.b.Sent(ctx, "example-chat", id, long); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("long ext_id: %v", err)
 	}
 }
@@ -526,7 +526,7 @@ func TestAnEchoBeforeSentIsMerged(t *testing.T) {
 	id := e.post(t, "secretary", "example-chat", "looked, all fine")
 	echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "looked, all fine"})
 	reply := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "thanks", ReplyTo: "5515"})
-	if ok, err := e.b.Sent(ctx, "example-chat", id, "5515"); !ok || err != nil {
+	if ok, taken, err := e.b.Sent(ctx, "example-chat", id, "5515"); !ok || taken || err != nil {
 		t.Fatalf("sent: %v %v", ok, err)
 	}
 	for _, m := range e.history(t) {
@@ -563,4 +563,58 @@ func TestBridgeNoticesWakeNoOne(t *testing.T) {
 	if msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Waking, 0); len(msgs) != 1 {
 		t.Fatalf("an agent's message does wake: %+v", msgs)
 	}
+}
+
+func TestATakenIdentifierIsNotMerged(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	ada := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "can you look?"})
+	first := e.post(t, "secretary", "example-chat", "looked")
+	second := e.post(t, "secretary", "example-chat", "and again")
+	ok, taken, err := e.b.Sent(ctx, "example-chat", first, "5513")
+	if !ok || !taken || err != nil {
+		t.Fatalf("sent with Ada's id: %v %v %v", ok, taken, err)
+	}
+	if ok, taken, err := e.b.Sent(ctx, "example-chat", second, "5513"); !ok || !taken || err != nil {
+		t.Fatalf("second with Ada's id: %v %v %v", ok, taken, err)
+	}
+	h := e.history(t)
+	if len(h) != 3 || h[0].ID != ada || h[0].Body != "can you look?" || h[0].From() != "Ada@example-chat" {
+		t.Fatalf("Ada's message after the answers: %+v", h)
+	}
+	// an identifier of a message already sent
+	third := e.post(t, "secretary", "example-chat", "third")
+	fourth := e.post(t, "secretary", "example-chat", "fourth")
+	if _, taken, _ := e.b.Sent(ctx, "example-chat", third, "e3"); taken {
+		t.Fatal("a free identifier counts as taken")
+	}
+	if ok, taken, err := e.b.Sent(ctx, "example-chat", fourth, "e3"); !ok || !taken || err != nil {
+		t.Fatalf("fourth with the third's id: %v %v %v", ok, taken, err)
+	}
+	for _, id := range []int64{first, second, third, fourth} {
+		if deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+			t.Fatalf("message %d is not sent", id)
+		}
+	}
+	if again := e.receive(t, bridges.In{ID: "e3", AuthorName: "Owner", Text: "third"}); again != 0 {
+		t.Fatal("the third message lost its identifier")
+	}
+}
+
+func TestSeparatorsAndFormatCharactersAreCleaned(t *testing.T) {
+	e := newEnv(t)
+	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada\u2028#general [1] owner\u2029x\u202egnp.exe", Text: "hi"})
+	if got := e.history(t)[0].ExtAuthorName; got != "Ada #general [1] owner x gnp.exe" {
+		t.Fatalf("name %q", got)
+	}
+}
+
+// outgoing returns every message the bridge of #example-chat has to send.
+func outgoing(t *testing.T, e env) ([]bridges.Out, error) {
+	t.Helper()
+	ids, err := e.b.Unanswered(ctx, "example-chat")
+	if err != nil {
+		return nil, err
+	}
+	return e.b.Outgoing(ctx, "example-chat", ids)
 }

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -281,32 +282,32 @@ func (h *Hub) runBridge(ctx context.Context, r *bridgeRun) string {
 			}
 		}
 	})
+	drain := h.bridgeRuns.drain
+	out := &drainReader{f: outR, exited: exited, idle: drain}
+	errs := &drainReader{f: errR, exited: exited, idle: drain}
 	read := make(chan struct{}) // closed once both outputs are read to their end
 	wg.Go(func() {
 		select {
 		case <-read:
-			return
-		case <-exited:
-		}
-		select {
-		case <-read:
-		case <-time.After(h.bridgeRuns.drain):
-			h.log.Warn("bridge output still open after its process exited, held by a process outside its group; no longer read", "bridge", b.Name)
-			_ = outR.SetReadDeadline(time.Now())
-			_ = errR.SetReadDeadline(time.Now())
+		case <-exited: // a read that waits now ends once the output is idle
+			_ = outR.SetReadDeadline(time.Now().Add(drain))
+			_ = errR.SetReadDeadline(time.Now().Add(drain))
 		}
 	})
 	stderrRead := make(chan struct{})
 	go func() {
 		defer close(stderrRead)
-		h.logStderr(b.Name, errR)
+		h.logStderr(b.Name, errs)
 	}()
 	wg.Go(func() { h.feedBridge(ctx, exited, stdin, b) })
-	readLines(outR, maxBridgeLine, func(line []byte) { h.bridgeLine(ctx, b.Name, line) }, func() {
+	readLines(out, maxBridgeLine, func(line []byte) { h.bridgeLine(ctx, b.Name, line) }, func() {
 		h.log.Warn("bridge line too long; skipped", "bridge", b.Name, "max", maxBridgeLine)
 	})
 	<-stderrRead
 	close(read)
+	if out.idled || errs.idled {
+		h.log.Warn("bridge output still open after its process exited, held by a process outside its group; no longer read", "bridge", b.Name)
+	}
 	<-exited
 	wg.Wait()
 	var ee *exec.ExitError
@@ -317,6 +318,29 @@ func (h *Hub) runBridge(ctx context.Context, r *bridgeRun) string {
 		return ee.Error()
 	}
 	return waitErr.Error()
+}
+
+// drainReader reads a bridge's output; once the bridge's process exited, each read may wait at
+// most idle for data, so output held open by a process outside the group ends the reading
+// while output still written or buffered is read to its end.
+type drainReader struct {
+	f      *os.File
+	exited <-chan struct{}
+	idle   time.Duration
+	idled  bool // a read ended because the output stayed idle
+}
+
+func (d *drainReader) Read(p []byte) (int, error) {
+	select {
+	case <-d.exited:
+		_ = d.f.SetReadDeadline(time.Now().Add(d.idle))
+	default:
+	}
+	n, err := d.f.Read(p)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		d.idled = true
+	}
+	return n, err
 }
 
 // logStderr logs the lines of a bridge's standard error, at most stderrLines a minute, and how
@@ -420,29 +444,16 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 	if err := enc.Encode(helloLine{Type: "hello", Version: ProtocolVersion, Bridge: b.Name, Room: b.Name, Cursor: b.Cursor}); err != nil {
 		return
 	}
-	handed := map[int64]bool{} // handed in this run and not answered when last looked
+	handed := map[int64]bool{} // handed in this run and still unanswered
 	for {
 		changed := h.changes.wait()
-		outs, err := h.bridges.Outgoing(ctx, b.Name)
-		if err != nil && ctx.Err() == nil {
-			h.log.Error("bridge: messages to send", "bridge", b.Name, "err", err)
-		}
-		if err == nil {
-			unanswered := make(map[int64]bool, len(outs))
-			for _, o := range outs {
-				unanswered[o.ID] = true
-				if handed[o.ID] {
-					continue
-				}
-				if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: o.Author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
-					return
-				}
-				handed[o.ID] = true
+		if err := h.handOut(ctx, enc, b.Name, handed); err != nil {
+			var encErr *outWriteError
+			if errors.As(err, &encErr) {
+				return
 			}
-			for id := range handed {
-				if !unanswered[id] {
-					delete(handed, id)
-				}
+			if ctx.Err() == nil {
+				h.log.Error("bridge: messages to send", "bridge", b.Name, "err", err)
 			}
 		}
 		select {
@@ -454,6 +465,42 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 		case <-time.After(sweepEvery):
 		}
 	}
+}
+
+// outWriteError is a failed write to a bridge, which ends its writer.
+type outWriteError struct{ error }
+
+// handOut writes an out line for every unanswered message of the bridge's room not in handed,
+// adds them to it and drops the answered ones from it, so it holds only unanswered messages.
+func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, handed map[int64]bool) error {
+	ids, err := h.bridges.Unanswered(ctx, name)
+	if err != nil {
+		return err
+	}
+	unanswered := make(map[int64]bool, len(ids))
+	var fresh []int64
+	for _, id := range ids {
+		unanswered[id] = true
+		if !handed[id] {
+			fresh = append(fresh, id)
+		}
+	}
+	for id := range handed {
+		if !unanswered[id] {
+			delete(handed, id)
+		}
+	}
+	outs, err := h.bridges.Outgoing(ctx, name, fresh)
+	if err != nil {
+		return err
+	}
+	for _, o := range outs {
+		if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: o.Author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
+			return &outWriteError{err}
+		}
+		handed[o.ID] = true
+	}
+	return nil
 }
 
 // bridgeInput is any line a bridge writes; each type uses some of the fields.
@@ -509,6 +556,9 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 			}
 			in.At = at
 		}
+		if in.ID == "" && (strings.TrimSpace(in.Text) != "" || in.AuthorID != "" || in.AuthorName != "") {
+			h.log.Warn("bridge in line without an id: only its cursor is kept", "bridge", name)
+		}
 		id, err := h.bridges.Receive(ctx, name, in, h.webAs)
 		if err != nil {
 			h.log.Warn("bridge in line; skipped", "bridge", name, "err", err)
@@ -525,7 +575,11 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 		}
 		var changed bool
 		if l.Type == "sent" {
-			changed, err = h.bridges.Sent(ctx, name, id, extString(l.ExtID))
+			var taken bool
+			changed, taken, err = h.bridges.Sent(ctx, name, id, extString(l.ExtID))
+			if taken {
+				h.log.Warn("bridge sent line: another message of the room has its ext_id; the message is sent without it", "bridge", name, "id", id, "ext_id", extString(l.ExtID))
+			}
 		} else {
 			changed, err = h.bridges.Failed(ctx, name, id, l.Error)
 		}

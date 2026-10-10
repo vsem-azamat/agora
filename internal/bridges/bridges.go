@@ -6,6 +6,7 @@ package bridges
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -285,11 +286,12 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 	return id, err
 }
 
-// clean replaces control characters, line breaks included, with spaces, so a value from
+// clean replaces control characters (line breaks included), line and paragraph separators and
+// format characters (bidirectional controls among them) with spaces, so a value from
 // outside stays on the line it is shown on, trims it and cuts it to limit characters.
 func clean(s string, limit int) string {
 	s = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf) {
 			return ' '
 		}
 		return r
@@ -308,12 +310,38 @@ type Out struct {
 	ReplyTo string // the identifier outside of the message of the same room it replies to, if any
 }
 
-// Outgoing returns every message of the bridge's room that the bridge has to send and has not
-// answered, in posting order.
-func (b *Bridges) Outgoing(ctx context.Context, name string) ([]Out, error) {
+// Unanswered returns the identifiers of the messages of the bridge's room that the bridge has to
+// send and has not answered, in posting order.
+func (b *Bridges) Unanswered(ctx context.Context, name string) ([]int64, error) {
+	rows, err := b.db.QueryContext(ctx, `SELECT id FROM messages WHERE room = ? AND delivery = 'sending' ORDER BY id`, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// Outgoing returns the messages ids of the bridge's room that the bridge has to send, in
+// posting order; ids no longer to send are left out.
+func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	list, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := b.db.QueryContext(ctx, `SELECT m.id, m.author, m.body, COALESCE(r.ext_id, '') FROM messages AS m
 		LEFT JOIN messages AS r ON r.id = m.reply_to AND r.room = m.room
-		WHERE m.room = ? AND m.delivery = 'sending' ORDER BY m.id`, name)
+		WHERE m.id IN (SELECT value FROM json_each(?)) AND m.room = ? AND m.delivery = 'sending' ORDER BY m.id`, string(list), name)
 	if err != nil {
 		return nil, err
 	}
@@ -332,18 +360,18 @@ func (b *Bridges) Outgoing(ctx context.Context, name string) ([]Out, error) {
 // Sent marks message id of the bridge's room, handed to the bridge, as sent with the identifier
 // outside extID, so later in lines with that identifier, its echo, are ignored; an echo stored
 // before the answer is merged into it. It reports whether the message was waiting for the
-// answer.
-func (b *Bridges) Sent(ctx context.Context, name string, id int64, extID string) (bool, error) {
+// answer, and whether another message of the room has extID, which the message then goes
+// without.
+func (b *Bridges) Sent(ctx context.Context, name string, id int64, extID string) (changed, taken bool, err error) {
 	if len(extID) > MaxIdentifier {
-		return false, fmt.Errorf("%w: identifiers are at most %d bytes", store.ErrInvalid, MaxIdentifier)
+		return false, false, fmt.Errorf("%w: identifiers are at most %d bytes", store.ErrInvalid, MaxIdentifier)
 	}
-	changed := false
-	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
+	err = store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var err error
-		_, _, changed, err = rooms.SettleTx(ctx, tx, id, name, rooms.Sending, rooms.Sent, extID, "")
+		changed, taken, err = rooms.SentTx(ctx, tx, id, name, extID)
 		return err
 	})
-	return changed, err
+	return changed, taken, err
 }
 
 // Failed marks message id of the bridge's room, handed to the bridge, as not sent for reason,
@@ -356,7 +384,7 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 	}
 	changed := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		_, author, ok, err := rooms.SettleTx(ctx, tx, id, name, rooms.Sending, rooms.Failed, "", reason)
+		_, author, ok, err := rooms.SettleTx(ctx, tx, id, name, rooms.Sending, rooms.Failed, reason)
 		if err != nil || !ok {
 			return err
 		}
@@ -385,7 +413,7 @@ func (b *Bridges) SendPending(ctx context.Context, id int64) error {
 		case Read:
 			return fmt.Errorf("%w: #%s is read-only; nothing goes out", rooms.ErrReadOnly, room)
 		}
-		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Pending, rooms.Sending, "", "")
+		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Pending, rooms.Sending, "")
 		return err
 	})
 }
@@ -394,7 +422,7 @@ func (b *Bridges) SendPending(ctx context.Context, id int64) error {
 // author in the room.
 func (b *Bridges) DeclinePending(ctx context.Context, id int64, operator string) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		room, author, ok, err := rooms.SettleTx(ctx, tx, id, "", rooms.Pending, rooms.Declined, "", "")
+		room, author, ok, err := rooms.SettleTx(ctx, tx, id, "", rooms.Pending, rooms.Declined, "")
 		if err != nil {
 			return err
 		}

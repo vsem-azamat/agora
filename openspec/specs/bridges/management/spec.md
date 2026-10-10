@@ -46,7 +46,7 @@ The system SHALL list every bridge in name order with its room, command, outboun
 
 ### Requirement: The Hub Runs Bridges
 
-The hub SHALL run each bridge's command with `sh -c`, in its own process group, with `AGORA_BRIDGE` and `AGORA_ROOM` set to the bridge's and the room's name. When the command exits, the hub SHALL start it again after a delay that starts at 1 second and doubles after each exit up to 60 seconds, and goes back to 1 second once the command has run for a minute. It SHALL log the lines the command writes to standard error, at most 100 a minute per bridge, then once how many it left out. Once the command's process has exited, the hub SHALL stop reading its output within 2 seconds, even when a process it started outside its process group keeps the output open, and start it again. The board SHALL post once in the room when the bridge stops working (its process exits) and once when it works again (its process has run for a minute); these two messages count as unread like any other but wake no one, also in a room followed with the mode `wake`. When the hub shuts down it SHALL stop every bridge's process group and wait for it before it closes the database.
+The hub SHALL run each bridge's command with `sh -c`, in its own process group, with `AGORA_BRIDGE` and `AGORA_ROOM` set to the bridge's and the room's name. When the command exits, the hub SHALL start it again after a delay that starts at 1 second and doubles after each exit up to 60 seconds, and goes back to 1 second once the command has run for a minute. It SHALL log the lines the command writes to standard error, at most 100 a minute per bridge, then once how many it left out. Once the command's process has exited, the hub SHALL read what is left of its output and stop once the output has given nothing for 2 seconds, even when a process it started outside its process group keeps it open, and start it again. The board SHALL post once in the room when the bridge stops working (its process exits) and once when it works again (its process has run for a minute); these two messages count as unread like any other but wake no one, also in a room followed with the mode `wake`. When the hub shuts down it SHALL stop every bridge's process group and wait for it before it closes the database.
 
 #### Scenario: A bridge that fails
 - **WHEN** a bridge command exits with an error
@@ -59,6 +59,10 @@ The hub SHALL run each bridge's command with `sh -c`, in its own process group, 
 #### Scenario: Output left open
 - **WHEN** a bridge command starts a process in a session of its own that keeps the command's output open, and exits
 - **THEN** the hub starts the command again, and removing the bridge returns
+
+#### Scenario: Output written just before the exit
+- **WHEN** a bridge command writes 1000 `in` lines and exits at once
+- **THEN** all 1000 messages are stored
 
 #### Scenario: Restart delays
 - **WHEN** a bridge command keeps exiting right after it starts

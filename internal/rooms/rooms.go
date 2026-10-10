@@ -492,11 +492,9 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 }
 
 // SettleTx moves message id, in room (any room when ""), from the delivery state from to to,
-// inside the caller's transaction. A message that is sent keeps its identifier outside extID;
-// a message of the room that came in with it before the bridge answered (its echo) is merged
-// into it: replies to the echo reply to it, and the echo is deleted. A failed message keeps
-// reason. It returns the message's room and author, and whether it was in the state from.
-func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to Delivery, extID, reason string) (string, string, bool, error) {
+// inside the caller's transaction; a failed message keeps reason. It returns the message's room
+// and author, and whether it was in the state from.
+func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to Delivery, reason string) (string, string, bool, error) {
 	var why any
 	if reason != "" {
 		why = reason
@@ -509,27 +507,42 @@ func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to D
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
 	}
-	if err != nil || extID == "" {
-		return room, author, err == nil, err
+	return room, author, err == nil, err
+}
+
+// SentTx marks message id of room, handed to its bridge, as sent with the identifier outside
+// extID ("" for none), inside the caller's transaction, and reports whether it was waiting for
+// the answer. Its echo, a message that came in with extID after it was posted (from outside or
+// from the operator outside, so without a delivery state), is merged into it: replies to the
+// echo reply to it and the echo is deleted. When another message of the room has extID, the
+// message is marked sent without it, nothing else changes, and taken is true.
+func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, taken bool, err error) {
+	if _, _, ok, err = SettleTx(ctx, tx, id, room, Sending, Sent, ""); !ok || err != nil || extID == "" {
+		return ok, false, err
 	}
-	echo, err := extMessageTx(ctx, tx, room, extID)
-	if err != nil {
-		return "", "", false, err
-	}
-	if echo != 0 && echo != id {
+	var holder int64
+	var echo bool
+	err = tx.QueryRowContext(ctx, `SELECT id, id > ? AND delivery IS NULL FROM messages WHERE room = ? AND ext_id = ?`, id, room, extID).Scan(&holder, &echo)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		return false, false, err
+	case !echo:
+		return true, true, nil
+	default:
 		for _, q := range []string{
 			`UPDATE messages SET reply_to = :id WHERE reply_to = :echo`,
 			`DELETE FROM mentions WHERE message_id = :echo`,
 			`DELETE FROM read_marks WHERE message_id = :echo`,
 			`DELETE FROM messages WHERE id = :echo`,
 		} {
-			if _, err := tx.ExecContext(ctx, q, sql.Named("id", id), sql.Named("echo", echo)); err != nil {
-				return "", "", false, err
+			if _, err := tx.ExecContext(ctx, q, sql.Named("id", id), sql.Named("echo", holder)); err != nil {
+				return false, false, err
 			}
 		}
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE messages SET ext_id = ? WHERE id = ?`, extID, id)
-	return room, author, err == nil, err
+	return err == nil, false, err
 }
 
 // NoticeTx posts a notice of the board about room's bridge inside the caller's transaction:
