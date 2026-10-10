@@ -19,8 +19,8 @@ service ResourceService {
   rpc Renew(RenewRequest) returns (RenewResponse);
   // Release removes an agent from a queue, freeing its slot.
   rpc Release(ReleaseRequest) returns (ReleaseResponse);
-  // List returns resources with their holders, offers and waiting agents.
-  rpc List(ListRequest) returns (ListResponse);
+  // ListResources returns resources with their holders, offers and waiting agents.
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
   // SetSlots changes how many agents may hold a resource at once.
   rpc SetSlots(SetSlotsRequest) returns (SetSlotsResponse);
 }
@@ -89,10 +89,11 @@ message RenewResponse {
 
 message ReleaseRequest {
   string key = 1;
-  // The agent to remove from the queue.
-  string agent = 2;
-  // Who asks; another agent's entry is removed only with force.
-  string actor = 3;
+  // The agent whose entry is removed; the acting agent when empty. Another agent's entry is
+  // removed only with force.
+  string holder = 2;
+  // The acting agent; required when holder is set.
+  string agent = 3;
   bool force = 4;
 }
 
@@ -101,12 +102,12 @@ message ReleaseResponse {
   bool released = 1;
 }
 
-message ListRequest {
+message ListResourcesRequest {
   // Only this resource when set.
   string key = 1;
 }
 
-message ListResponse {
+message ListResourcesResponse {
   repeated Resource resources = 1;
 }
 

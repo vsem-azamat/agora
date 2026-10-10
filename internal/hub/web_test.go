@@ -199,11 +199,11 @@ func TestWebServesOnlyTheAppsCalls(t *testing.T) {
 	token := w.token(t, false)
 	join(t, w.running, "example-app/merge", "builder", time.Hour)
 	res := agorav1connect.NewResourceServiceClient(w.client(token), w.base)
-	_, err := res.Release(context.Background(), connect.NewRequest(&agorav1.ReleaseRequest{Key: "example-app/merge", Agent: "builder", Actor: "operator", Force: true}))
+	_, err := res.Release(context.Background(), connect.NewRequest(&agorav1.ReleaseRequest{Key: "example-app/merge", Holder: "builder", Agent: "operator", Force: true}))
 	if code(err) != connect.CodeNotFound {
 		t.Fatalf("release over the web: %v", err)
 	}
-	list, err := res.List(context.Background(), connect.NewRequest(&agorav1.ListRequest{}))
+	list, err := res.ListResources(context.Background(), connect.NewRequest(&agorav1.ListResourcesRequest{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestTheAppActsAsTheOperator(t *testing.T) {
 		t.Fatal(err)
 	}
 	rooms := agorav1connect.NewRoomServiceClient(w.client(token), w.base)
-	if _, err := rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "general", Body: "@builder please rebase"})); err != nil {
+	if _, err := rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "general", Body: "@builder please rebase"})); err != nil {
 		t.Fatal(err)
 	}
 	hist, err := w.rooms.History(context.Background(), connect.NewRequest(&agorav1.HistoryRequest{Room: "general"}))
@@ -241,7 +241,7 @@ func TestTheAppActsAsTheOperator(t *testing.T) {
 	if m := hist.Msg.GetMessages(); len(m) != 1 || m[0].GetAuthor() != "owner" {
 		t.Fatalf("posted from the app: %v", m)
 	}
-	if _, err := w.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "general", Body: "@owner the release is ready"})); err != nil {
+	if _, err := w.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "general", Body: "@owner the release is ready"})); err != nil {
 		t.Fatal(err)
 	}
 	counts, err := rooms.UnreadByRoom(context.Background(), connect.NewRequest(&agorav1.UnreadByRoomRequest{Agent: "builder"}))
@@ -406,10 +406,9 @@ func TestWatchSendsChangesAndIgnoresReads(t *testing.T) {
 	}()
 	c := w.client(token)
 	for range 3 {
-		_, _ = agorav1connect.NewResourceServiceClient(c, w.base).List(ctx, connect.NewRequest(&agorav1.ListRequest{}))
+		_, _ = agorav1connect.NewResourceServiceClient(c, w.base).ListResources(ctx, connect.NewRequest(&agorav1.ListResourcesRequest{}))
 		_, _ = agorav1connect.NewAgentServiceClient(c, w.base).ListAgents(ctx, connect.NewRequest(&agorav1.ListAgentsRequest{}))
 		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{}))
-		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Follow: true}))
 		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{}))
 	}
 	select {
@@ -417,7 +416,7 @@ func TestWatchSendsChangesAndIgnoresReads(t *testing.T) {
 		t.Fatalf("reading sent revision %d", rev)
 	case <-time.After(1500 * time.Millisecond):
 	}
-	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "general", Body: "hello"})); err != nil {
+	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "general", Body: "hello"})); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -526,7 +525,7 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 	if _, err := w.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Creator: "builder"})); err != nil {
+	if _, err := w.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Agent: "builder"})); err != nil {
 		t.Fatal(err)
 	}
 	rooms := agorav1connect.NewRoomServiceClient(w.client(token), w.base)
@@ -542,11 +541,11 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 	if err != nil || len(listed.Msg.GetRooms()) != 2 || listed.Msg.GetRooms()[1] != "example-app" {
 		t.Fatalf("listed for the operator: %v %v", listed, err)
 	}
-	first, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "example-app", Body: "one"}))
-	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "example-app", Body: "two"})); err != nil {
+	first, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-app", Body: "one"}))
+	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-app", Body: "two"})); err != nil {
 		t.Fatal(err)
 	}
-	general, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "general", Body: "elsewhere"}))
+	general, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "general", Body: "elsewhere"}))
 	if _, err := rooms.MarkRoomRead(ctx, connect.NewRequest(&agorav1.MarkRoomReadRequest{Agent: "builder", Room: "example-app", ThroughId: general.Msg.GetId()})); code(err) != connect.CodeInvalidArgument {
 		t.Fatalf("a message from another room: %v", err)
 	}
@@ -597,11 +596,11 @@ func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
 		}},
 		{"profile", func() error {
 			task := "fix the login form"
-			_, err := w.agents.UpdateProfile(ctx, connect.NewRequest(&agorav1.UpdateProfileRequest{Name: "builder", Task: &task}))
+			_, err := w.agents.UpdateProfile(ctx, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Task: &task}))
 			return err
 		}},
 		{"room", func() error {
-			_, err := w.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Creator: "builder"}))
+			_, err := w.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Agent: "builder"}))
 			return err
 		}},
 		{"follow", func() error {
@@ -609,7 +608,7 @@ func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
 			return err
 		}},
 		{"proposal", func() error {
-			_, err := gov.Propose(ctx, connect.NewRequest(&agorav1.ProposeRequest{Author: "builder", Title: "Merge under the lock", Body: "Take the merge lock first."}))
+			_, err := gov.Propose(ctx, connect.NewRequest(&agorav1.ProposeRequest{Agent: "builder", Title: "Merge under the lock", Body: "Take the merge lock first."}))
 			return err
 		}},
 		{"vote", func() error {
@@ -617,7 +616,7 @@ func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
 			return err
 		}},
 		{"mark read", func() error {
-			id, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "example-app", Body: "hello"}))
+			id, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-app", Body: "hello"}))
 			if err != nil {
 				return err
 			}

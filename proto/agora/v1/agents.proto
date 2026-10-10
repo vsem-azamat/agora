@@ -21,6 +21,9 @@ service AgentService {
 }
 
 message Profile {
+  reserved 12, 15;
+  reserved "session_state", "ci";
+
   string name = 1;
   string kind = 2;
   string project = 3;
@@ -33,14 +36,9 @@ message Profile {
   string about = 9;
   google.protobuf.Timestamp joined_at = 10;
   google.protobuf.Timestamp updated_at = 11;
-  // busy, idle or offline. Deprecated: use session.
-  string session_state = 12 [deprecated = true];
   bool active = 13;
   // Open pull requests found from the agent's branch by the hub.
   repeated int32 found_prs = 14;
-  // The CI state last reported for a followed pull request, by number: green, red or conflict.
-  // A pull request without a reported state is absent. Deprecated: use ci_state.
-  map<int32, string> ci = 15 [deprecated = true];
   // The state of the agent's live session: busy or idle, else offline.
   SessionState session = 16;
   // The CI state last reported for a followed pull request, by number. A pull request without
@@ -60,7 +58,8 @@ enum CiState {
 }
 
 message UpdateProfileRequest {
-  string name = 1;
+  // The acting agent, whose profile changes.
+  string agent = 1;
   optional string kind = 2;
   optional string project = 3;
   optional string task = 4;
@@ -76,7 +75,8 @@ message UpdateProfileResponse {
 }
 
 message LeaveRequest {
-  string name = 1;
+  // The acting agent, which leaves.
+  string agent = 1;
 }
 
 message LeaveResponse {

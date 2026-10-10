@@ -86,7 +86,7 @@ func proposeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := o.governance().Propose(cmd.Context(), connect.NewRequest(&agorav1.ProposeRequest{Author: name, Title: args[0], Body: body}))
+			resp, err := o.governance().Propose(cmd.Context(), connect.NewRequest(&agorav1.ProposeRequest{Agent: name, Title: args[0], Body: body}))
 			if err != nil {
 				return err
 			}

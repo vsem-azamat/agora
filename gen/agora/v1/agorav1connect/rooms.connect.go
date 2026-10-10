@@ -62,8 +62,8 @@ type RoomServiceClient interface {
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
 	// ListRooms returns every room with its activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
-	// Subscribe follows or stops following rooms; #general always stays followed. With no rooms
-	// it changes nothing and only returns the followed rooms; ListSubscriptions is the read.
+	// Subscribe follows or stops following rooms; #general always stays followed. At least one
+	// room is required; ListSubscriptions reads the followed rooms.
 	Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error)
 	// ListSubscriptions returns the rooms the agent follows, #general first.
 	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
@@ -212,8 +212,8 @@ type RoomServiceHandler interface {
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
 	// ListRooms returns every room with its activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
-	// Subscribe follows or stops following rooms; #general always stays followed. With no rooms
-	// it changes nothing and only returns the followed rooms; ListSubscriptions is the read.
+	// Subscribe follows or stops following rooms; #general always stays followed. At least one
+	// room is required; ListSubscriptions reads the followed rooms.
 	Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error)
 	// ListSubscriptions returns the rooms the agent follows, #general first.
 	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)

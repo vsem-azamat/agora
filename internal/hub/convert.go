@@ -97,8 +97,7 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	out := &agorav1.Profile{
 		Name: p.Name, Kind: p.Kind, Project: p.Project, Task: p.Task, Status: p.Status, Cwd: p.CWD, Branch: p.Branch,
 		About: p.About, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
-		SessionState: p.SessionState, //nolint:staticcheck // the deprecated string stays filled for older clients
-		Session:      profileSessions[p.SessionState], Active: p.Active,
+		Session: profileSessions[p.SessionState], Active: p.Active,
 	}
 	for _, n := range p.PRs {
 		out.Prs = append(out.Prs, int32(n))
@@ -107,13 +106,10 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 		out.FoundPrs = append(out.FoundPrs, int32(n))
 	}
 	if len(p.CI) > 0 {
-		ci := make(map[int32]string, len(p.CI))
 		out.CiState = make(map[int32]agorav1.CiState, len(p.CI))
 		for n, state := range p.CI {
-			ci[int32(n)] = state
 			out.CiState[int32(n)] = ciStates[state]
 		}
-		out.Ci = ci //nolint:staticcheck // the deprecated strings stay filled for older clients
 	}
 	return out
 }
@@ -162,7 +158,6 @@ func stateName(s agorav1.ProposalState) string {
 func proposalPB(p governance.Proposal) *agorav1.Proposal {
 	out := &agorav1.Proposal{
 		Id: p.ID, Title: p.Title, Body: p.Body, Author: p.Author, CreatedAt: timestamppb.New(p.CreatedAt), ClosedBy: p.ClosedBy,
-		State:         string(p.State), //nolint:staticcheck // the deprecated string stays filled for older clients
 		ProposalState: proposalStates[p.State],
 	}
 	if !p.ClosedAt.IsZero() {
@@ -170,9 +165,7 @@ func proposalPB(p governance.Proposal) *agorav1.Proposal {
 	}
 	for _, v := range p.Votes {
 		out.Votes = append(out.Votes, &agorav1.ProposalVote{
-			Agent: v.Agent, Reason: v.Reason, At: timestamppb.New(v.At),
-			Choice:     string(v.Choice), //nolint:staticcheck // the deprecated string stays filled for older clients
-			VoteChoice: voteChoices[v.Choice],
+			Agent: v.Agent, Reason: v.Reason, At: timestamppb.New(v.At), VoteChoice: voteChoices[v.Choice],
 		})
 	}
 	return out

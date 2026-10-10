@@ -92,18 +92,9 @@ type Profile struct {
 	About     string                 `protobuf:"bytes,9,opt,name=about,proto3" json:"about,omitempty"`
 	JoinedAt  *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=joined_at,json=joinedAt,proto3" json:"joined_at,omitempty"`
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	// busy, idle or offline. Deprecated: use session.
-	//
-	// Deprecated: Marked as deprecated in agora/v1/agents.proto.
-	SessionState string `protobuf:"bytes,12,opt,name=session_state,json=sessionState,proto3" json:"session_state,omitempty"`
-	Active       bool   `protobuf:"varint,13,opt,name=active,proto3" json:"active,omitempty"`
+	Active    bool                   `protobuf:"varint,13,opt,name=active,proto3" json:"active,omitempty"`
 	// Open pull requests found from the agent's branch by the hub.
 	FoundPrs []int32 `protobuf:"varint,14,rep,packed,name=found_prs,json=foundPrs,proto3" json:"found_prs,omitempty"`
-	// The CI state last reported for a followed pull request, by number: green, red or conflict.
-	// A pull request without a reported state is absent. Deprecated: use ci_state.
-	//
-	// Deprecated: Marked as deprecated in agora/v1/agents.proto.
-	Ci map[int32]string `protobuf:"bytes,15,rep,name=ci,proto3" json:"ci,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// The state of the agent's live session: busy or idle, else offline.
 	Session SessionState `protobuf:"varint,16,opt,name=session,proto3,enum=agora.v1.SessionState" json:"session,omitempty"`
 	// The CI state last reported for a followed pull request, by number. A pull request without
@@ -220,14 +211,6 @@ func (x *Profile) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// Deprecated: Marked as deprecated in agora/v1/agents.proto.
-func (x *Profile) GetSessionState() string {
-	if x != nil {
-		return x.SessionState
-	}
-	return ""
-}
-
 func (x *Profile) GetActive() bool {
 	if x != nil {
 		return x.Active
@@ -238,14 +221,6 @@ func (x *Profile) GetActive() bool {
 func (x *Profile) GetFoundPrs() []int32 {
 	if x != nil {
 		return x.FoundPrs
-	}
-	return nil
-}
-
-// Deprecated: Marked as deprecated in agora/v1/agents.proto.
-func (x *Profile) GetCi() map[int32]string {
-	if x != nil {
-		return x.Ci
 	}
 	return nil
 }
@@ -265,16 +240,17 @@ func (x *Profile) GetCiState() map[int32]CiState {
 }
 
 type UpdateProfileRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Kind          *string                `protobuf:"bytes,2,opt,name=kind,proto3,oneof" json:"kind,omitempty"`
-	Project       *string                `protobuf:"bytes,3,opt,name=project,proto3,oneof" json:"project,omitempty"`
-	Task          *string                `protobuf:"bytes,4,opt,name=task,proto3,oneof" json:"task,omitempty"`
-	Status        *string                `protobuf:"bytes,5,opt,name=status,proto3,oneof" json:"status,omitempty"`
-	Cwd           *string                `protobuf:"bytes,6,opt,name=cwd,proto3,oneof" json:"cwd,omitempty"`
-	About         *string                `protobuf:"bytes,7,opt,name=about,proto3,oneof" json:"about,omitempty"`
-	AddPrs        []int32                `protobuf:"varint,8,rep,packed,name=add_prs,json=addPrs,proto3" json:"add_prs,omitempty"`
-	DropPrs       []int32                `protobuf:"varint,9,rep,packed,name=drop_prs,json=dropPrs,proto3" json:"drop_prs,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The acting agent, whose profile changes.
+	Agent         string  `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Kind          *string `protobuf:"bytes,2,opt,name=kind,proto3,oneof" json:"kind,omitempty"`
+	Project       *string `protobuf:"bytes,3,opt,name=project,proto3,oneof" json:"project,omitempty"`
+	Task          *string `protobuf:"bytes,4,opt,name=task,proto3,oneof" json:"task,omitempty"`
+	Status        *string `protobuf:"bytes,5,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	Cwd           *string `protobuf:"bytes,6,opt,name=cwd,proto3,oneof" json:"cwd,omitempty"`
+	About         *string `protobuf:"bytes,7,opt,name=about,proto3,oneof" json:"about,omitempty"`
+	AddPrs        []int32 `protobuf:"varint,8,rep,packed,name=add_prs,json=addPrs,proto3" json:"add_prs,omitempty"`
+	DropPrs       []int32 `protobuf:"varint,9,rep,packed,name=drop_prs,json=dropPrs,proto3" json:"drop_prs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -309,9 +285,9 @@ func (*UpdateProfileRequest) Descriptor() ([]byte, []int) {
 	return file_agora_v1_agents_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *UpdateProfileRequest) GetName() string {
+func (x *UpdateProfileRequest) GetAgent() string {
 	if x != nil {
-		return x.Name
+		return x.Agent
 	}
 	return ""
 }
@@ -417,8 +393,9 @@ func (x *UpdateProfileResponse) GetProfile() *Profile {
 }
 
 type LeaveRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The acting agent, which leaves.
+	Agent         string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -453,9 +430,9 @@ func (*LeaveRequest) Descriptor() ([]byte, []int) {
 	return file_agora_v1_agents_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *LeaveRequest) GetName() string {
+func (x *LeaveRequest) GetAgent() string {
 	if x != nil {
-		return x.Name
+		return x.Agent
 	}
 	return ""
 }
@@ -702,7 +679,7 @@ var File_agora_v1_agents_proto protoreflect.FileDescriptor
 
 const file_agora_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x17agora/v1/sessions.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbd\x05\n" +
+	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x17agora/v1/sessions.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcd\x04\n" +
 	"\aProfile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -716,21 +693,16 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\tjoined_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\bjoinedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12'\n" +
-	"\rsession_state\x18\f \x01(\tB\x02\x18\x01R\fsessionState\x12\x16\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x16\n" +
 	"\x06active\x18\r \x01(\bR\x06active\x12\x1b\n" +
-	"\tfound_prs\x18\x0e \x03(\x05R\bfoundPrs\x12-\n" +
-	"\x02ci\x18\x0f \x03(\v2\x19.agora.v1.Profile.CiEntryB\x02\x18\x01R\x02ci\x120\n" +
+	"\tfound_prs\x18\x0e \x03(\x05R\bfoundPrs\x120\n" +
 	"\asession\x18\x10 \x01(\x0e2\x16.agora.v1.SessionStateR\asession\x129\n" +
-	"\bci_state\x18\x11 \x03(\v2\x1e.agora.v1.Profile.CiStateEntryR\aciState\x1a5\n" +
-	"\aCiEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aM\n" +
+	"\bci_state\x18\x11 \x03(\v2\x1e.agora.v1.Profile.CiStateEntryR\aciState\x1aM\n" +
 	"\fCiStateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12'\n" +
-	"\x05value\x18\x02 \x01(\x0e2\x11.agora.v1.CiStateR\x05value:\x028\x01\"\xb9\x02\n" +
-	"\x14UpdateProfileRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
+	"\x05value\x18\x02 \x01(\x0e2\x11.agora.v1.CiStateR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\x0f\x10\x10R\rsession_stateR\x02ci\"\xbb\x02\n" +
+	"\x14UpdateProfileRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x17\n" +
 	"\x04kind\x18\x02 \x01(\tH\x00R\x04kind\x88\x01\x01\x12\x1d\n" +
 	"\aproject\x18\x03 \x01(\tH\x01R\aproject\x88\x01\x01\x12\x17\n" +
 	"\x04task\x18\x04 \x01(\tH\x02R\x04task\x88\x01\x01\x12\x1b\n" +
@@ -747,9 +719,9 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\x04_cwdB\b\n" +
 	"\x06_about\"D\n" +
 	"\x15UpdateProfileResponse\x12+\n" +
-	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile\"\"\n" +
-	"\fLeaveRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"+\n" +
+	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile\"$\n" +
+	"\fLeaveRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\"+\n" +
 	"\rLeaveResponse\x12\x1a\n" +
 	"\breleased\x18\x01 \x03(\tR\breleased\"%\n" +
 	"\x11ListAgentsRequest\x12\x10\n" +
@@ -788,7 +760,7 @@ func file_agora_v1_agents_proto_rawDescGZIP() []byte {
 }
 
 var file_agora_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_agora_v1_agents_proto_goTypes = []any{
 	(CiState)(0),                  // 0: agora.v1.CiState
 	(*Profile)(nil),               // 1: agora.v1.Profile
@@ -800,34 +772,32 @@ var file_agora_v1_agents_proto_goTypes = []any{
 	(*ListAgentsResponse)(nil),    // 7: agora.v1.ListAgentsResponse
 	(*WhoRequest)(nil),            // 8: agora.v1.WhoRequest
 	(*WhoResponse)(nil),           // 9: agora.v1.WhoResponse
-	nil,                           // 10: agora.v1.Profile.CiEntry
-	nil,                           // 11: agora.v1.Profile.CiStateEntry
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
-	(SessionState)(0),             // 13: agora.v1.SessionState
+	nil,                           // 10: agora.v1.Profile.CiStateEntry
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(SessionState)(0),             // 12: agora.v1.SessionState
 }
 var file_agora_v1_agents_proto_depIdxs = []int32{
-	12, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
-	12, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
-	10, // 2: agora.v1.Profile.ci:type_name -> agora.v1.Profile.CiEntry
-	13, // 3: agora.v1.Profile.session:type_name -> agora.v1.SessionState
-	11, // 4: agora.v1.Profile.ci_state:type_name -> agora.v1.Profile.CiStateEntry
-	1,  // 5: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
-	1,  // 6: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
-	1,  // 7: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
-	0,  // 8: agora.v1.Profile.CiStateEntry.value:type_name -> agora.v1.CiState
-	2,  // 9: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
-	4,  // 10: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
-	6,  // 11: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
-	8,  // 12: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
-	3,  // 13: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
-	5,  // 14: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
-	7,  // 15: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
-	9,  // 16: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
-	13, // [13:17] is the sub-list for method output_type
-	9,  // [9:13] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	11, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
+	11, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 2: agora.v1.Profile.session:type_name -> agora.v1.SessionState
+	10, // 3: agora.v1.Profile.ci_state:type_name -> agora.v1.Profile.CiStateEntry
+	1,  // 4: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
+	1,  // 5: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
+	1,  // 6: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
+	0,  // 7: agora.v1.Profile.CiStateEntry.value:type_name -> agora.v1.CiState
+	2,  // 8: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
+	4,  // 9: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
+	6,  // 10: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
+	8,  // 11: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
+	3,  // 12: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
+	5,  // 13: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
+	7,  // 14: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
+	9,  // 15: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
+	12, // [12:16] is the sub-list for method output_type
+	8,  // [8:12] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_agents_proto_init() }
@@ -843,7 +813,7 @@ func file_agora_v1_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_agents_proto_rawDesc), len(file_agora_v1_agents_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

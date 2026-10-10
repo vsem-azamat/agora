@@ -52,7 +52,7 @@ func roomCreateCmd(o *options) *cobra.Command {
 			}
 			room := roomArg(args[0])
 			if _, err := o.rooms().CreateRoom(cmd.Context(), connect.NewRequest(&agorav1.CreateRoomRequest{
-				Name: room, Purpose: strings.Join(args[1:], " "), Creator: name,
+				Name: room, Purpose: strings.Join(args[1:], " "), Agent: name,
 			})); err != nil {
 				return err
 			}
@@ -102,7 +102,7 @@ func postCmd(o *options) *cobra.Command {
 				return err
 			}
 			resp, err := o.rooms().Post(cmd.Context(), connect.NewRequest(&agorav1.PostRequest{
-				Author: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply,
+				Agent: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply,
 			}))
 			if err != nil {
 				return err

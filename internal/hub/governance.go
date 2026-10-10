@@ -12,7 +12,7 @@ import (
 type governanceService struct{ h *Hub }
 
 func (s *governanceService) Propose(ctx context.Context, req *connect.Request[agorav1.ProposeRequest]) (*connect.Response[agorav1.ProposeResponse], error) {
-	id, err := s.h.gov.Propose(ctx, req.Msg.GetAuthor(), req.Msg.GetTitle(), req.Msg.GetBody())
+	id, err := s.h.gov.Propose(ctx, req.Msg.GetAgent(), req.Msg.GetTitle(), req.Msg.GetBody())
 	if err != nil {
 		return nil, toConnect(err)
 	}
@@ -22,28 +22,17 @@ func (s *governanceService) Propose(ctx context.Context, req *connect.Request[ag
 
 func (s *governanceService) Vote(ctx context.Context, req *connect.Request[agorav1.VoteRequest]) (*connect.Response[agorav1.VoteResponse], error) {
 	m := req.Msg
-	choice := m.GetChoice() //nolint:staticcheck // older clients send the choice as a string
-	if c := m.GetVoteChoice(); c != agorav1.VoteChoice_VOTE_CHOICE_UNSPECIFIED {
-		choice = choiceName(c)
-	}
-	recorded, err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), choice, m.GetReason())
+	recorded, err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), choiceName(m.GetVoteChoice()), m.GetReason())
 	if err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.VoteResponse{
-		Choice:     string(recorded), //nolint:staticcheck // the deprecated string stays filled for older clients
-		VoteChoice: voteChoices[recorded],
-	}), nil
+	return connect.NewResponse(&agorav1.VoteResponse{VoteChoice: voteChoices[recorded]}), nil
 }
 
 func (s *governanceService) CloseProposal(ctx context.Context, req *connect.Request[agorav1.CloseProposalRequest]) (*connect.Response[agorav1.CloseProposalResponse], error) {
 	m := req.Msg
-	state := m.GetState() //nolint:staticcheck // older clients send the state as a string
-	if st := m.GetProposalState(); st != agorav1.ProposalState_PROPOSAL_STATE_UNSPECIFIED {
-		state = stateName(st)
-	}
-	if err := s.h.gov.Close(ctx, m.GetAgent(), m.GetProposalId(), state); err != nil {
+	if err := s.h.gov.Close(ctx, m.GetAgent(), m.GetProposalId(), stateName(m.GetProposalState())); err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()

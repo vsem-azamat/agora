@@ -39,7 +39,7 @@ const answers: Record<string, unknown> = {
   'RoomService/ListRooms': { rooms: [{ name: 'general', messages: 2 }] },
   'RoomService/UnreadByRoom': { rooms: [{ room: 'general', unread: 2, addressed: 1 }] },
   'RoomService/ListSubscriptions': { rooms: ['general'] },
-  'ResourceService/List': {},
+  'ResourceService/ListResources': {},
   'GovernanceService/ListProposals': {},
   'GovernanceService/GetCharter': { body: 'Be kind.' },
 };

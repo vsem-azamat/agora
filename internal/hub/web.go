@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
@@ -34,7 +36,7 @@ var webProcedures = map[string]bool{
 	agorav1connect.RoomServiceListSubscriptionsProcedure:   true,
 	agorav1connect.RoomServiceUnreadByRoomProcedure:        true,
 	agorav1connect.RoomServiceMarkRoomReadProcedure:        true,
-	agorav1connect.ResourceServiceListProcedure:            true,
+	agorav1connect.ResourceServiceListResourcesProcedure:   true,
 	agorav1connect.GovernanceServiceListProposalsProcedure: true,
 	agorav1connect.GovernanceServiceGetProposalProcedure:   true,
 	agorav1connect.GovernanceServiceGetCharterProcedure:    true,
@@ -161,20 +163,23 @@ func writeConnectError(w http.ResponseWriter, status int, code, msg string) {
 func operatorInterceptor(operator string) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			switch m := req.Any().(type) {
-			case *agorav1.PostRequest:
-				m.Author = operator
-			case *agorav1.SubscribeRequest:
-				m.Agent = operator
-			case *agorav1.ListSubscriptionsRequest:
-				m.Agent = operator
-			case *agorav1.UnreadByRoomRequest:
-				m.Agent = operator
-			case *agorav1.MarkRoomReadRequest:
-				m.Agent = operator
-			}
+			asOperator(req.Any(), operator)
 			return next(ctx, req)
 		}
+	}
+}
+
+// asOperator sets the acting agent of a request, its string field agent, to the operator.
+// Requests without that field are left alone.
+func asOperator(msg any, operator string) {
+	m, ok := msg.(proto.Message)
+	if !ok {
+		return
+	}
+	r := m.ProtoReflect()
+	f := r.Descriptor().Fields().ByName("agent")
+	if f != nil && f.Kind() == protoreflect.StringKind && f.Cardinality() != protoreflect.Repeated {
+		r.Set(f, protoreflect.ValueOfString(operator))
 	}
 }
 

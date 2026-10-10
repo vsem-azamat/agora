@@ -12,8 +12,8 @@ service RoomService {
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
   // ListRooms returns every room with its activity, in name order.
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
-  // Subscribe follows or stops following rooms; #general always stays followed. With no rooms
-  // it changes nothing and only returns the followed rooms; ListSubscriptions is the read.
+  // Subscribe follows or stops following rooms; #general always stays followed. At least one
+  // room is required; ListSubscriptions reads the followed rooms.
   rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
   // ListSubscriptions returns the rooms the agent follows, #general first.
   rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
@@ -54,7 +54,8 @@ message Message {
 message CreateRoomRequest {
   string name = 1;
   string purpose = 2;
-  string creator = 3;
+  // The acting agent, which becomes the creator and follows the room.
+  string agent = 3;
 }
 
 message CreateRoomResponse {}
@@ -67,6 +68,7 @@ message ListRoomsResponse {
 
 message SubscribeRequest {
   string agent = 1;
+  // At least one room.
   repeated string rooms = 2;
   // True to follow, false to stop following.
   bool follow = 3;
@@ -87,7 +89,8 @@ message ListSubscriptionsResponse {
 }
 
 message PostRequest {
-  string author = 1;
+  // The acting agent, which becomes the author.
+  string agent = 1;
   string room = 2;
   string body = 3;
   int64 reply_to = 4;

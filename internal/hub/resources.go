@@ -2,12 +2,14 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 type resources struct{ h *Hub }
@@ -60,18 +62,25 @@ func (s *resources) Renew(ctx context.Context, req *connect.Request[agorav1.Rene
 
 func (s *resources) Release(ctx context.Context, req *connect.Request[agorav1.ReleaseRequest]) (*connect.Response[agorav1.ReleaseResponse], error) {
 	m := req.Msg
-	ok, err := s.h.queue.Release(ctx, m.GetKey(), m.GetAgent(), m.GetActor(), m.GetForce())
+	holder := m.GetHolder()
+	switch {
+	case holder == "":
+		holder = m.GetAgent()
+	case m.GetAgent() == "":
+		return nil, toConnect(fmt.Errorf("%w: releasing %s needs the acting agent", store.ErrInvalid, holder))
+	}
+	ok, err := s.h.queue.Release(ctx, m.GetKey(), holder, m.GetAgent(), m.GetForce())
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	if ok && m.GetActor() != "" && m.GetActor() != m.GetAgent() {
-		s.h.log.Warn("forced release", "resource", m.GetKey(), "agent", m.GetAgent(), "by", m.GetActor())
+	if ok && m.GetAgent() != holder {
+		s.h.log.Warn("forced release", "resource", m.GetKey(), "agent", holder, "by", m.GetAgent())
 	}
 	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.ReleaseResponse{Released: ok}), nil
 }
 
-func (s *resources) List(ctx context.Context, req *connect.Request[agorav1.ListRequest]) (*connect.Response[agorav1.ListResponse], error) {
+func (s *resources) ListResources(ctx context.Context, req *connect.Request[agorav1.ListResourcesRequest]) (*connect.Response[agorav1.ListResourcesResponse], error) {
 	rs, settled, err := s.h.queue.List(ctx, req.Msg.GetKey())
 	if err != nil {
 		return nil, toConnect(err)
@@ -79,7 +88,7 @@ func (s *resources) List(ctx context.Context, req *connect.Request[agorav1.ListR
 	if settled {
 		s.h.changes.fire() // listing settled a queue and may have offered a slot
 	}
-	out := &agorav1.ListResponse{}
+	out := &agorav1.ListResourcesResponse{}
 	for _, r := range rs {
 		out.Resources = append(out.Resources, resourcePB(r))
 	}

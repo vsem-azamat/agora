@@ -41,8 +41,9 @@ const (
 	ResourceServiceRenewProcedure = "/agora.v1.ResourceService/Renew"
 	// ResourceServiceReleaseProcedure is the fully-qualified name of the ResourceService's Release RPC.
 	ResourceServiceReleaseProcedure = "/agora.v1.ResourceService/Release"
-	// ResourceServiceListProcedure is the fully-qualified name of the ResourceService's List RPC.
-	ResourceServiceListProcedure = "/agora.v1.ResourceService/List"
+	// ResourceServiceListResourcesProcedure is the fully-qualified name of the ResourceService's
+	// ListResources RPC.
+	ResourceServiceListResourcesProcedure = "/agora.v1.ResourceService/ListResources"
 	// ResourceServiceSetSlotsProcedure is the fully-qualified name of the ResourceService's SetSlots
 	// RPC.
 	ResourceServiceSetSlotsProcedure = "/agora.v1.ResourceService/SetSlots"
@@ -59,8 +60,8 @@ type ResourceServiceClient interface {
 	Renew(context.Context, *connect.Request[v1.RenewRequest]) (*connect.Response[v1.RenewResponse], error)
 	// Release removes an agent from a queue, freeing its slot.
 	Release(context.Context, *connect.Request[v1.ReleaseRequest]) (*connect.Response[v1.ReleaseResponse], error)
-	// List returns resources with their holders, offers and waiting agents.
-	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
+	// ListResources returns resources with their holders, offers and waiting agents.
+	ListResources(context.Context, *connect.Request[v1.ListResourcesRequest]) (*connect.Response[v1.ListResourcesResponse], error)
 	// SetSlots changes how many agents may hold a resource at once.
 	SetSlots(context.Context, *connect.Request[v1.SetSlotsRequest]) (*connect.Response[v1.SetSlotsResponse], error)
 }
@@ -100,10 +101,10 @@ func NewResourceServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(resourceServiceMethods.ByName("Release")),
 			connect.WithClientOptions(opts...),
 		),
-		list: connect.NewClient[v1.ListRequest, v1.ListResponse](
+		listResources: connect.NewClient[v1.ListResourcesRequest, v1.ListResourcesResponse](
 			httpClient,
-			baseURL+ResourceServiceListProcedure,
-			connect.WithSchema(resourceServiceMethods.ByName("List")),
+			baseURL+ResourceServiceListResourcesProcedure,
+			connect.WithSchema(resourceServiceMethods.ByName("ListResources")),
 			connect.WithClientOptions(opts...),
 		),
 		setSlots: connect.NewClient[v1.SetSlotsRequest, v1.SetSlotsResponse](
@@ -117,12 +118,12 @@ func NewResourceServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // resourceServiceClient implements ResourceServiceClient.
 type resourceServiceClient struct {
-	join     *connect.Client[v1.JoinRequest, v1.JoinResponse]
-	wait     *connect.Client[v1.WaitRequest, v1.WaitResponse]
-	renew    *connect.Client[v1.RenewRequest, v1.RenewResponse]
-	release  *connect.Client[v1.ReleaseRequest, v1.ReleaseResponse]
-	list     *connect.Client[v1.ListRequest, v1.ListResponse]
-	setSlots *connect.Client[v1.SetSlotsRequest, v1.SetSlotsResponse]
+	join          *connect.Client[v1.JoinRequest, v1.JoinResponse]
+	wait          *connect.Client[v1.WaitRequest, v1.WaitResponse]
+	renew         *connect.Client[v1.RenewRequest, v1.RenewResponse]
+	release       *connect.Client[v1.ReleaseRequest, v1.ReleaseResponse]
+	listResources *connect.Client[v1.ListResourcesRequest, v1.ListResourcesResponse]
+	setSlots      *connect.Client[v1.SetSlotsRequest, v1.SetSlotsResponse]
 }
 
 // Join calls agora.v1.ResourceService.Join.
@@ -145,9 +146,9 @@ func (c *resourceServiceClient) Release(ctx context.Context, req *connect.Reques
 	return c.release.CallUnary(ctx, req)
 }
 
-// List calls agora.v1.ResourceService.List.
-func (c *resourceServiceClient) List(ctx context.Context, req *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error) {
-	return c.list.CallUnary(ctx, req)
+// ListResources calls agora.v1.ResourceService.ListResources.
+func (c *resourceServiceClient) ListResources(ctx context.Context, req *connect.Request[v1.ListResourcesRequest]) (*connect.Response[v1.ListResourcesResponse], error) {
+	return c.listResources.CallUnary(ctx, req)
 }
 
 // SetSlots calls agora.v1.ResourceService.SetSlots.
@@ -166,8 +167,8 @@ type ResourceServiceHandler interface {
 	Renew(context.Context, *connect.Request[v1.RenewRequest]) (*connect.Response[v1.RenewResponse], error)
 	// Release removes an agent from a queue, freeing its slot.
 	Release(context.Context, *connect.Request[v1.ReleaseRequest]) (*connect.Response[v1.ReleaseResponse], error)
-	// List returns resources with their holders, offers and waiting agents.
-	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
+	// ListResources returns resources with their holders, offers and waiting agents.
+	ListResources(context.Context, *connect.Request[v1.ListResourcesRequest]) (*connect.Response[v1.ListResourcesResponse], error)
 	// SetSlots changes how many agents may hold a resource at once.
 	SetSlots(context.Context, *connect.Request[v1.SetSlotsRequest]) (*connect.Response[v1.SetSlotsResponse], error)
 }
@@ -203,10 +204,10 @@ func NewResourceServiceHandler(svc ResourceServiceHandler, opts ...connect.Handl
 		connect.WithSchema(resourceServiceMethods.ByName("Release")),
 		connect.WithHandlerOptions(opts...),
 	)
-	resourceServiceListHandler := connect.NewUnaryHandler(
-		ResourceServiceListProcedure,
-		svc.List,
-		connect.WithSchema(resourceServiceMethods.ByName("List")),
+	resourceServiceListResourcesHandler := connect.NewUnaryHandler(
+		ResourceServiceListResourcesProcedure,
+		svc.ListResources,
+		connect.WithSchema(resourceServiceMethods.ByName("ListResources")),
 		connect.WithHandlerOptions(opts...),
 	)
 	resourceServiceSetSlotsHandler := connect.NewUnaryHandler(
@@ -225,8 +226,8 @@ func NewResourceServiceHandler(svc ResourceServiceHandler, opts ...connect.Handl
 			resourceServiceRenewHandler.ServeHTTP(w, r)
 		case ResourceServiceReleaseProcedure:
 			resourceServiceReleaseHandler.ServeHTTP(w, r)
-		case ResourceServiceListProcedure:
-			resourceServiceListHandler.ServeHTTP(w, r)
+		case ResourceServiceListResourcesProcedure:
+			resourceServiceListResourcesHandler.ServeHTTP(w, r)
 		case ResourceServiceSetSlotsProcedure:
 			resourceServiceSetSlotsHandler.ServeHTTP(w, r)
 		default:
@@ -254,8 +255,8 @@ func (UnimplementedResourceServiceHandler) Release(context.Context, *connect.Req
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.ResourceService.Release is not implemented"))
 }
 
-func (UnimplementedResourceServiceHandler) List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.ResourceService.List is not implemented"))
+func (UnimplementedResourceServiceHandler) ListResources(context.Context, *connect.Request[v1.ListResourcesRequest]) (*connect.Response[v1.ListResourcesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.ResourceService.ListResources is not implemented"))
 }
 
 func (UnimplementedResourceServiceHandler) SetSlots(context.Context, *connect.Request[v1.SetSlotsRequest]) (*connect.Response[v1.SetSlotsResponse], error) {

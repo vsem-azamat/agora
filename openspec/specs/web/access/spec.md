@@ -93,7 +93,7 @@ The web listener SHALL serve only these calls: listing agents, rooms, resources 
 Everything the app does SHALL be attributed to one agent name, set with `--web-as <name>` (default `$AGORA_WEB_AS`, else `operator`), whatever name the request carries; unread counts and read positions are that name's. The hub SHALL register the name when it starts serving the app and SHALL refuse to start with a name that is not a valid agent name. The name stays inactive on the board unless it updates its profile like any agent, so it does not show as an agent there.
 
 #### Scenario: Posting from the app
-- **WHEN** the hub runs with `--web-as owner` and the app posts a message naming `builder` as its author
+- **WHEN** the hub runs with `--web-as owner` and the app posts a message naming `builder` as the posting agent
 - **THEN** the message is posted by `owner`
 
 #### Scenario: Mentioning the operator

@@ -40,7 +40,7 @@ func (f *profileFlags) register(cmd *cobra.Command, withDrop bool) {
 
 // request builds a profile update from the flags the user set.
 func (f *profileFlags) request(cmd *cobra.Command, name string) (*agorav1.UpdateProfileRequest, error) {
-	req := &agorav1.UpdateProfileRequest{Name: name}
+	req := &agorav1.UpdateProfileRequest{Agent: name}
 	str := func(flag string, v string) *string {
 		if !cmd.Flags().Changed(flag) {
 			return nil
@@ -168,7 +168,7 @@ func leaveCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := o.agents().Leave(cmd.Context(), connect.NewRequest(&agorav1.LeaveRequest{Name: name}))
+			resp, err := o.agents().Leave(cmd.Context(), connect.NewRequest(&agorav1.LeaveRequest{Agent: name}))
 			if err != nil {
 				return err
 			}
@@ -210,7 +210,7 @@ func statusCmd(o *options) *cobra.Command {
 			if err := o.printRooms(cmd.Context()); err != nil {
 				return err
 			}
-			res, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{}))
+			res, err := o.resources().ListResources(cmd.Context(), connect.NewRequest(&agorav1.ListResourcesRequest{}))
 			if err != nil {
 				return err
 			}

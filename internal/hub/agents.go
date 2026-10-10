@@ -20,7 +20,7 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 	for _, n := range m.GetDropPrs() {
 		u.DropPRs = append(u.DropPRs, int(n))
 	}
-	p, err := s.h.agents.Update(ctx, m.GetName(), u)
+	p, err := s.h.agents.Update(ctx, m.GetAgent(), u)
 	if err != nil {
 		return nil, toConnect(err)
 	}
@@ -29,7 +29,7 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 }
 
 func (s *agentService) Leave(ctx context.Context, req *connect.Request[agorav1.LeaveRequest]) (*connect.Response[agorav1.LeaveResponse], error) {
-	released, err := s.h.sessions.Leave(ctx, req.Msg.GetName())
+	released, err := s.h.sessions.Leave(ctx, req.Msg.GetAgent())
 	if err != nil {
 		return nil, toConnect(err)
 	}
