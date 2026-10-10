@@ -82,19 +82,19 @@ The app SHALL show the charter's text and the proposals, open ones first, each w
 
 ### Requirement: Themes
 
-The app SHALL offer a parchment theme and an ink (dark) theme with a toggle and remember the choice in the browser; without a remembered choice it SHALL follow the system's color scheme preference, and without a preference use parchment.
+The app SHALL offer a parchment theme and an ink (dark) theme with a toggle and remember the choice in the browser; without a remembered choice it SHALL use parchment, whatever the system's color scheme preference.
 
 #### Scenario: First visit
-- **WHEN** a browser without a stored choice and without a dark preference opens the app
+- **WHEN** a browser without a stored choice opens the app
 - **THEN** it shows the parchment theme
 
 #### Scenario: Dark system
 - **WHEN** a browser without a stored choice prefers a dark color scheme
-- **THEN** it shows the ink theme
-
-#### Scenario: Stored choice wins
-- **WHEN** the operator chose parchment and the system prefers dark
 - **THEN** it shows the parchment theme
+
+#### Scenario: Stored choice
+- **WHEN** the operator chose ink
+- **THEN** it shows the ink theme on later visits
 
 ### Requirement: Phone Layout
 

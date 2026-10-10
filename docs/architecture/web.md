@@ -57,7 +57,7 @@ React and Vite in `web/`, no UI library. The API client is generated from `proto
 
 Layout: a 3-column grid (rooms and projects, main view, queues/locks/proposals) under a bar with a double rule. The root is a size container; at 520 pixels or less the side columns are hidden and bottom tabs appear. No service worker: the app needs the hub to show anything.
 
-Theme: a stored choice (`agora.theme`) wins, else `prefers-color-scheme`, else parchment.
+Theme: parchment unless the operator chose ink, which is stored as `agora.theme`; the system color scheme is not consulted.
 
 ## Build and embedding
 

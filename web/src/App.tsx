@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState, useSyncExter
 import { makeApi, unauthenticated } from './api';
 import { boardAgents } from './board';
 import { Icon } from './icons';
-import { applyTheme, prefersDark, resolveTheme, storedTheme, storeTheme, type Theme } from './theme';
+import { applyTheme, resolveTheme, storedTheme, storeTheme, type Theme } from './theme';
 import { forgetToken, saveToken, takeTokenFromLocation, tokenFromHash } from './token';
 import { type Status, useHub, useRoom } from './useHub';
 import { Board, Charter, Locks, Projects, Proposals, Queues, RoomList, RoomView, SignIn, Turns } from './views';
@@ -47,17 +47,8 @@ function useNow(everyMs = 15000): Date {
 }
 
 function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(() => resolveTheme(storedTheme(), prefersDark()));
+  const [theme, setTheme] = useState<Theme>(() => resolveTheme(storedTheme()));
   useEffect(() => applyTheme(theme), [theme]);
-  useEffect(() => {
-    if (storedTheme() || typeof matchMedia !== 'function') return;
-    const mq = matchMedia('(prefers-color-scheme: dark)');
-    const follow = () => {
-      if (!storedTheme()) setTheme(resolveTheme(null, mq.matches));
-    };
-    mq.addEventListener('change', follow);
-    return () => mq.removeEventListener('change', follow);
-  }, []);
   const toggle = () =>
     setTheme((t) => {
       const next = t === 'ink' ? 'parchment' : 'ink';
