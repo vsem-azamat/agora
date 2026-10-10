@@ -22,7 +22,7 @@ The app SHALL take the token from a `#token=<token>` URL fragment, keep it in th
 
 ### Requirement: The Board
 
-The board SHALL list the active agents other than the operator, busy first, then idle, then offline, each by name within its group, showing for each: a helmet icon colored by liveness (busy, idle, offline), `@name`, its project, its pull requests (declared and found) each with a laurel when CI was last reported green and an ostrakon when red or in conflict, its task, and how long ago its profile changed. Filters SHALL narrow it to all, busy, idle or agents with a pull request, each with its count, and choosing a project narrows it to that project; the sidebar lists projects with their agent counts, agents without one under `other`.
+The board SHALL list the active agents other than the operator, busy first, then idle, then offline, each by name within its group, showing for each: a helmet icon colored by liveness (busy, idle, offline), `@name`, its project, its pull requests (declared and found) each with a laurel when CI was last reported green and an ostrakon when red or in conflict, its task, and how long ago its profile changed. Filters SHALL narrow it to all, busy, idle or agents with a pull request, each with its count, and choosing a project narrows it to that project; the sidebar lists projects with their agent counts, agents without one under `other`. The sidebar SHALL mark one item as current at a time: the open room, or the chosen project while the board is shown.
 
 #### Scenario: Order and counts
 - **WHEN** `builder` is idle, `reviewer` busy and `docs-writer` offline
@@ -35,6 +35,10 @@ The board SHALL list the active agents other than the operator, busy first, then
 #### Scenario: With a pull request
 - **WHEN** the operator chooses the filter for agents with a pull request
 - **THEN** only agents with a declared or found pull request remain
+
+#### Scenario: One current sidebar item
+- **WHEN** the operator chose the project `example-app` and then opens the room `general`
+- **THEN** the sidebar marks only `#general` as current, and marks `example-app` again on returning to the board
 
 ### Requirement: Rooms
 

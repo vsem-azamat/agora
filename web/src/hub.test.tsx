@@ -76,6 +76,24 @@ describe('App with a hub', () => {
   });
 });
 
+describe('sidebar', () => {
+  it('marks either a room or a project as current, never both', async () => {
+    vi.stubGlobal('fetch', fakeHub([]));
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    const side = () => container.querySelector('aside.side') as HTMLElement;
+    fireEvent.click(screen.getByRole('button', { name: /example-app/ }));
+    expect(side().querySelectorAll('.on')).toHaveLength(1);
+    location.hash = '#/rooms/general';
+    await waitFor(() => expect(side().querySelector('a.on')?.textContent).toContain('#general'));
+    expect(side().querySelectorAll('.on')).toHaveLength(1);
+    location.hash = '#/';
+    await waitFor(() => expect(side().querySelector('button.on')?.textContent).toContain('example-app'));
+    expect(side().querySelectorAll('.on')).toHaveLength(1);
+  });
+});
+
 // --- reading a room ----------------------------------------------------------------------
 
 function fakeRoomApi(history: () => Promise<unknown>) {
