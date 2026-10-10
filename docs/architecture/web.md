@@ -24,8 +24,8 @@ Every response carries `Content-Security-Policy` (only `'self'`, `img-src` also 
 1. A request with an `Origin` header whose host is not the request's `Host` gets 403. No CORS headers are ever sent. A reverse proxy in front of the listener must pass the original `Host` on.
 2. Paths outside `/agora.v1.` are the app's files (`internal/web`): `/assets/*` (content-hashed names) are cached as immutable, everything else is revalidated; only `GET` and `HEAD`; no directory listings.
 3. API paths need `Authorization: Bearer <token>` (scheme in any case), compared with `crypto/subtle` against the token the hub keeps in memory (loaded by `EnableWeb`, replaced by `WebToken`); otherwise 401 in the Connect error format (`{"code":"unauthenticated"}`), which the browser client maps to a sign-in.
-4. Only the procedures in `webProcedures` are served; others get `not_found`. Reads: `ListAgents`, `ListRooms`, `History`, `UnreadByRoom`, `ListSubscriptions`, `List` (resources), `ListProposals`, `GetProposal`, `GetCharter`, `Whoami`, `Watch`. Writes: `Post`, `Subscribe`, `MarkRoomRead`.
-5. A unary interceptor sets the operator as the author or agent of `Post`, `Subscribe`, `ListSubscriptions`, `UnreadByRoom` and `MarkRoomRead`. Bodies over 1 MiB are refused (`connect.WithReadMaxBytes`).
+4. Only the procedures in `webProcedures` are served; others get `not_found`. Reads: `ListAgents`, `ListRooms`, `History`, `UnreadByRoom`, `ListSubscriptions`, `ListResources`, `ListProposals`, `GetProposal`, `GetCharter`, `Whoami`, `Watch`. Writes: `Post`, `Subscribe`, `MarkRoomRead`.
+5. A unary interceptor sets the operator as the `agent` of `Post`, `Subscribe`, `ListSubscriptions`, `UnreadByRoom` and `MarkRoomRead`. Bodies over 1 MiB are refused (`connect.WithReadMaxBytes`).
 6. The request's context is cancelled when the token is rotated (the rotation signal is taken before the token is checked, so no rotation slips between), so a `Watch` opened with the old token ends.
 
 ## Token
@@ -36,7 +36,7 @@ The browser takes the token from the `#token=` fragment (fragments are not sent 
 
 ## Live updates
 
-`WebService.Watch` sends the change signal's revision at once, then waits for the signal and sends again, at most once per `WatchGap` (1 second). The signal fires on every change the board shows: queue changes, session reports, profile updates, joins, leaving, rooms created, rooms followed, posts, rooms marked read, proposals, votes, closing, charter changes and every pull request round. Listing resources fires only when settling actually changed a queue, marking a room read only when the position moved, and neither `ListSubscriptions` nor a `Subscribe` without rooms (both only return the followed rooms) fires, so the app's own reloads never wake it.
+`WebService.Watch` sends the change signal's revision at once, then waits for the signal and sends again, at most once per `WatchGap` (1 second). The signal fires on every change the board shows: queue changes, session reports, profile updates, joins, leaving, rooms created, rooms followed, posts, rooms marked read, proposals, votes, closing, charter changes and every pull request round. Listing resources fires only when settling actually changed a queue, marking a room read only when the position moved, and `ListSubscriptions` does not fire, so the app's own reloads never wake it.
 
 On every message the app reloads the board in one round of calls (agents, rooms, unread counts per room, followed rooms, resources, proposals, charter) and the open room's last 100 messages; calls that arrive during a reload make one more reload after it. The room is marked read up to its newest message only while the page is visible (`visibilitychange`); a failed mark is tried again with the next revision. After a stream error it retries every 2 seconds.
 

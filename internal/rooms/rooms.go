@@ -163,9 +163,12 @@ func (r *Rooms) List(ctx context.Context) ([]Room, error) {
 	return out, rows.Err()
 }
 
-// Subscribe makes agent follow (add) or stop following rooms; #general stays followed. It
-// returns the rooms the agent follows afterwards.
+// Subscribe makes agent follow (add) or stop following rooms, at least one; #general stays
+// followed. It returns the rooms the agent follows afterwards.
 func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add bool) ([]string, error) {
+	if len(rooms) == 0 {
+		return nil, fmt.Errorf("%w: name at least one room", store.ErrInvalid)
+	}
 	var out []string
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {

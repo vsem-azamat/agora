@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/agents.proto.
  */
 export const file_agora_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIp4ECgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASGQoNc2Vzc2lvbl9zdGF0ZRgMIAEoCUICGAESDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRIpCgJjaRgPIAMoCzIZLmFnb3JhLnYxLlByb2ZpbGUuQ2lFbnRyeUICGAESJwoHc2Vzc2lvbhgQIAEoDjIWLmFnb3JhLnYxLlNlc3Npb25TdGF0ZRIwCghjaV9zdGF0ZRgRIAMoCzIeLmFnb3JhLnYxLlByb2ZpbGUuQ2lTdGF0ZUVudHJ5GikKB0NpRW50cnkSCwoDa2V5GAEgASgFEg0KBXZhbHVlGAIgASgJOgI4ARpBCgxDaVN0YXRlRW50cnkSCwoDa2V5GAEgASgFEiAKBXZhbHVlGAIgASgOMhEuYWdvcmEudjEuQ2lTdGF0ZToCOAEi+QEKFFVwZGF0ZVByb2ZpbGVSZXF1ZXN0EgwKBG5hbWUYASABKAkSEQoEa2luZBgCIAEoCUgAiAEBEhQKB3Byb2plY3QYAyABKAlIAYgBARIRCgR0YXNrGAQgASgJSAKIAQESEwoGc3RhdHVzGAUgASgJSAOIAQESEAoDY3dkGAYgASgJSASIAQESEgoFYWJvdXQYByABKAlIBYgBARIPCgdhZGRfcHJzGAggAygFEhAKCGRyb3BfcHJzGAkgAygFQgcKBV9raW5kQgoKCF9wcm9qZWN0QgcKBV90YXNrQgkKB19zdGF0dXNCBgoEX2N3ZEIICgZfYWJvdXQiOwoVVXBkYXRlUHJvZmlsZVJlc3BvbnNlEiIKB3Byb2ZpbGUYASABKAsyES5hZ29yYS52MS5Qcm9maWxlIhwKDExlYXZlUmVxdWVzdBIMCgRuYW1lGAEgASgJIiEKDUxlYXZlUmVzcG9uc2USEAoIcmVsZWFzZWQYASADKAkiIAoRTGlzdEFnZW50c1JlcXVlc3QSCwoDYWxsGAEgASgIIjcKEkxpc3RBZ2VudHNSZXNwb25zZRIhCgZhZ2VudHMYASADKAsyES5hZ29yYS52MS5Qcm9maWxlIjYKCldob1JlcXVlc3QSDQoFcXVlcnkYASABKAkSDAoEcGF0aBgCIAEoCBILCgNhbGwYAyABKAgiMAoLV2hvUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSpgCgdDaVN0YXRlEhgKFENJX1NUQVRFX1VOU1BFQ0lGSUVEEAASEgoOQ0lfU1RBVEVfR1JFRU4QARIQCgxDSV9TVEFURV9SRUQQAhIVChFDSV9TVEFURV9DT05GTElDVBADMpcCCgxBZ2VudFNlcnZpY2USUAoNVXBkYXRlUHJvZmlsZRIeLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXF1ZXN0Gh8uYWdvcmEudjEuVXBkYXRlUHJvZmlsZVJlc3BvbnNlEjgKBUxlYXZlEhYuYWdvcmEudjEuTGVhdmVSZXF1ZXN0GhcuYWdvcmEudjEuTGVhdmVSZXNwb25zZRJHCgpMaXN0QWdlbnRzEhsuYWdvcmEudjEuTGlzdEFnZW50c1JlcXVlc3QaHC5hZ29yYS52MS5MaXN0QWdlbnRzUmVzcG9uc2USMgoDV2hvEhQuYWdvcmEudjEuV2hvUmVxdWVzdBoVLmFnb3JhLnYxLldob1Jlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
+  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIswDCgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRInCgdzZXNzaW9uGBAgASgOMhYuYWdvcmEudjEuU2Vzc2lvblN0YXRlEjAKCGNpX3N0YXRlGBEgAygLMh4uYWdvcmEudjEuUHJvZmlsZS5DaVN0YXRlRW50cnkaQQoMQ2lTdGF0ZUVudHJ5EgsKA2tleRgBIAEoBRIgCgV2YWx1ZRgCIAEoDjIRLmFnb3JhLnYxLkNpU3RhdGU6AjgBSgQIDBANSgQIDxAQUg1zZXNzaW9uX3N0YXRlUgJjaSL6AQoUVXBkYXRlUHJvZmlsZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSEQoEa2luZBgCIAEoCUgAiAEBEhQKB3Byb2plY3QYAyABKAlIAYgBARIRCgR0YXNrGAQgASgJSAKIAQESEwoGc3RhdHVzGAUgASgJSAOIAQESEAoDY3dkGAYgASgJSASIAQESEgoFYWJvdXQYByABKAlIBYgBARIPCgdhZGRfcHJzGAggAygFEhAKCGRyb3BfcHJzGAkgAygFQgcKBV9raW5kQgoKCF9wcm9qZWN0QgcKBV90YXNrQgkKB19zdGF0dXNCBgoEX2N3ZEIICgZfYWJvdXQiOwoVVXBkYXRlUHJvZmlsZVJlc3BvbnNlEiIKB3Byb2ZpbGUYASABKAsyES5hZ29yYS52MS5Qcm9maWxlIh0KDExlYXZlUmVxdWVzdBINCgVhZ2VudBgBIAEoCSIhCg1MZWF2ZVJlc3BvbnNlEhAKCHJlbGVhc2VkGAEgAygJIiAKEUxpc3RBZ2VudHNSZXF1ZXN0EgsKA2FsbBgBIAEoCCI3ChJMaXN0QWdlbnRzUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSI2CgpXaG9SZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEgwKBHBhdGgYAiABKAgSCwoDYWxsGAMgASgIIjAKC1dob1Jlc3BvbnNlEiEKBmFnZW50cxgBIAMoCzIRLmFnb3JhLnYxLlByb2ZpbGUqYAoHQ2lTdGF0ZRIYChRDSV9TVEFURV9VTlNQRUNJRklFRBAAEhIKDkNJX1NUQVRFX0dSRUVOEAESEAoMQ0lfU1RBVEVfUkVEEAISFQoRQ0lfU1RBVEVfQ09ORkxJQ1QQAzKXAgoMQWdlbnRTZXJ2aWNlElAKDVVwZGF0ZVByb2ZpbGUSHi5hZ29yYS52MS5VcGRhdGVQcm9maWxlUmVxdWVzdBofLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXNwb25zZRI4CgVMZWF2ZRIWLmFnb3JhLnYxLkxlYXZlUmVxdWVzdBoXLmFnb3JhLnYxLkxlYXZlUmVzcG9uc2USRwoKTGlzdEFnZW50cxIbLmFnb3JhLnYxLkxpc3RBZ2VudHNSZXF1ZXN0GhwuYWdvcmEudjEuTGlzdEFnZW50c1Jlc3BvbnNlEjIKA1dobxIULmFnb3JhLnYxLldob1JlcXVlc3QaFS5hZ29yYS52MS5XaG9SZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Profile
@@ -78,14 +78,6 @@ export type Profile = Message<"agora.v1.Profile"> & {
   updatedAt?: Timestamp | undefined;
 
   /**
-   * busy, idle or offline. Deprecated: use session.
-   *
-   * @generated from field: string session_state = 12 [deprecated = true];
-   * @deprecated
-   */
-  sessionState: string;
-
-  /**
    * @generated from field: bool active = 13;
    */
   active: boolean;
@@ -96,15 +88,6 @@ export type Profile = Message<"agora.v1.Profile"> & {
    * @generated from field: repeated int32 found_prs = 14;
    */
   foundPrs: number[];
-
-  /**
-   * The CI state last reported for a followed pull request, by number: green, red or conflict.
-   * A pull request without a reported state is absent. Deprecated: use ci_state.
-   *
-   * @generated from field: map<int32, string> ci = 15 [deprecated = true];
-   * @deprecated
-   */
-  ci: { [key: number]: string };
 
   /**
    * The state of the agent's live session: busy or idle, else offline.
@@ -134,9 +117,11 @@ export const ProfileSchema: GenMessage<Profile> = /*@__PURE__*/
  */
 export type UpdateProfileRequest = Message<"agora.v1.UpdateProfileRequest"> & {
   /**
-   * @generated from field: string name = 1;
+   * The acting agent, whose profile changes.
+   *
+   * @generated from field: string agent = 1;
    */
-  name: string;
+  agent: string;
 
   /**
    * @generated from field: optional string kind = 2;
@@ -208,9 +193,11 @@ export const UpdateProfileResponseSchema: GenMessage<UpdateProfileResponse> = /*
  */
 export type LeaveRequest = Message<"agora.v1.LeaveRequest"> & {
   /**
-   * @generated from field: string name = 1;
+   * The acting agent, which leaves.
+   *
+   * @generated from field: string agent = 1;
    */
-  name: string;
+  agent: string;
 };
 
 /**

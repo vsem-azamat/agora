@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/resources.proto.
  */
 export const file_agora_v1_resources: GenFile = /*@__PURE__*/
-  fileDesc("ChhhZ29yYS92MS9yZXNvdXJjZXMucHJvdG8SCGFnb3JhLnYxIvEBCgVFbnRyeRILCgNrZXkYASABKAkSDQoFYWdlbnQYAiABKAkSDAoEbm90ZRgDIAEoCRIjCgVzdGF0ZRgEIAEoDjIULmFnb3JhLnYxLkVudHJ5U3RhdGUSEAoIcG9zaXRpb24YBSABKAUSLQoJam9pbmVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpleHBpcmVzX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIoCgVsZWFzZRgIIAEoCzIZLmdvb2dsZS5wcm90b2J1Zi5EdXJhdGlvbiJICghSZXNvdXJjZRILCgNrZXkYASABKAkSDQoFc2xvdHMYAiABKAUSIAoHZW50cmllcxgDIAMoCzIPLmFnb3JhLnYxLkVudHJ5InIKC0pvaW5SZXF1ZXN0EgsKA2tleRgBIAEoCRINCgVhZ2VudBgCIAEoCRIMCgRub3RlGAMgASgJEigKBWxlYXNlGAQgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEg8KB25vX3dhaXQYBSABKAgiVAoMSm9pblJlc3BvbnNlEh4KBWVudHJ5GAEgASgLMg8uYWdvcmEudjEuRW50cnkSJAoIcmVzb3VyY2UYAiABKAsyEi5hZ29yYS52MS5SZXNvdXJjZSIpCgtXYWl0UmVxdWVzdBILCgNrZXkYASABKAkSDQoFYWdlbnQYAiABKAkiLgoMV2FpdFJlc3BvbnNlEh4KBWVudHJ5GAEgASgLMg8uYWdvcmEudjEuRW50cnkiKgoMUmVuZXdSZXF1ZXN0EgsKA2tleRgBIAEoCRINCgVhZ2VudBgCIAEoCSIvCg1SZW5ld1Jlc3BvbnNlEh4KBWVudHJ5GAEgASgLMg8uYWdvcmEudjEuRW50cnkiSgoOUmVsZWFzZVJlcXVlc3QSCwoDa2V5GAEgASgJEg0KBWFnZW50GAIgASgJEg0KBWFjdG9yGAMgASgJEg0KBWZvcmNlGAQgASgIIiMKD1JlbGVhc2VSZXNwb25zZRIQCghyZWxlYXNlZBgBIAEoCCIaCgtMaXN0UmVxdWVzdBILCgNrZXkYASABKAkiNQoMTGlzdFJlc3BvbnNlEiUKCXJlc291cmNlcxgBIAMoCzISLmFnb3JhLnYxLlJlc291cmNlIi0KD1NldFNsb3RzUmVxdWVzdBILCgNrZXkYASABKAkSDQoFc2xvdHMYAiABKAUiOAoQU2V0U2xvdHNSZXNwb25zZRIkCghyZXNvdXJjZRgBIAEoCzISLmFnb3JhLnYxLlJlc291cmNlKnEKCkVudHJ5U3RhdGUSGwoXRU5UUllfU1RBVEVfVU5TUEVDSUZJRUQQABIXChNFTlRSWV9TVEFURV9XQUlUSU5HEAESFwoTRU5UUllfU1RBVEVfT0ZGRVJFRBACEhQKEEVOVFJZX1NUQVRFX0hFTEQQAzL1AgoPUmVzb3VyY2VTZXJ2aWNlEjUKBEpvaW4SFS5hZ29yYS52MS5Kb2luUmVxdWVzdBoWLmFnb3JhLnYxLkpvaW5SZXNwb25zZRI3CgRXYWl0EhUuYWdvcmEudjEuV2FpdFJlcXVlc3QaFi5hZ29yYS52MS5XYWl0UmVzcG9uc2UwARI4CgVSZW5ldxIWLmFnb3JhLnYxLlJlbmV3UmVxdWVzdBoXLmFnb3JhLnYxLlJlbmV3UmVzcG9uc2USPgoHUmVsZWFzZRIYLmFnb3JhLnYxLlJlbGVhc2VSZXF1ZXN0GhkuYWdvcmEudjEuUmVsZWFzZVJlc3BvbnNlEjUKBExpc3QSFS5hZ29yYS52MS5MaXN0UmVxdWVzdBoWLmFnb3JhLnYxLkxpc3RSZXNwb25zZRJBCghTZXRTbG90cxIZLmFnb3JhLnYxLlNldFNsb3RzUmVxdWVzdBoaLmFnb3JhLnYxLlNldFNsb3RzUmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_google_protobuf_duration, file_google_protobuf_timestamp]);
+  fileDesc("ChhhZ29yYS92MS9yZXNvdXJjZXMucHJvdG8SCGFnb3JhLnYxIvEBCgVFbnRyeRILCgNrZXkYASABKAkSDQoFYWdlbnQYAiABKAkSDAoEbm90ZRgDIAEoCRIjCgVzdGF0ZRgEIAEoDjIULmFnb3JhLnYxLkVudHJ5U3RhdGUSEAoIcG9zaXRpb24YBSABKAUSLQoJam9pbmVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpleHBpcmVzX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIoCgVsZWFzZRgIIAEoCzIZLmdvb2dsZS5wcm90b2J1Zi5EdXJhdGlvbiJICghSZXNvdXJjZRILCgNrZXkYASABKAkSDQoFc2xvdHMYAiABKAUSIAoHZW50cmllcxgDIAMoCzIPLmFnb3JhLnYxLkVudHJ5InIKC0pvaW5SZXF1ZXN0EgsKA2tleRgBIAEoCRINCgVhZ2VudBgCIAEoCRIMCgRub3RlGAMgASgJEigKBWxlYXNlGAQgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEg8KB25vX3dhaXQYBSABKAgiVAoMSm9pblJlc3BvbnNlEh4KBWVudHJ5GAEgASgLMg8uYWdvcmEudjEuRW50cnkSJAoIcmVzb3VyY2UYAiABKAsyEi5hZ29yYS52MS5SZXNvdXJjZSIpCgtXYWl0UmVxdWVzdBILCgNrZXkYASABKAkSDQoFYWdlbnQYAiABKAkiLgoMV2FpdFJlc3BvbnNlEh4KBWVudHJ5GAEgASgLMg8uYWdvcmEudjEuRW50cnkiKgoMUmVuZXdSZXF1ZXN0EgsKA2tleRgBIAEoCRINCgVhZ2VudBgCIAEoCSIvCg1SZW5ld1Jlc3BvbnNlEh4KBWVudHJ5GAEgASgLMg8uYWdvcmEudjEuRW50cnkiSwoOUmVsZWFzZVJlcXVlc3QSCwoDa2V5GAEgASgJEg4KBmhvbGRlchgCIAEoCRINCgVhZ2VudBgDIAEoCRINCgVmb3JjZRgEIAEoCCIjCg9SZWxlYXNlUmVzcG9uc2USEAoIcmVsZWFzZWQYASABKAgiIwoUTGlzdFJlc291cmNlc1JlcXVlc3QSCwoDa2V5GAEgASgJIj4KFUxpc3RSZXNvdXJjZXNSZXNwb25zZRIlCglyZXNvdXJjZXMYASADKAsyEi5hZ29yYS52MS5SZXNvdXJjZSItCg9TZXRTbG90c1JlcXVlc3QSCwoDa2V5GAEgASgJEg0KBXNsb3RzGAIgASgFIjgKEFNldFNsb3RzUmVzcG9uc2USJAoIcmVzb3VyY2UYASABKAsyEi5hZ29yYS52MS5SZXNvdXJjZSpxCgpFbnRyeVN0YXRlEhsKF0VOVFJZX1NUQVRFX1VOU1BFQ0lGSUVEEAASFwoTRU5UUllfU1RBVEVfV0FJVElORxABEhcKE0VOVFJZX1NUQVRFX09GRkVSRUQQAhIUChBFTlRSWV9TVEFURV9IRUxEEAMykAMKD1Jlc291cmNlU2VydmljZRI1CgRKb2luEhUuYWdvcmEudjEuSm9pblJlcXVlc3QaFi5hZ29yYS52MS5Kb2luUmVzcG9uc2USNwoEV2FpdBIVLmFnb3JhLnYxLldhaXRSZXF1ZXN0GhYuYWdvcmEudjEuV2FpdFJlc3BvbnNlMAESOAoFUmVuZXcSFi5hZ29yYS52MS5SZW5ld1JlcXVlc3QaFy5hZ29yYS52MS5SZW5ld1Jlc3BvbnNlEj4KB1JlbGVhc2USGC5hZ29yYS52MS5SZWxlYXNlUmVxdWVzdBoZLmFnb3JhLnYxLlJlbGVhc2VSZXNwb25zZRJQCg1MaXN0UmVzb3VyY2VzEh4uYWdvcmEudjEuTGlzdFJlc291cmNlc1JlcXVlc3QaHy5hZ29yYS52MS5MaXN0UmVzb3VyY2VzUmVzcG9uc2USQQoIU2V0U2xvdHMSGS5hZ29yYS52MS5TZXRTbG90c1JlcXVlc3QaGi5hZ29yYS52MS5TZXRTbG90c1Jlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_google_protobuf_duration, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Entry
@@ -253,18 +253,19 @@ export type ReleaseRequest = Message<"agora.v1.ReleaseRequest"> & {
   key: string;
 
   /**
-   * The agent to remove from the queue.
+   * The agent whose entry is removed; the acting agent when empty. Another agent's entry is
+   * removed only with force.
    *
-   * @generated from field: string agent = 2;
+   * @generated from field: string holder = 2;
    */
-  agent: string;
+  holder: string;
 
   /**
-   * Who asks; another agent's entry is removed only with force.
+   * The acting agent.
    *
-   * @generated from field: string actor = 3;
+   * @generated from field: string agent = 3;
    */
-  actor: string;
+  agent: string;
 
   /**
    * @generated from field: bool force = 4;
@@ -299,9 +300,9 @@ export const ReleaseResponseSchema: GenMessage<ReleaseResponse> = /*@__PURE__*/
   messageDesc(file_agora_v1_resources, 9);
 
 /**
- * @generated from message agora.v1.ListRequest
+ * @generated from message agora.v1.ListResourcesRequest
  */
-export type ListRequest = Message<"agora.v1.ListRequest"> & {
+export type ListResourcesRequest = Message<"agora.v1.ListResourcesRequest"> & {
   /**
    * Only this resource when set.
    *
@@ -311,16 +312,16 @@ export type ListRequest = Message<"agora.v1.ListRequest"> & {
 };
 
 /**
- * Describes the message agora.v1.ListRequest.
- * Use `create(ListRequestSchema)` to create a new message.
+ * Describes the message agora.v1.ListResourcesRequest.
+ * Use `create(ListResourcesRequestSchema)` to create a new message.
  */
-export const ListRequestSchema: GenMessage<ListRequest> = /*@__PURE__*/
+export const ListResourcesRequestSchema: GenMessage<ListResourcesRequest> = /*@__PURE__*/
   messageDesc(file_agora_v1_resources, 10);
 
 /**
- * @generated from message agora.v1.ListResponse
+ * @generated from message agora.v1.ListResourcesResponse
  */
-export type ListResponse = Message<"agora.v1.ListResponse"> & {
+export type ListResourcesResponse = Message<"agora.v1.ListResourcesResponse"> & {
   /**
    * @generated from field: repeated agora.v1.Resource resources = 1;
    */
@@ -328,10 +329,10 @@ export type ListResponse = Message<"agora.v1.ListResponse"> & {
 };
 
 /**
- * Describes the message agora.v1.ListResponse.
- * Use `create(ListResponseSchema)` to create a new message.
+ * Describes the message agora.v1.ListResourcesResponse.
+ * Use `create(ListResourcesResponseSchema)` to create a new message.
  */
-export const ListResponseSchema: GenMessage<ListResponse> = /*@__PURE__*/
+export const ListResourcesResponseSchema: GenMessage<ListResourcesResponse> = /*@__PURE__*/
   messageDesc(file_agora_v1_resources, 11);
 
 /**
@@ -453,14 +454,14 @@ export const ResourceService: GenService<{
     output: typeof ReleaseResponseSchema;
   },
   /**
-   * List returns resources with their holders, offers and waiting agents.
+   * ListResources returns resources with their holders, offers and waiting agents.
    *
-   * @generated from rpc agora.v1.ResourceService.List
+   * @generated from rpc agora.v1.ResourceService.ListResources
    */
-  list: {
+  listResources: {
     methodKind: "unary";
-    input: typeof ListRequestSchema;
-    output: typeof ListResponseSchema;
+    input: typeof ListResourcesRequestSchema;
+    output: typeof ListResourcesResponseSchema;
   },
   /**
    * SetSlots changes how many agents may hold a resource at once.

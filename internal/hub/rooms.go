@@ -12,7 +12,7 @@ import (
 type roomService struct{ h *Hub }
 
 func (s *roomService) CreateRoom(ctx context.Context, req *connect.Request[agorav1.CreateRoomRequest]) (*connect.Response[agorav1.CreateRoomResponse], error) {
-	if err := s.h.rooms.Create(ctx, req.Msg.GetName(), req.Msg.GetPurpose(), req.Msg.GetCreator()); err != nil {
+	if err := s.h.rooms.Create(ctx, req.Msg.GetName(), req.Msg.GetPurpose(), req.Msg.GetAgent()); err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
@@ -40,9 +40,7 @@ func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	if len(req.Msg.GetRooms()) > 0 { // no rooms only asks which rooms are followed
-		s.h.changes.fire()
-	}
+	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.SubscribeResponse{Rooms: followed}), nil
 }
 
@@ -56,7 +54,7 @@ func (s *roomService) ListSubscriptions(ctx context.Context, req *connect.Reques
 
 func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
 	m := req.Msg
-	id, err := s.h.rooms.Post(ctx, m.GetAuthor(), m.GetRoom(), m.GetBody(), m.GetReplyTo())
+	id, err := s.h.rooms.Post(ctx, m.GetAgent(), m.GetRoom(), m.GetBody(), m.GetReplyTo())
 	if err != nil {
 		return nil, toConnect(err)
 	}

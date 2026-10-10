@@ -154,6 +154,9 @@ func TestSubscribingToARoomWithHistoryStartsAtItsNewestMessage(t *testing.T) {
 	if _, err := e.r.Subscribe(ctx, "reviewer", []string{"nowhere"}, true); !errors.Is(err, rooms.ErrNotFound) {
 		t.Fatalf("unknown room: %v", err)
 	}
+	if _, err := e.r.Subscribe(ctx, "reviewer", nil, true); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("no rooms: %v", err)
+	}
 }
 
 // --- messages ----------------------------------------------------------------------

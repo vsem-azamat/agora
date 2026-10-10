@@ -565,10 +565,11 @@ func (x *RenewResponse) GetEntry() *Entry {
 type ReleaseRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	// The agent to remove from the queue.
-	Agent string `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
-	// Who asks; another agent's entry is removed only with force.
-	Actor         string `protobuf:"bytes,3,opt,name=actor,proto3" json:"actor,omitempty"`
+	// The agent whose entry is removed; the acting agent when empty. Another agent's entry is
+	// removed only with force.
+	Holder string `protobuf:"bytes,2,opt,name=holder,proto3" json:"holder,omitempty"`
+	// The acting agent.
+	Agent         string `protobuf:"bytes,3,opt,name=agent,proto3" json:"agent,omitempty"`
 	Force         bool   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -611,16 +612,16 @@ func (x *ReleaseRequest) GetKey() string {
 	return ""
 }
 
-func (x *ReleaseRequest) GetAgent() string {
+func (x *ReleaseRequest) GetHolder() string {
 	if x != nil {
-		return x.Agent
+		return x.Holder
 	}
 	return ""
 }
 
-func (x *ReleaseRequest) GetActor() string {
+func (x *ReleaseRequest) GetAgent() string {
 	if x != nil {
-		return x.Actor
+		return x.Agent
 	}
 	return ""
 }
@@ -677,7 +678,7 @@ func (x *ReleaseResponse) GetReleased() bool {
 	return false
 }
 
-type ListRequest struct {
+type ListResourcesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Only this resource when set.
 	Key           string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -685,20 +686,20 @@ type ListRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListRequest) Reset() {
-	*x = ListRequest{}
+func (x *ListResourcesRequest) Reset() {
+	*x = ListResourcesRequest{}
 	mi := &file_agora_v1_resources_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListRequest) String() string {
+func (x *ListResourcesRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListRequest) ProtoMessage() {}
+func (*ListResourcesRequest) ProtoMessage() {}
 
-func (x *ListRequest) ProtoReflect() protoreflect.Message {
+func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_agora_v1_resources_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -710,39 +711,39 @@ func (x *ListRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListRequest.ProtoReflect.Descriptor instead.
-func (*ListRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListResourcesRequest.ProtoReflect.Descriptor instead.
+func (*ListResourcesRequest) Descriptor() ([]byte, []int) {
 	return file_agora_v1_resources_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *ListRequest) GetKey() string {
+func (x *ListResourcesRequest) GetKey() string {
 	if x != nil {
 		return x.Key
 	}
 	return ""
 }
 
-type ListResponse struct {
+type ListResourcesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Resources     []*Resource            `protobuf:"bytes,1,rep,name=resources,proto3" json:"resources,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListResponse) Reset() {
-	*x = ListResponse{}
+func (x *ListResourcesResponse) Reset() {
+	*x = ListResourcesResponse{}
 	mi := &file_agora_v1_resources_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListResponse) String() string {
+func (x *ListResourcesResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListResponse) ProtoMessage() {}
+func (*ListResourcesResponse) ProtoMessage() {}
 
-func (x *ListResponse) ProtoReflect() protoreflect.Message {
+func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_agora_v1_resources_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -754,12 +755,12 @@ func (x *ListResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListResponse.ProtoReflect.Descriptor instead.
-func (*ListResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListResourcesResponse.ProtoReflect.Descriptor instead.
+func (*ListResourcesResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_resources_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *ListResponse) GetResources() []*Resource {
+func (x *ListResourcesResponse) GetResources() []*Resource {
 	if x != nil {
 		return x.Resources
 	}
@@ -899,17 +900,17 @@ const file_agora_v1_resources_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\"6\n" +
 	"\rRenewResponse\x12%\n" +
-	"\x05entry\x18\x01 \x01(\v2\x0f.agora.v1.EntryR\x05entry\"d\n" +
+	"\x05entry\x18\x01 \x01(\v2\x0f.agora.v1.EntryR\x05entry\"f\n" +
 	"\x0eReleaseRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x14\n" +
-	"\x05actor\x18\x03 \x01(\tR\x05actor\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
+	"\x06holder\x18\x02 \x01(\tR\x06holder\x12\x14\n" +
+	"\x05agent\x18\x03 \x01(\tR\x05agent\x12\x14\n" +
 	"\x05force\x18\x04 \x01(\bR\x05force\"-\n" +
 	"\x0fReleaseResponse\x12\x1a\n" +
-	"\breleased\x18\x01 \x01(\bR\breleased\"\x1f\n" +
-	"\vListRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\"@\n" +
-	"\fListResponse\x120\n" +
+	"\breleased\x18\x01 \x01(\bR\breleased\"(\n" +
+	"\x14ListResourcesRequest\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\"I\n" +
+	"\x15ListResourcesResponse\x120\n" +
 	"\tresources\x18\x01 \x03(\v2\x12.agora.v1.ResourceR\tresources\"9\n" +
 	"\x0fSetSlotsRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -921,13 +922,13 @@ const file_agora_v1_resources_proto_rawDesc = "" +
 	"\x17ENTRY_STATE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13ENTRY_STATE_WAITING\x10\x01\x12\x17\n" +
 	"\x13ENTRY_STATE_OFFERED\x10\x02\x12\x14\n" +
-	"\x10ENTRY_STATE_HELD\x10\x032\xf5\x02\n" +
+	"\x10ENTRY_STATE_HELD\x10\x032\x90\x03\n" +
 	"\x0fResourceService\x125\n" +
 	"\x04Join\x12\x15.agora.v1.JoinRequest\x1a\x16.agora.v1.JoinResponse\x127\n" +
 	"\x04Wait\x12\x15.agora.v1.WaitRequest\x1a\x16.agora.v1.WaitResponse0\x01\x128\n" +
 	"\x05Renew\x12\x16.agora.v1.RenewRequest\x1a\x17.agora.v1.RenewResponse\x12>\n" +
-	"\aRelease\x12\x18.agora.v1.ReleaseRequest\x1a\x19.agora.v1.ReleaseResponse\x125\n" +
-	"\x04List\x12\x15.agora.v1.ListRequest\x1a\x16.agora.v1.ListResponse\x12A\n" +
+	"\aRelease\x12\x18.agora.v1.ReleaseRequest\x1a\x19.agora.v1.ReleaseResponse\x12P\n" +
+	"\rListResources\x12\x1e.agora.v1.ListResourcesRequest\x1a\x1f.agora.v1.ListResourcesResponse\x12A\n" +
 	"\bSetSlots\x12\x19.agora.v1.SetSlotsRequest\x1a\x1a.agora.v1.SetSlotsResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
@@ -956,8 +957,8 @@ var file_agora_v1_resources_proto_goTypes = []any{
 	(*RenewResponse)(nil),         // 8: agora.v1.RenewResponse
 	(*ReleaseRequest)(nil),        // 9: agora.v1.ReleaseRequest
 	(*ReleaseResponse)(nil),       // 10: agora.v1.ReleaseResponse
-	(*ListRequest)(nil),           // 11: agora.v1.ListRequest
-	(*ListResponse)(nil),          // 12: agora.v1.ListResponse
+	(*ListResourcesRequest)(nil),  // 11: agora.v1.ListResourcesRequest
+	(*ListResourcesResponse)(nil), // 12: agora.v1.ListResourcesResponse
 	(*SetSlotsRequest)(nil),       // 13: agora.v1.SetSlotsRequest
 	(*SetSlotsResponse)(nil),      // 14: agora.v1.SetSlotsResponse
 	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
@@ -974,19 +975,19 @@ var file_agora_v1_resources_proto_depIdxs = []int32{
 	2,  // 7: agora.v1.JoinResponse.resource:type_name -> agora.v1.Resource
 	1,  // 8: agora.v1.WaitResponse.entry:type_name -> agora.v1.Entry
 	1,  // 9: agora.v1.RenewResponse.entry:type_name -> agora.v1.Entry
-	2,  // 10: agora.v1.ListResponse.resources:type_name -> agora.v1.Resource
+	2,  // 10: agora.v1.ListResourcesResponse.resources:type_name -> agora.v1.Resource
 	2,  // 11: agora.v1.SetSlotsResponse.resource:type_name -> agora.v1.Resource
 	3,  // 12: agora.v1.ResourceService.Join:input_type -> agora.v1.JoinRequest
 	5,  // 13: agora.v1.ResourceService.Wait:input_type -> agora.v1.WaitRequest
 	7,  // 14: agora.v1.ResourceService.Renew:input_type -> agora.v1.RenewRequest
 	9,  // 15: agora.v1.ResourceService.Release:input_type -> agora.v1.ReleaseRequest
-	11, // 16: agora.v1.ResourceService.List:input_type -> agora.v1.ListRequest
+	11, // 16: agora.v1.ResourceService.ListResources:input_type -> agora.v1.ListResourcesRequest
 	13, // 17: agora.v1.ResourceService.SetSlots:input_type -> agora.v1.SetSlotsRequest
 	4,  // 18: agora.v1.ResourceService.Join:output_type -> agora.v1.JoinResponse
 	6,  // 19: agora.v1.ResourceService.Wait:output_type -> agora.v1.WaitResponse
 	8,  // 20: agora.v1.ResourceService.Renew:output_type -> agora.v1.RenewResponse
 	10, // 21: agora.v1.ResourceService.Release:output_type -> agora.v1.ReleaseResponse
-	12, // 22: agora.v1.ResourceService.List:output_type -> agora.v1.ListResponse
+	12, // 22: agora.v1.ResourceService.ListResources:output_type -> agora.v1.ListResourcesResponse
 	14, // 23: agora.v1.ResourceService.SetSlots:output_type -> agora.v1.SetSlotsResponse
 	18, // [18:24] is the sub-list for method output_type
 	12, // [12:18] is the sub-list for method input_type

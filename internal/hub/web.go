@@ -34,7 +34,7 @@ var webProcedures = map[string]bool{
 	agorav1connect.RoomServiceListSubscriptionsProcedure:   true,
 	agorav1connect.RoomServiceUnreadByRoomProcedure:        true,
 	agorav1connect.RoomServiceMarkRoomReadProcedure:        true,
-	agorav1connect.ResourceServiceListProcedure:            true,
+	agorav1connect.ResourceServiceListResourcesProcedure:   true,
 	agorav1connect.GovernanceServiceListProposalsProcedure: true,
 	agorav1connect.GovernanceServiceGetProposalProcedure:   true,
 	agorav1connect.GovernanceServiceGetCharterProcedure:    true,
@@ -163,7 +163,7 @@ func operatorInterceptor(operator string) connect.UnaryInterceptorFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			switch m := req.Any().(type) {
 			case *agorav1.PostRequest:
-				m.Author = operator
+				m.Agent = operator
 			case *agorav1.SubscribeRequest:
 				m.Agent = operator
 			case *agorav1.ListSubscriptionsRequest:

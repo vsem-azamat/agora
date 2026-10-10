@@ -112,7 +112,7 @@ func queueCmd(o *options) *cobra.Command {
 			if len(args) == 1 {
 				key = args[0]
 			}
-			resp, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{Key: key}))
+			resp, err := o.resources().ListResources(cmd.Context(), connect.NewRequest(&agorav1.ListResourcesRequest{Key: key}))
 			if err != nil {
 				return err
 			}
@@ -217,7 +217,7 @@ func (o *options) waitOnce(ctx context.Context, key, agent string, contact *time
 }
 
 func (o *options) release(ctx context.Context, key, agent, actor string, force bool) error {
-	resp, err := o.resources().Release(ctx, connect.NewRequest(&agorav1.ReleaseRequest{Key: key, Agent: agent, Actor: actor, Force: force}))
+	resp, err := o.resources().Release(ctx, connect.NewRequest(&agorav1.ReleaseRequest{Key: key, Holder: agent, Agent: actor, Force: force}))
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func (o *options) release(ctx context.Context, key, agent, actor string, force b
 
 // holders describes who holds or is offered key, for refusals.
 func (o *options) holders(ctx context.Context, key string) ([]string, error) {
-	resp, err := o.resources().List(ctx, connect.NewRequest(&agorav1.ListRequest{Key: key}))
+	resp, err := o.resources().ListResources(ctx, connect.NewRequest(&agorav1.ListResourcesRequest{Key: key}))
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +320,7 @@ func unlockCmd(o *options) *cobra.Command {
 			if !force {
 				return o.release(cmd.Context(), args[0], agent, agent, false)
 			}
-			resp, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{Key: args[0]}))
+			resp, err := o.resources().ListResources(cmd.Context(), connect.NewRequest(&agorav1.ListResourcesRequest{Key: args[0]}))
 			if err != nil {
 				return err
 			}
@@ -351,7 +351,7 @@ func locksCmd(o *options) *cobra.Command {
 		Short: "List held slots of every resource",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resp, err := o.resources().List(cmd.Context(), connect.NewRequest(&agorav1.ListRequest{}))
+			resp, err := o.resources().ListResources(cmd.Context(), connect.NewRequest(&agorav1.ListResourcesRequest{}))
 			if err != nil {
 				return err
 			}

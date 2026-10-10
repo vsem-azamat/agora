@@ -201,10 +201,11 @@ func (x *Message) GetAddressed() bool {
 }
 
 type CreateRoomRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Purpose       string                 `protobuf:"bytes,2,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	Creator       string                 `protobuf:"bytes,3,opt,name=creator,proto3" json:"creator,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Name    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Purpose string                 `protobuf:"bytes,2,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	// The acting agent, which becomes the creator and follows the room.
+	Agent         string `protobuf:"bytes,3,opt,name=agent,proto3" json:"agent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -253,9 +254,9 @@ func (x *CreateRoomRequest) GetPurpose() string {
 	return ""
 }
 
-func (x *CreateRoomRequest) GetCreator() string {
+func (x *CreateRoomRequest) GetAgent() string {
 	if x != nil {
-		return x.Creator
+		return x.Agent
 	}
 	return ""
 }
@@ -379,7 +380,8 @@ func (x *ListRoomsResponse) GetRooms() []*Room {
 type SubscribeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Agent string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
-	Rooms []string               `protobuf:"bytes,2,rep,name=rooms,proto3" json:"rooms,omitempty"`
+	// At least one room.
+	Rooms []string `protobuf:"bytes,2,rep,name=rooms,proto3" json:"rooms,omitempty"`
 	// True to follow, false to stop following.
 	Follow        bool `protobuf:"varint,3,opt,name=follow,proto3" json:"follow,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -572,11 +574,12 @@ func (x *ListSubscriptionsResponse) GetRooms() []string {
 }
 
 type PostRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Author        string                 `protobuf:"bytes,1,opt,name=author,proto3" json:"author,omitempty"`
-	Room          string                 `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
-	Body          string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
-	ReplyTo       int64                  `protobuf:"varint,4,opt,name=reply_to,json=replyTo,proto3" json:"reply_to,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The acting agent, which becomes the author.
+	Agent         string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Room          string `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
+	Body          string `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	ReplyTo       int64  `protobuf:"varint,4,opt,name=reply_to,json=replyTo,proto3" json:"reply_to,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -611,9 +614,9 @@ func (*PostRequest) Descriptor() ([]byte, []int) {
 	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *PostRequest) GetAuthor() string {
+func (x *PostRequest) GetAgent() string {
 	if x != nil {
-		return x.Author
+		return x.Agent
 	}
 	return ""
 }
@@ -1171,11 +1174,11 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x04body\x18\x04 \x01(\tR\x04body\x12\x19\n" +
 	"\breply_to\x18\x05 \x01(\x03R\areplyTo\x12*\n" +
 	"\x02at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x1c\n" +
-	"\taddressed\x18\a \x01(\bR\taddressed\"[\n" +
+	"\taddressed\x18\a \x01(\bR\taddressed\"W\n" +
 	"\x11CreateRoomRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
-	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x18\n" +
-	"\acreator\x18\x03 \x01(\tR\acreator\"\x14\n" +
+	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x14\n" +
+	"\x05agent\x18\x03 \x01(\tR\x05agent\"\x14\n" +
 	"\x12CreateRoomResponse\"\x12\n" +
 	"\x10ListRoomsRequest\"9\n" +
 	"\x11ListRoomsResponse\x12$\n" +
@@ -1189,9 +1192,9 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x18ListSubscriptionsRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\"1\n" +
 	"\x19ListSubscriptionsResponse\x12\x14\n" +
-	"\x05rooms\x18\x01 \x03(\tR\x05rooms\"h\n" +
-	"\vPostRequest\x12\x16\n" +
-	"\x06author\x18\x01 \x01(\tR\x06author\x12\x12\n" +
+	"\x05rooms\x18\x01 \x03(\tR\x05rooms\"f\n" +
+	"\vPostRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12\x19\n" +
 	"\breply_to\x18\x04 \x01(\x03R\areplyTo\"\x1e\n" +

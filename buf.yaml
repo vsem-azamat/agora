@@ -7,3 +7,25 @@ lint:
 breaking:
   use:
     - FILE
+  # Temporary: the deliberate v1 cleanup renames request fields, removes deprecated fields
+  # (their numbers and names stay reserved) and renames ResourceService.List. Only the rules
+  # and files that change needs are ignored; the follow-up pull request removes this block.
+  ignore_only:
+    FIELD_NO_DELETE:
+      - proto/agora/v1/agents.proto
+      - proto/agora/v1/governance.proto
+    FIELD_SAME_NAME:
+      - proto/agora/v1/agents.proto
+      - proto/agora/v1/governance.proto
+      - proto/agora/v1/resources.proto
+      - proto/agora/v1/rooms.proto
+    FIELD_SAME_JSON_NAME:
+      - proto/agora/v1/agents.proto
+      - proto/agora/v1/governance.proto
+      - proto/agora/v1/resources.proto
+      - proto/agora/v1/rooms.proto
+    MESSAGE_NO_DELETE:
+      - proto/agora/v1/agents.proto
+      - proto/agora/v1/resources.proto
+    RPC_NO_DELETE:
+      - proto/agora/v1/resources.proto

@@ -135,7 +135,7 @@ func TestWaiterWakesWhenAListingOffersItTheSlot(t *testing.T) {
 	join(t, r, "r", "b", time.Minute)
 	ended := waitFor(t, r, "r", "b")
 	r.clock.add(time.Minute) // a's lease ends; nothing has settled it yet
-	if _, err := r.client.List(context.Background(), connect.NewRequest(&agorav1.ListRequest{})); err != nil {
+	if _, err := r.client.ListResources(context.Background(), connect.NewRequest(&agorav1.ListResourcesRequest{})); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -248,7 +248,7 @@ func (r *running) post(t *testing.T, author, body string) {
 	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: author})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.rooms.Post(bg, connect.NewRequest(&agorav1.PostRequest{Author: author, Room: "general", Body: body})); err != nil {
+	if _, err := r.rooms.Post(bg, connect.NewRequest(&agorav1.PostRequest{Agent: author, Room: "general", Body: body})); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -439,7 +439,7 @@ func joinIn(t *testing.T, r *running) {
 	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.agents.UpdateProfile(ctx, connect.NewRequest(&agorav1.UpdateProfileRequest{Name: "builder", Cwd: &dir, AddPrs: []int32{57}})); err != nil {
+	if _, err := r.agents.UpdateProfile(ctx, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Cwd: &dir, AddPrs: []int32{57}})); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -602,7 +602,7 @@ func TestProfilesCarryEnumStates(t *testing.T) {
 	}
 }
 
-func TestVotesAndClosingTakeEnumsOrStrings(t *testing.T) {
+func TestVotesAndClosingTakeEnums(t *testing.T) {
 	r := start(t)
 	ctx := context.Background()
 	gov := agorav1connect.NewGovernanceServiceClient(r.httpClient, "http://agora")
@@ -611,21 +611,25 @@ func TestVotesAndClosingTakeEnumsOrStrings(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := gov.Propose(ctx, connect.NewRequest(&agorav1.ProposeRequest{Author: "builder", Title: "Rule", Body: "Text"})); err != nil {
+	if _, err := gov.Propose(ctx, connect.NewRequest(&agorav1.ProposeRequest{Agent: "builder", Title: "Rule", Body: "Text"})); err != nil {
 		t.Fatal(err)
 	}
-	old, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "builder", ProposalId: 1, Choice: "No"})) //nolint:staticcheck // an older client sends the choice as a string
-	if err != nil || old.Msg.GetVoteChoice() != agorav1.VoteChoice_VOTE_CHOICE_NO {
-		t.Fatalf("string vote: %v %v", old, err)
+	no, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "builder", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_NO}))
+	if err != nil || no.Msg.GetVoteChoice() != agorav1.VoteChoice_VOTE_CHOICE_NO {
+		t.Fatalf("vote: %v %v", no, err)
 	}
-	if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_YES, Choice: "no"})); err != nil { //nolint:staticcheck // the enum wins over the string
+	if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_YES})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: 99, Choice: "yes"})); connect.CodeOf(err) != connect.CodeInvalidArgument { //nolint:staticcheck // the string must not rescue an unknown enum
-		t.Fatalf("unknown vote choice: %v", err)
+	for _, c := range []agorav1.VoteChoice{agorav1.VoteChoice_VOTE_CHOICE_UNSPECIFIED, 99} {
+		if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: c})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("vote choice %v: %v", c, err)
+		}
 	}
-	if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: 99, State: "accepted"})); connect.CodeOf(err) != connect.CodeInvalidArgument { //nolint:staticcheck // the string must not rescue an unknown enum
-		t.Fatalf("unknown proposal state: %v", err)
+	for _, st := range []agorav1.ProposalState{agorav1.ProposalState_PROPOSAL_STATE_UNSPECIFIED, 99} {
+		if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: st})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("proposal state %v: %v", st, err)
+		}
 	}
 	if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: agorav1.ProposalState_PROPOSAL_STATE_OPEN})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("closing as open: %v", err)
@@ -638,7 +642,7 @@ func TestVotesAndClosingTakeEnumsOrStrings(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := got.Msg.GetProposal()
-	if p.GetProposalState() != agorav1.ProposalState_PROPOSAL_STATE_ACCEPTED || p.GetState() != "accepted" { //nolint:staticcheck // the deprecated string stays filled
+	if p.GetProposalState() != agorav1.ProposalState_PROPOSAL_STATE_ACCEPTED {
 		t.Fatalf("proposal %v", p)
 	}
 	choices := map[string]agorav1.VoteChoice{}
@@ -656,7 +660,7 @@ func TestListSubscriptionsReadsTheFollowedRooms(t *testing.T) {
 	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Creator: "builder"})); err != nil {
+	if _, err := r.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Agent: "builder"})); err != nil {
 		t.Fatal(err)
 	}
 	got, err := r.rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{Agent: "builder"}))
