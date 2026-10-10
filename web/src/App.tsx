@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { makeApi, unauthenticated } from './api';
-import { boardAgents, heldTurns, liveness, openProposals, projectOf } from './board';
+import { boardAgents, heldTurns, knownNames, liveness, openProposals, projectOf } from './board';
 import type { Profile } from './gen/agora/v1/agents_pb';
 import type { Room } from './gen/agora/v1/rooms_pb';
 import { Icon, type IconName } from './icons';
@@ -12,7 +12,7 @@ import { forgetToken, saveToken, takeTokenFromLocation, tokenFromHash } from './
 import { useAgentMessages, useHub, useRoom } from './useHub';
 import { Board } from './views/board';
 import { Charter } from './views/charter';
-import { Avatar, OpenAgent } from './views/common';
+import { Avatar, OpenAgent, Profiles } from './views/common';
 import { Drawer } from './views/drawer';
 import { type Arrival, RoomView } from './views/room';
 import { Rooms, roomHref } from './views/rooms';
@@ -91,7 +91,7 @@ function paletteItems(agents: Profile[], rooms: Room[], openAgent: (name: string
       key: `agent ${a.name}`,
       label: a.name,
       sub: `${projectOf(a)} · ${liveness(a)}`,
-      mark: <Avatar name={a.name} live={liveness(a)} size="sm" />,
+      mark: <Avatar name={a.name} agent={a} live={liveness(a)} size="sm" />,
       go: () => openAgent(a.name),
     })),
     ...rooms.map((r) => ({
@@ -177,7 +177,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const board = data?.board ?? '';
   const reader = useMemo(() => ({ operator, board }), [operator, board]);
   const agents = data?.agents;
-  const known = useMemo(() => new Set([...(agents ?? []).map((a) => a.name), operator]), [agents, operator]);
+  const known = useMemo(() => knownNames(agents ?? [], operator), [agents, operator]);
+  const profiles = useMemo(() => new Map((agents ?? []).map((a) => [a.name, a])), [agents]);
   const rooms = data?.rooms;
   const items = useMemo(() => paletteItems(listed ?? [], rooms ?? [], setDrawer), [listed, rooms]);
 
@@ -288,45 +289,47 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const unreadTotal = [...data.unread.values()].reduce((n, c) => n + c.unread, 0);
 
   return (
-    <OpenAgent.Provider value={setDrawer}>
-      <div className="app">
-        {bar}
-        <div className="body">
-          <Sidebar
-            view={route.view}
-            room={roomName}
-            // the project filter belongs to the board: only one sidebar item is current at a time
-            project={route.view === 'board' ? project : undefined}
-            agents={listed}
-            rooms={data.rooms}
-            unread={data.unread}
-            followed={data.followed}
-            counts={{ active: active ?? 0, turns: heldTurns(data.resources), open: openProposals(data.proposals) }}
-            onProject={pickProject}
-          />
-          <main className="main">{main}</main>
+    <Profiles.Provider value={profiles}>
+      <OpenAgent.Provider value={setDrawer}>
+        <div className="app">
+          {bar}
+          <div className="body">
+            <Sidebar
+              view={route.view}
+              room={roomName}
+              // the project filter belongs to the board: only one sidebar item is current at a time
+              project={route.view === 'board' ? project : undefined}
+              agents={listed}
+              rooms={data.rooms}
+              unread={data.unread}
+              followed={data.followed}
+              counts={{ active: active ?? 0, turns: heldTurns(data.resources), open: openProposals(data.proposals) }}
+              onProject={pickProject}
+            />
+            <main className="main">{main}</main>
+          </div>
+          <Tabs view={route.view} unread={unreadTotal} />
+          {drawer && (
+            <Drawer
+              name={drawer}
+              agent={data.agents.find((a) => a.name === drawer)}
+              operator={data.operator}
+              rooms={data.rooms}
+              general={data.general}
+              recent={recent}
+              known={known}
+              now={now}
+              onClose={closeDrawer}
+              onAddress={(room) => {
+                setDrafts((d) => ({ ...d, [room]: `@${drawer} ` }));
+                arrive({ room, compose: true });
+              }}
+              onGoto={(room, id) => arrive({ room, jump: id })}
+            />
+          )}
+          {palette && <Palette items={items} onClose={() => setPalette(false)} />}
         </div>
-        <Tabs view={route.view} unread={unreadTotal} />
-        {drawer && (
-          <Drawer
-            name={drawer}
-            agent={data.agents.find((a) => a.name === drawer)}
-            operator={data.operator}
-            rooms={data.rooms}
-            general={data.general}
-            recent={recent}
-            known={known}
-            now={now}
-            onClose={closeDrawer}
-            onAddress={(room) => {
-              setDrafts((d) => ({ ...d, [room]: `@${drawer} ` }));
-              arrive({ room, compose: true });
-            }}
-            onGoto={(room, id) => arrive({ room, jump: id })}
-          />
-        )}
-        {palette && <Palette items={items} onClose={() => setPalette(false)} />}
-      </div>
-    </OpenAgent.Provider>
+      </OpenAgent.Provider>
+    </Profiles.Provider>
   );
 }

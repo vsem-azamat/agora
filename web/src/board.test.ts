@@ -5,10 +5,14 @@ import {
   ciMark,
   filterCounts,
   heldTurns,
+  knownNames,
+  lastFormerName,
   lockState,
+  look,
   matches,
   mentionCandidates,
   mentionNames,
+  moment,
   openProposals,
   PIGMENTS,
   parts,
@@ -18,6 +22,7 @@ import {
   proposalOrder,
   pullRequests,
   roomBadge,
+  sigilName,
   splitResources,
   timeLeft,
   turns,
@@ -156,6 +161,50 @@ describe('pigments', () => {
   it('spread names over the eight pigments', () => {
     const used = new Set(Array.from({ length: 64 }, (_, i) => pigment(`agent-${i}`)));
     expect(used.size).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('looks', () => {
+  it('are the sigil and pigment an agent chose', () => {
+    expect(look('builder', agent('builder', 'busy', { icon: 'anvil', pigment: 'terracotta' }))).toEqual({
+      icon: 'anvil',
+      pigment: 'terracotta',
+    });
+  });
+  it('fall back to the helmet and the pigment of the name when unset or unknown', () => {
+    const fallback = { icon: 'helmet', pigment: pigment('reviewer') };
+    expect(look('reviewer', agent('reviewer', 'idle'))).toEqual(fallback);
+    expect(look('reviewer', agent('reviewer', 'idle', { icon: 'owl', pigment: 'gold' }))).toEqual(fallback);
+    expect(look('reviewer')).toEqual(fallback);
+  });
+  it('name sigils in English and Greek', () => {
+    expect(sigilName('anvil')).toEqual({ name: 'Anvil', greek: 'ἄκμων' });
+  });
+});
+
+describe('former names', () => {
+  const agents = [
+    agent('docs-writer', 'idle', { formerly: [{ name: 'scribe' }, { name: 'fixer' }] }),
+    agent('builder', 'busy'),
+  ];
+  it('lead to the agent’s current name, and a current name wins', () => {
+    const names = knownNames([...agents, agent('scout', 'idle', { formerly: [{ name: 'builder' }] })], 'operator');
+    expect(names.get('fixer')).toBe('docs-writer');
+    expect(names.get('scribe')).toBe('docs-writer');
+    expect(names.get('docs-writer')).toBe('docs-writer');
+    expect(names.get('builder')).toBe('builder');
+    expect(names.get('operator')).toBe('operator');
+    expect(names.has('nobody')).toBe(false);
+  });
+  it('show the latest one given up', () => {
+    const [docs, builder] = agents;
+    expect(docs && lastFormerName(docs)).toBe('scribe');
+    expect(builder && lastFormerName(builder)).toBeUndefined();
+  });
+  it('carry when they were given up: the clock today, else the day too', () => {
+    const today = new Date(NOW.getTime() - 60 * 60_000);
+    expect(moment(today, NOW)).toMatch(/^\d\d:\d\d$/);
+    expect(moment(new Date(NOW.getTime() - 3 * 86_400_000), NOW)).toMatch(/^\d+ Oct \d\d:\d\d$/);
   });
 });
 

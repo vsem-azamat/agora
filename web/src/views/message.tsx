@@ -1,12 +1,13 @@
 // One message on the tape: a tablet edged in its author's pigment, or the board's own thin line.
 import { Fragment, memo } from 'react';
+import type { Names } from '../board';
 import { clock, toDate } from '../board';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import type { TapeItem } from '../tape';
-import { AgentLink, Avatar, MessageBody, pg } from './common';
+import { AgentLink, Avatar, MessageBody, usePg } from './common';
 
-type Context = { known: Set<string>; operator: string };
+type Context = { known: Names; operator: string };
 
 function Time({ m }: { m: Message }) {
   const at = toDate(m.at);
@@ -40,6 +41,7 @@ export const Tablet = memo(function Tablet({
   onFocus: (pair: [string, string]) => void;
   onJump: (id: bigint) => void;
 }) {
+  const pg = usePg();
   const { message: m, parent, to } = item;
   const first = to[0];
   const cls = ['msg', item.cont && 'cont', item.toYou && 'tome', item.own && 'own', dim && 'dim'].filter(Boolean);

@@ -1,6 +1,6 @@
 // Pure helpers for a room's messages: who a message is to, how the tape groups them, who talks
 // with whom, and where the tape scrolls. Kept free of React and the DOM so they are cheap to test.
-import { mentionNames, toDate } from './board';
+import { mentionNames, type Names, toDate } from './board';
 import type { Message } from './gen/agora/v1/rooms_pb';
 
 /** Who the tape is read as: the operator, and the name the board posts its own messages under. */
@@ -8,16 +8,20 @@ export type Reader = { operator: string; board: string };
 
 /**
  * The agents a message is to: the author of the message it replies to, then the known agents its
- * body mentions, without its author and without the board.
+ * body mentions (a former name counting as its agent's current one), without its author and
+ * without the board.
  */
-export function addressees(m: Message, parent: Message | undefined, known: Set<string>, board: string): string[] {
+export function addressees(m: Message, parent: Message | undefined, known: Names, board: string): string[] {
   const to = parent ? [parent.author] : [];
-  for (const name of mentionNames(m.body)) if (known.has(name)) to.push(name);
+  for (const name of mentionNames(m.body)) {
+    const current = known.get(name);
+    if (current) to.push(current);
+  }
   return [...new Set(to)].filter((n) => n !== m.author && n !== board);
 }
 
 /** Addressees for every message of a list, by id. */
-export function addresseesById(messages: Message[], known: Set<string>, board: string): Map<bigint, string[]> {
+export function addresseesById(messages: Message[], known: Names, board: string): Map<bigint, string[]> {
   const byId = new Map(messages.map((m) => [m.id, m]));
   return new Map(messages.map((m) => [m.id, addressees(m, byId.get(m.replyTo), known, board)]));
 }
@@ -133,13 +137,19 @@ export function between(m: Message, to: string[], pair: readonly [string, string
 
 /**
  * The first unread message when the operator has `count` unread in the room: the count-th last
- * message by others, counting only those that mention the operator when the room is not followed.
+ * message by others, counting only those that mention the operator (by any name it had) when the
+ * room is not followed.
  */
-export function firstUnread(messages: Message[], count: number, reader: Reader, followed: boolean): bigint | undefined {
+export function firstUnread(
+  messages: Message[],
+  count: number,
+  reader: Reader,
+  followed: boolean,
+  known: Names,
+): bigint | undefined {
   if (count <= 0) return undefined;
-  const counted = messages.filter(
-    (m) => m.author !== reader.operator && (followed || mentionNames(m.body).includes(reader.operator)),
-  );
+  const mentionsOperator = (m: Message) => mentionNames(m.body).some((n) => known.get(n) === reader.operator);
+  const counted = messages.filter((m) => m.author !== reader.operator && (followed || mentionsOperator(m)));
   return counted[Math.max(0, counted.length - count)]?.id;
 }
 

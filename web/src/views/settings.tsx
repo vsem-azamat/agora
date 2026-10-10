@@ -4,7 +4,7 @@ import { Icon } from '../icons';
 import { askToNotify } from '../notify';
 import { NOTIFY, type Notify, SIZES, type TextSize } from '../prefs';
 import type { Theme } from '../theme';
-import { pg } from './common';
+import { usePg } from './common';
 import { ThemeCards } from './themes';
 
 function Row({ label, desc, children }: { label: ReactNode; desc: ReactNode; children: ReactNode }) {
@@ -59,6 +59,7 @@ export function Settings(props: {
   onNotify: (n: Notify) => void;
   onSignOut: () => void;
 }) {
+  const pg = usePg();
   return (
     <section className="view settings" aria-label="Settings">
       <div className="head">

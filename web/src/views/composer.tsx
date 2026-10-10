@@ -14,7 +14,7 @@ import { liveness, mentionCandidates } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
-import { Avatar, pg } from './common';
+import { Avatar, usePg } from './common';
 
 // `@` and the start of a name, right before the caret
 const typing = /(?:^|\s)@([a-z0-9-]*)$/i;
@@ -38,6 +38,7 @@ export function Composer(props: {
   const caret = useRef<number>(undefined);
   const box = props.inputRef;
   const listId = useId();
+  const pg = usePg();
 
   // after a completion the caret goes right after the inserted name
   useLayoutEffect(() => {
@@ -128,7 +129,7 @@ export function Composer(props: {
               onKeyDown={(e) => e.key === 'Enter' && pick(a.name)}
               tabIndex={-1}
             >
-              <Avatar name={a.name} live={liveness(a)} size="sm" />
+              <Avatar name={a.name} agent={a} live={liveness(a)} size="sm" />
               <span className="pgname" style={pg(a.name)}>
                 {a.name}
               </span>

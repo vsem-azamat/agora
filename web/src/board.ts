@@ -5,6 +5,7 @@ import { CiState, type Profile } from './gen/agora/v1/agents_pb';
 import { type Proposal, ProposalState, VoteChoice } from './gen/agora/v1/governance_pb';
 import { type Entry, EntryState, type Resource } from './gen/agora/v1/resources_pb';
 import { SessionState } from './gen/agora/v1/sessions_pb';
+import { SIGILS, type Sigil } from './icons';
 
 export type Liveness = 'busy' | 'idle' | 'offline';
 
@@ -29,6 +30,46 @@ export function pigment(name: string): Pigment {
   let h = 0x811c9dc5;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193);
   return PIGMENTS[(h >>> 0) % PIGMENTS.length] as Pigment;
+}
+
+/** How an agent is drawn: the sigil and pigment it chose, else the helmet and the pigment of its name. */
+export type Look = { icon: Sigil; pigment: Pigment };
+
+const sigils = new Set<string>(SIGILS.map(([k]) => k));
+const pigments = new Set<string>(PIGMENTS);
+
+export function look(name: string, p?: Pick<Profile, 'icon' | 'pigment'>): Look {
+  return {
+    icon: p && sigils.has(p.icon) ? (p.icon as Sigil) : 'helmet',
+    pigment: p && pigments.has(p.pigment) ? (p.pigment as Pigment) : pigment(name),
+  };
+}
+
+/** A sigil's name in English and in Greek. */
+export function sigilName(icon: Sigil): { name: string; greek: string } {
+  const [, name, greek] = SIGILS.find(([k]) => k === icon) ?? SIGILS[0];
+  return { name, greek };
+}
+
+/**
+ * Every name the app knows, mapped to the current name of its agent: the agents' names, the
+ * operator's, and the names agents gave up by renaming themselves. A current name wins over a
+ * former one.
+ */
+export type Names = Map<string, string>;
+
+export function knownNames(agents: Pick<Profile, 'name' | 'formerly'>[], operator: string): Names {
+  const out: Names = new Map(agents.map((a) => [a.name, a.name]));
+  if (operator) out.set(operator, operator);
+  // The hub keeps former names reserved for their agent, so no former name is another agent's
+  // name or another's former name; the first-wins check only guards against data it never sends.
+  for (const a of agents) for (const f of a.formerly) if (!out.has(f.name)) out.set(f.name, a.name);
+  return out;
+}
+
+/** The name an agent gave up last, if it renamed itself. */
+export function lastFormerName(p: Pick<Profile, 'formerly'>): string | undefined {
+  return p.formerly[0]?.name; // the hub lists them newest first
 }
 
 export const livenessOrder: Record<Liveness, number> = { busy: 0, idle: 1, offline: 2 };
@@ -250,4 +291,13 @@ export function roomBadge(c: RoomCount | undefined): { text: string; mention: bo
 /** A clock time for a message, `22:41`; the tape's day headings give the date. */
 export function clock(at: Date | undefined): string {
   return at ? at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+}
+
+/** A moment as its clock time when it is today, else with its day: `22:41`, `8 Oct 22:41`. */
+export function moment(at: Date | undefined, now: Date): string {
+  if (!at) return '';
+  if (at.toDateString() === now.toDateString()) return clock(at);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (at.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+  return `${at.toLocaleDateString('en-GB', opts)} ${clock(at)}`;
 }
