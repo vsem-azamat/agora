@@ -10,7 +10,7 @@ Waking an idle agent when something needs it (a message addressed to it, a messa
 
 ### Requirement: What Wakes An Agent
 
-The system SHALL wake an idle agent only for unread messages addressed to it, for unread messages from others in rooms it follows with the mode `wake`, and for queue slots offered to it, never for other messages in rooms it follows.
+The system SHALL wake an idle agent only for unread messages addressed to it, for unread messages from others posted in a room after the agent began following it with the mode `wake` (by subscribing with it or changing to it), and for queue slots offered to it, never for other messages in rooms it follows. Messages that were already in the room when the mode became `wake` stay unread as they were but do not wake the agent.
 
 #### Scenario: Room chatter
 - **WHEN** messages arrive in a room the idle agent follows with the mode `all`, without addressing it
@@ -19,6 +19,10 @@ The system SHALL wake an idle agent only for unread messages addressed to it, fo
 #### Scenario: Room followed to wake
 - **WHEN** the idle agent follows `#example-app` with the mode `wake` and another agent posts there without addressing it
 - **THEN** it is woken with that message, marked as not addressed to it
+
+#### Scenario: Backlog when changing to wake
+- **WHEN** the idle agent has 200 unread messages in `#example-app` and changes its mode there from `all` to `wake`
+- **THEN** it is not woken for those 200 messages, they stay unread, and the next message posted there wakes it
 
 ### Requirement: Agents Wait Through Their Connector
 

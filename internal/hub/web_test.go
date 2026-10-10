@@ -574,8 +574,17 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 		t.Fatalf("subscriptions with modes: %v %v", listed, err)
 	}
 	if _, err := rooms.Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{
-		Rooms: []string{"example-app"}, Follow: true, Mode: agorav1.SubscriptionMode_SUBSCRIPTION_MODE_ALL,
+		Rooms: []string{"example-app"}, Follow: true, Mode: agorav1.SubscriptionMode(99),
+	})); code(err) != connect.CodeInvalidArgument {
+		t.Fatalf("an unknown mode: %v", err)
+	}
+	// the mode is ignored when unfollowing
+	if _, err := rooms.Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{
+		Rooms: []string{"example-app"}, Follow: false, Mode: agorav1.SubscriptionMode(99),
 	})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rooms.Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Rooms: []string{"example-app"}, Follow: true})); err != nil {
 		t.Fatal(err)
 	}
 	first, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-app", Body: "one"}))

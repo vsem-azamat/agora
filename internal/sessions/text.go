@@ -67,7 +67,7 @@ func attention(opening, agent string, msgs []rooms.Message, more int, entries []
 		lines := []string{fmt.Sprintf("Agora: %s answer what is addressed to you (%s), "+
 			"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", opening, agent)}
 		if !allAddressed(msgs) {
-			lines[0] += " Messages not marked `to you` come from rooms you follow with --mode wake; act on them if they need you."
+			lines[0] += " Messages not marked `to you` come from rooms you follow with --mode wake: act on them only if they need you, and do not reply just to acknowledge them."
 		}
 		for _, m := range msgs {
 			lines = append(lines, rooms.Format(m, DeliverChars))

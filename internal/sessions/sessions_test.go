@@ -805,7 +805,7 @@ func TestRoomFollowedToWakeWakes(t *testing.T) {
 	if err != nil || !done || w == nil || !strings.Contains(w.Text, "main is red") || strings.Contains(w.Text, "chatter in general") {
 		t.Fatalf("wake %+v done %v err %v", w, done, err)
 	}
-	if strings.Contains(w.Text, "· to you") || !strings.Contains(w.Text, "--mode wake") {
+	if strings.Contains(w.Text, "· to you") || !strings.Contains(w.Text, "--mode wake") || !strings.Contains(w.Text, "do not reply") {
 		t.Fatalf("wake text %q", w.Text)
 	}
 	if err := e.s.ConfirmWake(ctx, "session-1", w); err != nil {

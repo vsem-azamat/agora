@@ -126,10 +126,11 @@ describe('following', () => {
     history.replaceState(null, '', '/#token=good-token');
     const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'granted') });
     location.hash = '#/rooms/general';
-    const follow = (await screen.findByRole('combobox', { name: 'Follow' })) as HTMLSelectElement;
-    expect(follow.value).toBe('mentions');
-    fireEvent.change(follow, { target: { value: 'wake' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow mode: Mentions only' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Every message notifies' }));
+    expect(Notification.requestPermission).toHaveBeenCalledOnce();
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(JSON.parse(bodies[0] ?? '{}')).toEqual({ rooms: ['general'], follow: true, mode: 'SUBSCRIPTION_MODE_WAKE' });
   });

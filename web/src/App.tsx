@@ -230,6 +230,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   };
   const follow = (on: boolean, mode?: Mode) => {
     if (!roomName) return;
+    // asked within the operator's click, as browsers require
+    if (mode === 'wake' && notify !== 'none') void askToNotify();
     api.rooms.subscribe({ rooms: [roomName], follow: on, mode: mode && subscriptionMode(mode) }).catch(fail);
   };
   const pickProject = (p: string | undefined) => {

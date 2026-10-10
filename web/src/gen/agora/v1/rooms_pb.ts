@@ -108,6 +108,8 @@ export const MessageSchema: GenMessage<Message> = /*@__PURE__*/
   messageDesc(file_agora_v1_rooms, 1);
 
 /**
+ * A room an agent follows, and how.
+ *
  * @generated from message agora.v1.Subscription
  */
 export type Subscription = Message$1<"agora.v1.Subscription"> & {

@@ -22,6 +22,7 @@ import {
 } from '../tape';
 import { AgentLink, Avatar } from './common';
 import { Composer } from './composer';
+import { FollowControls } from './follow';
 import { BoardLine, Tablet } from './message';
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
@@ -266,21 +267,13 @@ export function RoomView(props: {
           <span className="sum">
             {props.room?.messages ?? 0} msgs · {people.length} in room
           </span>
-          <select
-            className={props.followed ? 'chip on' : 'chip'}
-            aria-label="Follow"
-            value={props.followed ? (props.mode ?? 'all') : 'none'}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === 'none') props.onFollow(false);
-              else props.onFollow(true, v as Mode);
-            }}
-          >
-            {name !== props.general && <option value="none">Not following</option>}
-            <option value="all">Every message</option>
-            <option value="mentions">Mentions only</option>
-            <option value="wake">Every message notifies</option>
-          </select>
+          <FollowControls
+            room={name}
+            always={name === props.general}
+            followed={props.followed}
+            mode={props.mode ?? 'all'}
+            onFollow={props.onFollow}
+          />
         </div>
         {focus && (
           <FocusBar

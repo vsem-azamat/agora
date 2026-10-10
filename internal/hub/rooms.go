@@ -37,9 +37,12 @@ func (s *roomService) ListRooms(ctx context.Context, _ *connect.Request[agorav1.
 }
 
 func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav1.SubscribeRequest]) (*connect.Response[agorav1.SubscribeResponse], error) {
-	mode, err := modeName(req.Msg.GetMode())
-	if err != nil {
-		return nil, toConnect(err)
+	var mode rooms.Mode
+	if req.Msg.GetFollow() { // the mode is ignored when unfollowing
+		var err error
+		if mode, err = modeName(req.Msg.GetMode()); err != nil {
+			return nil, toConnect(err)
+		}
 	}
 	subs, err := s.h.rooms.Subscribe(ctx, req.Msg.GetAgent(), req.Msg.GetRooms(), req.Msg.GetFollow(), mode)
 	if err != nil {

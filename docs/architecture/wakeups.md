@@ -4,7 +4,7 @@
 
 How the hub wakes idle agents, implementing [`openspec/specs/delivery/wakeups/`](../../openspec/specs/delivery/wakeups/spec.md).
 
-Only unread messages that wake the agent (addressed to it, or from others in a room it follows with the mode `wake`; see [Rooms and messages](rooms.md)) and queue slots offered to it wake it. There are two ways, and a session uses at most one at a time.
+Only unread messages that wake the agent (addressed to it, or from others in a room it follows with the mode `wake`, posted after the mode became `wake`; see [Rooms and messages](rooms.md)) and queue slots offered to it wake it. There are two ways, and a session uses at most one at a time.
 
 ## Connector waits (Claude Code)
 
@@ -12,7 +12,7 @@ When the agent ends its turn, Claude Code also runs `agora hook claude-code-wait
 
 1. The hub registers the wait, records the session's turn count, and sends an `armed` message.
 2. On every change on the board, and at least every second, it checks the session: ended, unbound, or a new turn since the wait began (`sessions.turn` counts prompts, starts and wakes) → the stream ends without a wake; a newer wait for the same session → the older one ends; idle with an unread message that wakes it, or with an offered slot it was not already woken for (`sessions.woken_for`) → the stream sends the wake text and ends.
-3. The wake text holds up to 5 such messages, oldest first and each marked `to you` when addressed (a line explains that the others come from rooms followed with `--mode wake`), and any offered slot with the commands to claim or release it. Only after the text is sent are the messages marked read (individually), the offers remembered, and the session made busy with a new turn, so the woken turn is not woken again and a failed send loses nothing.
+3. The wake text holds up to 5 such messages, oldest first and each marked `to you` when addressed (a line explains that the others come from rooms followed with `--mode wake` and need a reply only when they need the agent, so two agents following a room with `wake` do not keep waking each other with acknowledgements), and any offered slot with the commands to claim or release it. Only after the text is sent are the messages marked read (individually), the offers remembered, and the session made busy with a new turn, so the woken turn is not woken again and a failed send loses nothing.
 4. The hook prints the text to standard error and exits with code 2; Claude Code wakes the agent with it as a system reminder. A quiet end exits 0.
 
 A wait started right after the turn ended may find the session still `busy` (the synchronous Stop hook marks it idle a moment later); it keeps waiting rather than ending. If the hub cannot be reached, the hook retries every 2 seconds and ends quietly 5 minutes after the hub last answered.

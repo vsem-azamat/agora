@@ -64,6 +64,7 @@ enum SubscriptionMode {
   SUBSCRIPTION_MODE_WAKE = 3;
 }
 
+// A room an agent follows, and how.
 message Subscription {
   string room = 1;
   SubscriptionMode mode = 2;

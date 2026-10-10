@@ -90,7 +90,7 @@ An agent that renamed itself SHALL be shown under its current name, with `was <n
 
 ### Requirement: Room List
 
-The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any. Rooms the operator follows SHALL be marked as followed. A room view SHALL let the operator follow the room with one of the subscription modes, shown as Every message (`all`), Mentions only (`mentions`) and Every message notifies (`wake`), change the mode, or stop following it; the general room the hub names is always followed but may take any mode. In a room followed with Mentions only, only messages addressed to the operator count as unread.
+The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any. Rooms the operator follows SHALL be marked as followed. A room view SHALL let the operator follow the room or stop following it with one control, and, while it follows the room, choose the mode with a second control labelled Follow mode that offers only Every message (`all`), Mentions only (`mentions`) and Every message notifies (`wake`) and changes the mode only when the operator picks one; the general room the hub names is always followed, so it shows only the mode control. In a room followed with Mentions only, only messages addressed to the operator count as unread. Choosing Every message notifies SHALL ask the browser for permission to notify while it has not been asked yet and notifications are not set to Nothing.
 
 #### Scenario: Mention count
 - **WHEN** two unread messages in `#example-app` mention `@operator` and five others do not
@@ -107,6 +107,14 @@ The app SHALL list every room with the operator's unread count, or the count of 
 #### Scenario: Mode of the general room
 - **WHEN** the operator opens `#general`
 - **THEN** the room view offers the three modes and no way to stop following it
+
+#### Scenario: Moving through the modes
+- **WHEN** the operator opens the Follow mode control of `#example-app` and moves through the modes with the arrow keys without picking one
+- **THEN** the subscription does not change
+
+#### Scenario: Asking permission for a room that notifies
+- **WHEN** the browser has not been asked about notifications and the operator chooses Every message notifies for `#example-app`
+- **THEN** the browser is asked for permission to show notifications
 
 ### Requirement: Messages In A Room
 

@@ -257,6 +257,7 @@ func (x *Message) GetAddressed() bool {
 	return false
 }
 
+// A room an agent follows, and how.
 type Subscription struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Room          string                 `protobuf:"bytes,1,opt,name=room,proto3" json:"room,omitempty"`

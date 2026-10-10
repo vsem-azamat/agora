@@ -714,19 +714,21 @@ button.pgname:hover {
   padding: 1px 9px;
   font-size: 0.8em;
 }
-select.chip {
-  font-family: inherit;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
+.follow {
+  position: relative;
+  display: inline-flex;
+  gap: 6px;
 }
-select.chip.on {
-  background: var(--fg);
-  color: var(--bg);
+.follow .chev {
+  color: var(--mute);
+  font-size: 0.8em;
 }
-select.chip option {
-  background: var(--bg);
-  color: var(--fg);
+.follow .menu {
+  min-width: 200px;
+}
+.follow .menu .check {
+  width: 0.8em;
+  color: var(--accent);
 }
 .strip {
   display: none;

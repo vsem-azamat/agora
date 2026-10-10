@@ -552,8 +552,12 @@ func TestGeneralTakesAMode(t *testing.T) {
 		t.Fatalf("chatter unread in general followed for mentions: %+v", got)
 	}
 	e.subscribe(t, "builder", "general", rooms.ModeAll)
-	if got := e.unread(t, "builder"); len(got) != 2 {
-		t.Fatalf("%d unread after following general with all again, want 2", len(got))
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("%d unread after following general with all again: leaving mentions skips the chatter", len(got))
+	}
+	e.post(t, "reviewer", "general", "after")
+	if got := e.unread(t, "builder"); len(got) != 1 {
+		t.Fatalf("%d unread in general followed with all again, want 1", len(got))
 	}
 }
 
@@ -605,5 +609,76 @@ func TestWakeModeMessagesWake(t *testing.T) {
 	}
 	if got := e.unread(t, "builder"); len(got) != 1 || got[0].Body != "chatter in general" {
 		t.Fatalf("unread after taking what wakes %+v", got)
+	}
+}
+
+func TestLeavingMentionsKeepsOldChatterRead(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	e.subscribe(t, "builder", "example-app", rooms.ModeMentions)
+	e.post(t, "reviewer", "example-app", "old chatter")
+	all := e.post(t, "reviewer", "example-app", "@all main is red")
+	after := e.post(t, "reviewer", "example-app", "chatter after")
+	e.subscribe(t, "builder", "example-app", rooms.ModeAll)
+	if got := ids(e.unread(t, "builder")); !slices.Equal(got, []int64{all, after}) {
+		t.Fatalf("unread %v, want %v", got, []int64{all, after})
+	}
+	// nothing addressed: the position moves to the newest message
+	e.subscribe(t, "builder", "example-app", rooms.ModeMentions)
+	if _, _, err := e.r.Take(ctx, "builder", rooms.Everything, 0); err != nil {
+		t.Fatal(err)
+	}
+	e.post(t, "reviewer", "example-app", "more chatter")
+	e.subscribe(t, "builder", "example-app", rooms.ModeWake)
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("chatter from the mentions time became unread: %+v", got)
+	}
+}
+
+func TestFollowingAgainStartsWithAll(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	e.subscribe(t, "builder", "example-app", rooms.ModeWake)
+	// a mode is ignored when unsubscribing, even one that does not exist
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"example-app"}, false, "loud"); err != nil {
+		t.Fatal(err)
+	}
+	e.subscribe(t, "builder", "example-app", "")
+	if m := e.modeOf(t, "builder", "example-app"); m != rooms.ModeAll {
+		t.Fatalf("mode %q after following again", m)
+	}
+}
+
+func TestBacklogDoesNotWakeAfterChangingToWake(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	e.subscribe(t, "builder", "example-app", rooms.ModeAll)
+	for range 200 {
+		e.post(t, "reviewer", "example-app", "backlog")
+	}
+	e.subscribe(t, "builder", "example-app", rooms.ModeWake)
+	if got, total, _ := e.r.Unread(ctx, "builder", rooms.Waking, 0); total != 0 {
+		t.Fatalf("the backlog wakes: %d, first %+v", total, got[0])
+	}
+	if n := len(e.unread(t, "builder")); n != 200 {
+		t.Fatalf("%d unread, want 200", n)
+	}
+	fresh := e.post(t, "reviewer", "example-app", "new")
+	if got, _, _ := e.r.Unread(ctx, "builder", rooms.Waking, 0); !slices.Equal(ids(got), []int64{fresh}) {
+		t.Fatalf("waking %v, want %v", ids(got), []int64{fresh})
+	}
+	// subscribing again in the same mode keeps where waking starts
+	e.subscribe(t, "builder", "example-app", rooms.ModeWake)
+	if _, total, _ := e.r.Unread(ctx, "builder", rooms.Waking, 0); total != 1 {
+		t.Fatalf("%d waking after subscribing again with wake", total)
 	}
 }

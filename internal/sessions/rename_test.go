@@ -52,6 +52,9 @@ func TestRenamingKeepsWhatIsTheAgents(t *testing.T) {
 	if err := e.r.Create(ctx, "example-app", "the example app", "fixer"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := e.r.Subscribe(ctx, "fixer", []string{"example-app"}, true, rooms.ModeWake); err != nil {
+		t.Fatal(err)
+	}
 	e.post(t, "builder", "example-app", "main is green")
 	if _, _, err := e.r.Take(ctx, "fixer", rooms.Everything, 0); err != nil { // fixer has read everything so far
 		t.Fatal(err)
@@ -76,7 +79,7 @@ func TestRenamingKeepsWhatIsTheAgents(t *testing.T) {
 	if p := e.places(t, "docs-writer"); len(p) != 1 || p[0].Key != "example-app/merge" || p[0].State != queue.Held {
 		t.Errorf("places: %+v", p)
 	}
-	if followed, _ := e.r.Subscriptions(ctx, "docs-writer"); !slices.Contains(followed, rooms.Subscription{Room: "example-app", Mode: rooms.ModeAll}) {
+	if followed, _ := e.r.Subscriptions(ctx, "docs-writer"); !slices.Contains(followed, rooms.Subscription{Room: "example-app", Mode: rooms.ModeWake}) {
 		t.Errorf("follows %v", followed)
 	}
 	unread, _, err := e.r.Unread(ctx, "docs-writer", rooms.Everything, 0)
