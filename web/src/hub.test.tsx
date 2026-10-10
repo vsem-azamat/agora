@@ -158,6 +158,16 @@ describe('theme', () => {
     expect(document.documentElement.dataset.theme).not.toBe('ink');
     expect(localStorage.getItem('agora.theme')).toBeNull();
   });
+  it('switches from the account menu, which closes', async () => {
+    await signedIn();
+    openMenu();
+    const ink = screen.getByRole('button', { name: 'Ink theme' });
+    fireEvent.pointerEnter(ink);
+    fireEvent.click(ink);
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(document.documentElement.dataset.theme).toBe('ink');
+    expect(localStorage.getItem('agora.theme')).toBe('ink');
+  });
   it('switches to ink in Settings and remembers it', async () => {
     await signedIn();
     location.hash = '#/settings';

@@ -1,6 +1,6 @@
 // Choices kept in this browser: theme, text size and notifications. Only an explicit choice is
 // stored; without one each falls back to its default.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function readPref(key: string): string | null {
   try {
@@ -19,8 +19,9 @@ export function writePref(key: string, value: string) {
 }
 
 /**
- * A stored choice: its current value, resolved from storage, and a setter that stores it and
- * passes it to `apply`. Applying the stored value when the page loads is main.tsx's job.
+ * A stored choice: its current value, resolved from storage, and a setter that stores it. The
+ * value is passed to `apply` after every render that changes it, so it wins over a preview that
+ * ends in the same render; main.tsx applies the stored values before the first render.
  */
 export function useChoice<T extends string>(
   key: string,
@@ -28,9 +29,9 @@ export function useChoice<T extends string>(
   apply?: (value: T) => void,
 ): [T, (value: T) => void] {
   const [value, setValue] = useState(() => resolve(readPref(key)));
+  useEffect(() => apply?.(value), [apply, value]);
   const choose = (v: T) => {
     writePref(key, v);
-    apply?.(v);
     setValue(v);
   };
   return [value, choose];
