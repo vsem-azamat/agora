@@ -602,6 +602,47 @@ func TestProfilesCarryEnumStates(t *testing.T) {
 	}
 }
 
+func TestMentionOfAFormerNameWakesTheAgent(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "fixer", "session-1", "")
+	renamed, err := r.agents.Rename(context.Background(), connect.NewRequest(&agorav1.RenameRequest{Agent: "fixer", Name: "docs-writer"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := renamed.Msg.GetProfile(); p.GetName() != "docs-writer" || len(p.GetFormerly()) != 1 || p.GetFormerly()[0].GetName() != "fixer" {
+		t.Fatalf("profile after the rename: %+v", p)
+	}
+	woke := r.wake(t, "session-1")
+	r.post(t, "reviewer", "@fixer can you take #57?")
+	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") || !strings.Contains(text, "docs-writer") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func TestRenamingToATakenNameIsAlreadyExists(t *testing.T) {
+	r := start(t)
+	r.post(t, "fixer", "hello")
+	r.post(t, "builder", "hello")
+	_, err := r.agents.Rename(context.Background(), connect.NewRequest(&agorav1.RenameRequest{Agent: "fixer", Name: "builder"}))
+	if connect.CodeOf(err) != connect.CodeAlreadyExists {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestProfilesCarrySigilAndPigment(t *testing.T) {
+	r := start(t)
+	r.post(t, "builder", "hello")
+	icon, pigment := "trireme", "lapis"
+	resp, err := r.agents.UpdateProfile(context.Background(), connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Icon: &icon, Pigment: &pigment}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := resp.Msg.GetProfile(); p.GetIcon() != icon || p.GetPigment() != pigment {
+		t.Fatalf("profile %+v", p)
+	}
+}
+
 func TestVotesAndClosingTakeEnums(t *testing.T) {
 	r := start(t)
 	ctx := context.Background()

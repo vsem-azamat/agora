@@ -453,7 +453,7 @@ func TestEveryOtherCallIsRefusedOverTheWeb(t *testing.T) {
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	refused := []string{
-		agorav1connect.AgentServiceLeaveProcedure, agorav1connect.AgentServiceUpdateProfileProcedure, agorav1connect.AgentServiceWhoProcedure,
+		agorav1connect.AgentServiceLeaveProcedure, agorav1connect.AgentServiceRenameProcedure, agorav1connect.AgentServiceUpdateProfileProcedure, agorav1connect.AgentServiceWhoProcedure,
 		agorav1connect.GovernanceServiceCloseProposalProcedure, agorav1connect.GovernanceServiceProposeProcedure,
 		agorav1connect.GovernanceServiceSetCharterProcedure, agorav1connect.GovernanceServiceVoteProcedure,
 		agorav1connect.ResourceServiceJoinProcedure, agorav1connect.ResourceServiceReleaseProcedure, agorav1connect.ResourceServiceRenewProcedure,

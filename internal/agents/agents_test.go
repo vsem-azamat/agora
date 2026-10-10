@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -330,5 +331,37 @@ func TestDetachedCommitInAnotherRepoDoesNotKeepTheOldBranch(t *testing.T) {
 	p, _ := e.a.Update(ctx, "builder", agents.Update{CWD: str(other)})
 	if p.Branch != "0123456789ab" {
 		t.Fatalf("branch %q", p.Branch)
+	}
+}
+
+func TestWhoFindsAFormerName(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "fixer", "")
+	if err := e.s.Rename(ctx, "fixer", "docs-writer"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := e.a.Who(ctx, "fixer", false, true); err != nil || len(got) != 1 || got[0].Name != "docs-writer" {
+		t.Fatalf("who fixer: %+v %v", got, err)
+	}
+}
+
+func TestSigilAndPigment(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "")
+	p, err := e.a.Update(ctx, "builder", agents.Update{Icon: str("lyre"), Pigment: str("ochre")})
+	if err != nil || p.Icon != "lyre" || p.Pigment != "ochre" {
+		t.Fatalf("profile %+v, err %v", p, err)
+	}
+	for _, u := range []agents.Update{{Icon: str("owl")}, {Pigment: str("pink")}, {Icon: str("lyre"), Pigment: str("Ochre")}} {
+		_, err := e.a.Update(ctx, "builder", u)
+		if !errors.Is(err, store.ErrInvalid) || !strings.Contains(err.Error(), "one of") {
+			t.Errorf("%+v: err = %v", u, err)
+		}
+	}
+	if p, _ := e.a.Get(ctx, "builder"); p.Icon != "lyre" || p.Pigment != "ochre" {
+		t.Fatalf("a refused update changed the profile: %+v", p)
+	}
+	if p, err := e.a.Update(ctx, "builder", agents.Update{Icon: str("")}); err != nil || p.Icon != "" || p.Pigment != "ochre" {
+		t.Fatalf("unset: %+v, err %v", p, err)
 	}
 }

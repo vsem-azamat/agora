@@ -277,7 +277,10 @@ func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body strin
 		return 0, err
 	}
 	for _, n := range names {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO mentions (message_id, agent) VALUES (?, ?)`, id, n); err != nil {
+		// a former name addresses the agent that gave it up
+		if _, err := tx.ExecContext(ctx, `INSERT INTO mentions (message_id, agent)
+			VALUES (:id, COALESCE((SELECT agent FROM former_names WHERE name = :n), :n)) ON CONFLICT DO NOTHING`,
+			sql.Named("id", id), sql.Named("n", n)); err != nil {
 			return 0, err
 		}
 	}

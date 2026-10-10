@@ -29,7 +29,7 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.As(err, &forbidden), errors.Is(err, rooms.ErrBoardOnly):
 		return connect.NewError(connect.CodePermissionDenied, err)
-	case errors.Is(err, sessions.ErrNameTaken):
+	case errors.Is(err, sessions.ErrNameTaken), errors.Is(err, agents.ErrTaken):
 		return connect.NewError(connect.CodeAlreadyExists, err)
 	case errors.Is(err, agents.ErrUnknown), errors.Is(err, rooms.ErrNotFound), errors.Is(err, governance.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, err)
@@ -96,7 +96,7 @@ var ciStates = map[string]agorav1.CiState{
 func profilePB(p agents.Profile) *agorav1.Profile {
 	out := &agorav1.Profile{
 		Name: p.Name, Kind: p.Kind, Project: p.Project, Task: p.Task, Status: p.Status, Cwd: p.CWD, Branch: p.Branch,
-		About: p.About, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
+		About: p.About, Icon: p.Icon, Pigment: p.Pigment, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
 		Session: profileSessions[p.SessionState], Active: p.Active,
 	}
 	for _, n := range p.PRs {
@@ -104,6 +104,9 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	}
 	for _, n := range p.FoundPRs {
 		out.FoundPrs = append(out.FoundPrs, int32(n))
+	}
+	for _, f := range p.Formerly {
+		out.Formerly = append(out.Formerly, &agorav1.FormerName{Name: f.Name, RenamedAt: timestamppb.New(f.At)})
 	}
 	if len(p.CI) > 0 {
 		out.CiState = make(map[int32]agorav1.CiState, len(p.CI))

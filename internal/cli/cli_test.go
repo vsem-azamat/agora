@@ -395,6 +395,42 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	}
 }
 
+func TestRenameAndSigil(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "session-rename")
+	t.Setenv("AGORA_NAME", "")
+	if r := agora(ctx, socket, "", "join", "fixer", "--project", "example-app"); r.code != 0 {
+		t.Fatalf("join: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "set", "--icon", "lyre", "--pigment", "ochre"); r.code != 0 || !strings.Contains(r.stdout, "lyre") || !strings.Contains(r.stdout, "ochre") {
+		t.Fatalf("set sigil: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "set", "--icon", "owl"); r.code != 1 || !strings.Contains(r.stderr, "one of") {
+		t.Fatalf("set the board's sigil: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "rename", "docs-writer"); r.code != 0 || !strings.Contains(r.stdout, "fixer is now called docs-writer") ||
+		!strings.Contains(r.stdout, "commands from this session now act as docs-writer") {
+		t.Fatalf("rename: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "whoami"); !strings.Contains(r.stdout, "name: docs-writer") {
+		t.Fatalf("whoami after rename: %+v", r)
+	}
+	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "docs-writer (was fixer)") {
+		t.Fatalf("status lacks the former name:\n%s", r.stdout)
+	}
+	if r := agora(ctx, socket, "x", "who", "fixer"); !strings.Contains(r.stdout, "docs-writer (was fixer)") {
+		t.Fatalf("who by the former name: %+v", r)
+	}
+	if r := agora(ctx, socket, "docs-writer", "rename", "reviewer"); r.code != 0 || !strings.Contains(r.stdout, "pass --as reviewer") {
+		t.Fatalf("rename by name: %+v", r)
+	}
+	if r := agora(ctx, socket, "fixer", "post", "general", "hello"); r.code != 1 || !strings.Contains(r.stderr, `now called "reviewer"`) {
+		t.Fatalf("posting as a former name: %+v", r)
+	}
+}
+
 func TestLeavingByNameSaysNothingAboutTheSession(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()

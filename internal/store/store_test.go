@@ -62,19 +62,7 @@ func TestCIColumnsMigrationSplitsReported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names, _ := fs.Glob(migrations, "migrations/*.sql")
-	for i, name := range names {
-		if strings.HasSuffix(name, "0009_ci_columns.sql") {
-			break
-		}
-		body, _ := migrations.ReadFile(name)
-		if _, err := db.ExecContext(ctx, string(body)); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
-			t.Fatal(err)
-		}
-	}
+	applyBefore(t, db, "0009_ci_columns.sql")
 	if _, err := db.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`); err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +86,59 @@ func TestCIColumnsMigrationSplitsReported(t *testing.T) {
 		if err := db.QueryRowContext(ctx, `SELECT ci_state, ci_head FROM pull_requests WHERE number = ?`, n).Scan(&state, &head); err != nil || [2]string{state, head} != want {
 			t.Errorf("#%d: %q %q err %v, want %q", n, state, head, err, want)
 		}
+	}
+}
+
+// applyBefore applies the migrations before the one named stop to db, as an older Agora did.
+func applyBefore(t *testing.T, db *sql.DB, stop string) {
+	t.Helper()
+	ctx := context.Background()
+	names, _ := fs.Glob(migrations, "migrations/*.sql")
+	for i, name := range names {
+		if strings.HasSuffix(name, stop) {
+			return
+		}
+		body, _ := migrations.ReadFile(name)
+		if _, err := db.ExecContext(ctx, string(body)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Fatalf("no migration %s", stop)
+}
+
+// TestNamesMigrationAddsSigilsAndFormerNames applies the migrations before it to a database
+// with an agent, then opens it: the agent has no sigil or pigment, and former names can be
+// recorded for it.
+func TestNamesMigrationAddsSigilsAndFormerNames(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0010_names.sql")
+	if _, err := db.ExecContext(ctx, `INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var icon, pigment string
+	if err := db.QueryRowContext(ctx, `SELECT icon, pigment FROM agents WHERE name = 'builder'`).Scan(&icon, &pigment); err != nil || icon != "" || pigment != "" {
+		t.Errorf("icon %q pigment %q err %v", icon, pigment, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO former_names (name, agent, renamed_at) VALUES ('fixer', 'builder', 2)`); err != nil {
+		t.Errorf("recording a former name: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO former_names (name, agent, renamed_at) VALUES ('ghost', 'nobody', 2)`); err == nil {
+		t.Error("a former name of no agent was recorded")
 	}
 }
 

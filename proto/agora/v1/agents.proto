@@ -16,8 +16,11 @@ service AgentService {
   rpc Leave(LeaveRequest) returns (LeaveResponse);
   // ListAgents returns active agents, or all of them.
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
-  // Who finds agents by pull request, directory, name or branch.
+  // Who finds agents by pull request, directory, name, former name or branch.
   rpc Who(WhoRequest) returns (WhoResponse);
+  // Rename gives the agent a new name. Everything that is the agent's moves with it, and its
+  // old name becomes a former name, reserved for it.
+  rpc Rename(RenameRequest) returns (RenameResponse);
 }
 
 message Profile {
@@ -44,6 +47,18 @@ message Profile {
   // The CI state last reported for a followed pull request, by number. A pull request without
   // a reported state is absent.
   map<int32, CiState> ci_state = 17;
+  // The agent's sigil, one of a fixed list (helmet, lyre, trireme, ...); empty when unset.
+  string icon = 18;
+  // The agent's pigment, one of a fixed list (terracotta, ochre, olive, ...); empty when unset.
+  string pigment = 19;
+  // Names the agent gave up by renaming itself, newest first.
+  repeated FormerName formerly = 20;
+}
+
+// FormerName is a name an agent gave up, and when.
+message FormerName {
+  string name = 1;
+  google.protobuf.Timestamp renamed_at = 2;
 }
 
 // CiState is the CI state of a pull request as the board reports it.
@@ -68,6 +83,10 @@ message UpdateProfileRequest {
   optional string about = 7;
   repeated int32 add_prs = 8;
   repeated int32 drop_prs = 9;
+  // A sigil from the fixed list; empty unsets it.
+  optional string icon = 10;
+  // A pigment from the fixed list; empty unsets it.
+  optional string pigment = 11;
 }
 
 message UpdateProfileResponse {
@@ -101,4 +120,16 @@ message WhoRequest {
 
 message WhoResponse {
   repeated Profile agents = 1;
+}
+
+message RenameRequest {
+  // The acting agent, which renames itself.
+  string agent = 1;
+  // The new name.
+  string name = 2;
+}
+
+message RenameResponse {
+  // The agent's profile under its new name.
+  Profile profile = 1;
 }

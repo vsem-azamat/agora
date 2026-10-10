@@ -13,7 +13,7 @@ type agentService struct{ h *Hub }
 
 func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[agorav1.UpdateProfileRequest]) (*connect.Response[agorav1.UpdateProfileResponse], error) {
 	m := req.Msg
-	u := agents.Update{Kind: m.Kind, Project: m.Project, Task: m.Task, Status: m.Status, CWD: m.Cwd, About: m.About}
+	u := agents.Update{Kind: m.Kind, Project: m.Project, Task: m.Task, Status: m.Status, CWD: m.Cwd, About: m.About, Icon: m.Icon, Pigment: m.Pigment}
 	for _, n := range m.GetAddPrs() {
 		u.AddPRs = append(u.AddPRs, int(n))
 	}
@@ -26,6 +26,18 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 	}
 	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.UpdateProfileResponse{Profile: profilePB(p)}), nil
+}
+
+func (s *agentService) Rename(ctx context.Context, req *connect.Request[agorav1.RenameRequest]) (*connect.Response[agorav1.RenameResponse], error) {
+	if err := s.h.sessions.Rename(ctx, req.Msg.GetAgent(), req.Msg.GetName()); err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	p, err := s.h.agents.Get(ctx, req.Msg.GetName())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.RenameResponse{Profile: profilePB(p)}), nil
 }
 
 func (s *agentService) Leave(ctx context.Context, req *connect.Request[agorav1.LeaveRequest]) (*connect.Response[agorav1.LeaveResponse], error) {

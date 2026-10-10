@@ -43,6 +43,9 @@ type Profile struct {
 	PRs          []int // declared
 	FoundPRs     []int // found from the branch by the pull request watcher
 	About        string
+	Icon         string       // a sigil from Icons, or ""
+	Pigment      string       // a colour from Pigments, or ""
+	Formerly     []FormerName // newest first
 	JoinedAt     time.Time
 	UpdatedAt    time.Time
 	SessionState string         // busy, idle or offline
@@ -52,8 +55,8 @@ type Profile struct {
 
 // Update changes the fields that are not nil; AddPRs and DropPRs edit the pull requests.
 type Update struct {
-	Kind, Project, Task, Status, CWD, About *string
-	AddPRs, DropPRs                         []int
+	Kind, Project, Task, Status, CWD, About, Icon, Pigment *string
+	AddPRs, DropPRs                                        []int
 }
 
 // Agents keeps profiles in the hub database.
@@ -81,6 +84,12 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 	if u.CWD != nil && !filepath.IsAbs(*u.CWD) {
 		return Profile{}, fmt.Errorf("%w: directory must be an absolute path", store.ErrInvalid)
 	}
+	if err := checkChoice("sigil", u.Icon, Icons); err != nil {
+		return Profile{}, err
+	}
+	if err := checkChoice("pigment", u.Pigment, Pigments); err != nil {
+		return Profile{}, err
+	}
 	for _, n := range append(slices.Clone(u.AddPRs), u.DropPRs...) {
 		if n <= 0 {
 			return Profile{}, fmt.Errorf("%w: pull request numbers are positive", store.ErrInvalid)
@@ -102,6 +111,8 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 		set(&p.Task, u.Task)
 		set(&p.Status, u.Status)
 		set(&p.About, u.About)
+		set(&p.Icon, u.Icon)
+		set(&p.Pigment, u.Pigment)
 		if u.CWD != nil {
 			dir := resolve(*u.CWD)
 			p.Branch = nextBranch(p.Branch, p.CWD, dir)
@@ -118,8 +129,8 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 			delete(prs, n)
 		}
 		p.PRs = sortedKeys(prs)
-		_, err = tx.ExecContext(ctx, `UPDATE agents SET kind = ?, project = ?, task = ?, status = ?, cwd = ?, branch = ?, prs = ?, about = ?, updated_at = ?
-			WHERE name = ?`, p.Kind, p.Project, p.Task, p.Status, p.CWD, p.Branch, joinPRs(p.PRs), p.About, now.UnixMilli(), name)
+		_, err = tx.ExecContext(ctx, `UPDATE agents SET kind = ?, project = ?, task = ?, status = ?, cwd = ?, branch = ?, prs = ?, about = ?, icon = ?, pigment = ?,
+			updated_at = ? WHERE name = ?`, p.Kind, p.Project, p.Task, p.Status, p.CWD, p.Branch, joinPRs(p.PRs), p.About, p.Icon, p.Pigment, now.UnixMilli(), name)
 		return err
 	})
 	if err != nil {
@@ -142,10 +153,17 @@ func ExistsTx(ctx context.Context, tx *sql.Tx, name string) error {
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM agents WHERE name = ?`, name).Scan(&n); err != nil {
 		return err
 	}
-	if n == 0 {
-		return unknown(name)
+	if n > 0 {
+		return nil
 	}
-	return nil
+	owner, err := formerOwner(ctx, tx, name)
+	switch {
+	case err != nil:
+		return err
+	case owner != "":
+		return nowCalled(ErrUnknown, name, owner)
+	}
+	return unknown(name)
 }
 
 func unknown(name string) error {
@@ -207,11 +225,12 @@ const sessionEnded, sessionBusy = "ended", "busy"
 
 // profileQuery selects full profiles; it takes sessionEnded, sessionBusy and Offline as its
 // first arguments.
-const profileQuery = `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
+const profileQuery = `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.icon, a.pigment, a.joined_at, a.updated_at,
 	COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != ?
 		ORDER BY CASE s.state WHEN ? THEN 0 ELSE 1 END LIMIT 1), ?),
 	COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), ''),
-	` + ciColumn + `
+	` + ciColumn + `,
+	` + formerlyColumn + `
 	FROM agents AS a`
 
 // active reports whether p counts as active at now: not left, and with a live session or
@@ -262,7 +281,7 @@ func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profi
 		case prErr == nil:
 			hit = slices.Contains(p.PRs, pr) || slices.Contains(p.FoundPRs, pr)
 		default:
-			hit = q == p.Name || (q != "" && q == p.Branch) || (len(q) > 2 && strings.Contains(p.Branch, q))
+			hit = q == p.Name || formerly(p, q) || (q != "" && q == p.Branch) || (len(q) > 2 && strings.Contains(p.Branch, q))
 		}
 		if hit {
 			out = append(out, p)
@@ -272,6 +291,11 @@ func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profi
 }
 
 // --- internals ---------------------------------------------------------------------
+
+// formerly reports whether name is one of p's former names.
+func formerly(p Profile, name string) bool {
+	return slices.ContainsFunc(p.Formerly, func(f FormerName) bool { return f.Name == name })
+}
 
 type scanner interface{ Scan(...any) error }
 
@@ -297,10 +321,12 @@ func parseCI(s string) map[int]string {
 
 func scan(r scanner) (Profile, error) {
 	var p Profile
-	var prs, found, ci string
+	var prs, found, ci, former string
 	var joined, updated int64
-	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &joined, &updated, &p.SessionState, &found, &ci)
+	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &p.Icon, &p.Pigment, &joined, &updated,
+		&p.SessionState, &found, &ci, &former)
 	p.CI = parseCI(ci)
+	p.Formerly = parseFormerly(former)
 	p.PRs = parsePRs(prs)
 	if f := parsePRs(found); len(f) > 0 {
 		slices.Sort(f)
@@ -311,8 +337,8 @@ func scan(r scanner) (Profile, error) {
 }
 
 func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
-	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, ?, '',
-		`+ciColumn+`
+	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, icon, pigment, joined_at, updated_at, ?, '',
+		`+ciColumn+`, ''
 		FROM agents AS a WHERE name = ?`, Offline, name))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, unknown(name)

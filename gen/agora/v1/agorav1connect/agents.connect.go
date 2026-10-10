@@ -42,6 +42,8 @@ const (
 	AgentServiceListAgentsProcedure = "/agora.v1.AgentService/ListAgents"
 	// AgentServiceWhoProcedure is the fully-qualified name of the AgentService's Who RPC.
 	AgentServiceWhoProcedure = "/agora.v1.AgentService/Who"
+	// AgentServiceRenameProcedure is the fully-qualified name of the AgentService's Rename RPC.
+	AgentServiceRenameProcedure = "/agora.v1.AgentService/Rename"
 )
 
 // AgentServiceClient is a client for the agora.v1.AgentService service.
@@ -53,8 +55,11 @@ type AgentServiceClient interface {
 	Leave(context.Context, *connect.Request[v1.LeaveRequest]) (*connect.Response[v1.LeaveResponse], error)
 	// ListAgents returns active agents, or all of them.
 	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
-	// Who finds agents by pull request, directory, name or branch.
+	// Who finds agents by pull request, directory, name, former name or branch.
 	Who(context.Context, *connect.Request[v1.WhoRequest]) (*connect.Response[v1.WhoResponse], error)
+	// Rename gives the agent a new name. Everything that is the agent's moves with it, and its
+	// old name becomes a former name, reserved for it.
+	Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the agora.v1.AgentService service. By default, it
@@ -92,6 +97,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("Who")),
 			connect.WithClientOptions(opts...),
 		),
+		rename: connect.NewClient[v1.RenameRequest, v1.RenameResponse](
+			httpClient,
+			baseURL+AgentServiceRenameProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("Rename")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -101,6 +112,7 @@ type agentServiceClient struct {
 	leave         *connect.Client[v1.LeaveRequest, v1.LeaveResponse]
 	listAgents    *connect.Client[v1.ListAgentsRequest, v1.ListAgentsResponse]
 	who           *connect.Client[v1.WhoRequest, v1.WhoResponse]
+	rename        *connect.Client[v1.RenameRequest, v1.RenameResponse]
 }
 
 // UpdateProfile calls agora.v1.AgentService.UpdateProfile.
@@ -123,6 +135,11 @@ func (c *agentServiceClient) Who(ctx context.Context, req *connect.Request[v1.Wh
 	return c.who.CallUnary(ctx, req)
 }
 
+// Rename calls agora.v1.AgentService.Rename.
+func (c *agentServiceClient) Rename(ctx context.Context, req *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error) {
+	return c.rename.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the agora.v1.AgentService service.
 type AgentServiceHandler interface {
 	// UpdateProfile changes the fields that are set.
@@ -132,8 +149,11 @@ type AgentServiceHandler interface {
 	Leave(context.Context, *connect.Request[v1.LeaveRequest]) (*connect.Response[v1.LeaveResponse], error)
 	// ListAgents returns active agents, or all of them.
 	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
-	// Who finds agents by pull request, directory, name or branch.
+	// Who finds agents by pull request, directory, name, former name or branch.
 	Who(context.Context, *connect.Request[v1.WhoRequest]) (*connect.Response[v1.WhoResponse], error)
+	// Rename gives the agent a new name. Everything that is the agent's moves with it, and its
+	// old name becomes a former name, reserved for it.
+	Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -167,6 +187,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("Who")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceRenameHandler := connect.NewUnaryHandler(
+		AgentServiceRenameProcedure,
+		svc.Rename,
+		connect.WithSchema(agentServiceMethods.ByName("Rename")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceUpdateProfileProcedure:
@@ -177,6 +203,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceListAgentsHandler.ServeHTTP(w, r)
 		case AgentServiceWhoProcedure:
 			agentServiceWhoHandler.ServeHTTP(w, r)
+		case AgentServiceRenameProcedure:
+			agentServiceRenameHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -200,4 +228,8 @@ func (UnimplementedAgentServiceHandler) ListAgents(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) Who(context.Context, *connect.Request[v1.WhoRequest]) (*connect.Response[v1.WhoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.AgentService.Who is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.AgentService.Rename is not implemented"))
 }

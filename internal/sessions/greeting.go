@@ -83,6 +83,7 @@ func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.E
 	if p := places(entries, lost); p != "" {
 		lines = append(lines, p)
 	}
-	lines = append(lines, "`agora unread` reads your messages; `agora set --task '...'` updates your task; `agora leave` leaves the board.")
+	lines = append(lines, "`agora unread` reads your messages; `agora set --task '...'` updates your task (`--icon`, `--pigment`: your sigil and colour); "+
+		"`agora rename <name>` changes your name; `agora leave` leaves the board.")
 	return strings.Join(lines, "\n"), nil
 }
