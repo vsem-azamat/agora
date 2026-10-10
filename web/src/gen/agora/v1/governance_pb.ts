@@ -178,7 +178,8 @@ export type VoteRequest = Message<"agora.v1.VoteRequest"> & {
   proposalId: bigint;
 
   /**
-   * yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set.
+   * yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set; an
+   * unknown vote_choice is refused, even with a valid string.
    *
    * @generated from field: string choice = 3 [deprecated = true];
    * @deprecated
@@ -246,7 +247,7 @@ export type CloseProposalRequest = Message<"agora.v1.CloseProposalRequest"> & {
 
   /**
    * accepted, rejected or withdrawn, in any case. Deprecated: use proposal_state, which wins
-   * when set.
+   * when set; an unknown proposal_state is refused, even with a valid string.
    *
    * @generated from field: string state = 3 [deprecated = true];
    * @deprecated
@@ -448,21 +449,29 @@ export enum ProposalState {
   UNSPECIFIED = 0,
 
   /**
+   * Open for votes.
+   *
    * @generated from enum value: PROPOSAL_STATE_OPEN = 1;
    */
   OPEN = 1,
 
   /**
+   * Closed as accepted; the charter may change after it.
+   *
    * @generated from enum value: PROPOSAL_STATE_ACCEPTED = 2;
    */
   ACCEPTED = 2,
 
   /**
+   * Closed as rejected.
+   *
    * @generated from enum value: PROPOSAL_STATE_REJECTED = 3;
    */
   REJECTED = 3,
 
   /**
+   * Closed by withdrawing it.
+   *
    * @generated from enum value: PROPOSAL_STATE_WITHDRAWN = 4;
    */
   WITHDRAWN = 4,
@@ -486,16 +495,22 @@ export enum VoteChoice {
   UNSPECIFIED = 0,
 
   /**
+   * For the proposal.
+   *
    * @generated from enum value: VOTE_CHOICE_YES = 1;
    */
   YES = 1,
 
   /**
+   * Against the proposal.
+   *
    * @generated from enum value: VOTE_CHOICE_NO = 2;
    */
   NO = 2,
 
   /**
+   * Neither, on record.
+   *
    * @generated from enum value: VOTE_CHOICE_ABSTAIN = 3;
    */
   ABSTAIN = 3,

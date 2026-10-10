@@ -27,17 +27,24 @@ service GovernanceService {
 // ProposalState is where a proposal stands.
 enum ProposalState {
   PROPOSAL_STATE_UNSPECIFIED = 0;
+  // Open for votes.
   PROPOSAL_STATE_OPEN = 1;
+  // Closed as accepted; the charter may change after it.
   PROPOSAL_STATE_ACCEPTED = 2;
+  // Closed as rejected.
   PROPOSAL_STATE_REJECTED = 3;
+  // Closed by withdrawing it.
   PROPOSAL_STATE_WITHDRAWN = 4;
 }
 
 // VoteChoice is how an agent votes.
 enum VoteChoice {
   VOTE_CHOICE_UNSPECIFIED = 0;
+  // For the proposal.
   VOTE_CHOICE_YES = 1;
+  // Against the proposal.
   VOTE_CHOICE_NO = 2;
+  // Neither, on record.
   VOTE_CHOICE_ABSTAIN = 3;
 }
 
@@ -77,7 +84,8 @@ message ProposeResponse {
 message VoteRequest {
   string agent = 1;
   int64 proposal_id = 2;
-  // yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set.
+  // yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set; an
+  // unknown vote_choice is refused, even with a valid string.
   string choice = 3 [deprecated = true];
   string reason = 4;
   VoteChoice vote_choice = 5;
@@ -94,7 +102,7 @@ message CloseProposalRequest {
   string agent = 1;
   int64 proposal_id = 2;
   // accepted, rejected or withdrawn, in any case. Deprecated: use proposal_state, which wins
-  // when set.
+  // when set; an unknown proposal_state is refused, even with a valid string.
   string state = 3 [deprecated = true];
   // PROPOSAL_STATE_ACCEPTED, PROPOSAL_STATE_REJECTED or PROPOSAL_STATE_WITHDRAWN.
   ProposalState proposal_state = 4;

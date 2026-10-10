@@ -621,6 +621,12 @@ func TestVotesAndClosingTakeEnumsOrStrings(t *testing.T) {
 	if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_YES, Choice: "no"})); err != nil { //nolint:staticcheck // the enum wins over the string
 		t.Fatal(err)
 	}
+	if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: 99, Choice: "yes"})); connect.CodeOf(err) != connect.CodeInvalidArgument { //nolint:staticcheck // the string must not rescue an unknown enum
+		t.Fatalf("unknown vote choice: %v", err)
+	}
+	if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: 99, State: "accepted"})); connect.CodeOf(err) != connect.CodeInvalidArgument { //nolint:staticcheck // the string must not rescue an unknown enum
+		t.Fatalf("unknown proposal state: %v", err)
+	}
 	if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: agorav1.ProposalState_PROPOSAL_STATE_OPEN})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("closing as open: %v", err)
 	}

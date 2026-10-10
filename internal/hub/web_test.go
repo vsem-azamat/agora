@@ -410,6 +410,7 @@ func TestWatchSendsChangesAndIgnoresReads(t *testing.T) {
 		_, _ = agorav1connect.NewAgentServiceClient(c, w.base).ListAgents(ctx, connect.NewRequest(&agorav1.ListAgentsRequest{}))
 		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{}))
 		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Follow: true}))
+		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{}))
 	}
 	select {
 	case rev := <-got:
@@ -536,7 +537,8 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 	if got := followed.Msg.GetRooms(); len(got) != 2 || got[1] != "example-app" {
 		t.Fatalf("operator follows %v", got)
 	}
-	listed, err := rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{Agent: "builder"}))
+	// the request names an agent that never joined: only the operator override makes it work
+	listed, err := rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{Agent: "ghost"}))
 	if err != nil || len(listed.Msg.GetRooms()) != 2 || listed.Msg.GetRooms()[1] != "example-app" {
 		t.Fatalf("listed for the operator: %v %v", listed, err)
 	}

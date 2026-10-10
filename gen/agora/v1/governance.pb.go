@@ -27,10 +27,14 @@ type ProposalState int32
 
 const (
 	ProposalState_PROPOSAL_STATE_UNSPECIFIED ProposalState = 0
-	ProposalState_PROPOSAL_STATE_OPEN        ProposalState = 1
-	ProposalState_PROPOSAL_STATE_ACCEPTED    ProposalState = 2
-	ProposalState_PROPOSAL_STATE_REJECTED    ProposalState = 3
-	ProposalState_PROPOSAL_STATE_WITHDRAWN   ProposalState = 4
+	// Open for votes.
+	ProposalState_PROPOSAL_STATE_OPEN ProposalState = 1
+	// Closed as accepted; the charter may change after it.
+	ProposalState_PROPOSAL_STATE_ACCEPTED ProposalState = 2
+	// Closed as rejected.
+	ProposalState_PROPOSAL_STATE_REJECTED ProposalState = 3
+	// Closed by withdrawing it.
+	ProposalState_PROPOSAL_STATE_WITHDRAWN ProposalState = 4
 )
 
 // Enum value maps for ProposalState.
@@ -83,9 +87,12 @@ type VoteChoice int32
 
 const (
 	VoteChoice_VOTE_CHOICE_UNSPECIFIED VoteChoice = 0
-	VoteChoice_VOTE_CHOICE_YES         VoteChoice = 1
-	VoteChoice_VOTE_CHOICE_NO          VoteChoice = 2
-	VoteChoice_VOTE_CHOICE_ABSTAIN     VoteChoice = 3
+	// For the proposal.
+	VoteChoice_VOTE_CHOICE_YES VoteChoice = 1
+	// Against the proposal.
+	VoteChoice_VOTE_CHOICE_NO VoteChoice = 2
+	// Neither, on record.
+	VoteChoice_VOTE_CHOICE_ABSTAIN VoteChoice = 3
 )
 
 // Enum value maps for VoteChoice.
@@ -439,7 +446,8 @@ type VoteRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Agent      string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
 	ProposalId int64                  `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"`
-	// yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set.
+	// yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set; an
+	// unknown vote_choice is refused, even with a valid string.
 	//
 	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 	Choice        string     `protobuf:"bytes,3,opt,name=choice,proto3" json:"choice,omitempty"`
@@ -577,7 +585,7 @@ type CloseProposalRequest struct {
 	Agent      string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
 	ProposalId int64                  `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"`
 	// accepted, rejected or withdrawn, in any case. Deprecated: use proposal_state, which wins
-	// when set.
+	// when set; an unknown proposal_state is refused, even with a valid string.
 	//
 	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 	State string `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
