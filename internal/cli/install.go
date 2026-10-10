@@ -38,9 +38,6 @@ func listTargets(w io.Writer, verb string) {
 	fmt.Fprintf(w, "\nRun `agora %s <target> --help` for its options.\n", verb)
 }
 
-// lookPath finds agora on PATH; tests replace it.
-var lookPath = exec.LookPath
-
 // agoraBinary is the absolute path hooks and the service call: --bin when given, else the
 // running binary, by its path on PATH when that is the same file (so a link such as one in a
 // package manager's bin directory survives upgrades). A temporary build (`go run`, a test
@@ -63,7 +60,7 @@ func agoraBinary(flag string) (string, error) {
 	if exe, err = filepath.Abs(exe); err != nil {
 		return "", err
 	}
-	if p, err := lookPath("agora"); err == nil {
+	if p, err := exec.LookPath("agora"); err == nil {
 		if abs, err := filepath.Abs(p); err == nil && sameFile(abs, exe) {
 			return abs, nil
 		}
@@ -96,7 +93,21 @@ func temporaryPath(p string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+const settingsHelp = "Claude Code settings file (default $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json)"
+
 const binHelp = "agora binary the integration runs (default: the running binary, by its PATH location when that is the same file)"
+
+// printWritten reports what writing the file at path of what (a hub service, an agent skill) did.
+func printWritten(w io.Writer, outcome install.Outcome, what, path string) {
+	switch outcome {
+	case install.Unchanged:
+		fmt.Fprintf(w, "%s already installed: %s\n", what, path)
+	case install.Updated:
+		fmt.Fprintf(w, "updated the %s: %s\n", what, path)
+	default:
+		fmt.Fprintf(w, "wrote the %s: %s\n", what, path)
+	}
+}
 
 func printForeign(w io.Writer, cmds []string) {
 	for _, c := range cmds {
@@ -171,7 +182,7 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&settings, "settings", "", "Claude Code settings file (default $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&settings, "settings", "", settingsHelp)
 	cmd.Flags().StringVar(&terminalEnv, "terminal-env", "",
 		"environment variable that holds the session's terminal handle, passed to the hub as $AGORA_TERMINAL for its wake command")
 	cmd.Flags().StringVar(&binFlag, "bin", "", binHelp)
@@ -207,7 +218,7 @@ func uninstallClaudeCodeCmd(o *options) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&settings, "settings", "", "Claude Code settings file (default $CLAUDE_CONFIG_DIR/settings.json, else ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&settings, "settings", "", settingsHelp)
 	cmd.Flags().StringVar(&binFlag, "bin", "", "also remove hooks that run this binary, whatever its name")
 	return cmd
 }
@@ -297,19 +308,11 @@ func installServiceCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path := filepath.Join(dir, install.ServiceName+".service")
 			outcome, err := install.InstallService(dir, install.Unit(argv))
 			if err != nil {
 				return err
 			}
-			switch outcome {
-			case install.Unchanged:
-				fmt.Fprintf(o.out, "hub service already installed: %s\n", path)
-			case install.Updated:
-				fmt.Fprintf(o.out, "updated the hub service: %s\n", path)
-			default:
-				fmt.Fprintf(o.out, "wrote the hub service: %s\n", path)
-			}
+			printWritten(o.out, outcome, "hub service", install.ServicePath(dir))
 			cmds := [][]string{{"daemon-reload"}, {"enable", "--now", install.ServiceName}}
 			if outcome == install.Updated {
 				cmds = append(cmds, []string{"restart", install.ServiceName})
@@ -349,7 +352,7 @@ func uninstallServiceCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			path := filepath.Join(dir, install.ServiceName+".service")
+			path := install.ServicePath(dir)
 			installed, err := install.ServiceInstalled(dir)
 			if err != nil {
 				return err
@@ -419,14 +422,7 @@ func installSkillCmd(o *options) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				switch outcome {
-				case install.Unchanged:
-					fmt.Fprintf(o.out, "agent skill already installed: %s\n", install.SkillPath(d))
-				case install.Updated:
-					fmt.Fprintf(o.out, "updated the agent skill: %s\n", install.SkillPath(d))
-				default:
-					fmt.Fprintf(o.out, "wrote the agent skill: %s\n", install.SkillPath(d))
-				}
+				printWritten(o.out, outcome, "agent skill", install.SkillPath(d))
 			}
 			return nil
 		},

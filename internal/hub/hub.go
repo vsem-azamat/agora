@@ -50,6 +50,20 @@ const (
 	DefaultWatchFirst = 10 * time.Second
 	// DefaultWatchEvery is how often the hub looks up pull requests after that.
 	DefaultWatchEvery = 2 * time.Minute
+
+	// shutdownGrace is how long unary calls may finish once the hub shuts down.
+	shutdownGrace = 5 * time.Second
+	// readHeaderTimeout bounds reading a request's headers, on the socket and the web listener.
+	readHeaderTimeout = 10 * time.Second
+	// webIdleTimeout closes idle web connections.
+	webIdleTimeout = 2 * time.Minute
+	// maxWebHeader bounds the request headers the web listener accepts.
+	maxWebHeader = 64 << 10
+	// wakeKillWait is how long a killed wake command may keep its output open before the hub
+	// stops reading it.
+	wakeKillWait = time.Second
+	// wakeOutputTail is how much of a failed wake command's output its result keeps.
+	wakeOutputTail = 300
 )
 
 // Hub holds the services and the change signal that wakes streaming waiters.
@@ -69,6 +83,7 @@ type Hub struct {
 	WakeCommand string
 	// WakeSettle is how long a session stays idle before the wake command may wake it.
 	WakeSettle time.Duration
+	wakeEvery  time.Duration // how often the wake loop runs: WakeCheckEvery, shorter in tests
 
 	// Forges, by host, are asked about the pull requests of active agents; with none the hub
 	// does not follow pull requests.
@@ -99,7 +114,7 @@ func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms,
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Hub{
-		queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle,
+		queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle, wakeEvery: WakeCheckEvery,
 		WatchFirst: DefaultWatchFirst, WatchEvery: DefaultWatchEvery,
 	}
 }
@@ -214,7 +229,8 @@ func (l *lockedListener) Close() error {
 }
 
 // Serve runs the hub on l until ctx ends. On shutdown it ends open streams, lets unary calls
-// finish for up to 5 seconds, and returns only after the server has stopped.
+// finish for up to shutdownGrace, and returns only after the server and every background loop
+// have stopped, so nothing writes to the database the caller closes next.
 func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -225,23 +241,23 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 	srv := &http.Server{
 		Handler:           h.Handler(),
 		Protocols:         protocols,
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
 		BaseContext:       func(net.Listener) context.Context { return base },
 	}
-	sweepCtx, stopSweep := context.WithCancel(ctx)
-	var watching sync.WaitGroup
+	loopCtx, stopLoops := context.WithCancel(ctx)
+	var loops sync.WaitGroup
 	defer func() {
-		stopSweep()
-		watching.Wait() // a pull request round writes to the database the caller closes next
+		stopLoops()
+		loops.Wait()
 	}()
-	go h.Sweep(sweepCtx)
+	loops.Go(func() { h.Sweep(loopCtx) })
 	var webSrv *http.Server
 	if h.webListener != nil {
 		webSrv = &http.Server{
 			Handler:           h.WebHandler(),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       2 * time.Minute,
-			MaxHeaderBytes:    64 << 10,
+			ReadHeaderTimeout: readHeaderTimeout,
+			IdleTimeout:       webIdleTimeout,
+			MaxHeaderBytes:    maxWebHeader,
 			BaseContext:       func(net.Listener) context.Context { return base },
 		}
 		go func() {
@@ -251,17 +267,17 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		}()
 	}
 	if h.WakeCommand != "" {
-		go h.wakeLoop(sweepCtx)
+		loops.Go(func() { h.wakeLoop(loopCtx) })
 	}
 	if len(h.Forges) > 0 && h.db != nil {
-		watching.Go(func() { h.watchLoop(sweepCtx) })
+		loops.Go(func() { h.watchLoop(loopCtx) })
 	}
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		<-ctx.Done()
-		endStreams() // waiting streams return; clients reconnect to the next hub
-		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		<-loopCtx.Done() // ctx ended, or Serve failed and returns
+		endStreams()     // waiting streams return; clients reconnect to the next hub
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownGrace)
 		defer cancel()
 		if webSrv != nil {
 			_ = webSrv.Shutdown(shutdown) // like the socket server below
@@ -269,11 +285,14 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 		_ = srv.Shutdown(shutdown) // past the deadline Serve has returned; what is left is closed with the process
 	}()
 	err := srv.Serve(l)
-	if webSrv != nil && !errors.Is(err, http.ErrServerClosed) {
-		_ = webSrv.Close() // the socket failed: the caller closes the database next
+	if !errors.Is(err, http.ErrServerClosed) {
+		if webSrv != nil {
+			_ = webSrv.Close() // the socket failed: the caller closes the database next
+		}
+		stopLoops()
 	}
+	<-stopped
 	if errors.Is(err, http.ErrServerClosed) {
-		<-stopped
 		return nil
 	}
 	return err
@@ -791,7 +810,7 @@ func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agor
 
 // wakeLoop runs the wake command for idle sessions with a terminal that no connector waits for.
 func (h *Hub) wakeLoop(ctx context.Context) {
-	t := time.NewTicker(WakeCheckEvery)
+	t := time.NewTicker(h.wakeEvery)
 	defer t.Stop()
 	for {
 		select {
@@ -854,14 +873,14 @@ func runWakeCommand(ctx context.Context, command, terminal, text string) (string
 	cmd.Env = append(os.Environ(), "AGORA_TERMINAL="+terminal, "AGORA_WAKE_TEXT="+text)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	cmd.WaitDelay = time.Second
+	cmd.WaitDelay = wakeKillWait
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return "ok", true
 	}
 	tail := strings.TrimSpace(string(out))
-	if len(tail) > 300 {
-		tail = tail[len(tail)-300:]
+	if len(tail) > wakeOutputTail {
+		tail = tail[len(tail)-wakeOutputTail:]
 	}
 	return strings.TrimSpace(err.Error() + ": " + tail), false
 }

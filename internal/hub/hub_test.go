@@ -2,9 +2,11 @@ package hub_test
 
 import (
 	"context"
+	"database/sql"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -50,6 +52,7 @@ type running struct {
 	sessions   agorav1connect.SessionServiceClient
 	rooms      agorav1connect.RoomServiceClient
 	agents     agorav1connect.AgentServiceClient
+	db         *sql.DB // closed after Serve returns, as the hub command does
 	clock      *clock
 	stop       context.CancelFunc
 	done       chan struct{} // closed when Serve returns
@@ -72,7 +75,7 @@ func startWith(t *testing.T, configure func(*hub.Hub)) *running {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &running{clock: c, stop: cancel, done: make(chan struct{})}
+	r := &running{db: db, clock: c, stop: cancel, done: make(chan struct{})}
 	h := hub.Open(db, c.now, nil)
 	if configure != nil {
 		configure(h)
@@ -519,5 +522,63 @@ func TestShutdownWaitsForTheWatchRound(t *testing.T) {
 	defer f.mu.Unlock()
 	if !f.done {
 		t.Fatal("Serve returned while a lookup was still running")
+	}
+}
+
+func TestShutdownWaitsForTheWakeCommand(t *testing.T) {
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("needs setsid")
+	}
+	ready := filepath.Join(shortDir(t), "ready")
+	r := startWith(t, func(h *hub.Hub) {
+		// The setsid child is outside the process group the hub kills and keeps the command's
+		// output open, so the run ends a while after shutdown has begun.
+		h.WakeCommand = "touch " + ready + "; setsid sleep 2 & wait"
+		h.WakeSettle = 0
+		hub.SetWakeEvery(h, 10*time.Millisecond)
+	})
+	r.idleAgent(t, "builder", "session-1", "pane-7")
+	r.post(t, "reviewer", "@builder ping")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the wake command did not run")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	r.stop()
+	<-r.done
+	var result string
+	if err := r.db.QueryRowContext(context.Background(), `SELECT wake_result FROM sessions WHERE id = 'session-1'`).Scan(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result == "" {
+		t.Fatal("Serve returned before the wake was recorded")
+	}
+}
+
+func TestServeReturnsWhenTheListenerFails(t *testing.T) {
+	db, err := store.Open(context.Background(), filepath.Join(shortDir(t), "agora.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	l, err := hub.Listen(filepath.Join(shortDir(t), "hub.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Close()
+	done := make(chan error, 1)
+	go func() { done <- hub.Open(db, nil, nil).Serve(context.Background(), l) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("Serve on a closed listener returned no error")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Serve did not return after its listener failed")
 	}
 }

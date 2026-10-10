@@ -80,11 +80,12 @@ func systemdQuote(s string) string {
 	return b.String()
 }
 
-func unitPath(dir string) string { return filepath.Join(dir, ServiceName+".service") }
+// ServicePath is the unit file of the hub service in the user unit directory dir.
+func ServicePath(dir string) string { return filepath.Join(dir, ServiceName+".service") }
 
 // ServiceInstalled reports whether dir holds the hub's unit, and refuses one Agora did not write.
 func ServiceInstalled(dir string) (bool, error) {
-	b, err := os.ReadFile(unitPath(dir))
+	b, err := os.ReadFile(ServicePath(dir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
@@ -92,7 +93,7 @@ func ServiceInstalled(dir string) (bool, error) {
 		return false, err
 	}
 	if !strings.HasPrefix(string(b), UnitHeader+"\n") {
-		return true, fmt.Errorf("%s was not written by agora install; move it away first", unitPath(dir))
+		return true, fmt.Errorf("%s was not written by agora install; move it away first", ServicePath(dir))
 	}
 	return true, nil
 }
@@ -102,7 +103,7 @@ func InstallService(dir, unit string) (Outcome, error) {
 	if _, err := ServiceInstalled(dir); err != nil {
 		return 0, err
 	}
-	return writeIfChanged(unitPath(dir), []byte(unit))
+	return writeIfChanged(ServicePath(dir), []byte(unit))
 }
 
 // UninstallService removes the hub's unit file from dir and the link that enabling it made,
@@ -121,7 +122,7 @@ func UninstallService(dir string) (Outcome, error) {
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return 0, err
 	}
-	o, err := removeIfExists(unitPath(dir))
+	o, err := removeIfExists(ServicePath(dir))
 	if err != nil {
 		return 0, err
 	}

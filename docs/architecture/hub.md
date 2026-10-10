@@ -35,7 +35,7 @@ The hub is the process that holds Agora's state and serves its API.
 
 ## Shutdown
 
-On `SIGINT` or `SIGTERM` the hub ends every open stream, lets unary calls finish for up to 5 seconds, and exits. Queues are stored, so a client waiting for its turn reconnects to the next hub, retrying every second, and keeps waiting; it gives up as unreachable once no hub has answered for 30 seconds.
+On `SIGINT` or `SIGTERM` the hub ends every open stream, lets unary calls finish for up to 5 seconds, stops its background work (the sweep, wake command runs and a pull request round) and waits for it, so nothing writes to the database after it is closed, and exits. Queues are stored, so a client waiting for its turn reconnects to the next hub, retrying every second, and keeps waiting; it gives up as unreachable once no hub has answered for 30 seconds.
 
 ## Identity
 
