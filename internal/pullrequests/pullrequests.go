@@ -16,6 +16,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/gitinfo"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -27,14 +28,17 @@ const (
 	MaxSkip = 7
 )
 
+// State is the CI state of a pull request.
+type State string
+
 // CI states.
 const (
-	Green   = "green"
-	Red     = "red"
-	Pending = "pending"
+	Green   State = "green"
+	Red     State = "red"
+	Pending State = "pending"
 	// Conflict is the state of a pull request that conflicts with its base branch and has no
 	// failed check: CI does not run for it.
-	Conflict = "conflict"
+	Conflict State = "conflict"
 )
 
 // Watcher looks up pull requests in rounds and posts CI messages.
@@ -225,8 +229,33 @@ func (w *Watcher) lookup(ctx context.Context, g *group) (forge.Result, error) {
 // apply stores which pull requests each agent of the group follows and posts CI messages, in
 // one transaction.
 func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, error) {
-	open := map[int]forge.PR{}
-	gone := map[int]bool{} // reported closed, merged or not existing
+	open, gone := split(res)
+	follow := following(g, res.DefaultBranch, open)
+	key := g.repo.Key()
+	var notes []string
+	err := store.InTx(ctx, w.db, func(tx *sql.Tx) error {
+		for _, agent := range slices.Sorted(maps.Keys(follow)) {
+			n, err := w.sync(ctx, tx, g, agent, follow[agent], open, gone)
+			if err != nil {
+				return err
+			}
+			notes = append(notes, n...)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if len(notes) > 0 {
+		w.log.Info("CI messages posted", "repo", key, "messages", notes)
+	}
+	return len(notes), nil
+}
+
+// split sorts the forge's reply into open pull requests and the numbers that are closed,
+// merged or do not exist.
+func split(res forge.Result) (open map[int]forge.PR, gone map[int]bool) {
+	open, gone = map[int]forge.PR{}, map[int]bool{}
 	for _, p := range res.PRs {
 		if p.Open {
 			open[p.Number] = p
@@ -237,13 +266,19 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 	for _, n := range res.NotFound {
 		gone[n] = true
 	}
-	// agent -> number -> found from the branch (false: followed because declared)
+	return open, gone
+}
+
+// following works out the open pull requests each agent of the group follows: agent ->
+// number -> found from the branch (false: followed because declared). Every agent of the group
+// has an entry, so the pull requests it no longer follows are removed even if none is open.
+func following(g *group, defaultBranch string, open map[int]forge.PR) map[string]map[int]bool {
 	follow := map[string]map[int]bool{}
 	mark := func(agent string, n int, found bool) {
 		follow[agent][n] = follow[agent][n] || found
 	}
 	for agent, ns := range g.found {
-		follow[agent] = map[int]bool{} // so its closed pull requests are removed even if none is open
+		follow[agent] = map[int]bool{}
 		for _, n := range ns {
 			if _, ok := open[n]; ok {
 				mark(agent, n, true)
@@ -254,7 +289,7 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 		if follow[agent] == nil {
 			follow[agent] = map[int]bool{}
 		}
-		if m.branch != "" && m.branch != res.DefaultBranch {
+		if m.branch != "" && m.branch != defaultBranch {
 			for _, p := range open {
 				if !p.Fork && p.Branch == m.branch {
 					mark(agent, p.Number, true)
@@ -267,102 +302,93 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 			}
 		}
 	}
+	return follow
+}
 
+// followed is a stored pull request row of one agent in one repository.
+type followed struct {
+	found    bool
+	reported string // the state and head commit last reported, "green <sha>"
+}
+
+// sync stores the pull requests agent follows in the group's repository, drops the ones it no
+// longer follows, and posts a message for each CI state that turned green, red or conflicting.
+// It returns a note per message.
+func (w *Watcher) sync(ctx context.Context, tx *sql.Tx, g *group, agent string, nums map[int]bool, open map[int]forge.PR, gone map[int]bool) ([]string, error) {
 	key := g.repo.Key()
-	posted := 0
-	var notes []string
-	tx, err := w.db.BeginTx(ctx, nil)
+	stored, err := storedPRs(ctx, tx, agent, key)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback() }() // no-op once committed
-	for _, agent := range slices.Sorted(maps.Keys(follow)) {
-		nums := follow[agent]
-		type row struct {
-			found    bool
-			reported string
+	m, current := g.current[agent]
+	for n, r := range stored {
+		if _, ok := nums[n]; ok {
+			continue
 		}
-		rows, err := func() (map[int]row, error) {
-			q, err := tx.QueryContext(ctx, `SELECT number, found, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
-			if err != nil {
+		// Not followed this round: drop it when the forge says it is closed or gone, or when
+		// it was followed only as a declared pull request the agent no longer declares. A
+		// pull request the reply says nothing about keeps its row and what was reported.
+		if gone[n] || (!r.found && current && !slices.Contains(m.declared, n)) {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM pull_requests WHERE agent = ? AND repo = ? AND number = ?`, agent, key, n); err != nil {
 				return nil, err
 			}
-			defer q.Close() // before the next statement: the database has one connection
-			rows := map[int]row{}
-			for q.Next() {
-				var n int
-				var r row
-				if err := q.Scan(&n, &r.found, &r.reported); err != nil {
-					return nil, err
-				}
-				rows[n] = r
+		}
+	}
+	if current {
+		// declared pull requests are followed only in the repository the agent works in now
+		if _, err := tx.ExecContext(ctx, `DELETE FROM pull_requests WHERE agent = ? AND repo != ? AND found = 0`, agent, key); err != nil {
+			return nil, err
+		}
+	}
+	var notes []string
+	for _, n := range slices.Sorted(maps.Keys(nums)) {
+		pr := open[n]
+		state, failed := CI(pr)
+		report := stored[n].reported
+		var body string
+		if state == Green || state == Red || state == Conflict {
+			if k := string(state) + " " + pr.Head; k != report {
+				report = k
+				body = Message(agent, n, state, failed, pr.Merge == forge.Conflicting)
 			}
-			return rows, q.Err()
-		}()
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, reported) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (agent, repo, number) DO UPDATE SET found = excluded.found, reported = excluded.reported`,
+			agent, key, n, nums[n], report); err != nil {
+			return nil, err
+		}
+		if body == "" {
+			continue
+		}
+		room, err := rooms.NoticeRoomTx(ctx, tx, agent)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		m, current := g.current[agent]
-		for n, r := range rows {
-			if _, ok := nums[n]; ok {
-				continue
-			}
-			// Not followed this round: drop it when the forge says it is closed or gone, or when
-			// it was followed only as a declared pull request the agent no longer declares. A
-			// pull request the reply says nothing about keeps its row and what was reported.
-			if gone[n] || (!r.found && current && !slices.Contains(m.declared, n)) {
-				if _, err := tx.ExecContext(ctx, `DELETE FROM pull_requests WHERE agent = ? AND repo = ? AND number = ?`, agent, key, n); err != nil {
-					return 0, err
-				}
-			}
+		if _, err := w.rooms.PostTx(ctx, tx, rooms.Board, room, body, 0); err != nil {
+			return nil, err
 		}
-		if current {
-			// declared pull requests are followed only in the repository the agent works in now
-			if _, err := tx.ExecContext(ctx, `DELETE FROM pull_requests WHERE agent = ? AND repo != ? AND found = 0`, agent, key); err != nil {
-				return 0, err
-			}
-		}
-		for _, n := range slices.Sorted(maps.Keys(nums)) {
-			pr := open[n]
-			state, failed := CI(pr)
-			report := rows[n].reported
-			var body string
-			if state == Green || state == Red || state == Conflict {
-				if k := state + " " + pr.Head; k != report {
-					report = k
-					body = Message(agent, n, state, failed, pr.Merge == forge.Conflicting)
-				}
-			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO pull_requests (agent, repo, number, found, reported) VALUES (?, ?, ?, ?, ?)
-				ON CONFLICT (agent, repo, number) DO UPDATE SET found = excluded.found, reported = excluded.reported`,
-				agent, key, n, nums[n], report); err != nil {
-				return 0, err
-			}
-			if body == "" {
-				continue
-			}
-			followed, err := w.rooms.FollowedTx(ctx, tx, agent)
-			if err != nil {
-				return 0, err
-			}
-			room := rooms.General
-			if len(followed) > 1 {
-				room = followed[1] // the alphabetically first room other than #general
-			}
-			if _, err := w.rooms.PostTx(ctx, tx, rooms.Board, room, body, 0); err != nil {
-				return 0, err
-			}
-			posted++
-			notes = append(notes, fmt.Sprintf("%s #%d %s", agent, n, state))
-		}
+		notes = append(notes, fmt.Sprintf("%s #%d %s", agent, n, state))
 	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
+	return notes, nil
+}
+
+// storedPRs returns the pull requests stored for agent in the repository with key, by number.
+func storedPRs(ctx context.Context, tx *sql.Tx, agent, key string) (map[int]followed, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT number, found, reported FROM pull_requests WHERE agent = ? AND repo = ?`, agent, key)
+	if err != nil {
+		return nil, err
 	}
-	if posted > 0 {
-		w.log.Info("CI messages posted", "repo", key, "messages", notes)
+	defer rows.Close() // before the next statement: the database has one connection
+	out := map[int]followed{}
+	for rows.Next() {
+		var n int
+		var r followed
+		if err := rows.Scan(&n, &r.found, &r.reported); err != nil {
+			return nil, err
+		}
+		out[n] = r
 	}
-	return posted, nil
+	return out, rows.Err()
 }
 
 // CI returns the CI state of an open pull request and the names of its failed checks:
@@ -374,7 +400,7 @@ func (w *Watcher) apply(ctx context.Context, g *group, res forge.Result) (int, e
 //   - Pending while the merge state is unknown, a check is unfinished, or the forge knows
 //     more checks than it listed;
 //   - Green otherwise, when at least one check succeeded.
-func CI(pr forge.PR) (string, []string) {
+func CI(pr forge.PR) (State, []string) {
 	if pr.Draft {
 		return "", nil
 	}
@@ -407,7 +433,7 @@ func CI(pr forge.PR) (string, []string) {
 
 // Message is the text the board posts when pull request n of agent turns green, red or
 // conflicting.
-func Message(agent string, n int, state string, failed []string, conflicts bool) string {
+func Message(agent string, n int, state State, failed []string, conflicts bool) string {
 	switch state {
 	case Green:
 		return fmt.Sprintf("@%s CI is green on #%d.", agent, n)

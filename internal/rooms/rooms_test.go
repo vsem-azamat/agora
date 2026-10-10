@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -119,10 +120,10 @@ func TestCreatingRooms(t *testing.T) {
 	if err := e.r.Create(ctx, "example-app", "again", "builder"); !errors.Is(err, rooms.ErrExists) {
 		t.Fatalf("duplicate: %v", err)
 	}
-	if err := e.r.Create(ctx, "no-purpose", "  ", "builder"); !errors.Is(err, rooms.ErrInvalid) {
+	if err := e.r.Create(ctx, "no-purpose", "  ", "builder"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("no purpose: %v", err)
 	}
-	if err := e.r.Create(ctx, "Bad_Name", "x", "builder"); !errors.Is(err, rooms.ErrInvalid) {
+	if err := e.r.Create(ctx, "Bad_Name", "x", "builder"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("bad name: %v", err)
 	}
 	list, _ := e.r.List(ctx)
@@ -169,13 +170,13 @@ func TestPostingAndReplying(t *testing.T) {
 	if len(h) != 2 || h[1].ReplyTo != first || !strings.Contains(rooms.Format(h[1], 0), "re ") {
 		t.Fatalf("history %+v", h)
 	}
-	if _, err := e.r.Post(ctx, "builder", "general", "x", 9999); !errors.Is(err, rooms.ErrInvalid) {
+	if _, err := e.r.Post(ctx, "builder", "general", "x", 9999); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("unknown reply: %v", err)
 	}
-	if _, err := e.r.Post(ctx, "builder", "general", "   ", 0); !errors.Is(err, rooms.ErrInvalid) {
+	if _, err := e.r.Post(ctx, "builder", "general", "   ", 0); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("empty: %v", err)
 	}
-	if _, err := e.r.Post(ctx, "ghost", "general", "hi", 0); !errors.Is(err, rooms.ErrNotFound) {
+	if _, err := e.r.Post(ctx, "ghost", "general", "hi", 0); !errors.Is(err, agents.ErrUnknown) {
 		t.Fatalf("unknown author: %v", err)
 	}
 }
@@ -267,11 +268,11 @@ func TestMarkingReadAndPeeking(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatal(len(got))
 	}
-	if err := e.r.MarkRead(ctx, "builder", got[1:]); err != nil {
+	if err := rooms.MarkRead(ctx, e.r, "builder", got[1:]); err != nil {
 		t.Fatal(err)
 	}
 	// older: the position does not move back
-	if err := e.r.MarkRead(ctx, "builder", got[:1]); err != nil {
+	if err := rooms.MarkRead(ctx, e.r, "builder", got[:1]); err != nil {
 		t.Fatal(err)
 	}
 	if again := e.unread(t, "builder"); len(again) != 0 {
@@ -336,7 +337,7 @@ func TestMarkingSingleMessagesKeepsEarlierOnesUnread(t *testing.T) {
 	if len(left) != 1 || left[0].Body != "chatter" {
 		t.Fatalf("unread %+v", left)
 	}
-	if err := e.r.MarkRead(ctx, "builder", left); err != nil {
+	if err := rooms.MarkRead(ctx, e.r, "builder", left); err != nil {
 		t.Fatal(err)
 	}
 	if again := e.unread(t, "builder"); len(again) != 0 {
@@ -426,7 +427,7 @@ func TestMarkingARoomRead(t *testing.T) {
 	second := e.post(t, "reviewer", "example-app", "two")
 	third := e.post(t, "reviewer", "example-app", "three")
 	other := e.post(t, "reviewer", "general", "elsewhere")
-	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", other); !errors.Is(err, rooms.ErrInvalid) {
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", other); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("message from another room: %v", err)
 	}
 	if got := ids(e.unread(t, "builder")); len(got) != 4 {

@@ -46,7 +46,7 @@ func newEnv(t *testing.T) env {
 	t.Cleanup(func() { db.Close() })
 	c := &clock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
 	q := queue.New(db, c.now)
-	return env{a: agents.New(db, q, c.now), s: sessions.New(db, q, rooms.New(db, c.now), c.now), q: q, clock: c}
+	return env{a: agents.New(db, c.now), s: sessions.New(db, q, rooms.New(db, c.now), c.now), q: q, clock: c}
 }
 
 func str(s string) *string { return &s }
@@ -300,7 +300,7 @@ func TestResumedSessionBringsALeftAgentBack(t *testing.T) {
 func TestSettingStatusLeftIsRefused(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "")
-	if _, err := e.a.Update(ctx, "builder", agents.Update{Status: str("left")}); !errors.Is(err, agents.ErrInvalid) {
+	if _, err := e.a.Update(ctx, "builder", agents.Update{Status: str("left")}); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -308,7 +308,7 @@ func TestSettingStatusLeftIsRefused(t *testing.T) {
 func TestRelativeDirectoryIsRefused(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "")
-	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str("rel/dir")}); !errors.Is(err, agents.ErrInvalid) {
+	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str("rel/dir")}); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("err = %v", err)
 	}
 }

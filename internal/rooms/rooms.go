@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -24,22 +27,32 @@ const (
 	DefaultHistory = 20
 )
 
+// The name rule for rooms and agents. Rooms owns it because mentions, which rooms parses,
+// name agents; sessions applies it to agent names.
+const (
+	// MinName and MaxName bound the length of a room or agent name.
+	MinName, MaxName = 2, 32
+	// NameRule describes a valid room or agent name.
+	NameRule = "2-32 lowercase letters, digits and dashes, starting with a letter"
+)
+
+// nameRE is NameRule.
+var nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+
+// ValidName reports whether s may name a room or an agent.
+func ValidName(s string) bool { return nameRE.MatchString(s) }
+
 var (
-	// ErrInvalid marks an invalid room name, message or reference.
-	ErrInvalid = errors.New("invalid request")
-	// ErrNotFound means the room or agent does not exist.
+	// ErrNotFound means the room does not exist.
 	ErrNotFound = errors.New("not found")
 	// ErrExists means the room name is taken.
 	ErrExists = errors.New("room exists")
 )
 
-var (
-	roomRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	// A mention: @name not preceded by a letter, digit or address character, in any script. The
-	// name is matched greedily on the lowercased body, so the character after it is never part
-	// of a name.
-	mentionRE = regexp.MustCompile(`(?:^|[^\p{L}\p{N}._@-])@([a-z][a-z0-9-]*)`)
-)
+// A mention: @name not preceded by a letter, digit or address character, in any script. The
+// name is matched greedily on the lowercased body, so the character after it is never part
+// of a name.
+var mentionRE = regexp.MustCompile(`(?:^|[^\p{L}\p{N}._@-])@([a-z][a-z0-9-]*)`)
 
 // Room is a room with its activity.
 type Room struct {
@@ -86,7 +99,7 @@ func Mentions(body string) (names []string, all bool) {
 			all = true
 			continue
 		}
-		if len(name) < 2 || len(name) > 32 || seen[name] {
+		if len(name) < MinName || len(name) > MaxName || seen[name] {
 			continue
 		}
 		seen[name] = true
@@ -97,15 +110,15 @@ func Mentions(body string) (names []string, all bool) {
 
 // Create makes a room and subscribes its creator, all at once.
 func (r *Rooms) Create(ctx context.Context, name, purpose, creator string) error {
-	if !roomRE.MatchString(name) {
-		return fmt.Errorf("%w: room name %q: 2-32 lowercase letters, digits and dashes, starting with a letter", ErrInvalid, name)
+	if !ValidName(name) {
+		return fmt.Errorf("%w: room name %q: %s", store.ErrInvalid, name, NameRule)
 	}
 	purpose = strings.TrimSpace(purpose)
 	if purpose == "" {
-		return fmt.Errorf("%w: a room needs a purpose", ErrInvalid)
+		return fmt.Errorf("%w: a room needs a purpose", store.ErrInvalid)
 	}
-	return r.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, creator); err != nil {
+	return store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, creator); err != nil {
 			return err
 		}
 		var n int
@@ -152,8 +165,8 @@ func (r *Rooms) List(ctx context.Context) ([]Room, error) {
 // returns the rooms the agent follows afterwards.
 func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add bool) ([]string, error) {
 	var out []string
-	err := r.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		for _, room := range rooms {
@@ -184,7 +197,7 @@ func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add
 // Followed returns the rooms agent follows, #general first.
 func (r *Rooms) Followed(ctx context.Context, agent string) ([]string, error) {
 	var out []string
-	err := r.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
 		out, err = followed(ctx, tx, agent)
 		return err
@@ -192,21 +205,22 @@ func (r *Rooms) Followed(ctx context.Context, agent string) ([]string, error) {
 	return out, err
 }
 
-// FollowedTx is Followed inside the caller's transaction.
-func (r *Rooms) FollowedTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	return followed(ctx, tx, agent)
+// NoticeRoomTx returns the room where the board tells agent about its own work, inside the
+// caller's transaction: the alphabetically first room it follows other than #general, else
+// #general.
+func NoticeRoomTx(ctx context.Context, tx *sql.Tx, agent string) (string, error) {
+	rooms, err := followed(ctx, tx, agent)
+	if err != nil || len(rooms) < 2 {
+		return General, err
+	}
+	return rooms[1], nil
 }
 
 // Post stores a message from author (a joined agent, or the board itself) and returns its
 // identifier.
 func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
-	room = strings.TrimPrefix(room, "#")
-	body = strings.TrimSpace(body)
-	if body == "" || utf8.RuneCountInString(body) > MaxBody {
-		return 0, fmt.Errorf("%w: a message is 1 to %d characters", ErrInvalid, MaxBody)
-	}
 	var id int64
-	err := r.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
 		id, err = r.PostTx(ctx, tx, author, room, body, replyTo)
 		return err
@@ -220,48 +234,43 @@ func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body strin
 	room = strings.TrimPrefix(room, "#")
 	body = strings.TrimSpace(body)
 	if body == "" || utf8.RuneCountInString(body) > MaxBody {
-		return 0, fmt.Errorf("%w: a message is 1 to %d characters", ErrInvalid, MaxBody)
+		return 0, fmt.Errorf("%w: a message is 1 to %d characters", store.ErrInvalid, MaxBody)
+	}
+	if author != Board {
+		if err := agents.ExistsTx(ctx, tx, author); err != nil {
+			return 0, err
+		}
+	}
+	if err := requireRoom(ctx, tx, room); err != nil {
+		return 0, err
+	}
+	var reply any
+	if replyTo != 0 {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE id = ?`, replyTo).Scan(&n); err != nil {
+			return 0, err
+		}
+		if n == 0 {
+			return 0, fmt.Errorf("%w: no message %d to reply to", store.ErrInvalid, replyTo)
+		}
+		reply = replyTo
 	}
 	names, all := Mentions(body)
-	var id int64
-	err := func() error {
-		if author != Board {
-			if err := requireAgent(ctx, tx, author); err != nil {
-				return err
-			}
+	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all) VALUES (?, ?, ?, ?, ?, ?)`,
+		room, author, body, reply, r.now().UnixMilli(), all)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	for _, n := range names {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO mentions (message_id, agent) VALUES (?, ?)`, id, n); err != nil {
+			return 0, err
 		}
-		if err := requireRoom(ctx, tx, room); err != nil {
-			return err
-		}
-		if replyTo != 0 {
-			var n int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE id = ?`, replyTo).Scan(&n); err != nil {
-				return err
-			}
-			if n == 0 {
-				return fmt.Errorf("%w: no message %d to reply to", ErrInvalid, replyTo)
-			}
-		}
-		var reply any
-		if replyTo != 0 {
-			reply = replyTo
-		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all) VALUES (?, ?, ?, ?, ?, ?)`,
-			room, author, body, reply, r.now().UnixMilli(), all)
-		if err != nil {
-			return err
-		}
-		if id, err = res.LastInsertId(); err != nil {
-			return err
-		}
-		for _, n := range names {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO mentions (message_id, agent) VALUES (?, ?)`, id, n); err != nil {
-				return err
-			}
-		}
-		return nil
-	}()
-	return id, err
+	}
+	return id, nil
 }
 
 // History returns the last messages of room, oldest first; last <= 0 means DefaultHistory.
@@ -271,7 +280,7 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 		last = DefaultHistory
 	}
 	var out []Message
-	err := r.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		if err := requireRoom(ctx, tx, room); err != nil {
 			return err
 		}
@@ -291,7 +300,7 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 func (r *Rooms) Unread(ctx context.Context, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
 	var out []Message
 	var total int
-	err := r.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
 		out, total, err = unread(ctx, tx, agent, mentionsOnly, limit)
 		return err
@@ -303,12 +312,12 @@ func (r *Rooms) Unread(ctx context.Context, agent string, mentionsOnly bool, lim
 // addressed to it.
 func (r *Rooms) UnreadCount(ctx context.Context, agent string, mentionsOnly bool) (int, error) {
 	var n int
-	err := r.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE addressed OR NOT :m`,
-			sql.Named("a", agent), sql.Named("m", mentionsOnly)).Scan(&n)
+			sql.Named("a", agent), sql.Named("m", mentionsOnly), sql.Named("general", General)).Scan(&n)
 	})
 	return n, err
 }
@@ -319,7 +328,7 @@ func (r *Rooms) UnreadCount(ctx context.Context, agent string, mentionsOnly bool
 func (r *Rooms) Take(ctx context.Context, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
 	var out []Message
 	var total int
-	err := r.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
 		if out, total, err = unread(ctx, tx, agent, mentionsOnly, limit); err != nil {
 			return err
@@ -334,9 +343,10 @@ func (r *Rooms) Take(ctx context.Context, agent string, mentionsOnly bool, limit
 
 // unreadQuery finds unread messages through the indexes: messages in followed rooms after the
 // reading position (messages_room), and messages mentioning the agent by name (mentions_agent).
+// It takes the agent as :a and General as :general.
 const unreadQuery = `
 WITH followed(room) AS (
-	SELECT 'general' UNION SELECT room FROM subscriptions WHERE agent = :a
+	SELECT :general UNION SELECT room FROM subscriptions WHERE agent = :a
 ), start AS (
 	SELECT read_from FROM agents WHERE name = :a
 ), candidates AS (
@@ -357,10 +367,10 @@ GROUP BY m.id
 ORDER BY m.id`
 
 func unread(ctx context.Context, tx *sql.Tx, agent string, mentionsOnly bool, limit int) ([]Message, int, error) {
-	if err := requireAgent(ctx, tx, agent); err != nil {
+	if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 		return nil, 0, err
 	}
-	rows, err := tx.QueryContext(ctx, unreadQuery, sql.Named("a", agent))
+	rows, err := tx.QueryContext(ctx, unreadQuery, sql.Named("a", agent), sql.Named("general", General))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -395,12 +405,12 @@ type RoomUnread struct {
 // without changing what is read.
 func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, error) {
 	var out []RoomUnread
-	err := r.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT room, COUNT(*), SUM(addressed) FROM (`+unreadQuery+`) GROUP BY room ORDER BY room`,
-			sql.Named("a", agent))
+			sql.Named("a", agent), sql.Named("general", General))
 		if err != nil {
 			return err
 		}
@@ -423,8 +433,8 @@ func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, e
 func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through int64) (bool, error) {
 	room = strings.TrimPrefix(room, "#")
 	moved := false
-	err := r.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		if err := requireRoom(ctx, tx, room); err != nil {
@@ -433,7 +443,7 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 		var in string
 		err := tx.QueryRowContext(ctx, `SELECT room FROM messages WHERE id = ?`, through).Scan(&in)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && in != room) {
-			return fmt.Errorf("%w: message %d is not in #%s", ErrInvalid, through, room)
+			return fmt.Errorf("%w: message %d is not in #%s", store.ErrInvalid, through, room)
 		}
 		if err != nil {
 			return err
@@ -455,7 +465,7 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 // MarkEach marks single messages read without moving the reading position, so earlier unread
 // messages in the same rooms stay unread.
 func (r *Rooms) MarkEach(ctx context.Context, agent string, msgs []Message) error {
-	return r.tx(ctx, func(tx *sql.Tx) error { return markEach(ctx, tx, agent, msgs) })
+	return store.InTx(ctx, r.db, func(tx *sql.Tx) error { return markEach(ctx, tx, agent, msgs) })
 }
 
 func markEach(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) error {
@@ -467,13 +477,9 @@ func markEach(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) err
 	return nil
 }
 
-// MarkRead moves agent's reading position in each message's room past that message; positions
+// markRead moves agent's reading position in each message's room past that message; positions
 // never move backwards. msgs must be the oldest unread messages, as Unread returns them, so no
 // unread message is skipped.
-func (r *Rooms) MarkRead(ctx context.Context, agent string, msgs []Message) error {
-	return r.tx(ctx, func(tx *sql.Tx) error { return markRead(ctx, tx, agent, msgs) })
-}
-
 func markRead(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) error {
 	if len(msgs) == 0 {
 		return nil
@@ -492,29 +498,6 @@ func markRead(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) err
 }
 
 // --- internals -------------------------------------------------------------------
-
-func (r *Rooms) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
-}
-
-func requireAgent(ctx context.Context, tx *sql.Tx, agent string) error {
-	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM agents WHERE name = ?`, agent).Scan(&n); err != nil {
-		return err
-	}
-	if n == 0 {
-		return fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrNotFound, agent, agent)
-	}
-	return nil
-}
 
 func requireRoom(ctx context.Context, tx *sql.Tx, room string) error {
 	var n int
@@ -544,20 +527,11 @@ func subscribe(ctx context.Context, tx *sql.Tx, agent, room string) error {
 }
 
 func followed(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT room FROM subscriptions WHERE agent = ? AND room != 'general' ORDER BY room`, agent)
+	rooms, err := store.Strings(ctx, tx, `SELECT room FROM subscriptions WHERE agent = ? AND room != ? ORDER BY room`, agent, General)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []string{General}
-	for rows.Next() {
-		var room string
-		if err := rows.Scan(&room); err != nil {
-			return nil, err
-		}
-		out = append(out, room)
-	}
-	return out, rows.Err()
+	return append([]string{General}, rooms...), nil
 }
 
 func scanMessages(rows *sql.Rows) ([]Message, error) {

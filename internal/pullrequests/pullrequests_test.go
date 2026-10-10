@@ -106,7 +106,7 @@ func newEnv(t *testing.T) *env {
 	now := func() time.Time { return time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC) }
 	q := queue.New(db, now)
 	r := rooms.New(db, now)
-	e := &env{db: db, a: agents.New(db, q, now), s: sessions.New(db, q, r, now), r: r, fake: newFake(), log: &bytes.Buffer{}}
+	e := &env{db: db, a: agents.New(db, now), s: sessions.New(db, q, r, now), r: r, fake: newFake(), log: &bytes.Buffer{}}
 	e.forges = forge.Forges{"github.com": e.fake}
 	e.restart()
 	return e

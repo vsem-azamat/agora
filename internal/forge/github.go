@@ -20,10 +20,20 @@ type GitHub struct {
 	Run func(ctx context.Context, args []string) ([]byte, error)
 }
 
-const prFields = `fragment pr on PullRequest {
+// Limits of one lookup.
+const (
+	// branchPRs is how many open pull requests are asked for per branch.
+	branchPRs = 5
+	// maxChecks is how many checks are asked for per pull request; with more, it is incomplete.
+	maxChecks = 100
+	// maxSuites is how many check suites are asked for per pull request.
+	maxSuites = 50
+)
+
+var prFields = fmt.Sprintf(`fragment pr on PullRequest {
   number headRefName headRefOid isCrossRepository state isDraft mergeable
   commits(last: 1) { nodes { commit {
-    statusCheckRollup { contexts(first: 100) {
+    statusCheckRollup { contexts(first: %d) {
       nodes {
         __typename
         ... on CheckRun { name status conclusion }
@@ -31,9 +41,16 @@ const prFields = `fragment pr on PullRequest {
       }
       pageInfo { hasNextPage }
     } }
-    checkSuites(first: 50) { nodes { status workflowRun { id } } }
+    checkSuites(first: %d) { nodes { status workflowRun { id } } }
   } } }
-}`
+}`, maxChecks, maxSuites)
+
+// The GraphQL aliases of the i-th branch and the i-th pull request number in a lookup start
+// with these prefixes.
+const branchPrefix, numberPrefix = "b", "n"
+
+func branchAlias(i int) string { return branchPrefix + strconv.Itoa(i) }
+func numberAlias(i int) string { return numberPrefix + strconv.Itoa(i) }
 
 // Lookup asks for the default branch, the open pull requests from each branch and each pull
 // request by number, in one GraphQL request.
@@ -42,40 +59,56 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 	if !ok || strings.Contains(name, "/") {
 		return Result{}, fmt.Errorf("%s is not an owner/name repository", repo.Key())
 	}
-	vars := []string{"$owner: String!", "$name: String!"}
-	fields := []string{"defaultBranchRef { name }"}
-	args := []string{"api", "graphql", "--hostname", repo.Host, "-f", "owner=" + owner, "-f", "name=" + name}
-	seenBranch := map[string]bool{}
-	for _, b := range q.Branches {
-		if b == "" || seenBranch[b] {
-			continue
-		}
-		seenBranch[b] = true
-		k := "b" + strconv.Itoa(len(seenBranch)-1)
-		vars = append(vars, "$"+k+": String!")
-		fields = append(fields, k+": pullRequests(headRefName: $"+k+", states: OPEN, first: 5) { nodes { ...pr } }")
-		args = append(args, "-f", k+"="+b)
-	}
-	seenNumber := map[int]bool{}
-	for _, n := range q.Numbers {
-		if n <= 0 || seenNumber[n] {
-			continue
-		}
-		seenNumber[n] = true
-		k := "n" + strconv.Itoa(len(seenNumber)-1)
-		vars = append(vars, "$"+k+": Int!")
-		fields = append(fields, k+": pullRequest(number: $"+k+") { ...pr }")
-		args = append(args, "-F", k+"="+strconv.Itoa(n))
-	}
-	query := "query(" + strings.Join(vars, ", ") + ") {\n  repository(owner: $owner, name: $name) {\n    " +
-		strings.Join(fields, "\n    ") + "\n  }\n}\n" + prFields
-	args = append(args, "-f", "query="+query)
-
+	lq := newLookup(repo.Host, owner, name, q)
 	run := g.Run
 	if run == nil {
 		run = runGH
 	}
-	out, runErr := run(ctx, args)
+	out, err := run(ctx, lq.args)
+	return lq.parse(out, err)
+}
+
+// lookup is one GraphQL request: the gh arguments, and the branches and numbers it asks for,
+// in alias order.
+type lookup struct {
+	args     []string
+	branches []string
+	numbers  []int
+}
+
+func newLookup(host, owner, name string, q Query) lookup {
+	var lq lookup
+	vars := []string{"$owner: String!", "$name: String!"}
+	fields := []string{"defaultBranchRef { name }"}
+	lq.args = []string{"api", "graphql", "--hostname", host, "-f", "owner=" + owner, "-f", "name=" + name}
+	for _, b := range q.Branches {
+		if b == "" || slices.Contains(lq.branches, b) {
+			continue
+		}
+		k := branchAlias(len(lq.branches))
+		lq.branches = append(lq.branches, b)
+		vars = append(vars, "$"+k+": String!")
+		fields = append(fields, fmt.Sprintf("%s: pullRequests(headRefName: $%s, states: OPEN, first: %d) { nodes { ...pr } }", k, k, branchPRs))
+		lq.args = append(lq.args, "-f", k+"="+b)
+	}
+	for _, n := range q.Numbers {
+		if n <= 0 || slices.Contains(lq.numbers, n) {
+			continue
+		}
+		k := numberAlias(len(lq.numbers))
+		lq.numbers = append(lq.numbers, n)
+		vars = append(vars, "$"+k+": Int!")
+		fields = append(fields, k+": pullRequest(number: $"+k+") { ...pr }")
+		lq.args = append(lq.args, "-F", k+"="+strconv.Itoa(n))
+	}
+	query := "query(" + strings.Join(vars, ", ") + ") {\n  repository(owner: $owner, name: $name) {\n    " +
+		strings.Join(fields, "\n    ") + "\n  }\n}\n" + prFields
+	lq.args = append(lq.args, "-f", "query="+query)
+	return lq
+}
+
+// parse reads gh's output for the lookup; runErr is how gh ended.
+func (lq lookup) parse(out []byte, runErr error) (Result, error) {
 	var resp struct {
 		Data struct {
 			Repository map[string]json.RawMessage `json:"repository"`
@@ -95,7 +128,7 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 	for _, e := range resp.Errors {
 		msgs = append(msgs, e.Message)
 		if e.Type == "NOT_FOUND" && len(e.Path) == 2 && e.Path[0] == "repository" {
-			if alias, ok := e.Path[1].(string); ok && strings.HasPrefix(alias, "n") {
+			if alias, ok := e.Path[1].(string); ok && strings.HasPrefix(alias, numberPrefix) {
 				missing[alias] = true
 				continue
 			}
@@ -123,23 +156,17 @@ func (g *GitHub) Lookup(ctx context.Context, repo Repo, q Query) (Result, error)
 		seenPR[p.Number] = true
 		res.PRs = append(res.PRs, p.pr())
 	}
-	for i := range len(seenBranch) {
+	for i := range lq.branches {
 		var list struct {
 			Nodes []ghPR `json:"nodes"`
 		}
-		_ = json.Unmarshal(resp.Data.Repository["b"+strconv.Itoa(i)], &list) // absent or null: no pull requests
+		_ = json.Unmarshal(resp.Data.Repository[branchAlias(i)], &list) // absent or null: no pull requests
 		for _, p := range list.Nodes {
 			add(p)
 		}
 	}
-	numbers := make([]int, 0, len(seenNumber))
-	for _, n := range q.Numbers {
-		if seenNumber[n] && !slices.Contains(numbers, n) {
-			numbers = append(numbers, n)
-		}
-	}
-	for i, n := range numbers {
-		k := "n" + strconv.Itoa(i)
+	for i, n := range lq.numbers {
+		k := numberAlias(i)
 		if missing[k] {
 			res.NotFound = append(res.NotFound, n)
 			continue

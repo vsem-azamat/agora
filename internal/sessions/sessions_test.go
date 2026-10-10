@@ -49,7 +49,7 @@ func newEnv(t *testing.T) env {
 	c := &clock{t: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)}
 	q := queue.New(db, c.now)
 	r := rooms.New(db, c.now)
-	return env{s: sessions.New(db, q, r, c.now), q: q, r: r, a: agents.New(db, q, c.now), clock: c}
+	return env{s: sessions.New(db, q, r, c.now), q: q, r: r, a: agents.New(db, c.now), clock: c}
 }
 
 func (e env) report(t *testing.T, id string, ev sessions.Event) sessions.Reply {
@@ -99,7 +99,7 @@ func TestNamesFollowTheRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"Reviewer_2", "x", "all", "agora", "2fast", strings.Repeat("a", 33)} {
-		if _, err := e.s.Join(ctx, bad, "", false); !errors.Is(err, sessions.ErrInvalid) {
+		if _, err := e.s.Join(ctx, bad, "", false); !errors.Is(err, store.ErrInvalid) {
 			t.Errorf("%q: err = %v", bad, err)
 		}
 	}
@@ -178,7 +178,7 @@ func TestFirstEventRegistersTheSession(t *testing.T) {
 func TestInvalidSessionIDsAreRefused(t *testing.T) {
 	e := newEnv(t)
 	for _, id := range []string{"short", "has space in it", strings.Repeat("a", 81), "../../etc"} {
-		if _, err := e.s.Report(ctx, sessions.Report{SessionID: id, Event: sessions.Start}); !errors.Is(err, sessions.ErrInvalid) {
+		if _, err := e.s.Report(ctx, sessions.Report{SessionID: id, Event: sessions.Start}); !errors.Is(err, store.ErrInvalid) {
 			t.Errorf("%q: err = %v", id, err)
 		}
 	}

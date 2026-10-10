@@ -75,10 +75,6 @@ func Origin(commonDir string) string {
 	return ""
 }
 
-// Branch returns the branch checked out in the checkout that contains dir, the first 12
-// characters of the commit when detached, or "" outside any checkout.
-func Branch(dir string) string { return Read(dir).Branch }
-
 // Repo returns the name of the repository that contains dir: the directory of its main
 // checkout, also from a linked worktree, or, for a worktree of a bare repository, the bare
 // repository's name without `.git`. It returns "" outside any checkout.

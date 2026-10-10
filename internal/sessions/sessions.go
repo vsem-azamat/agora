@@ -15,6 +15,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -43,6 +44,9 @@ const (
 // EndReasonClear is the end reason of a session replaced by a new conversation in the same
 // process; the name and places move to the new session when it starts.
 const EndReasonClear = "clear"
+
+// UnknownKind is the kind of a session whose connector did not say.
+const UnknownKind = "unknown"
 
 // State of a session.
 type State string
@@ -88,33 +92,28 @@ type Session struct {
 	Terminal  string
 }
 
-var (
-	// ErrInvalid marks an invalid name or session identifier.
-	ErrInvalid = errors.New("invalid request")
-	// ErrNameTaken means the name is bound to another live session.
-	ErrNameTaken = errors.New("name taken")
-)
+// ErrNameTaken means the name is bound to another live session.
+var ErrNameTaken = errors.New("name taken")
 
 var (
-	nameRE    = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 	sessionRE = regexp.MustCompile(`^[A-Za-z0-9_-]{6,80}$`)
 	reserved  = map[string]bool{"all": true, "agora": true}
 )
 
-// CheckName reports why name cannot be an agent name, or nil.
-func CheckName(name string) error {
+// checkName reports why name cannot be an agent name, or nil.
+func checkName(name string) error {
 	if reserved[name] {
-		return fmt.Errorf("%w: %q is reserved", ErrInvalid, name)
+		return fmt.Errorf("%w: %q is reserved", store.ErrInvalid, name)
 	}
-	if !nameRE.MatchString(name) {
-		return fmt.Errorf("%w: name %q: 2-32 lowercase letters, digits and dashes, starting with a letter", ErrInvalid, name)
+	if !rooms.ValidName(name) {
+		return fmt.Errorf("%w: name %q: %s", store.ErrInvalid, name, rooms.NameRule)
 	}
 	return nil
 }
 
 func checkSession(id string) error {
 	if !sessionRE.MatchString(id) {
-		return fmt.Errorf("%w: session id: 6-80 letters, digits, '_' and '-'", ErrInvalid)
+		return fmt.Errorf("%w: session id: 6-80 letters, digits, '_' and '-'", store.ErrInvalid)
 	}
 	return nil
 }
@@ -146,7 +145,7 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	}
 	now := s.now()
 	var agent string
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 		if err := register(ctx, tx, r, now); err != nil {
 			return err
 		}
@@ -227,31 +226,6 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	return Reply{Context: strings.TrimSpace(text + "\n\n" + news)}, nil
 }
 
-// deliver returns the agent's oldest unread messages as context text and marks the ones shown
-// as read; it also returns how many of them address the agent.
-func (s *Sessions) deliver(ctx context.Context, agent string) (string, int, error) {
-	if s.rooms == nil {
-		return "", 0, nil
-	}
-	msgs, total, err := s.rooms.Take(ctx, agent, false, DeliverAtOnce)
-	if err != nil || len(msgs) == 0 {
-		return "", 0, err
-	}
-	lines := []string{fmt.Sprintf("Agora: new board messages for you (%s). Act on what is addressed to you "+
-		"(reply: agora post <room> '...' --reply <id>); otherwise note them and carry on.", agent)}
-	addressed := 0
-	for _, m := range msgs {
-		lines = append(lines, rooms.Format(m, DeliverChars))
-		if m.Addressed {
-			addressed++
-		}
-	}
-	if more := total - len(msgs); more > 0 {
-		lines = append(lines, fmt.Sprintf("... %d more: run `agora unread`.", more))
-	}
-	return strings.Join(lines, "\n"), addressed, nil
-}
-
 // addressedCount returns how many unread messages address the agent.
 func (s *Sessions) addressedCount(ctx context.Context, agent string) (int, error) {
 	if s.rooms == nil {
@@ -270,7 +244,7 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		return nil, nil, false, false, err
 	}
 	sig := signature(entries)
-	err = s.tx(ctx, func(tx *sql.Tx) error {
+	err = store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 		var noted string
 		var checkedAt int64
 		if err := tx.QueryRowContext(ctx, `SELECT noted, checked_at FROM sessions WHERE id = ?`, r.SessionID).Scan(&noted, &checkedAt); err != nil {
@@ -297,7 +271,7 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		if len(entries) == 0 && len(lost) == 0 {
 			return nil
 		}
-		show = r.Event == Start || sig != noted || hasOffer(entries)
+		show = r.Event == Start || sig != noted || len(offered(entries)) > 0
 		return nil
 	})
 	return entries, lost, show, checked, err
@@ -316,237 +290,14 @@ func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Ti
 			return Reply{Block: true, BlockReason: text}, nil
 		}
 	}
-	return Reply{}, s.tx(ctx, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
-}
-
-// waiting returns the text for what needs the agent now (unread messages addressed to it,
-// which it marks read, and offered slots), or "" when nothing does. when says when the agent
-// should act, e.g. "before you end your turn".
-func (s *Sessions) waiting(ctx context.Context, agent, when string) (string, error) {
-	var parts []string
-	if s.rooms != nil {
-		msgs, total, err := s.rooms.Take(ctx, agent, true, DeliverAtOnce)
-		if err != nil {
-			return "", err
-		}
-		if len(msgs) > 0 {
-			lines := []string{fmt.Sprintf("Agora: %s, answer what is addressed to you (%s), "+
-				"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", when, agent)}
-			for _, m := range msgs {
-				lines = append(lines, rooms.Format(m, DeliverChars))
-			}
-			if more := total - len(msgs); more > 0 {
-				lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
-			}
-			parts = append(parts, strings.Join(lines, "\n"))
-		}
-	}
-	entries, err := s.queue.EntriesOf(ctx, agent)
-	if err != nil {
-		return "", err
-	}
-	if hasOffer(entries) {
-		parts = append(parts, note(agent, entries, nil)+
-			" Claim or release the offered slot now; otherwise it passes to the next agent.")
-	}
-	return strings.Join(parts, "\n\n"), nil
-}
-
-// Turn returns the session's turn count, which grows with every prompt and start.
-func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
-	var turn int64
-	err := s.db.QueryRowContext(ctx, `SELECT turn FROM sessions WHERE id = ?`, sessionID).Scan(&turn)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("%w: unknown session", ErrInvalid)
-	}
-	return turn, err
-}
-
-// Wake is what a connector wait delivers: the text, the addressed messages it shows (marked
-// read only once the wake is delivered) and a key of what it woke for.
-type Wake struct {
-	Text     string
-	Messages []rooms.Message
-	Key      string
-	Turn     int64
-}
-
-// CheckWake decides a connector's wait for a session that started at turn: done with no wake
-// when the session ended, a new turn began or the session lost its agent; done with a wake when
-// the session is idle and something new needs its agent (an addressed message, or an offered slot
-// it was not already woken for); otherwise keep waiting. Nothing is consumed until ConfirmWake.
-func (s *Sessions) CheckWake(ctx context.Context, sessionID string, turn int64) (w *Wake, done bool, err error) {
-	var state, agent, wokenFor string
-	var now int64
-	err = s.db.QueryRowContext(ctx, `SELECT state, COALESCE(agent, ''), turn, woken_for FROM sessions WHERE id = ?`, sessionID).
-		Scan(&state, &agent, &now, &wokenFor)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return nil, true, nil
-	case err != nil:
-		return nil, false, err
-	case state == string(Ended) || now != turn:
-		return nil, true, nil
-	case state != string(Idle):
-		return nil, false, nil
-	case agent == "":
-		return nil, true, nil
-	}
-	var msgs []rooms.Message
-	if s.rooms != nil {
-		if msgs, _, err = s.rooms.Unread(ctx, agent, true, DeliverAtOnce); err != nil {
-			return nil, false, err
-		}
-	}
-	entries, err := s.queue.EntriesOf(ctx, agent)
-	if err != nil {
-		return nil, false, err
-	}
-	key := offerKey(entries)
-	if len(msgs) == 0 && (key == "" || key == wokenFor) {
-		return nil, false, nil
-	}
-	return &Wake{Text: wakeText(agent, msgs, entries), Messages: msgs, Key: key, Turn: turn}, true, nil
-}
-
-// ConfirmWake records a delivered wake: its messages are read, the session is busy with a new
-// turn (the woken agent works), and the offers it woke for are remembered so they do not wake
-// the agent again.
-func (s *Sessions) ConfirmWake(ctx context.Context, sessionID string, w *Wake) error {
-	if s.rooms != nil && len(w.Messages) > 0 {
-		var agent string
-		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(agent, '') FROM sessions WHERE id = ?`, sessionID).Scan(&agent); err != nil {
-			return err
-		}
-		if err := s.rooms.MarkEach(ctx, agent, w.Messages); err != nil {
-			return err
-		}
-	}
-	now := s.now().UnixMilli()
-	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET state = 'busy', state_at = ?, turn = turn + 1, woken_for = ?, woken_at = ?
-		WHERE id = ? AND turn = ? AND state = 'idle'`, now, w.Key, now, sessionID, w.Turn)
-	return err
-}
-
-// Now is the clock Sessions uses.
-func (s *Sessions) Now() time.Time { return s.now() }
-
-func offerKey(entries []queue.Entry) string {
-	var keys []string
-	for _, e := range entries {
-		if e.State == queue.Offered {
-			keys = append(keys, "o"+e.Key)
-		}
-	}
-	return strings.Join(keys, " ")
-}
-
-func wakeText(agent string, msgs []rooms.Message, entries []queue.Entry) string {
-	var parts []string
-	if len(msgs) > 0 {
-		lines := []string{fmt.Sprintf("Agora: you were woken; answer what is addressed to you (%s), "+
-			"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", agent)}
-		for _, m := range msgs {
-			lines = append(lines, rooms.Format(m, DeliverChars))
-		}
-		parts = append(parts, strings.Join(lines, "\n"))
-	}
-	if hasOffer(entries) {
-		parts = append(parts, note(agent, entries, nil)+" Claim or release the offered slot now; otherwise it passes to the next agent.")
-	}
-	return strings.Join(parts, "\n\n")
-}
-
-// Pending describes what would wake a session's agent without consuming it: a key that
-// changes when something new arrives (the newest addressed message and the offered slots) and
-// a short text for a terminal prompt. key is "" when nothing needs the agent.
-func (s *Sessions) Pending(ctx context.Context, agent string) (key, text string, err error) {
-	var parts, keys []string
-	if s.rooms != nil {
-		msgs, _, err := s.rooms.Unread(ctx, agent, true, 0)
-		if err != nil {
-			return "", "", err
-		}
-		if len(msgs) > 0 {
-			from := map[string]bool{}
-			var senders []string
-			for _, m := range msgs {
-				who := fmt.Sprintf("%s in #%s", m.Author, m.Room)
-				if !from[who] {
-					from[who] = true
-					senders = append(senders, who)
-				}
-			}
-			keys = append(keys, fmt.Sprintf("m%d", msgs[len(msgs)-1].ID))
-			parts = append(parts, fmt.Sprintf("%d board message(s) addressed to you (%s)", len(msgs), strings.Join(senders, ", ")))
-		}
-	}
-	entries, err := s.queue.EntriesOf(ctx, agent)
-	if err != nil {
-		return "", "", err
-	}
-	for _, e := range entries {
-		if e.State == queue.Offered {
-			keys = append(keys, "o"+e.Key)
-			parts = append(parts, "your turn on "+e.Key)
-		}
-	}
-	if len(keys) == 0 {
-		return "", "", nil
-	}
-	return strings.Join(keys, " "), fmt.Sprintf("Agora: %s. Read them with agora unread and agora queue ls, act if needed, then carry on or end your turn.",
-		strings.Join(parts, "; ")), nil
-}
-
-// CommandWake is an idle session that a wake command may wake.
-type CommandWake struct {
-	SessionID, Agent, Terminal, WokenFor string
-	WokenAt                              time.Time
-	PID                                  int
-	PIDStart                             int64
-}
-
-// IdleWithTerminal returns sessions with a bound agent, a known terminal and a known process
-// that have been idle for at least settle (so a connector that is about to wait gets there
-// first).
-func (s *Sessions) IdleWithTerminal(ctx context.Context, settle time.Duration) ([]CommandWake, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, agent, terminal, woken_for, woken_at, pid, pid_start FROM sessions
-		WHERE state = 'idle' AND agent IS NOT NULL AND terminal != '' AND pid > 0 AND state_at <= ? ORDER BY id`,
-		s.now().Add(-settle).UnixMilli())
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []CommandWake
-	for rows.Next() {
-		var c CommandWake
-		var at int64
-		if err := rows.Scan(&c.SessionID, &c.Agent, &c.Terminal, &c.WokenFor, &at, &c.PID, &c.PIDStart); err != nil {
-			return nil, err
-		}
-		c.WokenAt = time.UnixMilli(at)
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
-// RecordWake stores how a command wake went; only a successful wake remembers what it was for,
-// so a failed one is retried after the gap.
-func (s *Sessions) RecordWake(ctx context.Context, sessionID, key, result string, ok bool) error {
-	if ok {
-		_, err := s.db.ExecContext(ctx, `UPDATE sessions SET woken_for = ?, woken_at = ?, wake_result = ? WHERE id = ?`,
-			key, s.now().UnixMilli(), result, sessionID)
-		return err
-	}
-	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET woken_at = ?, wake_result = ? WHERE id = ?`, s.now().UnixMilli(), result, sessionID)
-	return err
+	return Reply{}, store.InTx(ctx, s.db, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
 }
 
 // Join registers name and binds it to sessionID when that session has not ended; without
 // force, a name bound to another live session is refused. It reports whether the name is now
 // bound to the session.
 func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool) (bool, error) {
-	if err := CheckName(name); err != nil {
+	if err := checkName(name); err != nil {
 		return false, err
 	}
 	if sessionID != "" {
@@ -556,7 +307,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 	}
 	now := s.now()
 	bound := false
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (name, joined_at, read_from) VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages))
 			ON CONFLICT (name) DO NOTHING`, name, now.UnixMilli()); err != nil {
 			return err
@@ -568,8 +319,8 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 		switch err := tx.QueryRowContext(ctx, `SELECT state FROM sessions WHERE id = ?`, sessionID).Scan(&state); {
 		case errors.Is(err, sql.ErrNoRows):
 			t := now.UnixMilli()
-			if _, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, state, state_at, started_at, seen_at) VALUES (?, 'unknown', 'busy', ?, ?, ?)`,
-				sessionID, t, t, t); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, state, state_at, started_at, seen_at) VALUES (?, ?, ?, ?, ?, ?)`,
+				sessionID, UnknownKind, Busy, t, t, t); err != nil {
 				return err
 			}
 		case err != nil:
@@ -578,7 +329,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 			return nil // an ended session is not brought back; the name is only registered
 		}
 		var holder string
-		err := tx.QueryRowContext(ctx, `SELECT id FROM sessions WHERE agent = ? AND state != 'ended' AND id != ?`, name, sessionID).Scan(&holder)
+		err := tx.QueryRowContext(ctx, `SELECT id FROM sessions WHERE agent = ? AND state != ? AND id != ?`, name, Ended, sessionID).Scan(&holder)
 		switch {
 		case err == nil && !force:
 			return fmt.Errorf("%w: %q belongs to a live session; pick another name, or force the claim if it is you", ErrNameTaken, name)
@@ -604,7 +355,7 @@ func (s *Sessions) Resolve(ctx context.Context, sessionID string) (string, error
 		return "", nil //nolint:nilerr // a malformed session ID is bound to no name
 	}
 	var agent sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT agent FROM sessions WHERE id = ? AND state != 'ended'`, sessionID).Scan(&agent)
+	err := s.db.QueryRowContext(ctx, `SELECT agent FROM sessions WHERE id = ? AND state != ?`, sessionID, Ended).Scan(&agent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -614,7 +365,7 @@ func (s *Sessions) Resolve(ctx context.Context, sessionID string) (string, error
 // List returns sessions that have not ended, newest first.
 func (s *Sessions) List(ctx context.Context) ([]Session, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, COALESCE(agent, ''), state, state_at, started_at, seen_at, pid, pid_start, cwd, terminal
-		FROM sessions WHERE state != 'ended' ORDER BY started_at DESC, id`)
+		FROM sessions WHERE state != ? ORDER BY started_at DESC, id`, Ended)
 	if err != nil {
 		return nil, err
 	}
@@ -650,11 +401,11 @@ func (s *Sessions) EndDead(ctx context.Context, alive func(pid int, start int64)
 			continue
 		}
 		done := false
-		err := s.tx(ctx, func(tx *sql.Tx) error {
+		err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 			// only if nothing re-registered the session with another process meanwhile
 			var same int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE id = ? AND state != 'ended' AND pid = ? AND pid_start = ? AND seen_at = ?`,
-				x.ID, x.PID, x.PIDStart, x.SeenAt.UnixMilli()).Scan(&same); err != nil || same == 0 {
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE id = ? AND state != ? AND pid = ? AND pid_start = ? AND seen_at = ?`,
+				x.ID, Ended, x.PID, x.PIDStart, x.SeenAt.UnixMilli()).Scan(&same); err != nil || same == 0 {
 				return err
 			}
 			done = true
@@ -668,20 +419,6 @@ func (s *Sessions) EndDead(ctx context.Context, alive func(pid int, start int64)
 		}
 	}
 	return ended, nil
-}
-
-// --- internals -------------------------------------------------------------------
-
-func (s *Sessions) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
 }
 
 // endTx ends the session and, unless its agent is bound to another live session, removes the
@@ -698,7 +435,7 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 		return nil
 	}
 	var live int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE agent = ? AND state != 'ended'`, agent).Scan(&live); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE agent = ? AND state != ?`, agent, Ended).Scan(&live); err != nil {
 		return err
 	}
 	if live > 0 {
@@ -707,7 +444,7 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 	if err := agents.MarkLeftTx(ctx, tx, agent, now); err != nil {
 		return err
 	}
-	_, err := s.queue.ReleaseAgentTx(ctx, tx, agent)
+	_, err := queue.ReleaseAgentTx(ctx, tx, agent, now)
 	return err
 }
 
@@ -716,22 +453,24 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 func register(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 	kind := r.Kind
 	if kind == "" {
-		kind = "unknown"
+		kind = UnknownKind
 	}
 	t := now.UnixMilli()
 	_, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, pid, pid_start, cwd, terminal, state, state_at, started_at, seen_at)
-		VALUES (?, ?, ?, ?, ?, ?, 'busy', ?, ?, ?)
+		VALUES (:id, :kind, :pid, :pid_start, :cwd, :terminal, :busy, :t, :t, :t)
 		ON CONFLICT (id) DO UPDATE SET
-			kind = CASE WHEN excluded.kind != 'unknown' THEN excluded.kind ELSE kind END,
+			kind = CASE WHEN excluded.kind != :unknown THEN excluded.kind ELSE kind END,
 			pid = CASE WHEN excluded.pid > 0 THEN excluded.pid ELSE pid END,
 			pid_start = CASE WHEN excluded.pid > 0 THEN excluded.pid_start ELSE pid_start END,
 			cwd = CASE WHEN excluded.cwd != '' THEN excluded.cwd ELSE cwd END,
 			terminal = CASE WHEN excluded.terminal != '' THEN excluded.terminal ELSE terminal END,
 			seen_at = excluded.seen_at,
-			agent = CASE WHEN state = 'ended' AND EXISTS (SELECT 1 FROM sessions AS other
-				WHERE other.agent = sessions.agent AND other.state != 'ended' AND other.id != sessions.id) THEN NULL ELSE agent END,
-			state = CASE WHEN state = 'ended' THEN 'busy' ELSE state END`,
-		r.SessionID, kind, r.PID, r.PIDStart, r.CWD, r.Terminal, t, t, t)
+			agent = CASE WHEN state = :ended AND EXISTS (SELECT 1 FROM sessions AS other
+				WHERE other.agent = sessions.agent AND other.state != :ended AND other.id != sessions.id) THEN NULL ELSE agent END,
+			state = CASE WHEN state = :ended THEN :busy ELSE state END`,
+		sql.Named("id", r.SessionID), sql.Named("kind", kind), sql.Named("pid", r.PID), sql.Named("pid_start", r.PIDStart),
+		sql.Named("cwd", r.CWD), sql.Named("terminal", r.Terminal), sql.Named("t", t),
+		sql.Named("busy", Busy), sql.Named("ended", Ended), sql.Named("unknown", UnknownKind))
 	return err
 }
 
@@ -745,7 +484,7 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 	type old struct{ id, agent string }
 	olds, err := func() ([]old, error) {
 		rows, err := tx.QueryContext(ctx, `SELECT id, COALESCE(agent, '') FROM sessions
-		WHERE pid = ? AND pid_start = ? AND state != 'ended' AND id != ? ORDER BY started_at DESC`, r.PID, r.PIDStart, r.SessionID)
+		WHERE pid = ? AND pid_start = ? AND state != ? AND id != ? ORDER BY started_at DESC`, r.PID, r.PIDStart, Ended, r.SessionID)
 		if err != nil {
 			return nil, err
 		}
@@ -764,7 +503,7 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 		return err
 	}
 	for _, o := range olds {
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL, state = 'ended', state_at = ? WHERE id = ?`, now.UnixMilli(), o.id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL, state = ?, state_at = ? WHERE id = ?`, Ended, now.UnixMilli(), o.id); err != nil {
 			return err
 		}
 		if o.agent == "" {
@@ -782,13 +521,15 @@ func setState(ctx context.Context, tx *sql.Tx, id string, st State, now time.Tim
 	return err
 }
 
-func hasOffer(entries []queue.Entry) bool {
+// offered returns the entries whose slot is offered to the agent.
+func offered(entries []queue.Entry) []queue.Entry {
+	var out []queue.Entry
 	for _, e := range entries {
 		if e.State == queue.Offered {
-			return true
+			out = append(out, e)
 		}
 	}
-	return false
+	return out
 }
 
 // signature identifies the agent's places without times, to tell whether they changed.
@@ -814,40 +555,4 @@ func lostKeys(prev string, entries []queue.Entry) []string {
 		}
 	}
 	return lost
-}
-
-func clock(t time.Time) string { return t.Local().Format("15:04") }
-
-func note(agent string, entries []queue.Entry, lost []string) string {
-	return strings.TrimSpace(fmt.Sprintf("Agora: you are %s. %s", agent, places(entries, lost)))
-}
-
-// places describes the agent's places in queues and the ones it lost, or "" for none.
-func places(entries []queue.Entry, lost []string) string {
-	var held, waiting, offered []string
-	for _, e := range entries {
-		switch e.State {
-		case queue.Held:
-			held = append(held, fmt.Sprintf("%s until %s", e.Key, clock(e.Expires)))
-		case queue.Waiting:
-			waiting = append(waiting, fmt.Sprintf("%s at position %d", e.Key, e.Position))
-		case queue.Offered:
-			offered = append(offered, fmt.Sprintf("%s: claim it by %s with `agora queue renew %s`, or give it up with `agora queue release %s`",
-				e.Key, clock(e.Expires), e.Key, e.Key))
-		}
-	}
-	var parts []string
-	for _, o := range offered {
-		parts = append(parts, fmt.Sprintf("It is your turn on %s.", o))
-	}
-	if len(held) > 0 {
-		parts = append(parts, fmt.Sprintf("You hold %s; release with `agora queue release <key>` when done.", strings.Join(held, ", ")))
-	}
-	if len(waiting) > 0 {
-		parts = append(parts, fmt.Sprintf("You wait for %s.", strings.Join(waiting, ", ")))
-	}
-	if len(lost) > 0 {
-		parts = append(parts, fmt.Sprintf("You no longer hold or wait for %s (lease ended, turn missed or removed).", strings.Join(lost, ", ")))
-	}
-	return strings.Join(parts, " ")
 }

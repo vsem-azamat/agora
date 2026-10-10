@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -25,6 +27,8 @@ const (
 	MaxLease = 7 * 24 * time.Hour
 	// MaxSlots is the largest number of slots a resource may have.
 	MaxSlots = 1000
+	// DefaultSlots is how many slots a resource has until they are set.
+	DefaultSlots = 1
 )
 
 // State of an agent in a resource's queue.
@@ -55,20 +59,7 @@ type Resource struct {
 	Entries []Entry
 }
 
-// Holders returns the entries that hold a slot.
-func (r Resource) Holders() []Entry {
-	var out []Entry
-	for _, e := range r.Entries {
-		if e.State == Held {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
 var (
-	// ErrInvalid marks a request with an invalid key, agent name or value.
-	ErrInvalid = errors.New("invalid request")
 	// ErrNotQueued means the agent neither holds nor waits for the resource.
 	ErrNotQueued = errors.New("not queued")
 	// ErrNotYourTurn means the agent waits and has no slot to renew.
@@ -84,8 +75,8 @@ func (e *ForbiddenError) Error() string {
 
 var keyRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]{0,63}$`)
 
-// ValidKey reports whether key may name a resource.
-func ValidKey(key string) bool {
+// validKey reports whether key may name a resource.
+func validKey(key string) bool {
 	return keyRE.MatchString(key) && !strings.Contains(key, "..")
 }
 
@@ -104,15 +95,15 @@ func New(db *sql.DB, now func() time.Time) *Queue {
 }
 
 func checkKey(key string) error {
-	if !ValidKey(key) {
-		return fmt.Errorf("%w: resource key %q: up to 64 lowercase letters, digits, '.', '_', '-', '/', no '..'", ErrInvalid, key)
+	if !validKey(key) {
+		return fmt.Errorf("%w: resource key %q: up to 64 lowercase letters, digits, '.', '_', '-', '/', no '..'", store.ErrInvalid, key)
 	}
 	return nil
 }
 
 func checkAgent(agent string) error {
 	if strings.TrimSpace(agent) == "" {
-		return fmt.Errorf("%w: agent name is required", ErrInvalid)
+		return fmt.Errorf("%w: agent name is required", store.ErrInvalid)
 	}
 	return nil
 }
@@ -135,7 +126,7 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 		lease = DefaultLease
 	}
 	if lease < MinLease || lease > MaxLease {
-		return nil, Resource{}, fmt.Errorf("%w: lease must be between %s and %s", ErrInvalid, MinLease, MaxLease)
+		return nil, Resource{}, fmt.Errorf("%w: lease must be between %s and %s", store.ErrInvalid, MinLease, MaxLease)
 	}
 	var res Resource
 	var joined bool
@@ -162,8 +153,8 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 					note, lease.Milliseconds(), ms(now.Add(lease)), key, agent)
 			case given:
 				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ?, lease_ms = ?,
-					expires_at = CASE WHEN state = 'held' THEN ? ELSE expires_at END WHERE key = ? AND agent = ?`,
-					note, lease.Milliseconds(), ms(now.Add(lease)), key, agent)
+					expires_at = CASE WHEN state = ? THEN ? ELSE expires_at END WHERE key = ? AND agent = ?`,
+					note, lease.Milliseconds(), Held, ms(now.Add(lease)), key, agent)
 			default:
 				_, err = tx.ExecContext(ctx, `UPDATE entries SET note = ? WHERE key = ? AND agent = ?`, note, key, agent)
 			}
@@ -179,13 +170,13 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 		switch {
 		case free:
 			_, err = tx.ExecContext(ctx, `INSERT INTO entries (key, agent, note, state, seq, lease_ms, joined_at, expires_at)
-				VALUES (?, ?, ?, 'held', `+nextSeq+`, ?, ?, ?)`, key, agent, note, key, lease.Milliseconds(), ms(now), ms(now.Add(lease)))
+				VALUES (?, ?, ?, ?, `+nextSeq+`, ?, ?, ?)`, key, agent, note, Held, key, lease.Milliseconds(), ms(now), ms(now.Add(lease)))
 		case noWait:
 			res = r
 			return nil
 		default:
 			_, err = tx.ExecContext(ctx, `INSERT INTO entries (key, agent, note, state, seq, lease_ms, joined_at)
-				VALUES (?, ?, ?, 'waiting', `+nextSeq+`, ?, ?)`, key, agent, note, key, lease.Milliseconds(), ms(now))
+				VALUES (?, ?, ?, ?, `+nextSeq+`, ?, ?)`, key, agent, note, Waiting, key, lease.Milliseconds(), ms(now))
 		}
 		if err != nil {
 			return err
@@ -242,8 +233,8 @@ func (q *Queue) touch(ctx context.Context, key, agent string, renew bool) (*Entr
 			out = e
 			return nil
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = 'held', expires_at = ?, skips = 0 WHERE key = ? AND agent = ?`,
-			ms(now.Add(e.Lease)), key, agent); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE entries SET state = ?, expires_at = ?, skips = 0 WHERE key = ? AND agent = ?`,
+			Held, ms(now.Add(e.Lease)), key, agent); err != nil {
 			return err
 		}
 		r, err = load(ctx, tx, key)
@@ -305,7 +296,7 @@ func (q *Queue) SetSlots(ctx context.Context, key string, slots int) (Resource, 
 		return Resource{}, err
 	}
 	if slots < 1 || slots > MaxSlots {
-		return Resource{}, fmt.Errorf("%w: slots must be between 1 and %d", ErrInvalid, MaxSlots)
+		return Resource{}, fmt.Errorf("%w: slots must be between 1 and %d", store.ErrInvalid, MaxSlots)
 	}
 	var res Resource
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
@@ -323,9 +314,8 @@ func (q *Queue) SetSlots(ctx context.Context, key string, slots int) (Resource, 
 	return res, err
 }
 
-// List returns resources that someone holds or waits for, or whose slots were set, and whether
-// settling them changed any queue; only key
-// when key is not empty.
+// List returns resources that someone holds or waits for, or whose slots were set (only key
+// when key is not empty), and whether settling them changed any queue.
 func (q *Queue) List(ctx context.Context, key string) ([]Resource, bool, error) {
 	if key != "" {
 		if err := checkKey(key); err != nil {
@@ -387,21 +377,10 @@ func (q *Queue) EntriesOf(ctx context.Context, agent string) ([]Entry, error) {
 	return out, err
 }
 
-// ReleaseAgent removes agent from every resource queue and returns the keys it left.
-func (q *Queue) ReleaseAgent(ctx context.Context, agent string) ([]string, error) {
-	var left []string
-	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		var err error
-		left, err = q.ReleaseAgentTx(ctx, tx, agent)
-		return err
-	})
-	return left, err
-}
-
-// ReleaseAgentTx is ReleaseAgent inside the caller's transaction, so other packages can give
-// back an agent's places atomically with their own changes.
-func (q *Queue) ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	now := q.now()
+// ReleaseAgentTx removes agent from every resource queue inside the caller's transaction, so
+// other packages can give back an agent's places atomically with their own changes, and
+// returns the keys it left.
+func ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string, now time.Time) ([]string, error) {
 	keys, err := keysOf(ctx, tx, agent)
 	if err != nil {
 		return nil, err
@@ -418,20 +397,7 @@ func (q *Queue) ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string) ([
 }
 
 func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT key FROM entries WHERE agent = ? ORDER BY key`, agent)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
-	}
-	return keys, rows.Err()
+	return store.Strings(ctx, tx, `SELECT key FROM entries WHERE agent = ? ORDER BY key`, agent)
 }
 
 // Sweep settles every resource with an expired lease or claim deadline and returns the keys
@@ -439,7 +405,7 @@ func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
 func (q *Queue) Sweep(ctx context.Context) ([]string, error) {
 	var changed []string
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		keys, err := column(ctx, tx, `SELECT DISTINCT key FROM entries WHERE expires_at IS NOT NULL AND expires_at <= ? ORDER BY key`, ms(now))
+		keys, err := store.Strings(ctx, tx, `SELECT DISTINCT key FROM entries WHERE expires_at IS NOT NULL AND expires_at <= ? ORDER BY key`, ms(now))
 		if err != nil {
 			return err
 		}
@@ -456,35 +422,10 @@ func (q *Queue) Sweep(ctx context.Context) ([]string, error) {
 
 // --- internals ---------------------------------------------------------------
 
+// tx runs fn in a transaction with the time it starts.
 func (q *Queue) tx(ctx context.Context, fn func(*sql.Tx, time.Time) error) error {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx, q.now()); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
-}
-
-// column runs a query that selects one text column and returns its values. The rows are closed
-// before it returns, so the transaction's single connection is free for the next statement.
-func column(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
+	now := q.now()
+	return store.InTx(ctx, q.db, func(tx *sql.Tx) error { return fn(tx, now) })
 }
 
 func ensureResource(ctx context.Context, tx *sql.Tx, key string) error {
@@ -512,34 +453,34 @@ func settled(ctx context.Context, tx *sql.Tx, key string, now time.Time) (bool, 
 		changed = changed || n > 0
 		return err
 	}
-	if err := exec(`DELETE FROM entries WHERE key = ? AND state = 'held' AND expires_at <= ?`, key, t); err != nil {
+	if err := exec(`DELETE FROM entries WHERE key = ? AND state = ? AND expires_at <= ?`, key, Held, t); err != nil {
 		return false, err
 	}
-	if err := exec(`DELETE FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? AND skips + 1 >= ?`,
-		key, t, MaxMissedTurns); err != nil {
+	if err := exec(`DELETE FROM entries WHERE key = ? AND state = ? AND expires_at <= ? AND skips + 1 >= ?`,
+		key, Offered, t, MaxMissedTurns); err != nil {
 		return false, err
 	}
-	missed, err := column(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
+	missed, err := store.Strings(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = ? AND expires_at <= ? ORDER BY seq`, key, Offered, t)
 	if err != nil {
 		return false, err
 	}
 	for _, a := range missed {
-		if err := exec(`UPDATE entries SET state = 'waiting', expires_at = NULL, skips = skips + 1,
-			seq = `+nextSeq+` WHERE key = ? AND agent = ?`, key, key, a); err != nil {
+		if err := exec(`UPDATE entries SET state = ?, expires_at = NULL, skips = skips + 1,
+			seq = `+nextSeq+` WHERE key = ? AND agent = ?`, Waiting, key, key, a); err != nil {
 			return false, err
 		}
 	}
 	var slots, active int
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), 1)`, key).Scan(&slots); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), ?)`, key, DefaultSlots).Scan(&slots); err != nil {
 		return false, err
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE key = ? AND state IN ('held', 'offered')`, key).Scan(&active); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE key = ? AND state IN (?, ?)`, key, Held, Offered).Scan(&active); err != nil {
 		return false, err
 	}
 	if free := slots - active; free > 0 {
-		if err := exec(`UPDATE entries SET state = 'offered', expires_at = ?
-			WHERE key = ? AND agent IN (SELECT agent FROM entries WHERE key = ? AND state = 'waiting' ORDER BY seq LIMIT ?)`,
-			ms(now.Add(ClaimWindow)), key, key, free); err != nil {
+		if err := exec(`UPDATE entries SET state = ?, expires_at = ?
+			WHERE key = ? AND agent IN (SELECT agent FROM entries WHERE key = ? AND state = ? ORDER BY seq LIMIT ?)`,
+			Offered, ms(now.Add(ClaimWindow)), key, key, Waiting, free); err != nil {
 			return false, err
 		}
 	}
@@ -547,12 +488,12 @@ func settled(ctx context.Context, tx *sql.Tx, key string, now time.Time) (bool, 
 }
 
 func load(ctx context.Context, tx *sql.Tx, key string) (Resource, error) {
-	r := Resource{Key: key, Slots: 1}
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), 1)`, key).Scan(&r.Slots); err != nil {
+	r := Resource{Key: key, Slots: DefaultSlots}
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT slots FROM resources WHERE key = ?), ?)`, key, DefaultSlots).Scan(&r.Slots); err != nil {
 		return r, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT agent, note, state, lease_ms, joined_at, expires_at FROM entries WHERE key = ?
-		ORDER BY CASE state WHEN 'held' THEN 0 WHEN 'offered' THEN 1 ELSE 2 END, seq`, key)
+		ORDER BY CASE state WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, seq`, key, Held, Offered)
 	if err != nil {
 		return r, err
 	}
@@ -585,20 +526,7 @@ func listKeys(ctx context.Context, tx *sql.Tx, key string) ([]string, error) {
 	if key != "" {
 		query, args = `SELECT key FROM resources WHERE key = ?`, []any{key}
 	}
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
-	}
-	return keys, rows.Err()
+	return store.Strings(ctx, tx, query, args...)
 }
 
 func find(r Resource, agent string) *Entry {
