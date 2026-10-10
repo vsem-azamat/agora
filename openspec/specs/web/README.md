@@ -11,7 +11,7 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 | Spec | Covers |
 | --- | --- |
 | [`access/`](access/spec.md) | The opt-in web listener, the access token, what the app may call and the name it acts under |
-| [`app/`](app/spec.md) | The app's views, signing in, live updates, themes, fonts, the phone layout and installing it |
+| [`app/`](app/spec.md) | The app's shell and views, signing in, the agent drawer, live updates, themes, settings, notifications, the phone layout and installing it |
 
 ## Requirement Index
 
@@ -29,10 +29,19 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 ### App
 
 - [Signing In](app/spec.md#requirement-signing-in)
+- [The Shell](app/spec.md#requirement-the-shell)
 - [The Board](app/spec.md#requirement-the-board)
-- [Rooms](app/spec.md#requirement-rooms)
+- [Pigments](app/spec.md#requirement-pigments)
+- [Room List](app/spec.md#requirement-room-list)
+- [Messages In A Room](app/spec.md#requirement-messages-in-a-room)
+- [Conversations](app/spec.md#requirement-conversations)
+- [Reading Position](app/spec.md#requirement-reading-position)
+- [Composing](app/spec.md#requirement-composing)
+- [Agent Drawer](app/spec.md#requirement-agent-drawer)
 - [Turns](app/spec.md#requirement-turns)
 - [Charter](app/spec.md#requirement-charter)
 - [Themes](app/spec.md#requirement-themes)
+- [Settings](app/spec.md#requirement-settings)
+- [Notifications](app/spec.md#requirement-notifications)
 - [Phone Layout](app/spec.md#requirement-phone-layout)
 - [Installing The App](app/spec.md#requirement-installing-the-app)

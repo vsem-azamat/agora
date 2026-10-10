@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from './App';
+import { App, parseRoute } from './App';
 import type { Api } from './api';
 import { useRoom } from './useHub';
 
@@ -9,6 +9,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
   history.replaceState(null, '', '/');
+  document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-size');
 });
 
 // --- a fake hub behind fetch, speaking the Connect protocol with JSON ---------------------
@@ -23,7 +25,7 @@ function envelope(flags: number, json: unknown): Uint8Array {
 }
 
 const answers: Record<string, unknown> = {
-  'WebService/Whoami': { name: 'operator' },
+  'WebService/Whoami': { name: 'operator', board: 'agora', generalRoom: 'general' },
   'AgentService/ListAgents': {
     agents: [
       {
@@ -33,10 +35,17 @@ const answers: Record<string, unknown> = {
         task: 'fixing the login timeout',
         active: true,
       },
+      { name: 'reviewer', session: 'SESSION_STATE_IDLE', project: 'example-app', active: true },
       { name: 'operator', session: 'SESSION_STATE_OFFLINE', active: true },
     ],
   },
-  'RoomService/ListRooms': { rooms: [{ name: 'general', messages: 2 }] },
+  'RoomService/ListRooms': {
+    rooms: [
+      { name: 'example-app', messages: 1 },
+      { name: 'general', messages: 2 },
+    ],
+  },
+  'RoomService/History': { messages: [{ id: '1', room: 'general', author: 'builder', body: 'hello' }] },
   'RoomService/UnreadByRoom': { rooms: [{ room: 'general', unread: 2, addressed: 1 }] },
   'RoomService/ListSubscriptions': { rooms: ['general'] },
   'ResourceService/ListResources': {},
@@ -65,6 +74,16 @@ function fakeHub(seen: string[]) {
   });
 }
 
+async function signedIn() {
+  vi.stubGlobal('fetch', fakeHub([]));
+  history.replaceState(null, '', '/#token=good-token');
+  const r = render(<App />);
+  await waitFor(() => expect(r.container.querySelector('[data-agent="builder"]')).not.toBeNull());
+  return r;
+}
+
+const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Account: @operator' }));
+
 describe('App with a hub', () => {
   it('opens the printed address, shows the board and signs out', async () => {
     const seen: string[] = [];
@@ -76,7 +95,11 @@ describe('App with a hub', () => {
     expect(location.href).not.toContain('good-token');
     expect(seen.every((s) => s.endsWith('Bearer good-token'))).toBe(true);
     expect(container.querySelector('em.mention')?.textContent).toBe('@1');
-    fireEvent.click(screen.getByText('Sign out'));
+    expect(screen.getByText('live · 2 on the board')).toBeTruthy();
+    openMenu();
+    expect(screen.getByRole('menu').textContent).toContain('@operator');
+    expect(screen.getAllByRole('button', { name: /theme$/ })).toHaveLength(5);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
   });
@@ -84,38 +107,82 @@ describe('App with a hub', () => {
 
 describe('sidebar', () => {
   it('marks either a room or a project as current, never both', async () => {
-    vi.stubGlobal('fetch', fakeHub([]));
-    history.replaceState(null, '', '/#token=good-token');
-    const { container } = render(<App />);
-    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
-    const side = () => container.querySelector('aside.side') as HTMLElement;
-    fireEvent.click(screen.getByRole('button', { name: /example-app/ }));
-    expect(side().querySelectorAll('.on')).toHaveLength(1);
+    const { container } = await signedIn();
+    const current = () => [...container.querySelectorAll('nav.side [aria-current]')].map((e) => e.textContent);
+    const side = container.querySelector('nav.side') as HTMLElement;
+    fireEvent.click(within(side).getByRole('button', { name: /example-app/ }));
+    expect(current()).toEqual(['example-app2']);
     location.hash = '#/rooms/general';
-    await waitFor(() => expect(side().querySelector('a.on')?.textContent).toContain('#general'));
-    expect(side().querySelectorAll('.on')).toHaveLength(1);
+    await waitFor(() => expect(current()).toEqual(['#general@1']));
     location.hash = '#/';
-    await waitFor(() => expect(side().querySelector('button.on')?.textContent).toContain('example-app'));
-    expect(side().querySelectorAll('.on')).toHaveLength(1);
+    await waitFor(() => expect(current()).toEqual(['example-app2']));
+  });
+});
+
+describe('palette', () => {
+  it('opens a room by name with Ctrl+K', async () => {
+    await signedIn();
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    const input = screen.getByRole('textbox', { name: 'Jump to' });
+    fireEvent.change(input, { target: { value: 'gen' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(location.hash).toBe('#/rooms/general');
+    expect(screen.queryByRole('dialog', { name: 'Jump to' })).toBeNull();
+  });
+  it('moves with the arrow keys and opens an agent', async () => {
+    await signedIn();
+    fireEvent.click(screen.getByText('Jump to an agent, room or view'));
+    const input = screen.getByRole('textbox', { name: 'Jump to' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('dialog', { name: 'reviewer' })).toBeTruthy();
+  });
+});
+
+describe('drawer', () => {
+  it('addresses an agent in its project room', async () => {
+    const { container } = await signedIn();
+    fireEvent.click(container.querySelector('[data-agent="builder"]') as HTMLElement);
+    fireEvent.click(screen.getByText(/Address in #example-app/));
+    await waitFor(() => expect(location.hash).toBe('#/rooms/example-app'));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Message #example-app') as HTMLTextAreaElement).value).toBe('@builder '),
+    );
+    expect(screen.queryByRole('dialog', { name: 'builder' })).toBeNull();
   });
 });
 
 describe('theme', () => {
   it('stores nothing until the operator chooses', async () => {
-    vi.stubGlobal('fetch', fakeHub([]));
-    history.replaceState(null, '', '/#token=good-token');
-    render(<App />);
-    await screen.findByText('Ink');
+    await signedIn();
+    expect(document.documentElement.dataset.theme).not.toBe('ink');
     expect(localStorage.getItem('agora.theme')).toBeNull();
   });
-  it('switches to ink and remembers it', async () => {
-    vi.stubGlobal('fetch', fakeHub([]));
-    history.replaceState(null, '', '/#token=good-token');
-    render(<App />);
-    expect(document.documentElement.dataset.theme).toBe('parchment');
-    fireEvent.click(screen.getByText('Ink'));
+  it('switches to ink in Settings and remembers it', async () => {
+    await signedIn();
+    location.hash = '#/settings';
+    fireEvent.click(await screen.findByText('Ink'));
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('ink'));
     expect(localStorage.getItem('agora.theme')).toBe('ink');
+  });
+});
+
+describe('settings', () => {
+  it('keeps a larger text size', async () => {
+    await signedIn();
+    location.hash = '#/settings';
+    fireEvent.click(await screen.findByText('Large'));
+    expect(document.documentElement.dataset.size).toBe('l');
+    expect(localStorage.getItem('agora.size')).toBe('l');
+  });
+  it('asks for permission to notify when notifications are chosen', async () => {
+    const requestPermission = vi.fn(async () => 'granted');
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    await signedIn();
+    location.hash = '#/settings';
+    fireEvent.click(await screen.findByText('Everything'));
+    expect(requestPermission).toHaveBeenCalled();
+    expect(localStorage.getItem('agora.notify')).toBe('all');
   });
 });
 
@@ -130,11 +197,13 @@ function fakeRoomApi(history: () => Promise<unknown>) {
 const msgs = { messages: [{ id: 7n, room: 'example-app', author: 'reviewer', body: 'hello' }] };
 
 describe('useRoom', () => {
-  it('marks the room read up to the newest message shown', async () => {
+  it('marks the room read up to the newest message seen', async () => {
     const { api, markRoomRead } = fakeRoomApi(async () => msgs);
     const fail = vi.fn();
     const { result } = renderHook(() => useRoom(api, 'example-app', 1n, fail));
     await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    expect(markRoomRead).not.toHaveBeenCalled();
+    act(() => result.current.markSeen(7n));
     await waitFor(() => expect(markRoomRead).toHaveBeenCalledWith({ room: 'example-app', throughId: 7n }));
     expect(fail).not.toHaveBeenCalled();
   });
@@ -144,6 +213,7 @@ describe('useRoom', () => {
     const { api, markRoomRead } = fakeRoomApi(async () => msgs);
     const { result } = renderHook(() => useRoom(api, 'example-app', 1n, vi.fn()));
     await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    act(() => result.current.markSeen(7n));
     expect(markRoomRead).not.toHaveBeenCalled();
     vi.restoreAllMocks();
     document.dispatchEvent(new Event('visibilitychange'));
@@ -170,5 +240,38 @@ describe('useRoom', () => {
     const { result } = renderHook(() => useRoom(api, 'nowhere', 1n, fail));
     await waitFor(() => expect(result.current.error).toBe('room not found'));
     expect(fail).not.toHaveBeenCalled();
+  });
+});
+
+describe('App', () => {
+  it('routes by the fragment', () => {
+    expect(parseRoute('#/')).toEqual({ view: 'board' });
+    expect(parseRoute('#/rooms/example-app')).toEqual({ view: 'room', room: 'example-app' });
+    expect(parseRoute('#/turns')).toEqual({ view: 'turns' });
+    expect(parseRoute('#/settings')).toEqual({ view: 'settings' });
+  });
+
+  it('asks for a token when none is stored', () => {
+    render(<App />);
+    expect(screen.getByLabelText('Web token')).toBeTruthy();
+  });
+
+  it('forgets a token the hub refuses and asks again', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ code: 'unauthenticated', message: 'a valid web token is required' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    );
+    history.replaceState(null, '', '/#token=rotated-away');
+    render(<App />);
+    await waitFor(() => expect(screen.getByLabelText('Web token')).toBeTruthy());
+    expect(screen.getByText(/did not accept that token/)).toBeTruthy();
+    expect(localStorage.getItem('agora.token')).toBeNull();
+    expect(location.href).not.toContain('rotated-away');
   });
 });

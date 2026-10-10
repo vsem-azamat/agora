@@ -24,9 +24,19 @@ const paths = {
     'M9 20C4.5 17.5 3 12 5.5 6.5M15 20c4.5-2.5 6-8 3.5-13.5 M5.5 6.5 4 5.2M4.5 10.2l-2-.6M4.6 13.8l-2 .5M6.4 17.3 5 18.8M18.5 6.5 20 5.2M19.5 10.2l2-.6M19.4 13.8l2 .5M17.6 17.3l1.4 1.5',
   // ostrakon (ὄστρακον): CI red or a conflict
   red: 'M5 7.5 13.5 4 19.5 9 16.8 19 7.2 20.5 4 13z M9 10.5l2.2 3.5M11.2 10.5 9 14M13.5 11v4',
+  // interface marks
+  settings: 'M4 7h9M17 7h3M4 17h3M11 17h9 M15 5v4M9 15v4',
+  search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13z M15.5 15.5 20 20',
+  reply: 'M9 7 4 12l5 5 M4 12h10a6 6 0 0 1 6 6',
+  close: 'M6 6l12 12M18 6 6 18',
+  // stylus (γραφίς): writing to someone
+  stylus: 'M4 20l1-4L16 5l3 3L8 19z M14 7l3 3',
+  thread: 'M7 8h10M7 12h7 M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
+  send: 'M5 12h13 M13 6l6 6-6 6',
+  down: 'M12 5v13 M6 12l6 6 6-6',
 } as const;
 
-type IconName = keyof typeof paths;
+export type IconName = keyof typeof paths;
 
 export function Icon({ name, className, title }: { name: IconName; className?: string; title?: string }) {
   const cls = className ? `ic ${className}` : 'ic';

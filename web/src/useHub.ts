@@ -14,6 +14,10 @@ export type Status = 'connecting' | 'live' | 'offline';
 
 type HubData = {
   operator: string;
+  /** The name the board posts its own messages under. */
+  board: string;
+  /** The room every agent follows. */
+  general: string;
   agents: Profile[];
   rooms: Room[];
   unread: Map<string, RoomCount>;
@@ -54,6 +58,8 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
     ]);
     setData({
       operator: who.name,
+      board: who.board,
+      general: who.generalRoom,
       agents: agents.agents,
       rooms: rooms.rooms,
       unread: new Map(unread.rooms.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }])),
@@ -115,12 +121,14 @@ function visible(): boolean {
 }
 
 /**
- * A room's last messages, reloaded with every board revision. Showing them in a visible page
- * marks the room read up to the newest; a hidden page marks nothing until it is shown.
+ * A room's last messages, reloaded with every board revision. The room view reports the newest
+ * message the operator has seen with `markSeen`; the room is marked read up to it while the page
+ * is visible, and a hidden page marks nothing until it is shown.
  */
 export function useRoom(api: Api, room: string | undefined, revision: bigint | undefined, fail: (e: unknown) => void) {
   // what was loaded is kept with its room, so another room starts empty until its own load
   const [loaded, setLoaded] = useState<{ room: string; messages?: Message[]; error?: string }>();
+  const [seen, setSeen] = useState<{ room: string; id: bigint }>();
   const [shown, setShown] = useState(visible);
   const marked = useRef(new Map<string, bigint>());
 
@@ -154,17 +162,55 @@ export function useRoom(api: Api, room: string | undefined, revision: bigint | u
     };
   }, [api, room, revision, fail]);
 
-  const mine = room !== undefined && loaded?.room === room ? loaded : undefined;
-  const messages = mine?.messages;
-  const newest = messages?.at(-1);
+  const markSeen = useCallback(
+    (id: bigint) => {
+      if (room) setSeen((s) => (s?.room === room && s.id >= id ? s : { room, id }));
+    },
+    [room],
+  );
+
+  const through = room !== undefined && seen?.room === room ? seen.id : undefined;
   useEffect(() => {
-    if (!room || !shown || !newest) return;
-    if (newest.id <= (marked.current.get(room) ?? 0n)) return;
-    marked.current.set(room, newest.id);
-    api.rooms.markRoomRead({ room, throughId: newest.id }).catch((err) => {
-      marked.current.delete(room); // tried again with the next revision
+    if (!room || !shown || through === undefined) return;
+    if (through <= (marked.current.get(room) ?? 0n)) return;
+    marked.current.set(room, through);
+    api.rooms.markRoomRead({ room, throughId: through }).catch((err) => {
+      marked.current.delete(room); // tried again with the next report
       if (unauthenticated(err)) fail(err);
     });
-  }, [api, room, newest, shown, fail]);
-  return { messages, error: mine?.error };
+  }, [api, room, through, shown, fail]);
+
+  const mine = room !== undefined && loaded?.room === room ? loaded : undefined;
+  return { messages: mine?.messages, error: mine?.error, markSeen };
+}
+
+/** How many recent messages of an agent its drawer shows. */
+const RECENT = 3;
+
+/**
+ * An agent's latest messages across the rooms, newest first, read from each room's history when
+ * the drawer opens.
+ */
+export function useAgentMessages(api: Api, agent: string | undefined, rooms: string[], fail: (e: unknown) => void) {
+  const [found, setFound] = useState<{ agent: string; messages: Message[] }>();
+  const key = rooms.join('\n');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the rooms are compared by their names
+  useEffect(() => {
+    if (!agent) return;
+    let current = true;
+    Promise.all(rooms.map((room) => api.rooms.history({ room, last: 100 })))
+      .then((hs) => {
+        if (!current) return;
+        const mine = hs.flatMap((h) => h.messages).filter((m) => m.author === agent);
+        mine.sort((a, b) => Number(b.id - a.id)); // ids grow with every message, in every room
+        setFound({ agent, messages: mine.slice(0, RECENT) });
+      })
+      .catch((err) => {
+        if (current && unauthenticated(err)) fail(err);
+      });
+    return () => {
+      current = false;
+    };
+  }, [api, agent, key, fail]);
+  return found && found.agent === agent ? found.messages : undefined;
 }
