@@ -27,7 +27,8 @@ const (
 	DefaultHistory = 20
 )
 
-// Names of rooms and agents.
+// The name rule for rooms and agents. Rooms owns it because mentions, which rooms parses,
+// name agents; sessions applies it to agent names.
 const (
 	// MinName and MaxName bound the length of a room or agent name.
 	MinName, MaxName = 2, 32
@@ -527,7 +528,10 @@ func subscribe(ctx context.Context, tx *sql.Tx, agent, room string) error {
 
 func followed(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
 	rooms, err := store.Strings(ctx, tx, `SELECT room FROM subscriptions WHERE agent = ? AND room != ? ORDER BY room`, agent, General)
-	return append([]string{General}, rooms...), err
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{General}, rooms...), nil
 }
 
 func scanMessages(rows *sql.Rows) ([]Message, error) {

@@ -209,7 +209,7 @@ func FollowTx(ctx context.Context, tx *sql.Tx, name, sessionDir string, now time
 
 // Get returns the profile of name.
 func (a *Agents) Get(ctx context.Context, name string) (Profile, error) {
-	p, err := scan(a.db.QueryRowContext(ctx, profileQuery+` WHERE a.name = ?`, Offline, name))
+	p, err := scan(a.db.QueryRowContext(ctx, profileQuery+` WHERE a.name = ?`, sessionEnded, sessionBusy, Offline, name))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, unknown(name)
 	}
@@ -217,10 +217,15 @@ func (a *Agents) Get(ctx context.Context, name string) (Profile, error) {
 	return p, err
 }
 
-// profileQuery selects full profiles; it takes Offline as its first argument.
+// The session states profileQuery reads from the sessions table; the sessions package, which
+// owns them, imports this one.
+const sessionEnded, sessionBusy = "ended", "busy"
+
+// profileQuery selects full profiles; it takes sessionEnded, sessionBusy and Offline as its
+// first arguments.
 const profileQuery = `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
-	COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
-		ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), ?),
+	COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != ?
+		ORDER BY CASE s.state WHEN ? THEN 0 ELSE 1 END LIMIT 1), ?),
 	COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), ''),
 	` + ciColumn + `
 	FROM agents AS a`
@@ -233,7 +238,7 @@ func active(p Profile, now time.Time) bool {
 
 // List returns profiles in name order: active agents, or all agents when all is true.
 func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
-	rows, err := a.db.QueryContext(ctx, profileQuery+` ORDER BY a.name`, Offline)
+	rows, err := a.db.QueryContext(ctx, profileQuery+` ORDER BY a.name`, sessionEnded, sessionBusy, Offline)
 	if err != nil {
 		return nil, err
 	}

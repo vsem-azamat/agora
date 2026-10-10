@@ -11,13 +11,14 @@ import (
 var ErrInvalid = errors.New("invalid request")
 
 // InTx runs fn in a transaction on db and commits it, or rolls it back and returns fn's error.
+// A panic in fn rolls the transaction back too, so the single connection is not left in it.
 func InTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = tx.Rollback() }() // after Commit a no-op; report the error that failed the transaction
 	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
 		return err
 	}
 	return tx.Commit()

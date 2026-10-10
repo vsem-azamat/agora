@@ -136,7 +136,12 @@ func editSettings(path string, now time.Time, edit func(hooks *object) ([]string
 
 // editOnce is one attempt of editSettings; every error it returns names path.
 func editOnce(path, target string, now time.Time, edit func(hooks *object) ([]string, error)) (Change, error) {
-	fail := func(err error) (Change, error) { return Change{}, fmt.Errorf("%s: %w", path, err) }
+	fail := func(err error) (Change, error) {
+		if _, named := errors.AsType[*os.PathError](err); named {
+			return Change{}, err // already names the file
+		}
+		return Change{}, fmt.Errorf("%s: %w", path, err)
+	}
 	old, mode, exists, err := readIfExists(target)
 	if err != nil {
 		return fail(err)

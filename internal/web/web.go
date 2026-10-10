@@ -26,7 +26,7 @@ func files() fs.FS {
 // Handler serves the built app: hashed files under /assets/ are cached for good, everything
 // else is revalidated, and missing files are not found.
 func Handler() http.Handler {
-	files := http.FileServerFS(files())
+	server := http.FileServerFS(files())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -45,6 +45,6 @@ func Handler() http.Handler {
 		if strings.HasSuffix(r.URL.Path, ".webmanifest") {
 			w.Header().Set("Content-Type", "application/manifest+json")
 		}
-		files.ServeHTTP(w, r)
+		server.ServeHTTP(w, r)
 	})
 }
