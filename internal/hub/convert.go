@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -126,6 +127,37 @@ func messagesPB(msgs []rooms.Message) []*agorav1.Message {
 		out = append(out, &agorav1.Message{Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed})
 	}
 	return out
+}
+
+var subscriptionModes = map[rooms.Mode]agorav1.SubscriptionMode{
+	rooms.ModeAll:      agorav1.SubscriptionMode_SUBSCRIPTION_MODE_ALL,
+	rooms.ModeMentions: agorav1.SubscriptionMode_SUBSCRIPTION_MODE_MENTIONS,
+	rooms.ModeWake:     agorav1.SubscriptionMode_SUBSCRIPTION_MODE_WAKE,
+}
+
+// modeName is the rooms mode for an API subscription mode: "" for unspecified, and an error for
+// an unknown one.
+func modeName(m agorav1.SubscriptionMode) (rooms.Mode, error) {
+	if m == agorav1.SubscriptionMode_SUBSCRIPTION_MODE_UNSPECIFIED {
+		return "", nil
+	}
+	for name, v := range subscriptionModes {
+		if v == m {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("%w: unknown subscription mode %d", store.ErrInvalid, m)
+}
+
+// subscriptionsPB returns the rooms of subs and the subscriptions with their modes.
+func subscriptionsPB(subs []rooms.Subscription) ([]string, []*agorav1.Subscription) {
+	names := make([]string, 0, len(subs))
+	out := make([]*agorav1.Subscription, 0, len(subs))
+	for _, s := range subs {
+		names = append(names, s.Room)
+		out = append(out, &agorav1.Subscription{Room: s.Room, Mode: subscriptionModes[s.Mode]})
+	}
+	return names, out
 }
 
 var proposalStates = map[governance.State]agorav1.ProposalState{

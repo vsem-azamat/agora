@@ -4,7 +4,7 @@ import { ConnectError } from '@connectrpc/connect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Api } from './api';
 import { unauthenticated } from './api';
-import type { RoomCount } from './board';
+import { type Mode, modeOf, type RoomCount } from './board';
 import type { Profile } from './gen/agora/v1/agents_pb';
 import type { GetCharterResponse, Proposal } from './gen/agora/v1/governance_pb';
 import type { Resource } from './gen/agora/v1/resources_pb';
@@ -22,6 +22,8 @@ type HubData = {
   rooms: Room[];
   unread: Map<string, RoomCount>;
   followed: Set<string>;
+  /** The mode of each followed room. */
+  modes: Map<string, Mode>;
   resources: Resource[];
   proposals: Proposal[];
   charter?: GetCharterResponse;
@@ -64,6 +66,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       rooms: rooms.rooms,
       unread: new Map(unread.rooms.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }])),
       followed: new Set(followed.rooms),
+      modes: new Map(followed.subscriptions.map((s) => [s.room, modeOf(s.mode)])),
       resources: resources.resources,
       proposals: proposals.proposals,
       charter,

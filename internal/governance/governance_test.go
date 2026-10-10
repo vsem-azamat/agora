@@ -61,7 +61,7 @@ func TestProposingAnnouncesToEveryone(t *testing.T) {
 	if len(h) != 1 || h[0].Author != "agora" || !strings.Contains(h[0].Body, "@all new proposal #1") || !strings.Contains(h[0].Body, "agora vote 1") {
 		t.Fatalf("announcement %+v", h)
 	}
-	if got, _, _ := e.r.Unread(ctx, "reviewer", true, 0); len(got) != 1 {
+	if got, _, _ := e.r.Unread(ctx, "reviewer", rooms.Addressed, 0); len(got) != 1 {
 		t.Fatalf("not addressed to everyone: %+v", got)
 	}
 }

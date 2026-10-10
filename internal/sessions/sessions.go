@@ -232,7 +232,7 @@ func (s *Sessions) addressedCount(ctx context.Context, agent string) (int, error
 	if s.rooms == nil {
 		return 0, nil
 	}
-	return s.rooms.UnreadCount(ctx, agent, true)
+	return s.rooms.UnreadCount(ctx, agent, rooms.Addressed)
 }
 
 // remind reports the agent's places, the places it lost since the last note, and whether a

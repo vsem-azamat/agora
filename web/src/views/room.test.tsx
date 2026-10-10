@@ -139,13 +139,29 @@ describe('messages in a room', () => {
     expect(screen.getByRole('button', { name: /builder ⇄ docs-writer/ }).textContent).toContain('2');
   });
 
-  it('follows and stops following, except the general room', () => {
+  it('follows with a mode and stops following, except the general room', () => {
     const { props } = room(ms, { followed: false });
-    fireEvent.click(screen.getByText('follow'));
-    expect(props.onFollow).toHaveBeenCalledWith(true);
+    const follow = screen.getByRole('combobox', { name: 'Follow' }) as HTMLSelectElement;
+    expect(follow.value).toBe('none');
+    fireEvent.change(follow, { target: { value: 'wake' } });
+    expect(props.onFollow).toHaveBeenCalledWith(true, 'wake');
     cleanup();
-    room([], { name: 'general' });
-    expect(screen.queryByText(/^follow/)).toBeNull();
+    const general = room([], { name: 'general', mode: 'mentions' });
+    const select = screen.getByRole('combobox', { name: 'Follow' }) as HTMLSelectElement;
+    expect(select.value).toBe('mentions');
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'Every message',
+      'Mentions only',
+      'Every message notifies',
+    ]);
+    fireEvent.change(select, { target: { value: 'all' } });
+    expect(general.props.onFollow).toHaveBeenCalledWith(true, 'all');
+  });
+
+  it('stops following', () => {
+    const { props } = room(ms, { mode: 'all' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Follow' }), { target: { value: 'none' } });
+    expect(props.onFollow).toHaveBeenCalledWith(false);
   });
 });
 

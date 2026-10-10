@@ -1,6 +1,15 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { makeApi, unauthenticated } from './api';
-import { boardAgents, heldTurns, knownNames, liveness, openProposals, projectOf } from './board';
+import {
+  boardAgents,
+  heldTurns,
+  knownNames,
+  liveness,
+  type Mode,
+  openProposals,
+  projectOf,
+  subscriptionMode,
+} from './board';
 import type { Profile } from './gen/agora/v1/agents_pb';
 import type { Room } from './gen/agora/v1/rooms_pb';
 import { Icon, type IconName } from './icons';
@@ -170,7 +179,12 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const { messages, error: roomError, markSeen } = useRoom(api, roomName, data?.revision, fail);
   const listed = useMemo(() => (data ? boardAgents(data.agents, data.operator) : undefined), [data]);
   const recent = useAgentMessages(api, drawer, data?.rooms ?? [], fail);
-  useNotifications(data?.unread, notify, openRoom);
+  const modes = data?.modes;
+  const wake = useMemo(
+    () => new Set([...(modes ?? [])].filter(([, m]) => m === 'wake').map(([room]) => room)),
+    [modes],
+  );
+  useNotifications(data?.unread, notify, openRoom, wake);
   usePaletteKey(useCallback(() => setPalette((p) => !p), []));
   const closeDrawer = useCallback(() => setDrawer(undefined), []);
   const operator = data?.operator ?? '';
@@ -214,9 +228,9 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       throw err;
     }
   };
-  const follow = (on: boolean) => {
+  const follow = (on: boolean, mode?: Mode) => {
     if (!roomName) return;
-    api.rooms.subscribe({ rooms: [roomName], follow: on }).catch(fail);
+    api.rooms.subscribe({ rooms: [roomName], follow: on, mode: mode && subscriptionMode(mode) }).catch(fail);
   };
   const pickProject = (p: string | undefined) => {
     setProject(p);
@@ -246,6 +260,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           general={data.general}
           agents={data.agents}
           followed={data.followed.has(roomName ?? '')}
+          mode={data.modes.get(roomName ?? '')}
           unread={data.unread.get(roomName ?? '')}
           now={now}
           draft={drafts[roomName ?? ''] ?? ''}

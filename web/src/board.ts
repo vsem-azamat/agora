@@ -4,6 +4,7 @@ import { type Timestamp, timestampDate } from '@bufbuild/protobuf/wkt';
 import { CiState, type Profile } from './gen/agora/v1/agents_pb';
 import { type Proposal, ProposalState, VoteChoice } from './gen/agora/v1/governance_pb';
 import { type Entry, EntryState, type Resource } from './gen/agora/v1/resources_pb';
+import { SubscriptionMode } from './gen/agora/v1/rooms_pb';
 import { SessionState } from './gen/agora/v1/sessions_pb';
 import { SIGILS, type Sigil } from './icons';
 
@@ -281,6 +282,23 @@ export function mentionNames(body: string): string[] {
 }
 
 export type RoomCount = { unread: number; addressed: number };
+
+/** How the operator follows a room: every message, only those addressed to it, or every message with a notification. */
+export type Mode = 'all' | 'mentions' | 'wake';
+
+const MODES: Record<Mode, SubscriptionMode> = {
+  all: SubscriptionMode.ALL,
+  mentions: SubscriptionMode.MENTIONS,
+  wake: SubscriptionMode.WAKE,
+};
+
+export function modeOf(m: SubscriptionMode): Mode {
+  return m === SubscriptionMode.MENTIONS ? 'mentions' : m === SubscriptionMode.WAKE ? 'wake' : 'all';
+}
+
+export function subscriptionMode(m: Mode): SubscriptionMode {
+  return MODES[m];
+}
 
 /** What a room shows in the list: `@n` for messages addressed to the operator, else the unread count. */
 export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean } | undefined {

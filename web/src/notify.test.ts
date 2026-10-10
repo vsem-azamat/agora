@@ -20,6 +20,15 @@ describe('alerts', () => {
   it('tells only messages to the operator for Mentions', () => {
     expect(alerts(before, after, 'mentions')).toEqual([{ room: 'example-app', body: '1 for you' }]);
   });
+  it('tells every rise in a room that notifies, unless Nothing', () => {
+    const wake = new Set(['website']);
+    expect(alerts(before, after, 'mentions', wake)).toEqual([
+      { room: 'example-app', body: '1 for you' },
+      { room: 'website', body: '1 new' },
+    ]);
+    expect(alerts(before, after, 'all', wake)).toEqual(alerts(before, after, 'all'));
+    expect(alerts(before, after, 'none', wake)).toEqual([]);
+  });
   it('tells nothing for Nothing or when counts fall', () => {
     expect(alerts(before, after, 'none')).toEqual([]);
     expect(alerts(after, before, 'all')).toEqual([]);

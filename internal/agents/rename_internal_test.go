@@ -19,7 +19,7 @@ var textColumns = map[string]map[string]bool{
 	"rooms":           {"name": false, "purpose": false, "created_by": true},
 	"messages":        {"room": false, "author": true, "body": false},
 	"mentions":        {"agent": true},
-	"subscriptions":   {"agent": true, "room": false},
+	"subscriptions":   {"agent": true, "room": false, "mode": false},
 	"read_positions":  {"agent": true, "room": false},
 	"read_marks":      {"agent": true},
 	"proposals":       {"title": false, "body": false, "author": true, "state": false, "closed_by": true},

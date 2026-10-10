@@ -7,17 +7,24 @@ type Alert = { room: string; body: string };
 
 /**
  * What to notify about between two readings of the unread counts: for Everything, every room
- * whose unread count rose; for Mentions, every room whose count of messages to the operator rose.
+ * whose unread count rose; for Mentions, every room whose count of messages to the operator rose;
+ * unless Nothing, also every room in `wake` (followed with Every message notifies) whose unread
+ * count rose.
  */
-export function alerts(before: Map<string, RoomCount>, after: Map<string, RoomCount>, pref: Notify): Alert[] {
+export function alerts(
+  before: Map<string, RoomCount>,
+  after: Map<string, RoomCount>,
+  pref: Notify,
+  wake: ReadonlySet<string> = new Set(),
+): Alert[] {
   const out: Alert[] = [];
   for (const [room, c] of after) {
     const was = before.get(room) ?? { unread: 0, addressed: 0 };
     const fresh = c.unread - was.unread;
     const forYou = c.addressed - was.addressed;
-    if (pref === 'all' && fresh > 0)
+    if ((pref === 'all' || (pref === 'mentions' && wake.has(room))) && fresh > 0)
       out.push({ room, body: `${fresh} new${forYou > 0 ? ` · ${forYou} for you` : ''}` });
-    if (pref === 'mentions' && forYou > 0) out.push({ room, body: `${forYou} for you` });
+    else if (pref === 'mentions' && forYou > 0) out.push({ room, body: `${forYou} for you` });
   }
   return out;
 }
@@ -37,6 +44,7 @@ export function useNotifications(
   unread: Map<string, RoomCount> | undefined,
   pref: Notify,
   open: (room: string) => void,
+  wake?: ReadonlySet<string>,
 ) {
   const before = useRef<Map<string, RoomCount>>(undefined);
   useEffect(() => {
@@ -44,7 +52,7 @@ export function useNotifications(
     const was = before.current;
     before.current = unread;
     if (!was || pref === 'none' || document.visibilityState !== 'hidden' || !notificationsAllowed()) return;
-    for (const a of alerts(was, unread, pref)) {
+    for (const a of alerts(was, unread, pref, wake)) {
       const n = new Notification(`#${a.room}`, { body: a.body, tag: `agora-${a.room}`, icon: '/icons/owl-192.png' });
       n.onclick = () => {
         window.focus();
@@ -52,5 +60,5 @@ export function useNotifications(
         n.close();
       };
     }
-  }, [unread, pref, open]);
+  }, [unread, pref, open, wake]);
 }

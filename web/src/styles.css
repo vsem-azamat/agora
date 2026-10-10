@@ -714,6 +714,20 @@ button.pgname:hover {
   padding: 1px 9px;
   font-size: 0.8em;
 }
+select.chip {
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+select.chip.on {
+  background: var(--fg);
+  color: var(--bg);
+}
+select.chip option {
+  background: var(--bg);
+  color: var(--fg);
+}
 .strip {
   display: none;
   gap: 3px;

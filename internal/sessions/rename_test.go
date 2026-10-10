@@ -53,7 +53,7 @@ func TestRenamingKeepsWhatIsTheAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.post(t, "builder", "example-app", "main is green")
-	if _, _, err := e.r.Take(ctx, "fixer", false, 0); err != nil { // fixer has read everything so far
+	if _, _, err := e.r.Take(ctx, "fixer", rooms.Everything, 0); err != nil { // fixer has read everything so far
 		t.Fatal(err)
 	}
 	posted := e.post(t, "fixer", "general", "taking #57")
@@ -76,10 +76,10 @@ func TestRenamingKeepsWhatIsTheAgents(t *testing.T) {
 	if p := e.places(t, "docs-writer"); len(p) != 1 || p[0].Key != "example-app/merge" || p[0].State != queue.Held {
 		t.Errorf("places: %+v", p)
 	}
-	if followed, _ := e.r.Followed(ctx, "docs-writer"); !slices.Contains(followed, "example-app") {
+	if followed, _ := e.r.Subscriptions(ctx, "docs-writer"); !slices.Contains(followed, rooms.Subscription{Room: "example-app", Mode: rooms.ModeAll}) {
 		t.Errorf("follows %v", followed)
 	}
-	unread, _, err := e.r.Unread(ctx, "docs-writer", false, 0)
+	unread, _, err := e.r.Unread(ctx, "docs-writer", rooms.Everything, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestMentioningAFormerName(t *testing.T) {
 	e.rename(t, "fixer", "docs-writer")
 	after := e.post(t, "builder", "general", "@fixer can you look at #57?")
 	capital := e.post(t, "builder", "general", "@Fixer please check")
-	msgs, _, err := e.r.Unread(ctx, "docs-writer", true, 0)
+	msgs, _, err := e.r.Unread(ctx, "docs-writer", rooms.Addressed, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

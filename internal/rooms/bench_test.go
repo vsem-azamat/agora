@@ -40,12 +40,12 @@ func BenchmarkUnreadOnALargeBoard(b *testing.B) {
 	if err := tx.Commit(); err != nil {
 		b.Fatal(err)
 	}
-	if _, err := r.Subscribe(ctx, "reader", []string{"room-1", "room-2"}, true); err != nil {
+	if _, err := r.Subscribe(ctx, "reader", []string{"room-1", "room-2"}, true, ""); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for b.Loop() {
-		if _, _, err := r.Unread(ctx, "reader", false, 5); err != nil {
+		if _, _, err := r.Unread(ctx, "reader", rooms.Everything, 5); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -31,6 +31,21 @@ func TestEveryEnumValueIsMapped(t *testing.T) {
 			t.Errorf("proposal state %v: name %q", s, name)
 		}
 	}
+	for n := range agorav1.SubscriptionMode_name {
+		m := agorav1.SubscriptionMode(n)
+		name, err := modeName(m)
+		switch {
+		case m == agorav1.SubscriptionMode_SUBSCRIPTION_MODE_UNSPECIFIED:
+			if name != "" || err != nil {
+				t.Errorf("unspecified mode: %q %v", name, err)
+			}
+		case err != nil || subscriptionModes[name] != m:
+			t.Errorf("subscription mode %v: name %q err %v", m, name, err)
+		}
+	}
+	if _, err := modeName(agorav1.SubscriptionMode(99)); err == nil {
+		t.Error("unknown subscription mode accepted")
+	}
 	for n := range agorav1.CiState_name {
 		s := agorav1.CiState(n)
 		if s == agorav1.CiState_CI_STATE_UNSPECIFIED {

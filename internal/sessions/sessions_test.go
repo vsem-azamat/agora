@@ -597,7 +597,7 @@ func TestOnlyFiveMessagesAtOnce(t *testing.T) {
 	if strings.Count(r.Context, "#general [") != 5 || !strings.Contains(r.Context, "3 more") {
 		t.Fatalf("context %q", r.Context)
 	}
-	if left, total, _ := e.r.Unread(ctx, "builder", false, 0); total != 3 || len(left) != 3 {
+	if left, total, _ := e.r.Unread(ctx, "builder", rooms.Everything, 0); total != 3 || len(left) != 3 {
 		t.Fatalf("%d left", total)
 	}
 }
@@ -616,7 +616,7 @@ func TestMentionKeepsTheTurnGoingOnce(t *testing.T) {
 	if !r.Block || !strings.Contains(r.BlockReason, "can you take #57") || strings.Contains(r.BlockReason, "chatter") {
 		t.Fatalf("reply %+v", r)
 	}
-	if left, _, _ := e.r.Unread(ctx, "builder", false, 0); len(left) != 1 || left[0].Body != "chatter" {
+	if left, _, _ := e.r.Unread(ctx, "builder", rooms.Everything, 0); len(left) != 1 || left[0].Body != "chatter" {
 		t.Fatalf("unread %+v", left)
 	}
 	if r, _ := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Stop, StopActive: true}); r.Block {
@@ -675,13 +675,13 @@ func TestCheckWake(t *testing.T) {
 	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57") {
 		t.Fatalf("wake %+v done %v err %v", w, done, err)
 	}
-	if left, _, _ := e.r.Unread(ctx, "builder", true, 0); len(left) != 1 {
+	if left, _, _ := e.r.Unread(ctx, "builder", rooms.Addressed, 0); len(left) != 1 {
 		t.Fatal("mention consumed before the wake was delivered")
 	}
 	if err := e.s.ConfirmWake(ctx, "session-1", w); err != nil {
 		t.Fatal(err)
 	}
-	if left, _, _ := e.r.Unread(ctx, "builder", true, 0); len(left) != 0 {
+	if left, _, _ := e.r.Unread(ctx, "builder", rooms.Addressed, 0); len(left) != 0 {
 		t.Fatalf("mention still unread after the wake: %+v", left)
 	}
 	if st := e.state(t, "session-1"); st != sessions.Busy {
@@ -769,5 +769,103 @@ func TestPendingKeyChangesWithNewMentions(t *testing.T) {
 	}
 	if k2, _, _ := e.s.Pending(ctx, "builder"); k2 == k1 {
 		t.Fatal("key did not change")
+	}
+}
+
+// --- subscription modes ----------------------------------------------------------------
+
+func (e env) room(t *testing.T, room, creator string) {
+	t.Helper()
+	if err := e.r.Create(ctx, room, "work", creator); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (e env) follow(t *testing.T, agent, room string, mode rooms.Mode) {
+	t.Helper()
+	if _, err := e.r.Subscribe(ctx, agent, []string{room}, true, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRoomFollowedToWakeWakes(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.room(t, "example-app", "reviewer")
+	e.follow(t, "builder", "example-app", rooms.ModeWake)
+	e.report(t, "session-1", sessions.Stop) // idle
+	turn, _ := e.s.Turn(ctx, "session-1")
+	e.post(t, "reviewer", "general", "chatter in general")
+	if _, done, _ := e.s.CheckWake(ctx, "session-1", turn); done {
+		t.Fatal("woken by chatter in a room followed with all")
+	}
+	e.post(t, "reviewer", "example-app", "main is red")
+	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
+	if err != nil || !done || w == nil || !strings.Contains(w.Text, "main is red") || strings.Contains(w.Text, "chatter in general") {
+		t.Fatalf("wake %+v done %v err %v", w, done, err)
+	}
+	if strings.Contains(w.Text, "· to you") || !strings.Contains(w.Text, "--mode wake") {
+		t.Fatalf("wake text %q", w.Text)
+	}
+	if err := e.s.ConfirmWake(ctx, "session-1", w); err != nil {
+		t.Fatal(err)
+	}
+	if left, _, _ := e.r.Unread(ctx, "builder", rooms.Everything, 0); len(left) != 1 || left[0].Body != "chatter in general" {
+		t.Fatalf("unread after the wake %+v", left)
+	}
+}
+
+func TestRoomFollowedToWakeKeepsTheTurnGoing(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.room(t, "example-app", "reviewer")
+	e.follow(t, "builder", "example-app", rooms.ModeWake)
+	e.post(t, "reviewer", "example-app", "main is red")
+	r := e.report(t, "session-1", sessions.Stop)
+	if !r.Block || !strings.Contains(r.BlockReason, "main is red") {
+		t.Fatalf("reply %+v", r)
+	}
+}
+
+func TestRoomFollowedForMentionsDeliversOnlyAddressedMessages(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.room(t, "example-app", "reviewer")
+	e.follow(t, "builder", "example-app", rooms.ModeMentions)
+	e.post(t, "reviewer", "example-app", "chatter")
+	e.post(t, "reviewer", "example-app", "@builder please look")
+	r := e.report(t, "session-1", sessions.Prompt)
+	if strings.Contains(r.Context, "chatter") || !strings.Contains(r.Context, "please look") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestReminderListsModes(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.room(t, "example-app", "reviewer")
+	e.room(t, "ops", "reviewer")
+	e.follow(t, "builder", "example-app", rooms.ModeWake)
+	e.follow(t, "builder", "ops", rooms.ModeMentions)
+	r := e.report(t, "session-1", sessions.Start)
+	if !strings.Contains(r.Context, "Rooms: #general, #example-app (wake), #ops (mentions).") {
+		t.Fatalf("context %q", r.Context)
+	}
+}
+
+func TestPendingIncludesRoomsFollowedToWake(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "")
+	e.join(t, "reviewer", "")
+	e.room(t, "example-app", "reviewer")
+	e.follow(t, "builder", "example-app", rooms.ModeWake)
+	e.post(t, "reviewer", "example-app", "main is red")
+	key, text, _ := e.s.Pending(ctx, "builder")
+	if key == "" || !strings.Contains(text, "reviewer in #example-app") || strings.Contains(text, "addressed") {
+		t.Fatalf("key %q text %q", key, text)
 	}
 }

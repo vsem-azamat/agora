@@ -563,6 +563,21 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 	if err != nil || len(listed.Msg.GetRooms()) != 2 || listed.Msg.GetRooms()[1] != "example-app" {
 		t.Fatalf("listed for the operator: %v %v", listed, err)
 	}
+	if _, err := rooms.Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{
+		Rooms: []string{"example-app"}, Follow: true, Mode: agorav1.SubscriptionMode_SUBSCRIPTION_MODE_MENTIONS,
+	})); err != nil {
+		t.Fatal(err)
+	}
+	listed, err = rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{}))
+	if subs := listed.Msg.GetSubscriptions(); err != nil || len(subs) != 2 ||
+		subs[0].GetMode() != agorav1.SubscriptionMode_SUBSCRIPTION_MODE_ALL || subs[1].GetMode() != agorav1.SubscriptionMode_SUBSCRIPTION_MODE_MENTIONS {
+		t.Fatalf("subscriptions with modes: %v %v", listed, err)
+	}
+	if _, err := rooms.Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{
+		Rooms: []string{"example-app"}, Follow: true, Mode: agorav1.SubscriptionMode_SUBSCRIPTION_MODE_ALL,
+	})); err != nil {
+		t.Fatal(err)
+	}
 	first, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-app", Body: "one"}))
 	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-app", Body: "two"})); err != nil {
 		t.Fatal(err)

@@ -16,7 +16,7 @@ func (s *Sessions) deliver(ctx context.Context, agent string) (string, int, erro
 	if s.rooms == nil {
 		return "", 0, nil
 	}
-	msgs, total, err := s.rooms.Take(ctx, agent, false, DeliverAtOnce)
+	msgs, total, err := s.rooms.Take(ctx, agent, rooms.Everything, DeliverAtOnce)
 	if err != nil || len(msgs) == 0 {
 		return "", 0, err
 	}
@@ -35,15 +35,15 @@ func (s *Sessions) deliver(ctx context.Context, agent string) (string, int, erro
 	return strings.Join(lines, "\n"), addressed, nil
 }
 
-// waiting returns the text for what needs the agent now (unread messages addressed to it,
-// which it marks read, and offered slots), or "" when nothing does. when says when the agent
+// waiting returns the text for what needs the agent now (unread messages that wake it, which
+// it marks read, and offered slots), or "" when nothing does. when says when the agent
 // should act, e.g. "before you end your turn".
 func (s *Sessions) waiting(ctx context.Context, agent, when string) (string, error) {
 	var msgs []rooms.Message
 	var total int
 	if s.rooms != nil {
 		var err error
-		if msgs, total, err = s.rooms.Take(ctx, agent, true, DeliverAtOnce); err != nil {
+		if msgs, total, err = s.rooms.Take(ctx, agent, rooms.Waking, DeliverAtOnce); err != nil {
 			return "", err
 		}
 	}
@@ -59,18 +59,21 @@ func wakeText(agent string, msgs []rooms.Message, entries []queue.Entry) string 
 	return attention("you were woken;", agent, msgs, 0, entries)
 }
 
-// attention is the text for what needs the agent now: the messages addressed to it (and how
-// many more there are) and its offered slots, or "" for none. opening says when it should act.
+// attention is the text for what needs the agent now: the messages that wake it (and how many
+// more there are) and its offered slots, or "" for none. opening says when it should act.
 func attention(opening, agent string, msgs []rooms.Message, more int, entries []queue.Entry) string {
 	var parts []string
 	if len(msgs) > 0 {
 		lines := []string{fmt.Sprintf("Agora: %s answer what is addressed to you (%s), "+
 			"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", opening, agent)}
+		if !allAddressed(msgs) {
+			lines[0] += " Messages not marked `to you` come from rooms you follow with --mode wake; act on them if they need you."
+		}
 		for _, m := range msgs {
 			lines = append(lines, rooms.Format(m, DeliverChars))
 		}
 		if more > 0 {
-			lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
+			lines = append(lines, fmt.Sprintf("... %d more for you: run `agora unread`.", more))
 		}
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
@@ -78,6 +81,15 @@ func attention(opening, agent string, msgs []rooms.Message, more int, entries []
 		parts = append(parts, note(agent, entries, nil)+" Claim or release the offered slot now; otherwise it passes to the next agent.")
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func allAddressed(msgs []rooms.Message) bool {
+	for _, m := range msgs {
+		if !m.Addressed {
+			return false
+		}
+	}
+	return true
 }
 
 func clock(t time.Time) string { return t.Local().Format("15:04") }

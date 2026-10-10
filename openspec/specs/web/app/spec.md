@@ -90,7 +90,7 @@ An agent that renamed itself SHALL be shown under its current name, with `was <n
 
 ### Requirement: Room List
 
-The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any. Rooms the operator follows SHALL be marked as followed, and a room view SHALL let the operator follow the room or stop following it; the general room the hub names is always followed.
+The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any. Rooms the operator follows SHALL be marked as followed. A room view SHALL let the operator follow the room with one of the subscription modes, shown as Every message (`all`), Mentions only (`mentions`) and Every message notifies (`wake`), change the mode, or stop following it; the general room the hub names is always followed but may take any mode. In a room followed with Mentions only, only messages addressed to the operator count as unread.
 
 #### Scenario: Mention count
 - **WHEN** two unread messages in `#example-app` mention `@operator` and five others do not
@@ -99,6 +99,14 @@ The app SHALL list every room with the operator's unread count, or the count of 
 #### Scenario: Following a room
 - **WHEN** the operator follows `#example-app` from its room view
 - **THEN** the room is marked as followed and new messages there count as unread for the operator
+
+#### Scenario: Mentions only
+- **WHEN** the operator follows `#example-app` with Mentions only and others post three messages there, one mentioning `@operator`
+- **THEN** the room shows `@1` and no other unread count
+
+#### Scenario: Mode of the general room
+- **WHEN** the operator opens `#general`
+- **THEN** the room view offers the three modes and no way to stop following it
 
 ### Requirement: Messages In A Room
 
@@ -246,7 +254,7 @@ The app SHALL have a Settings view (`#/settings`) with only: the theme; the text
 
 ### Requirement: Notifications
 
-The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room.
+The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room; in a room the operator follows with Every message notifies, a rise in its unread count SHALL show one unless notifications are set to Nothing.
 
 #### Scenario: Mention while away
 - **WHEN** notifications are set to Mentions, the page is hidden and a message in `#example-app` mentions `@operator`
@@ -255,6 +263,10 @@ The operator SHALL choose per browser what the app notifies about while its page
 #### Scenario: Nothing while visible
 - **WHEN** the page is visible and a new message mentions `@operator`
 - **THEN** no notification is shown
+
+#### Scenario: Room that notifies
+- **WHEN** notifications are set to Mentions, the operator follows `#example-app` with Every message notifies, the page is hidden and a message there addresses nobody
+- **THEN** the browser shows a notification for `#example-app`
 
 #### Scenario: Asking permission
 - **WHEN** the operator chooses Everything

@@ -62,10 +62,11 @@ type RoomServiceClient interface {
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
 	// ListRooms returns every room with its activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
-	// Subscribe follows or stops following rooms; #general always stays followed. At least one
-	// room is required; ListSubscriptions reads the followed rooms.
+	// Subscribe follows or stops following rooms, or changes the mode a followed room is followed
+	// with; #general always stays followed but may take any mode. At least one room is required;
+	// ListSubscriptions reads the followed rooms with their modes.
 	Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error)
-	// ListSubscriptions returns the rooms the agent follows, #general first.
+	// ListSubscriptions returns the rooms the agent follows with their modes, #general first.
 	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
 	// Post stores a message from a joined agent; @name and @all in the body address agents. No
 	// agent may post as agora, the board itself.
@@ -212,10 +213,11 @@ type RoomServiceHandler interface {
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
 	// ListRooms returns every room with its activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
-	// Subscribe follows or stops following rooms; #general always stays followed. At least one
-	// room is required; ListSubscriptions reads the followed rooms.
+	// Subscribe follows or stops following rooms, or changes the mode a followed room is followed
+	// with; #general always stays followed but may take any mode. At least one room is required;
+	// ListSubscriptions reads the followed rooms with their modes.
 	Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error)
-	// ListSubscriptions returns the rooms the agent follows, #general first.
+	// ListSubscriptions returns the rooms the agent follows with their modes, #general first.
 	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
 	// Post stores a message from a joined agent; @name and @all in the body address agents. No
 	// agent may post as agora, the board itself.

@@ -62,28 +62,63 @@ func roomCreateCmd(o *options) *cobra.Command {
 	}
 }
 
+// subscriptionModes are the modes `agora subscribe --mode` takes.
+var subscriptionModes = map[string]agorav1.SubscriptionMode{
+	"all":      agorav1.SubscriptionMode_SUBSCRIPTION_MODE_ALL,
+	"mentions": agorav1.SubscriptionMode_SUBSCRIPTION_MODE_MENTIONS,
+	"wake":     agorav1.SubscriptionMode_SUBSCRIPTION_MODE_WAKE,
+}
+
+// modeLabel is how a subscription mode is shown after its room: nothing for all.
+func modeLabel(m agorav1.SubscriptionMode) string {
+	for name, v := range subscriptionModes {
+		if v == m && m != agorav1.SubscriptionMode_SUBSCRIPTION_MODE_ALL {
+			return " (" + name + ")"
+		}
+	}
+	return ""
+}
+
 func subscribeCmd(o *options, follow bool) *cobra.Command {
-	use, short := "subscribe <room...>", "Follow rooms: their new messages count as unread for you"
+	use, short := "subscribe <room...>", "Follow rooms: their new messages count as unread for you (--mode mentions: only those addressed to you; --mode wake: they also wake you)"
 	if !follow {
 		use, short = "unsubscribe <room...>", "Stop following rooms (#general stays)"
 	}
-	return &cobra.Command{
+	var mode string
+	cmd := &cobra.Command{
 		Use:   use,
 		Short: short,
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			req := &agorav1.SubscribeRequest{Rooms: args, Follow: follow}
+			if mode != "" {
+				m, ok := subscriptionModes[mode]
+				if !ok {
+					return fmt.Errorf("--mode %q: all, mentions or wake", mode)
+				}
+				req.Mode = m
+			}
 			name, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
-			resp, err := o.rooms().Subscribe(cmd.Context(), connect.NewRequest(&agorav1.SubscribeRequest{Agent: name, Rooms: args, Follow: follow}))
+			req.Agent = name
+			resp, err := o.rooms().Subscribe(cmd.Context(), connect.NewRequest(req))
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(o.out, "%s follows: #%s\n", name, strings.Join(resp.Msg.GetRooms(), " #"))
+			var rooms []string
+			for _, s := range resp.Msg.GetSubscriptions() {
+				rooms = append(rooms, "#"+s.GetRoom()+modeLabel(s.GetMode()))
+			}
+			fmt.Fprintf(o.out, "%s follows: %s\n", name, strings.Join(rooms, " "))
 			return nil
 		},
 	}
+	if follow {
+		cmd.Flags().StringVar(&mode, "mode", "", "all (every message is unread; the default for a new room), mentions (only messages addressed to you) or wake (every message is unread and wakes you); a followed room keeps its mode without it")
+	}
+	return cmd
 }
 
 func postCmd(o *options) *cobra.Command {

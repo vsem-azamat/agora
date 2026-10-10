@@ -49,14 +49,18 @@ func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.E
 	}
 	followed := "none"
 	if s.rooms != nil {
-		rooms, err := s.rooms.Followed(ctx, agent)
+		subs, err := s.rooms.Subscriptions(ctx, agent)
 		if err != nil {
 			return "", err
 		}
-		for i := range rooms {
-			rooms[i] = "#" + rooms[i]
+		names := make([]string, len(subs))
+		for i, sub := range subs {
+			names[i] = "#" + sub.Room
+			if sub.Mode != rooms.ModeAll {
+				names[i] += fmt.Sprintf(" (%s)", sub.Mode)
+			}
 		}
-		followed = strings.Join(rooms, ", ")
+		followed = strings.Join(names, ", ")
 	}
 	var waiting string
 	switch addressed {

@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
+	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 type roomService struct{ h *Hub }
@@ -36,20 +37,26 @@ func (s *roomService) ListRooms(ctx context.Context, _ *connect.Request[agorav1.
 }
 
 func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav1.SubscribeRequest]) (*connect.Response[agorav1.SubscribeResponse], error) {
-	followed, err := s.h.rooms.Subscribe(ctx, req.Msg.GetAgent(), req.Msg.GetRooms(), req.Msg.GetFollow())
+	mode, err := modeName(req.Msg.GetMode())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	subs, err := s.h.rooms.Subscribe(ctx, req.Msg.GetAgent(), req.Msg.GetRooms(), req.Msg.GetFollow(), mode)
 	if err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.SubscribeResponse{Rooms: followed}), nil
+	names, pb := subscriptionsPB(subs)
+	return connect.NewResponse(&agorav1.SubscribeResponse{Rooms: names, Subscriptions: pb}), nil
 }
 
 func (s *roomService) ListSubscriptions(ctx context.Context, req *connect.Request[agorav1.ListSubscriptionsRequest]) (*connect.Response[agorav1.ListSubscriptionsResponse], error) {
-	followed, err := s.h.rooms.Followed(ctx, req.Msg.GetAgent())
+	subs, err := s.h.rooms.Subscriptions(ctx, req.Msg.GetAgent())
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	return connect.NewResponse(&agorav1.ListSubscriptionsResponse{Rooms: followed}), nil
+	names, pb := subscriptionsPB(subs)
+	return connect.NewResponse(&agorav1.ListSubscriptionsResponse{Rooms: names, Subscriptions: pb}), nil
 }
 
 func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
@@ -76,7 +83,11 @@ func (s *roomService) Unread(ctx context.Context, req *connect.Request[agorav1.U
 	if m.GetPeek() {
 		read = s.h.rooms.Unread
 	}
-	msgs, total, err := read(ctx, m.GetAgent(), m.GetMentionsOnly(), int(m.GetLimit()))
+	filter := rooms.Everything
+	if m.GetMentionsOnly() {
+		filter = rooms.Addressed
+	}
+	msgs, total, err := read(ctx, m.GetAgent(), filter, int(m.GetLimit()))
 	if err != nil {
 		return nil, toConnect(err)
 	}
