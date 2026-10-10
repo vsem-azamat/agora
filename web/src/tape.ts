@@ -137,13 +137,19 @@ export function between(m: Message, to: string[], pair: readonly [string, string
 
 /**
  * The first unread message when the operator has `count` unread in the room: the count-th last
- * message by others, counting only those that mention the operator when the room is not followed.
+ * message by others, counting only those that mention the operator (by any name it had) when the
+ * room is not followed.
  */
-export function firstUnread(messages: Message[], count: number, reader: Reader, followed: boolean): bigint | undefined {
+export function firstUnread(
+  messages: Message[],
+  count: number,
+  reader: Reader,
+  followed: boolean,
+  known: Names,
+): bigint | undefined {
   if (count <= 0) return undefined;
-  const counted = messages.filter(
-    (m) => m.author !== reader.operator && (followed || mentionNames(m.body).includes(reader.operator)),
-  );
+  const mentionsOperator = (m: Message) => mentionNames(m.body).some((n) => known.get(n) === reader.operator);
+  const counted = messages.filter((m) => m.author !== reader.operator && (followed || mentionsOperator(m)));
   return counted[Math.max(0, counted.length - count)]?.id;
 }
 

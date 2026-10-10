@@ -174,6 +174,27 @@ describe('Drawer', () => {
     expect(container.querySelector('.drawer input, .sigil button, .rename')).toBeNull();
   });
 
+  it('tells the operator how to set its own sigil', () => {
+    const { container } = render(
+      <Drawer
+        name="operator"
+        agent={agent('operator', 'offline')}
+        operator="operator"
+        rooms={rooms}
+        general="general"
+        known={new Map()}
+        now={NOW}
+        onClose={() => {}}
+        onAddress={() => {}}
+        onGoto={() => {}}
+      />,
+    );
+    expect((container.querySelector('.sigil .av') as HTMLElement).dataset.sigil).toBe('helmet');
+    expect(container.querySelector('.cli')?.textContent).toBe(
+      'Set yours with agora --as operator set --icon <name> --pigment <name>.',
+    );
+  });
+
   it('addresses an agent without a project room in the general room', () => {
     expect(addressRoom(agent('scout', 'idle', { project: 'other-app' }), rooms, 'general')).toBe('general');
     expect(addressRoom(builder, rooms, 'general')).toBe('example-app');

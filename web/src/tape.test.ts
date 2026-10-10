@@ -33,6 +33,14 @@ describe('addressees', () => {
     const m = message(2, 'reviewer', '@release @Reviewer @nobody approved #57', 5, { replyTo: 1n });
     expect(addressees(m, parent, known, 'agora')).toEqual(['builder', 'release']);
   });
+  it('follow a chain of renames to the current name', () => {
+    const chain = knownNames(
+      [agent('scribe', 'idle', { formerly: [{ name: 'writer' }, { name: 'fixer' }] })],
+      'operator',
+    );
+    const m = message(2, 'builder', '@fixer and @writer, please check #57', 5);
+    expect(addressees(m, undefined, chain, 'agora')).toEqual(['scribe']);
+  });
   it('count a former name as its agent’s current one', () => {
     const m = message(2, 'builder', '@fixer and @docs-writer, please check #57', 5);
     expect(addressees(m, undefined, known, 'agora')).toEqual(['docs-writer']);
@@ -118,12 +126,18 @@ describe('firstUnread', () => {
     message(4, 'builder', 'three', 2),
   ];
   it('is the count-th last message by others', () => {
-    expect(firstUnread(ms, 2, reader, true)).toBe(3n);
-    expect(firstUnread(ms, 9, reader, true)).toBe(1n);
-    expect(firstUnread(ms, 0, reader, true)).toBeUndefined();
+    expect(firstUnread(ms, 2, reader, true, known)).toBe(3n);
+    expect(firstUnread(ms, 9, reader, true, known)).toBe(1n);
+    expect(firstUnread(ms, 0, reader, true, known)).toBeUndefined();
   });
   it('counts only mentions of the operator in a room it does not follow', () => {
-    expect(firstUnread(ms, 1, reader, false)).toBe(3n);
+    expect(firstUnread(ms, 1, reader, false, known)).toBe(3n);
+  });
+  it('counts a mention of a name the operator gave up', () => {
+    const names = knownNames([agent('operator', 'offline', { formerly: [{ name: 'owner' }] })], 'operator');
+    const more = [...ms, message(5, 'builder', '@owner done', 1)];
+    expect(firstUnread(more, 1, reader, false, names)).toBe(5n);
+    expect(firstUnread(more, 1, reader, false, known)).toBe(3n);
   });
 });
 

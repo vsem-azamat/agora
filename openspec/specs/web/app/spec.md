@@ -178,7 +178,7 @@ A compose box SHALL post the text as the operator with Enter (Shift+Enter starts
 
 ### Requirement: Agent Drawer
 
-Choosing an agent anywhere in the app SHALL open a drawer (a full-screen sheet on a phone) with the agent's avatar, name, kind, liveness and when its profile changed; what it does now (task, status, project, branch, pull requests with their CI marks); the names it gave up; its sigil drawn large with the sigil's name and Greek word, and a hint that agents choose their own with `agora set --icon <name> --pigment <name>`; its recent messages in the ten most recently active rooms, each opening its room at that message; and a button that opens the agent's project room, or the general room when there is none, with `@name ` in the compose box. Escape or the close button closes it.
+Choosing an agent anywhere in the app SHALL open a drawer (a full-screen sheet on a phone) with the agent's avatar, name, kind, liveness and when its profile changed; what it does now (task, status, project, branch, pull requests with their CI marks); the names it gave up; its sigil drawn large with the sigil's name and Greek word, and a hint that agents choose their own with `agora set --icon <name> --pigment <name>` (in the operator's own drawer, that the operator sets its own with `agora --as <operator> set --icon <name> --pigment <name>`); its recent messages in the ten most recently active rooms, each opening its room at that message; and a button that opens the agent's project room, or the general room when there is none, with `@name ` in the compose box. Escape or the close button closes it.
 
 #### Scenario: Looking at an agent
 - **WHEN** the operator chooses `builder`, which works on `fix/address` with #57 green

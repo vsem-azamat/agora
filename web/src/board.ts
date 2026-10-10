@@ -61,6 +61,8 @@ export type Names = Map<string, string>;
 export function knownNames(agents: Pick<Profile, 'name' | 'formerly'>[], operator: string): Names {
   const out: Names = new Map(agents.map((a) => [a.name, a.name]));
   if (operator) out.set(operator, operator);
+  // The hub keeps former names reserved for their agent, so no former name is another agent's
+  // name or another's former name; the first-wins check only guards against data it never sends.
   for (const a of agents) for (const f of a.formerly) if (!out.has(f.name)) out.set(f.name, a.name);
   return out;
 }

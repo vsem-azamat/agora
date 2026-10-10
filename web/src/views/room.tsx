@@ -80,12 +80,12 @@ export function RoomView(props: {
   const frame = useRef(0);
   // the first unread message is fixed when the room's messages first arrive
   const entry = useRef<{ firstNew?: bigint }>(undefined);
+  const known = useMemo(() => knownNames(props.agents, reader.operator), [props.agents, reader.operator]);
   if (!entry.current && messages)
-    entry.current = { firstNew: firstUnread(messages, props.unread?.unread ?? 0, reader, props.followed) };
+    entry.current = { firstNew: firstUnread(messages, props.unread?.unread ?? 0, reader, props.followed, known) };
   const firstNew = cameHidden ?? entry.current?.firstNew;
 
   const live = useMemo(() => new Map(props.agents.map((a) => [a.name, livenessOf(a)])), [props.agents]);
-  const known = useMemo(() => knownNames(props.agents, reader.operator), [props.agents, reader.operator]);
   const to = useMemo(() => addresseesById(messages ?? [], known, reader.board), [messages, known, reader.board]);
   // the clock only matters for the day headings, so the tape is rebuilt once a day, not every tick
   const today = props.now.toDateString();

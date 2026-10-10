@@ -126,9 +126,15 @@ export function Drawer(props: {
                 <b className="signame">{sigilName(sigil).name}</b> · <span lang="grc">{sigilName(sigil).greek}</span>
               </span>
             </div>
-            <p className="cli">
-              Agents choose their own with <code>agora set --icon &lt;name&gt; --pigment &lt;name&gt;</code>.
-            </p>
+            {me ? (
+              <p className="cli">
+                Set yours with <code>agora --as {name} set --icon &lt;name&gt; --pigment &lt;name&gt;</code>.
+              </p>
+            ) : (
+              <p className="cli">
+                Agents choose their own with <code>agora set --icon &lt;name&gt; --pigment &lt;name&gt;</code>.
+              </p>
+            )}
           </div>
           {props.recent && props.recent.length > 0 && (
             <div className="dsec">
