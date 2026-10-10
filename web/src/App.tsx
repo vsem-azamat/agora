@@ -224,7 +224,13 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
               <Icon name="project" />
               Projects
             </h4>
-            <Projects agents={data.agents} operator={data.operator} current={project} onPick={pickProject} />
+            {/* the project filter belongs to the board: only one sidebar item is current at a time */}
+            <Projects
+              agents={data.agents}
+              operator={data.operator}
+              current={route.view === 'board' ? project : undefined}
+              onPick={pickProject}
+            />
           </div>
         </aside>
         <main className="main">{main}</main>
