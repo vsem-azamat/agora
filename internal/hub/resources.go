@@ -2,12 +2,14 @@ package hub
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 type resources struct{ h *Hub }
@@ -61,14 +63,17 @@ func (s *resources) Renew(ctx context.Context, req *connect.Request[agorav1.Rene
 func (s *resources) Release(ctx context.Context, req *connect.Request[agorav1.ReleaseRequest]) (*connect.Response[agorav1.ReleaseResponse], error) {
 	m := req.Msg
 	holder := m.GetHolder()
-	if holder == "" {
+	switch {
+	case holder == "":
 		holder = m.GetAgent()
+	case m.GetAgent() == "":
+		return nil, toConnect(fmt.Errorf("%w: releasing %s needs the acting agent", store.ErrInvalid, holder))
 	}
 	ok, err := s.h.queue.Release(ctx, m.GetKey(), holder, m.GetAgent(), m.GetForce())
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	if ok && m.GetAgent() != "" && m.GetAgent() != holder {
+	if ok && m.GetAgent() != holder {
 		s.h.log.Warn("forced release", "resource", m.GetKey(), "agent", holder, "by", m.GetAgent())
 	}
 	s.h.changes.fire()

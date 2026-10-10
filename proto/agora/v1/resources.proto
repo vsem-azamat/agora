@@ -92,7 +92,7 @@ message ReleaseRequest {
   // The agent whose entry is removed; the acting agent when empty. Another agent's entry is
   // removed only with force.
   string holder = 2;
-  // The acting agent.
+  // The acting agent; required when holder is set.
   string agent = 3;
   bool force = 4;
 }

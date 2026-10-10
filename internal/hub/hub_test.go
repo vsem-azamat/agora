@@ -671,3 +671,16 @@ func TestListSubscriptionsReadsTheFollowedRooms(t *testing.T) {
 		t.Fatalf("unknown agent: %v", err)
 	}
 }
+
+func TestReleaseOfAHolderNeedsTheActingAgent(t *testing.T) {
+	r := start(t)
+	join(t, r, "r", "a", time.Minute)
+	ctx := context.Background()
+	if _, err := r.client.Release(ctx, connect.NewRequest(&agorav1.ReleaseRequest{Key: "r", Holder: "a", Force: true})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("release without agent: %v", err)
+	}
+	res, err := r.client.Release(ctx, connect.NewRequest(&agorav1.ReleaseRequest{Key: "r", Agent: "a"}))
+	if err != nil || !res.Msg.GetReleased() {
+		t.Fatalf("own release: %v %v", res, err)
+	}
+}

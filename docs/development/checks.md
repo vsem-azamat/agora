@@ -12,7 +12,7 @@ CI runs these checks on every pull request and on `main`. The [`Makefile`](../..
 | `make lint-go` | `golangci-lint run` | Go linters and formatters configured in [`.golangci.yml`](../../.golangci.yml) |
 | `make lint-proto` | `buf lint`, `buf format -d --exit-code` | `proto/` follows the standard style and is formatted |
 | `make lint-web` | `pnpm lint` (`biome check`) | Biome's recommended rules and formatting, configured in `web/biome.json` |
-| `make breaking` | `buf breaking --against "$BREAKING_AGAINST"` | `proto/` has no breaking change against `main` (CI: the pull request base; pull requests only) |
+| `make breaking` | `buf breaking --against "$BREAKING_AGAINST"` | `proto/` has no breaking change against `main` (CI: the pull request base; pull requests only); `buf.yaml` temporarily ignores the rules the v1 API cleanup breaks (`breaking.ignore_only`) until its follow-up removes them |
 | `make test` | `test-go` and `test-web` | All tests |
 | `make test-go` | `go test -race ./...` | Unit and end-to-end tests, with the race detector |
 | `make test-web` | `pnpm test` | Vitest: the web app's helpers, hooks and views |

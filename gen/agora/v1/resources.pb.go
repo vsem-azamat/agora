@@ -568,7 +568,7 @@ type ReleaseRequest struct {
 	// The agent whose entry is removed; the acting agent when empty. Another agent's entry is
 	// removed only with force.
 	Holder string `protobuf:"bytes,2,opt,name=holder,proto3" json:"holder,omitempty"`
-	// The acting agent.
+	// The acting agent; required when holder is set.
 	Agent         string `protobuf:"bytes,3,opt,name=agent,proto3" json:"agent,omitempty"`
 	Force         bool   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields

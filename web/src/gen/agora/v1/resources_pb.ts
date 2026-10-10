@@ -261,7 +261,7 @@ export type ReleaseRequest = Message<"agora.v1.ReleaseRequest"> & {
   holder: string;
 
   /**
-   * The acting agent.
+   * The acting agent; required when holder is set.
    *
    * @generated from field: string agent = 3;
    */
