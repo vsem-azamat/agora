@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
       - name: Repository, documentation and spec checks
@@ -30,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache-dependency-path: |
@@ -41,7 +41,7 @@ jobs:
       - name: Lint and format (golangci-lint)
         run: make lint-go
       - name: Test
-        run: make test
+        run: make test-go
       - name: API lint and format (buf)
         run: make lint-proto
       - name: API breaking changes
@@ -56,33 +56,25 @@ jobs:
     name: Web app
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: web
-        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: web/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache-dependency-path: tools/go.sum
-      - name: Install
-        run: pnpm install --frozen-lockfile
       - name: Generated client is up to date
-        run: pnpm generate && git diff --exit-code src/gen && test -z "$(git status --porcelain src/gen)"
-      - name: Lint and format
-        run: pnpm lint
-      - name: Types
-        run: pnpm typecheck
+        run: make generate-check-web
+      - name: Lint and format (Biome)
+        run: make lint-web
       - name: Test
-        run: pnpm test
+        run: make test-web
       - name: Embedded build is up to date
-        run: pnpm build && git status --porcelain ../internal/web/dist | tee /dev/stderr | (! grep .)
+        run: make build-check

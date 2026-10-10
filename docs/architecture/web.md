@@ -61,4 +61,4 @@ Theme: parchment unless the operator chose ink, which is stored as `agora.theme`
 
 ## Build and embedding
 
-`pnpm --dir web build` type-checks and writes `internal/web/dist/`, which `internal/web` embeds with `//go:embed all:dist`. The built files are committed, so `go build` and `go install` need no Node.js. The build is reproducible (content-hashed names from the lockfile's versions); CI rebuilds and fails when `internal/web/dist/` differs from the commit, the same way it checks `gen/`. During development, `pnpm --dir web dev` serves the app with a proxy to a hub on `127.0.0.1:8484`.
+`pnpm --dir web build` type-checks and writes `internal/web/dist/`, which `internal/web` embeds with `//go:embed all:dist`. The built files are committed, so `go build` and `go install` need no Node.js. The build is reproducible (content-hashed names from the lockfile's versions); `make build-check` (and CI) rebuilds and fails when `internal/web/dist/` differs from the commit, the same way it checks `gen/`. During development, `pnpm --dir web dev` serves the app with a proxy to a hub on `127.0.0.1:8484`.
