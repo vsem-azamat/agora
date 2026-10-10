@@ -741,12 +741,8 @@ button.pgname:hover {
   color: var(--mute);
   font-size: 0.8em;
 }
-.choice .menu {
-  min-width: 200px;
-}
-.choice .menu .check {
-  width: 0.8em;
-  color: var(--accent);
+.choice .pre {
+  color: var(--mute);
 }
 .strip {
   display: none;
@@ -1505,6 +1501,13 @@ button.pgname:hover {
 .menu .dots .dot {
   padding: 0;
 }
+.choice .menu {
+  min-width: 200px;
+}
+.choice .menu .check {
+  width: 0.8em;
+  color: var(--accent);
+}
 
 /* --- bridged rooms: their mark, people outside and what goes out ------------------------ */
 
@@ -1653,7 +1656,7 @@ button.pgname:hover {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 84px;
+  top: 70px;
   z-index: 30;
   transform: translateX(-50%);
   display: flex;
@@ -1991,8 +1994,8 @@ button.pgname:hover {
     flex-wrap: wrap;
     row-gap: 6px;
   }
-  .toast {
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  .roomhead .choice .pre {
+    display: none;
   }
   .decide .why {
     flex-basis: 100%;

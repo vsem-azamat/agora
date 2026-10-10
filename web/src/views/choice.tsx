@@ -6,6 +6,8 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 export function ChoiceMenu<T extends string>(props: {
   /** What is chosen, such as `Follow mode`; it names the menu and labels the chip. */
   name: string;
+  /** The chip also shows the name in front of the choice, where there is room. */
+  shown?: boolean;
   /** Unique on the page: the menu's id is built from it. */
   id: string;
   labels: Record<T, string>;
@@ -72,6 +74,7 @@ export function ChoiceMenu<T extends string>(props: {
           }
         }}
       >
+        {props.shown && <span className="pre">{props.name}</span>}
         {props.labels[props.value]}
         <span className="chev">▾</span>
       </button>

@@ -293,11 +293,11 @@ const TOAST_MS = 8000;
 
 /** A short notice at the bottom of the window, such as a refused call; it goes by itself. */
 export function Toast({ text, onClose }: { text: string; onClose: () => void }) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new text starts the time again
+  // a notice told again is a new Toast (keyed by its number), so its time starts again
   useEffect(() => {
     const t = setTimeout(onClose, TOAST_MS);
     return () => clearTimeout(t);
-  }, [text, onClose]);
+  }, [onClose]);
   return (
     <div className="toast" role="alert">
       <span>{text}</span>

@@ -23,11 +23,12 @@ export function alerts(
     const was = before.get(room) ?? { unread: 0, addressed: 0 };
     const fresh = c.unread - was.unread;
     const forYou = c.addressed - was.addressed;
-    const waiting = (c.pending ?? 0) - (was.pending ?? 0);
+    const waiting = Math.max(0, (c.pending ?? 0) - (was.pending ?? 0));
+    // a waiting message may also be new and mention the operator: it is told once, as waiting,
+    // and the other counts only when they are more than the waiting ones
     const parts: string[] = [];
-    if ((pref === 'all' || wake.has(room)) && fresh > 0)
-      parts.push(`${fresh} new${forYou > 0 ? ` · ${forYou} for you` : ''}`);
-    else if (forYou > 0) parts.push(`${forYou} for you`);
+    if ((pref === 'all' || wake.has(room)) && fresh > waiting) parts.push(`${fresh} new`);
+    if (forYou > waiting) parts.push(`${forYou} for you`);
     if (waiting > 0) parts.push(`${waiting} waiting for you to send`);
     if (parts.length > 0) out.push({ room, body: parts.join(' · ') });
   }

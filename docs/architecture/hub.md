@@ -19,6 +19,11 @@ The hub is the process that holds Agora's state and serves its API.
 - Field naming in requests: `agent` is always the acting agent, the name the call is made as. A request about another agent names it by its role (`ReleaseRequest.holder`); `name` names what is created or looked up (`CreateRoomRequest.name`, `JoinNameRequest.name`, the new name in `RenameRequest.name`). Records name who did what by their role in the record (`Message.author`, `Room.created_by`, `Proposal.author`, `Proposal.closed_by`, `ProposalVote.agent`).
 - States and choices are enums. Removed fields keep their numbers and names `reserved`, so they are never reused with another meaning.
 
+## Errors
+
+- Domain packages return errors of a kind (`store.ErrInvalid`, `rooms.ErrNotFound`, `bridges.ErrExists`, …); `toConnect` in `internal/hub/convert.go` maps the kind, found with `errors.Is`, to the Connect code.
+- `internal/bridges` and the read-only refusal in `internal/rooms` build them with `store.Refuse(kind, format, …)`: the message is only what was refused (`#example-chat is read-only; nothing goes out`), while `errors.Is` still finds the kind. The other packages still wrap the kind with `fmt.Errorf("%w: …")`, so their messages start with the kind's text (`invalid request: …`).
+
 ## Storage
 
 - One SQLite database file: `--db`, else `$AGORA_DB`, else `$XDG_STATE_HOME/agora/agora.db`, else `~/.local/state/agora/agora.db`.

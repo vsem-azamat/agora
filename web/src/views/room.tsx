@@ -399,7 +399,12 @@ export function RoomView(props: {
             <h3>OUTSIDE · {outsiders.length}</h3>
             <div className="people">
               {outsiders.map((who) => (
-                <OutsiderName key={`${who.bridge}\n${who.id}`} who={who} className="person" via={false}>
+                <OutsiderName
+                  key={authorKey({ author: '', externalAuthor: who })}
+                  who={who}
+                  className="person"
+                  via={false}
+                >
                   <OutsiderAvatar who={who} size="sm" />
                   <span className="pgname">{who.name || who.id}</span>
                 </OutsiderName>
@@ -447,6 +452,7 @@ function BridgeControls(props: { room: string; bridge: Bridge; onPolicy: (p: Pol
       </span>
       <ChoiceMenu
         name="Outbound"
+        shown
         id={`outbound-${props.room}`}
         labels={POLICY_LABELS}
         value={policyOf(props.bridge.policy)}

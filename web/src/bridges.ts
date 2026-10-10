@@ -68,11 +68,13 @@ export function authorName(m: Pick<Message, 'author' | 'externalAuthor'>): strin
 
 /**
  * Who wrote a message, as one key: the agent's name, or the bridge and the id outside for someone
- * outside, whose `author` is empty and so cannot tell two people apart.
+ * outside, whose `author` is empty and so cannot tell two people apart; the name stands in for an
+ * id the bridge did not give.
  */
 export function authorKey(m: Pick<Message, 'author' | 'externalAuthor'>): string {
   const x = m.externalAuthor;
-  return x ? `${x.bridge}\n${x.id}` : m.author;
+  if (!x) return m.author;
+  return x.id ? `${x.bridge}\nid ${x.id}` : `${x.bridge}\nname ${x.name}`;
 }
 
 /** The mark of someone outside: the first letter of the name, else of the id. */

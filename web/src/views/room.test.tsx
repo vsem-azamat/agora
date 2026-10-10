@@ -43,7 +43,7 @@ function room(
     onPost: vi.fn(async () => {}),
     onFollow: vi.fn(),
     onSeen: vi.fn(),
-    onDecide: vi.fn(async () => {}),
+    onDecide: vi.fn(async () => true),
     onPolicy: vi.fn(),
     memory: new Map<string, Saved>(),
     onArrived: vi.fn(),
@@ -349,6 +349,7 @@ describe('bridged rooms', () => {
   it('changes the outbound policy only when one is picked', () => {
     const { props } = bridgedRoom([]);
     const button = screen.getByRole('button', { name: 'Outbound: Ask before sending' });
+    expect(button.textContent).toBe('OutboundAsk before sending▾'); // the name shows on the chip too
     fireEvent.keyDown(button, { key: 'ArrowDown' });
     const menu = screen.getByRole('menu', { name: 'Outbound' });
     const items = within(menu).getAllByRole('menuitemradio');
@@ -415,6 +416,27 @@ describe('messages from outside', () => {
     expect(tablet(container, 1).querySelector('.card')).toBeNull();
   });
 
+  it('tells people outside without an id apart by their names', () => {
+    const anonymous = [
+      outside(1, 'Ada', '', 'hello', 3),
+      outside(2, 'Bob', '', 'hi', 2.5),
+      outside(3, 'Bob', '', 'again', 2),
+    ];
+    const { container } = room(anonymous, { name: 'example-chat', bridge: bridge('example-chat', 'running') });
+    expect(tablet(container, 2).classList).not.toContain('cont');
+    expect(tablet(container, 3).classList).toContain('cont');
+    expect([...container.querySelectorAll('.outsiders .pgname')].map((p) => p.textContent)).toEqual(['Ada', 'Bob']);
+  });
+
+  it('shows what the operator wrote outside as the operator’s', () => {
+    const mine = message(9, 'operator', 'writing from the phone', 1, { room: 'example-chat' });
+    const { container } = room([...ms, mine], { name: 'example-chat', bridge: bridge('example-chat', 'running') });
+    const t = tablet(container, 9);
+    expect(t.classList).toContain('own');
+    expect(t.querySelector('.av.ext')).toBeNull();
+    expect(header(container, 9)).toBe('operatorreply');
+  });
+
   it('gives each person outside a header of their own', () => {
     const { container } = chatRoom();
     expect(tablet(container, 2).classList).toContain('cont');
@@ -465,16 +487,20 @@ describe('messages going out', () => {
   });
 
   it('sends a pending message, then shows a check', async () => {
-    let done = () => {};
-    const onDecide = vi.fn(() => new Promise<void>((r) => (done = r)));
+    let done = (_: boolean) => {};
+    const onDecide = vi.fn(() => new Promise<boolean>((r) => (done = r)));
     const pending = goingOut(1, 'secretary', 'looked, all fine', 5, 'pending');
     const { container, props, rerender } = chatRoom([pending], { onDecide });
     const send = within(tablet(container, 1)).getByRole('button', { name: 'Send' }) as HTMLButtonElement;
     fireEvent.click(send);
     expect(onDecide).toHaveBeenCalledWith(pending, true);
     expect(send.disabled).toBe(true);
-    await act(async () => done());
-    expect(send.disabled).toBe(false);
+    await act(async () => done(true));
+    // taken: both stay off until the message stops waiting, so a second click cannot be refused
+    expect(send.disabled).toBe(true);
+    expect(
+      (within(tablet(container, 1)).getByRole('button', { name: 'Don’t send' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'looked, all fine', 5, 'sending')]} />);
     expect(tablet(container, 1).querySelector('.dl')?.textContent).toBe('sending…');
     rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'looked, all fine', 5, 'sent')]} />);
@@ -482,6 +508,14 @@ describe('messages going out', () => {
     expect(t.querySelector('.dl.sent svg')).not.toBeNull();
     expect(t.querySelector('.decide')).toBeNull();
     expect(t.classList).not.toContain('waiting');
+  });
+
+  it('turns the buttons on again when the hub refused the decision', async () => {
+    const onDecide = vi.fn(async () => false);
+    const { container } = chatRoom([goingOut(1, 'secretary', 'draft', 5, 'pending')], { onDecide });
+    const send = within(tablet(container, 1)).getByRole('button', { name: 'Send' }) as HTMLButtonElement;
+    fireEvent.click(send);
+    await waitFor(() => expect(send.disabled).toBe(false));
   });
 
   it('declines a pending message, then shows it muted as not sent', () => {

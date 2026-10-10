@@ -181,9 +181,14 @@ describe('bridged rooms', () => {
           return policy === 'BRIDGE_POLICY_APPROVE'
             ? reply({})
             : reply({ code: 'not_found', message: 'message 7 is not pending' }, 404);
-        case 'BridgeService/SetBridgePolicy':
-          calls.push([proc, JSON.parse(raw)]);
-          return reply({});
+        case 'BridgeService/SetBridgePolicy': {
+          const body = JSON.parse(raw);
+          calls.push([proc, body]);
+          // the fake stands for a bridge removed meanwhile when asked for read only
+          return body.policy === 'BRIDGE_POLICY_READ'
+            ? reply({ code: 'not_found', message: 'no bridge example-chat' }, 404)
+            : reply({});
+        }
       }
       return hub(input, init);
     });
@@ -246,6 +251,20 @@ describe('bridged rooms', () => {
         ['BridgeService/SetBridgePolicy', { name: 'example-chat', policy: 'BRIDGE_POLICY_OPEN' }],
       ]),
     );
+  });
+
+  it('says why the policy did not change', async () => {
+    await openChat('BRIDGE_POLICY_APPROVE', []);
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Read only' }));
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toBe('The policy did not change: no bridge example-chat');
+  });
+
+  it('counts a waiting message once on the phone’s Rooms tab', async () => {
+    await openChat('BRIDGE_POLICY_APPROVE', []);
+    // general has 2 unread; #example-chat 1 waiting, which is not unread here
+    expect(document.querySelector('.tabs em')?.textContent).toBe('3');
   });
 });
 

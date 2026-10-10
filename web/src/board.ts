@@ -301,6 +301,15 @@ export function subscriptionMode(m: Mode): SubscriptionMode {
   return MODES[m];
 }
 
+/**
+ * What the phone's Rooms tab counts: per room its unread messages or the messages waiting for the
+ * operator to send them, whichever is more; a waiting message of a followed room is also unread,
+ * so the two are not added.
+ */
+export function roomsTabCount(counts: Map<string, RoomCount>): number {
+  return [...counts.values()].reduce((n, c) => n + Math.max(c.unread, c.pending ?? 0), 0);
+}
+
 /** What a room shows in the list: `@n` for messages addressed to the operator, else the unread count. */
 export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean } | undefined {
   if (!c || c.unread === 0) return undefined;

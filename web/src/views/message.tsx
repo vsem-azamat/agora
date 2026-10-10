@@ -12,8 +12,8 @@ import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
 
 type Context = { known: Names; operator: string };
 
-/** The operator's decision on a pending message: send it or not. */
-export type Decide = (m: Message, send: boolean) => Promise<void>;
+/** The operator's decision on a pending message: send it or not; true once the hub took it. */
+export type Decide = (m: Message, send: boolean) => Promise<boolean>;
 
 function Time({ m }: { m: Message }) {
   const at = toDate(m.at);
@@ -60,7 +60,10 @@ function Decision({ m, onDecide, readOnly }: { m: Message; onDecide: Decide; rea
   const [busy, setBusy] = useState(false);
   const decide = (send: boolean) => {
     setBusy(true);
-    onDecide(m, send).finally(() => setBusy(false));
+    // after a decision the hub took, the buttons stay off until the message stops waiting
+    void onDecide(m, send).then((took) => {
+      if (!took) setBusy(false);
+    });
   };
   return (
     <fieldset className="decide" aria-label={`Send the message of ${m.author} to ${m.room}?`}>

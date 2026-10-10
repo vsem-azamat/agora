@@ -57,3 +57,34 @@ func TestUnreadQueryReachesMessagesThroughIndexes(t *testing.T) {
 		}
 	}
 }
+
+// TestPendingCountUsesItsIndex keeps listing rooms from reading every message of a room to count
+// the pending ones: the count must come from the partial index messages_pending alone.
+func TestPendingCountUsesItsIndex(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, `EXPLAIN QUERY PLAN `+listQuery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(plan, "\n"), "SEARCH messages USING COVERING INDEX messages_pending (room=?)") {
+		t.Fatalf("the pending count does not search messages_pending:\n%s", strings.Join(plan, "\n"))
+	}
+}

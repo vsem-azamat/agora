@@ -9,6 +9,7 @@ import {
   type Mode,
   openProposals,
   projectOf,
+  roomsTabCount,
   subscriptionMode,
 } from './board';
 import { bridgePolicy, type Policy } from './bridges';
@@ -182,7 +183,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [palette, setPalette] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [arrival, setArrival] = useState<Arrival>();
-  const [notice, setNotice] = useState<string>();
+  // each notice has its own number, so the same text told again shows for its full time
+  const [notice, setNotice] = useState<{ text: string; n: number }>();
   const closeNotice = useCallback(() => setNotice(undefined), []);
   const memory = useRef(new Map<string, Saved>()).current;
   const roomName = route.view === 'room' ? route.room : undefined;
@@ -211,7 +213,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const refused = useCallback(
     (what: string) => (err: unknown) => {
       if (unauthenticated(err)) fail(err);
-      else setNotice(`${what}: ${ConnectError.from(err).rawMessage}`);
+      else setNotice((was) => ({ text: `${what}: ${ConnectError.from(err).rawMessage}`, n: (was?.n ?? 0) + 1 }));
     },
     [fail],
   );
@@ -221,8 +223,10 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       try {
         if (send) await api.bridges.sendPending({ messageId: m.id });
         else await api.bridges.declinePending({ messageId: m.id });
+        return true;
       } catch (err) {
         refused(send ? 'Not sent' : 'Not declined')(err);
+        return false;
       }
     },
     [api, refused],
@@ -344,7 +348,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       main = <Board agents={listed} now={now} project={project} onProject={setProject} />;
   }
 
-  const unreadTotal = [...data.unread.values()].reduce((n, c) => n + c.unread + (c.pending ?? 0), 0);
+  const unreadTotal = roomsTabCount(data.unread);
 
   return (
     <Profiles.Provider value={profiles}>
@@ -387,7 +391,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
             />
           )}
           {palette && <Palette items={items} onClose={() => setPalette(false)} />}
-          {notice && <Toast text={notice} onClose={closeNotice} />}
+          {notice && <Toast key={notice.n} text={notice.text} onClose={closeNotice} />}
         </div>
       </OpenAgent.Provider>
     </Profiles.Provider>

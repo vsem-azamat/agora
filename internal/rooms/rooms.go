@@ -225,12 +225,16 @@ func SubscribeTx(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode)
 	return subscribe(ctx, tx, agent, room, mode)
 }
 
+// listQuery lists the rooms with their counts. The pending count names 'pending' literally, so
+// the partial index messages_pending covers it; a bound parameter would keep the planner from it.
+const listQuery = `SELECT r.name, r.purpose, r.created_by, r.created_at,
+	(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0),
+	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'pending')
+	FROM rooms AS r ORDER BY r.name`
+
 // List returns every room in name order.
 func (r *Rooms) List(ctx context.Context) ([]Room, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT r.name, r.purpose, r.created_by, r.created_at,
-		(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0),
-		(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = ?)
-		FROM rooms AS r ORDER BY r.name`, Pending)
+	rows, err := r.db.QueryContext(ctx, listQuery)
 	if err != nil {
 		return nil, err
 	}
