@@ -176,15 +176,11 @@ describe('bridged rooms', () => {
           });
         case 'BridgeService/SendPending':
           calls.push([proc, JSON.parse(raw)]);
-          return policy === 'BRIDGE_POLICY_READ'
-            ? reply(
-                {
-                  code: 'failed_precondition',
-                  message: 'read-only bridge: #example-chat is read-only; nothing goes out',
-                },
-                400,
-              )
-            : reply({});
+          // the fake has the message pending only under approve; another policy stands for a
+          // decision taken meanwhile
+          return policy === 'BRIDGE_POLICY_APPROVE'
+            ? reply({})
+            : reply({ code: 'not_found', message: 'message 7 is not pending' }, 404);
         case 'BridgeService/SetBridgePolicy':
           calls.push([proc, JSON.parse(raw)]);
           return reply({});
@@ -217,12 +213,20 @@ describe('bridged rooms', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('says why a message was not sent from a read-only room', async () => {
+  it('keeps Send from a read-only room and says why', async () => {
+    const { container } = await openChat('BRIDGE_POLICY_READ', []);
+    const t = waiting(container);
+    expect((within(t).getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(t.querySelector('.decide .hint')?.textContent).toBe('read only — switch Outbound to send');
+    expect((within(t).getByRole('button', { name: 'Don’t send' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says why the hub refused to send a message', async () => {
     const calls: [string, unknown][] = [];
-    const { container } = await openChat('BRIDGE_POLICY_READ', calls);
+    const { container } = await openChat('BRIDGE_POLICY_OPEN', calls);
     fireEvent.click(within(waiting(container)).getByRole('button', { name: 'Send' }));
     const notice = await screen.findByRole('alert');
-    expect(notice.textContent).toBe('Not sent: read-only bridge: #example-chat is read-only; nothing goes out');
+    expect(notice.textContent).toBe('Not sent: message 7 is not pending');
     await waitFor(() =>
       expect((within(waiting(container)).getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(
         false,

@@ -85,13 +85,13 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 	name = strings.TrimPrefix(name, "#")
 	command = strings.TrimSpace(command)
 	if !rooms.ValidName(name) {
-		return false, fmt.Errorf("%w: bridge name %q: %s", store.ErrInvalid, name, rooms.NameRule)
+		return false, store.Refuse(store.ErrInvalid, "bridge name %q: %s", name, rooms.NameRule)
 	}
 	if name == rooms.General {
-		return false, fmt.Errorf("%w: #%s is everyone's room and cannot be bridged", store.ErrInvalid, rooms.General)
+		return false, store.Refuse(store.ErrInvalid, "#%s is everyone's room and cannot be bridged", rooms.General)
 	}
 	if command == "" {
-		return false, fmt.Errorf("%w: a bridge needs a command", store.ErrInvalid)
+		return false, store.Refuse(store.ErrInvalid, "a bridge needs a command")
 	}
 	if strings.TrimSpace(purpose) == "" {
 		purpose = DefaultPurpose
@@ -111,7 +111,7 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 			return err
 		}
 		if n > 0 {
-			return fmt.Errorf("%w: #%s already has a bridge; remove it first with `agora bridge remove %s`", ErrExists, name, name)
+			return store.Refuse(ErrExists, "#%s already has a bridge; remove it first with `agora bridge remove %s`", name, name)
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM rooms WHERE name = ?`, name).Scan(&n); err != nil {
 			return err
@@ -152,7 +152,7 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 			return err
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			return fmt.Errorf("%w: no bridge %s; see `agora bridge list`", ErrNotFound, name)
+			return store.Refuse(ErrNotFound, "no bridge %s; see `agora bridge list`", name)
 		}
 		_, err = b.rooms.PostTx(ctx, tx, rooms.Board, name, agent+" removed the bridge of this room; the room stays, no longer bridged.", 0)
 		return err
@@ -194,7 +194,7 @@ func (b *Bridges) Get(ctx context.Context, name string) (Bridge, error) {
 			return x, nil
 		}
 	}
-	return Bridge{}, fmt.Errorf("%w: no bridge %s", ErrNotFound, name)
+	return Bridge{}, store.Refuse(ErrNotFound, "no bridge %s", name)
 }
 
 // SetPolicy changes the outbound policy of the bridge name.
@@ -202,14 +202,14 @@ func (b *Bridges) SetPolicy(ctx context.Context, name string, p Policy) error {
 	switch p {
 	case Approve, Open, Read:
 	default:
-		return fmt.Errorf("%w: policy %q: approve, open or read", store.ErrInvalid, p)
+		return store.Refuse(store.ErrInvalid, "policy %q: approve, open or read", p)
 	}
 	res, err := b.db.ExecContext(ctx, `UPDATE bridges SET policy = ? WHERE name = ?`, p, name)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("%w: no bridge %s", ErrNotFound, name)
+		return store.Refuse(ErrNotFound, "no bridge %s", name)
 	}
 	return nil
 }
@@ -233,11 +233,11 @@ type In struct {
 // returns the stored message's identifier, or 0 when nothing was stored.
 func (b *Bridges) Receive(ctx context.Context, name string, in In, operator string) (int64, error) {
 	if in.ID == "" && in.Cursor == "" {
-		return 0, fmt.Errorf("%w: an in line needs an id or a cursor", store.ErrInvalid)
+		return 0, store.Refuse(store.ErrInvalid, "an in line needs an id or a cursor")
 	}
 	for _, v := range []string{in.ID, in.ReplyTo, in.Cursor} {
 		if len(v) > MaxIdentifier {
-			return 0, fmt.Errorf("%w: identifiers and cursors are at most %d bytes", store.ErrInvalid, MaxIdentifier)
+			return 0, store.Refuse(store.ErrInvalid, "identifiers and cursors are at most %d bytes", MaxIdentifier)
 		}
 	}
 	text := strings.TrimSpace(in.Text)
@@ -263,7 +263,7 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 			return err
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			return fmt.Errorf("%w: no bridge %s", ErrNotFound, name)
+			return store.Refuse(ErrNotFound, "no bridge %s", name)
 		}
 		if in.ID == "" {
 			return nil // only the cursor
@@ -364,7 +364,7 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 // without.
 func (b *Bridges) Sent(ctx context.Context, name string, id int64, extID string) (changed, taken bool, err error) {
 	if len(extID) > MaxIdentifier {
-		return false, false, fmt.Errorf("%w: identifiers are at most %d bytes", store.ErrInvalid, MaxIdentifier)
+		return false, false, store.Refuse(store.ErrInvalid, "identifiers are at most %d bytes", MaxIdentifier)
 	}
 	err = store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var err error
@@ -402,16 +402,16 @@ func (b *Bridges) SendPending(ctx context.Context, id int64) error {
 		err := tx.QueryRowContext(ctx, `SELECT m.room, COALESCE(b.policy, '') FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room
 			WHERE m.id = ? AND m.delivery = 'pending'`, id).Scan(&room, &policy)
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: message %d is not pending", ErrNotFound, id)
+			return store.Refuse(ErrNotFound, "message %d is not pending", id)
 		}
 		if err != nil {
 			return err
 		}
 		switch Policy(policy) {
 		case "":
-			return fmt.Errorf("%w: #%s has no bridge", store.ErrInvalid, room)
+			return store.Refuse(store.ErrInvalid, "#%s has no bridge", room)
 		case Read:
-			return fmt.Errorf("%w: #%s is read-only; nothing goes out", rooms.ErrReadOnly, room)
+			return store.Refuse(rooms.ErrReadOnly, "#%s is read-only; nothing goes out", room)
 		}
 		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Pending, rooms.Sending, "")
 		return err
@@ -427,7 +427,7 @@ func (b *Bridges) DeclinePending(ctx context.Context, id int64, operator string)
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("%w: message %d is not pending", ErrNotFound, id)
+			return store.Refuse(ErrNotFound, "message %d is not pending", id)
 		}
 		who := "the operator"
 		if operator != "" {

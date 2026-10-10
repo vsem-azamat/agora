@@ -4,11 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
 // ErrInvalid marks a request with an invalid value; every domain package wraps it with what was
 // wrong.
 var ErrInvalid = errors.New("invalid request")
+
+// Refusal is an error that says only what was refused, while errors.Is still finds its kind,
+// so a message reads "#example-chat is read-only" rather than "read-only bridge: #example-chat
+// is read-only".
+type Refusal struct {
+	Kind error
+	Msg  string
+}
+
+func (e *Refusal) Error() string { return e.Msg }
+
+func (e *Refusal) Unwrap() error { return e.Kind }
+
+// Refuse returns a Refusal of kind with the formatted message.
+func Refuse(kind error, format string, a ...any) error {
+	return &Refusal{Kind: kind, Msg: fmt.Sprintf(format, a...)}
+}
 
 // InTx runs fn in a transaction on db and commits it, or rolls it back and returns fn's error.
 // A panic in fn rolls the transaction back too, so the single connection is not left in it.

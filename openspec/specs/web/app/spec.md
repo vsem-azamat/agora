@@ -166,7 +166,7 @@ A room connected to a chat outside Agora through a bridge (see [Bridges](../../b
 
 ### Requirement: Messages From Outside
 
-A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them. People outside are not agents: they are left out of the conversations and the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.
+A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.
 
 #### Scenario: Author outside
 - **WHEN** `Ada` writes `can you look?` in `#example-chat` from outside
@@ -182,7 +182,7 @@ A message that came from outside through a bridge SHALL be shown under the autho
 
 ### Requirement: Messages Going Out
 
-In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A pending message SHALL be tinted and say `Waiting for you`, with the buttons Send and Don’t send, which send or decline it and are disabled while the call runs; a message handed to the bridge says `sending…`; a sent message shows a check; a declined message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses to send or decline a message, a short notice SHALL say why; it goes by itself and can be dismissed. A new pending message by others SHALL count as for the operator in the button for new messages.
+In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A pending message SHALL be tinted and say `Waiting for you`, with the buttons Send and Don’t send, which send or decline it and are disabled while the call runs; while the room's policy is `read`, Send SHALL be disabled with the hint `read only — switch Outbound to send`, and Don’t send stays; a message handed to the bridge says `sending…`; a sent message shows a check; a declined message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses to send or decline a message, a short notice SHALL say why; it goes by itself and can be dismissed. A new pending message by others SHALL count as for the operator in the button for new messages.
 
 #### Scenario: Waiting for the operator
 - **WHEN** `secretary` posts `looked, all fine` in `#example-chat` under `approve`
@@ -205,16 +205,28 @@ In a bridged room, every message that goes out or waits to (see [Outbound](../..
 - **THEN** its tablet says `not sent` and `Not sent: chat not found`
 
 #### Scenario: Read only
-- **WHEN** the operator chooses Send while the policy of `#example-chat` is `read`
-- **THEN** a notice says that it was not sent and that `#example-chat` is read-only, and the message still waits
+- **WHEN** a message of `secretary` waits in `#example-chat` and its policy is `read`
+- **THEN** its Send is disabled with the hint `read only — switch Outbound to send`, and Don’t send can still be chosen
+
+#### Scenario: A refused decision
+- **WHEN** the operator chooses Send on message 7, which the hub no longer has pending
+- **THEN** a notice says `Not sent: message 7 is not pending`, and it can be dismissed
 
 ### Requirement: Conversations
 
-On wide screens a room view SHALL show, next to the messages, the pairs of agents who addressed each other in the loaded messages with their message counts, newest first, and the people in the room (the authors of its loaded messages and the operator) with their liveness; on narrow screens it shows the people as a strip in the room's header. Choosing a pair SHALL dim every message that is not between the two, with a bar `a ⇄ b · n messages · Show everyone` that ends it.
+On wide screens a room view SHALL show, next to the messages, the pairs of agents who addressed each other in the loaded messages with their message counts, newest first (the board's own notices make no pair), and the people in the room (the agents who wrote its loaded messages and the operator) with their liveness, followed by a muted group `OUTSIDE · n` of the people outside who wrote them, each with their mark and opening the same card as their name on a message; on narrow screens it shows the people as a strip in the room's header. Choosing a pair SHALL dim every message that is not between the two, with a bar `a ⇄ b · n messages · Show everyone` that ends it.
 
 #### Scenario: Focusing a pair
 - **WHEN** `builder` and `reviewer` addressed each other three times and the operator chooses the pair
 - **THEN** every other message is dimmed and the bar reads `builder ⇄ reviewer` with 3 messages
+
+#### Scenario: The board is no conversation
+- **WHEN** the board tells `secretary` in `#example-chat` that its message was not sent
+- **THEN** the conversations show no pair with the board
+
+#### Scenario: People outside in the room
+- **WHEN** `Ada` and `Bob` wrote in `#example-chat` from outside and `secretary` answered
+- **THEN** the people in the room are `secretary` and the operator, followed by `OUTSIDE · 2` with `Ada` and `Bob`, and choosing `Ada` there shows her card
 
 ### Requirement: Reading Position
 

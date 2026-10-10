@@ -2,10 +2,10 @@
 // new messages only while the operator is at the bottom; see tape.ts for the decisions.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { knownNames, type Liveness, liveness as livenessOf, livenessOrder, type Mode, type RoomCount } from '../board';
-import { POLICY_LABELS, type Policy, policyOf, runningOf, runningText } from '../bridges';
+import { authorKey, POLICY_LABELS, type Policy, policyOf, runningOf, runningText } from '../bridges';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Bridge } from '../gen/agora/v1/bridges_pb';
-import type { Message, Room } from '../gen/agora/v1/rooms_pb';
+import type { ExternalAuthor, Message, Room } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import {
   addresseesById,
@@ -27,6 +27,7 @@ import { AgentLink, Avatar } from './common';
 import { Composer } from './composer';
 import { FollowControls } from './follow';
 import { BoardLine, type Decide, Tablet } from './message';
+import { OutsiderAvatar, OutsiderName } from './outside';
 import { RoomIcon } from './rooms';
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
@@ -115,7 +116,8 @@ export function RoomView(props: {
     [messages, to, reader, today, firstNew],
   );
   const people = useMemo(() => roomPeople(messages ?? [], reader, live), [messages, reader, live]);
-  const talks = useMemo(() => pairs(messages ?? [], to), [messages, to]);
+  const outsiders = useMemo(() => roomOutsiders(messages ?? []), [messages]);
+  const talks = useMemo(() => pairs(messages ?? [], to, reader.board), [messages, to, reader.board]);
 
   /** Counts what is in view as seen (only while the page is visible) and updates the pill. */
   const read = () => {
@@ -258,6 +260,7 @@ export function RoomView(props: {
     setReply(undefined);
   };
 
+  const readOnly = props.bridge !== undefined && policyOf(props.bridge.policy) === 'read';
   const dimmed = (m: Message) => focus !== undefined && !between(m, to.get(m.id) ?? [], focus);
   const ctx = { known, operator: reader.operator };
   const inRoom = new Set(people.map((p) => p.name));
@@ -331,6 +334,7 @@ export function RoomView(props: {
                       onFocus={setFocus}
                       onJump={jump}
                       onDecide={decide}
+                      readOnly={readOnly}
                       {...ctx}
                     />
                   );
@@ -390,9 +394,29 @@ export function RoomView(props: {
             ))}
           </div>
         </div>
+        {outsiders.length > 0 && (
+          <div className="outsiders">
+            <h3>OUTSIDE · {outsiders.length}</h3>
+            <div className="people">
+              {outsiders.map((who) => (
+                <OutsiderName key={`${who.bridge}\n${who.id}`} who={who} className="person" via={false}>
+                  <OutsiderAvatar who={who} size="sm" />
+                  <span className="pgname">{who.name || who.id}</span>
+                </OutsiderName>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
     </div>
   );
+}
+
+/** The people outside who wrote the loaded messages, by name. */
+function roomOutsiders(messages: Message[]): ExternalAuthor[] {
+  const found = new Map<string, ExternalAuthor>();
+  for (const m of messages) if (m.externalAuthor) found.set(authorKey(m), m.externalAuthor);
+  return [...found.values()].sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
 }
 
 type Person = { name: string; live?: Liveness };

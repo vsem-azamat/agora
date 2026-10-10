@@ -52,8 +52,11 @@ function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
   }
 }
 
-/** A pending message's buttons: it goes out only when the operator sends it. */
-function Decision({ m, onDecide }: { m: Message; onDecide: Decide }) {
+/**
+ * A pending message's buttons: it goes out only when the operator sends it. While the room is
+ * read only it cannot be sent, only declined.
+ */
+function Decision({ m, onDecide, readOnly }: { m: Message; onDecide: Decide; readOnly: boolean }) {
   const [busy, setBusy] = useState(false);
   const decide = (send: boolean) => {
     setBusy(true);
@@ -62,7 +65,8 @@ function Decision({ m, onDecide }: { m: Message; onDecide: Decide }) {
   return (
     <fieldset className="decide" aria-label={`Send the message of ${m.author} to ${m.room}?`}>
       <span className="why">Waiting for you</span>
-      <button type="button" className="btn" disabled={busy} onClick={() => decide(true)}>
+      {readOnly && <span className="hint">read only — switch Outbound to send</span>}
+      <button type="button" className="btn" disabled={busy || readOnly} onClick={() => decide(true)}>
         <Icon name="send" />
         Send
       </button>
@@ -81,6 +85,7 @@ export const Tablet = memo(function Tablet({
   onFocus,
   onJump,
   onDecide,
+  readOnly,
   ...ctx
 }: Context & {
   item: Extract<TapeItem, { kind: 'message' }>;
@@ -89,6 +94,8 @@ export const Tablet = memo(function Tablet({
   onFocus: (pair: [string, string]) => void;
   onJump: (id: bigint) => void;
   onDecide: Decide;
+  /** The room's policy is read: nothing can be sent. */
+  readOnly: boolean;
 }) {
   const pg = usePg();
   const { message: m, parent, to } = item;
@@ -156,7 +163,7 @@ export const Tablet = memo(function Tablet({
         <div className="tx">
           <MessageBody body={m.body} {...ctx} />
         </div>
-        {d === 'pending' && <Decision m={m} onDecide={onDecide} />}
+        {d === 'pending' && <Decision m={m} onDecide={onDecide} readOnly={readOnly} />}
         {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
       </div>
       <div className="acts">

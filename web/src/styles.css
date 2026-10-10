@@ -1618,6 +1618,22 @@ button.pgname:hover {
 .decide .btn {
   padding: 2px 12px;
 }
+.decide .hint {
+  color: var(--mute);
+  font-size: 0.82em;
+  font-style: italic;
+}
+.outsiders .outsider {
+  display: flex;
+}
+.outsiders .pgname {
+  color: var(--mute);
+}
+.outsiders .card {
+  left: auto;
+  right: 0;
+  max-width: 230px;
+}
 .decide .btn .ic {
   width: 1em;
   height: 1em;

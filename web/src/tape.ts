@@ -120,11 +120,14 @@ export function tape(
 
 export type Pair = { a: string; b: string; n: number };
 
-/** Pairs of agents who addressed each other, with how many messages, the latest conversation first. */
-export function pairs(messages: Message[], to: Map<bigint, string[]>): Pair[] {
+/**
+ * Pairs of agents who addressed each other, with how many messages, the latest conversation
+ * first; the board's notices and people outside are no conversation.
+ */
+export function pairs(messages: Message[], to: Map<bigint, string[]>, board: string): Pair[] {
   const found = new Map<string, Pair & { last: number }>();
   messages.forEach((m, i) => {
-    if (m.externalAuthor) return; // someone outside is not an agent
+    if (m.externalAuthor || m.author === board) return;
     for (const other of to.get(m.id) ?? []) {
       const [a, b] = [m.author, other].sort() as [string, string];
       const key = `${a}\n${b}`;

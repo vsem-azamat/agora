@@ -480,6 +480,26 @@ func TestRoomsCountPendingMessages(t *testing.T) {
 	}
 }
 
+func TestSendingWhileReadOnlySaysWhy(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	id := b.post(t, "secretary", "a draft")
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_READ)
+	_, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id}))
+	var cerr *connect.Error
+	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeFailedPrecondition || cerr.Message() != "#example-chat is read-only; nothing goes out" {
+		t.Fatalf("sending under read: %v", err)
+	}
+	if b.message(t, id).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING {
+		t.Fatal("the message no longer waits")
+	}
+	_, err = b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id + 100}))
+	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeNotFound || cerr.Message() != fmt.Sprintf("message %d is not pending", id+100) {
+		t.Fatalf("sending a message that does not wait: %v", err)
+	}
+}
+
 func TestPoliciesOpenAndRead(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)

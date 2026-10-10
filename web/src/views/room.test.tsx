@@ -422,15 +422,31 @@ describe('messages from outside', () => {
     expect(header(container, 3)).toBe('Bob · example-chatreply');
   });
 
-  it('leaves people outside out of conversations and the room’s people', () => {
-    const { container } = chatRoom();
+  it('leaves people outside and the board out of conversations', () => {
+    const notice = message(5, 'agora', '@secretary your message 4 was not sent: chat not found.', 5, {
+      room: 'example-chat',
+    });
+    const { container } = room([...ms, notice], {
+      name: 'example-chat',
+      agents: [...agents, agent('secretary', 'idle')],
+    });
     expect(header(container, 4)).toBe('secretaryreply'); // a reply to Bob addresses no one
     expect(tablet(container, 4).querySelector('.quote .qa')?.textContent).toBe('Bob');
-    expect([...container.querySelectorAll('.rail .person .pgname')].map((p) => p.textContent)).toEqual([
-      'secretary',
-      'operator',
-    ]);
     expect(container.querySelector('.pairs')).toBeNull();
+  });
+
+  it('lists people outside apart from the agents in the room', () => {
+    const { container } = chatRoom();
+    const groups = [...container.querySelectorAll('.rail .people')];
+    const names = (g: Element | undefined) => [...(g?.querySelectorAll('.pgname') ?? [])].map((p) => p.textContent);
+    expect(names(groups[0])).toEqual(['secretary', 'operator']);
+    expect(container.querySelector('.outsiders h3')?.textContent).toBe('OUTSIDE · 2');
+    expect(names(groups[1])).toEqual(['Ada', 'Bob']);
+    const ada = within(groups[1] as HTMLElement).getByRole('button', { name: 'Ada' });
+    expect(ada.querySelector('.av.ext')?.textContent).toBe('A');
+    fireEvent.click(ada);
+    expect(groups[1]?.querySelector('.card')?.textContent).toContain('id there: 42');
+    expect(open).not.toHaveBeenCalled();
   });
 });
 
@@ -487,6 +503,16 @@ describe('messages going out', () => {
     ]);
     expect(tablet(container, 2).classList).not.toContain('cont');
     expect(tablet(container, 2).querySelector('.dl')?.textContent).toBe('sending…');
+  });
+
+  it('keeps Send from a read-only room, but not Don’t send', () => {
+    const pending = goingOut(1, 'secretary', 'looked, all fine', 5, 'pending');
+    const { container, props } = chatRoom([pending], { bridge: bridge('example-chat', 'running', 'read') });
+    const t = tablet(container, 1);
+    expect((within(t).getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(t.querySelector('.hint')?.textContent).toBe('read only — switch Outbound to send');
+    fireEvent.click(within(t).getByRole('button', { name: 'Don’t send' }));
+    expect(props.onDecide).toHaveBeenCalledWith(pending, false);
   });
 
   it('says why the bridge could not send a message', () => {

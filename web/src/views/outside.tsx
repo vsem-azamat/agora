@@ -1,22 +1,35 @@
 // Someone outside Agora who wrote through a bridge: a neutral mark with the first letter of the
 // name, and the name with its bridge, which opens a small card instead of an agent's drawer.
-import { type CSSProperties, useEffect, useId, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { initial } from '../bridges';
 import type { ExternalAuthor } from '../gen/agora/v1/rooms_pb';
 
 /** The neutral pigment of people outside, for `style`. */
 export const OUTSIDE: CSSProperties = { '--pg': 'var(--mute)' } as CSSProperties;
 
-export function OutsiderAvatar({ who }: { who: ExternalAuthor }) {
+export function OutsiderAvatar({ who, size }: { who: ExternalAuthor; size?: 'sm' }) {
   return (
-    <span className="av ext" aria-hidden="true">
+    <span className={size ? `av ext ${size}` : 'av ext'} aria-hidden="true">
       <span className="l">{initial(who.name || who.id)}</span>
     </span>
   );
 }
 
-/** The name outside with its bridge (`Ada · example-chat`); choosing it shows who it is there. */
-export function OutsiderName({ who }: { who: ExternalAuthor }) {
+/**
+ * The name outside, by default with its bridge (`Ada · example-chat`); choosing it shows who it
+ * is there. `children` replace the name on the button, as in the room's people.
+ */
+export function OutsiderName({
+  who,
+  className = 'au',
+  via = true,
+  children,
+}: {
+  who: ExternalAuthor;
+  className?: string;
+  via?: boolean;
+  children?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -45,15 +58,15 @@ export function OutsiderName({ who }: { who: ExternalAuthor }) {
     <span className="outsider" ref={root}>
       <button
         type="button"
-        className="au"
+        className={className}
         ref={button}
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen(!open)}
       >
-        {name}
+        {children ?? name}
       </button>
-      <span className="via"> · {who.bridge}</span>
+      {via && <span className="via"> · {who.bridge}</span>}
       {open && (
         <span className="card" id={id}>
           <b>{name}</b>

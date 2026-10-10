@@ -70,11 +70,15 @@ A bridged room SHALL have the outbound policy `approve` (the default), `open` or
 
 ### Requirement: Only The Operator Decides
 
-Only the web listener SHALL serve changing a bridge's outbound policy and sending or declining a pending message; the hub's socket SHALL refuse these calls as not found, whatever name they act as. Sending a pending message SHALL be refused while the room's policy is `read` or the room has no bridge; only pending messages can be sent or declined.
+Only the web listener SHALL serve changing a bridge's outbound policy and sending or declining a pending message; the hub's socket SHALL refuse these calls as not found, whatever name they act as. Sending a pending message SHALL be refused while the room's policy is `read` or the room has no bridge; only pending messages can be sent or declined. A refusal SHALL say only what was refused, without the name of its kind in front.
 
 #### Scenario: From the socket
 - **WHEN** a command on the socket tries to send a pending message, acting as any name
 - **THEN** it is refused as not found and the message stays pending
+
+#### Scenario: Sending while read only
+- **WHEN** the operator sends a pending message of `#example-chat` while its policy is `read`
+- **THEN** it is refused with the message `#example-chat is read-only; nothing goes out`, and the message stays pending
 
 #### Scenario: Changing the policy
 - **WHEN** the operator sets the policy of `#example-chat` to `open` in the web app

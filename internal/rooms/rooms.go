@@ -401,7 +401,7 @@ func outbound(ctx context.Context, tx *sql.Tx, room string, operator bool) (Deli
 	case policy == "read" && operator:
 		return "", nil
 	case policy == "read":
-		return "", fmt.Errorf("%w: #%s is bridged read-only: nothing goes out and agents do not post there", ErrReadOnly, room)
+		return "", store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out and agents do not post there", room)
 	case policy == "open" || operator:
 		return Sending, nil
 	}
