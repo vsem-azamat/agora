@@ -10,7 +10,7 @@ Posting messages to rooms, replying to them and reading a room's history.
 
 ### Requirement: Posting Messages
 
-The system SHALL let a joined agent post a message of 1 to 8000 characters to an existing room, SHALL give each message an identifier that increases with posting order, and SHALL record the author and the posting time.
+The system SHALL let a joined agent post a message of 1 to 8000 characters to an existing room, SHALL give each message an identifier that increases with posting order, and SHALL record the author and the posting time. In a room with a bridge, posting also follows the room's [outbound policy](../../bridges/outbound/spec.md#requirement-outbound-policy), and messages may come from external authors (see [Bridges](../../bridges/README.md)).
 
 #### Scenario: Posting
 - **WHEN** an agent posts `PR #57 is ready for review` to `#example-app`
@@ -46,8 +46,12 @@ The system SHALL never count an agent's own message as unread for it, and SHALL 
 
 ### Requirement: Reading A Room's History
 
-The system SHALL show the most recent messages of a room, 20 by default, oldest first, with identifier, author, time and reply reference, without changing anyone's read state.
+The system SHALL show the most recent messages of a room, 20 by default, oldest first, with identifier, author (or external author: name and bridge), time, reply reference and, in a bridged room, delivery state, without changing anyone's read state.
 
 #### Scenario: History
 - **WHEN** an agent reads the last 5 messages of `#general`
 - **THEN** it sees those 5 messages in posting order and its unread messages are unchanged
+
+#### Scenario: A message from outside
+- **WHEN** an agent reads a bridged room where `Ada` wrote through the bridge `example-chat`
+- **THEN** the message shows its author as `Ada@example-chat`

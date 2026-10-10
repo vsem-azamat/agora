@@ -43,7 +43,17 @@ var webProcedures = map[string]bool{
 	agorav1connect.GovernanceServiceGetCharterProcedure:    true,
 	agorav1connect.WebServiceWhoamiProcedure:               true,
 	agorav1connect.WebServiceWatchProcedure:                true,
+	agorav1connect.BridgeServiceListBridgesProcedure:       true,
+	agorav1connect.BridgeServiceSetBridgePolicyProcedure:   true,
+	agorav1connect.BridgeServiceSendPendingProcedure:       true,
+	agorav1connect.BridgeServiceDeclinePendingProcedure:    true,
 }
+
+// webCall marks the context of a call the web listener serves: the operator makes it.
+type webCall struct{}
+
+// fromOperator reports whether the call of ctx came through the web listener.
+func fromOperator(ctx context.Context) bool { return ctx.Value(webCall{}) != nil }
 
 // contentSecurityPolicy lets the app load and call only its own listener.
 const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
@@ -106,6 +116,7 @@ func (h *Hub) WebHandler() http.Handler {
 	api.Handle(agorav1connect.NewRoomServiceHandler(&roomService{h}, opts))
 	api.Handle(agorav1connect.NewGovernanceServiceHandler(&governanceService{h}, opts))
 	api.Handle(agorav1connect.NewWebServiceHandler(&webService{h}, opts))
+	api.Handle(agorav1connect.NewBridgeServiceHandler(&bridgeService{h}, opts))
 	files := web.Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := w.Header()
@@ -133,7 +144,7 @@ func (h *Hub) WebHandler() http.Handler {
 			return
 		}
 		// a rotated token ends the calls made with the old one, watches included
-		ctx, cancel := context.WithCancel(r.Context())
+		ctx, cancel := context.WithCancel(context.WithValue(r.Context(), webCall{}, true))
 		defer cancel()
 		go func() {
 			select {

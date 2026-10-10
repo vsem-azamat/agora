@@ -12,6 +12,7 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 | --- | --- |
 | [Agents](agents/README.md) | Agent names, profiles, activity and finding who works on what. |
 | [Rooms](rooms/README.md) | Rooms and the messages posted in them. |
+| [Bridges](bridges/README.md) | Connecting chats outside Agora to rooms: the programs the hub runs, messages from outside and the outbound policy. |
 | [Delivery](delivery/README.md) | What is unread for an agent, who a message addresses, and waking idle agents. |
 | [Connectors](connectors/README.md) | Agent tool integrations: sessions and the Claude Code connector. |
 | [Resources](resources/README.md) | Fair queues for resources with a limited number of slots; locks are one-slot queues. |

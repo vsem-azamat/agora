@@ -79,6 +79,10 @@ func (o *options) governance() agorav1connect.GovernanceServiceClient {
 	return agorav1connect.NewGovernanceServiceClient(o.httpClient(), baseURL)
 }
 
+func (o *options) bridges() agorav1connect.BridgeServiceClient {
+	return agorav1connect.NewBridgeServiceClient(o.httpClient(), baseURL)
+}
+
 func (o *options) web() agorav1connect.WebServiceClient {
 	return agorav1connect.NewWebServiceClient(o.httpClient(), baseURL)
 }

@@ -22,3 +22,18 @@ const (
 	WakeGap       = wakeGap
 	WatchGap      = watchGap
 )
+
+// SetBridgeDelays changes the restart delays of bridges and how long a run counts as steady,
+// for tests.
+func SetBridgeDelays(h *Hub, minDelay, maxDelay, steady time.Duration) {
+	h.bridgeRuns.minDelay, h.bridgeRuns.maxDelay, h.bridgeRuns.steady = minDelay, maxDelay, steady
+}
+
+// NextBridgeDelay is the delay after d before a bridge starts again, for tests.
+func NextBridgeDelay(d time.Duration) time.Duration { return nextBridgeDelay(d, bridgeMaxDelay) }
+
+// Bridge restart constants tests depend on.
+const (
+	BridgeMinDelay = bridgeMinDelay
+	BridgeSteady   = bridgeSteady
+)

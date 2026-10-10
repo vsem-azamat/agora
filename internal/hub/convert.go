@@ -11,6 +11,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/pullrequests"
 	"github.com/vsem-azamat/agora/internal/queue"
@@ -31,6 +32,12 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, queue.ErrNotYourTurn):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, rooms.ErrReadOnly):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, bridges.ErrNotFound):
+		return connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, bridges.ErrExists):
+		return connect.NewError(connect.CodeAlreadyExists, err)
 	case errors.As(err, &forbidden), errors.Is(err, rooms.ErrBoardOnly):
 		return connect.NewError(connect.CodePermissionDenied, err)
 	case errors.Is(err, sessions.ErrNameTaken), errors.Is(err, agents.ErrTaken):
@@ -124,9 +131,24 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 func messagesPB(msgs []rooms.Message) []*agorav1.Message {
 	out := make([]*agorav1.Message, 0, len(msgs))
 	for _, m := range msgs {
-		out = append(out, &agorav1.Message{Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed})
+		pb := &agorav1.Message{
+			Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed,
+			DeliveryState: deliveryStates[m.Delivery], DeliveryError: m.DeliveryError,
+		}
+		if m.External() {
+			pb.ExternalAuthor = &agorav1.ExternalAuthor{Bridge: m.Room, Id: m.ExtAuthorID, Name: m.ExtAuthorName}
+		}
+		out = append(out, pb)
 	}
 	return out
+}
+
+var deliveryStates = map[rooms.Delivery]agorav1.DeliveryState{
+	rooms.Pending:  agorav1.DeliveryState_DELIVERY_STATE_PENDING,
+	rooms.Sending:  agorav1.DeliveryState_DELIVERY_STATE_SENDING,
+	rooms.Sent:     agorav1.DeliveryState_DELIVERY_STATE_SENT,
+	rooms.Declined: agorav1.DeliveryState_DELIVERY_STATE_DECLINED,
+	rooms.Failed:   agorav1.DeliveryState_DELIVERY_STATE_FAILED,
 }
 
 var subscriptionModes = map[rooms.Mode]agorav1.SubscriptionMode{

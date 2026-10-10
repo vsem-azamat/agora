@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package agora.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
+
+// BridgeService keeps the bridges that connect rooms to chats outside Agora, and the
+// operator's decisions about what goes out through them.
+service BridgeService {
+  // AddBridge binds a bridge to the room of its name, creating the room or attaching an existing
+  // one without a bridge, stores it with the policy approve, starts its command and subscribes
+  // the addressees to the room with the mode wake.
+  rpc AddBridge(AddBridgeRequest) returns (AddBridgeResponse);
+  // RemoveBridge stops a bridge; its room and messages stay.
+  rpc RemoveBridge(RemoveBridgeRequest) returns (RemoveBridgeResponse);
+  // ListBridges returns every bridge with its state, in name order.
+  rpc ListBridges(ListBridgesRequest) returns (ListBridgesResponse);
+  // SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
+  rpc SetBridgePolicy(SetBridgePolicyRequest) returns (SetBridgePolicyResponse);
+  // SendPending lets a pending message go out. Only the web listener serves it.
+  rpc SendPending(SendPendingRequest) returns (SendPendingResponse);
+  // DeclinePending keeps a pending message from ever going out and tells its author. Only the
+  // web listener serves it.
+  rpc DeclinePending(DeclinePendingRequest) returns (DeclinePendingResponse);
+}
+
+// What goes out of a bridged room.
+enum BridgePolicy {
+  BRIDGE_POLICY_UNSPECIFIED = 0;
+  // Agents' messages wait for the operator; the operator's go out at once.
+  BRIDGE_POLICY_APPROVE = 1;
+  // Every message goes out at once.
+  BRIDGE_POLICY_OPEN = 2;
+  // Nothing goes out; agents may not post.
+  BRIDGE_POLICY_READ = 3;
+}
+
+// Whether the hub runs a bridge's command.
+enum BridgeState {
+  BRIDGE_STATE_UNSPECIFIED = 0;
+  // Its process runs.
+  BRIDGE_STATE_RUNNING = 1;
+  // Its process exited; the hub starts it again after a delay.
+  BRIDGE_STATE_RESTARTING = 2;
+  // The hub does not run it.
+  BRIDGE_STATE_STOPPED = 3;
+}
+
+message Bridge {
+  // The bridge's name, which is also its room's.
+  string name = 1;
+  string command = 2;
+  BridgePolicy policy = 3;
+  string created_by = 4;
+  google.protobuf.Timestamp created_at = 5;
+  // The agents an addressed message from outside addresses, in name order.
+  repeated string addressees = 6;
+  BridgeState state = 7;
+  // How its process last ended, while restarting.
+  string last_exit = 8;
+}
+
+message AddBridgeRequest {
+  // The acting agent, which becomes the creator.
+  string agent = 1;
+  // The bridge's and its room's name.
+  string name = 2;
+  // The shell command the hub runs.
+  string command = 3;
+  // The purpose of a room created for the bridge; a default when empty.
+  string purpose = 4;
+  // Agents to subscribe to the room with the mode wake; an addressed message from outside
+  // addresses them.
+  repeated string addressees = 5;
+}
+
+message AddBridgeResponse {
+  // True when the room was created, false when an existing room was attached.
+  bool created_room = 1;
+}
+
+message RemoveBridgeRequest {
+  // The acting agent.
+  string agent = 1;
+  string name = 2;
+}
+
+message RemoveBridgeResponse {}
+
+message ListBridgesRequest {}
+
+message ListBridgesResponse {
+  repeated Bridge bridges = 1;
+}
+
+message SetBridgePolicyRequest {
+  string name = 1;
+  BridgePolicy policy = 2;
+}
+
+message SetBridgePolicyResponse {}
+
+message SendPendingRequest {
+  int64 message_id = 1;
+}
+
+message SendPendingResponse {}
+
+message DeclinePendingRequest {
+  int64 message_id = 1;
+}
+
+message DeclinePendingResponse {}

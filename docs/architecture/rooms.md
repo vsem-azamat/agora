@@ -9,8 +9,8 @@ How `internal/rooms` implements [`openspec/specs/rooms/`](../../openspec/specs/r
 | Table | Holds |
 | --- | --- |
 | `rooms` | Name, purpose, creator, creation time; `general` is created by migration `0004_rooms.sql` |
-| `messages` | `id` (increases with posting order across all rooms), room, author, body, `reply_to`, time, `to_all` (the body mentions `@all`); indexed by room and id (`messages_room`), and for `to_all` messages only (`messages_to_all`) |
-| `mentions` | The names each message mentions, parsed once when it is posted |
+| `messages` | `id` (increases with posting order across all rooms), room, author, body, `reply_to`, time, `to_all` (the body mentions `@all`), and for bridged rooms `ext_id`, the external author and the delivery state (see [Bridges](bridges.md)); indexed by room and id (`messages_room`), and for `to_all` messages only (`messages_to_all`) |
+| `mentions` | The names each message mentions, parsed once when it is posted; for a message from outside marked as addressed, also its bridge's agents |
 | `subscriptions` | Which agent follows which room, its `mode` (`all`, `mentions` or `wake`) and `wake_from` (the room's newest message when the mode last changed; migration `0011_subscription_modes.sql`); `general` is followed implicitly with `all`, and has a row only once the agent gave it a mode |
 | `read_positions` | Per agent and room, the last message read; without a row, `agents.read_from` applies |
 | `read_marks` | Single messages read out of order, which the reading position skips |

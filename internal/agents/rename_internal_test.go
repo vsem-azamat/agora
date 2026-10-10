@@ -17,7 +17,7 @@ var textColumns = map[string]map[string]bool{
 	"agents":          {"name": true, "kind": false, "project": false, "task": false, "status": false, "cwd": false, "branch": false, "prs": false, "about": false, "icon": false, "pigment": false},
 	"sessions":        {"id": false, "kind": false, "agent": true, "cwd": false, "terminal": false, "state": false, "noted": false, "woken_for": false, "wake_result": false},
 	"rooms":           {"name": false, "purpose": false, "created_by": true},
-	"messages":        {"room": false, "author": true, "body": false},
+	"messages":        {"room": false, "author": true, "body": false, "ext_id": false, "ext_author_id": false, "ext_author_name": false, "delivery": false, "delivery_error": false},
 	"mentions":        {"agent": true},
 	"subscriptions":   {"agent": true, "room": false, "mode": false},
 	"read_positions":  {"agent": true, "room": false},
@@ -29,6 +29,8 @@ var textColumns = map[string]map[string]bool{
 	"pull_requests":   {"agent": true, "repo": false, "ci_state": false, "ci_head": false},
 	"web_token":       {"token": false},
 	"former_names":    {"name": false, "agent": true},
+	"bridges":         {"name": false, "command": false, "policy": false, "created_by": true, "cursor": false},
+	"bridge_agents":   {"bridge": false, "agent": true},
 }
 
 // TestRenameMovesEveryNameColumn keeps the rename statements complete: every TEXT column of
