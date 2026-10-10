@@ -1,9 +1,20 @@
 // The board: every agent but the operator, with what it works on.
 import { useContext, useState } from 'react';
-import { age, ciMark, type Filter, filterCounts, liveness, matches, projectOf, pullRequests, toDate } from '../board';
+import {
+  age,
+  ciMark,
+  type Filter,
+  filterCounts,
+  lastFormerName,
+  liveness,
+  matches,
+  projectOf,
+  pullRequests,
+  toDate,
+} from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import { Icon } from '../icons';
-import { Avatar, OpenAgent, pg } from './common';
+import { Avatar, OpenAgent, usePg } from './common';
 
 const filterLabels: Record<Filter, string> = { all: 'all', busy: 'busy', idle: 'idle', pr: 'with PR' };
 
@@ -60,16 +71,19 @@ export function Board(props: {
 
 function AgentRow({ agent, now }: { agent: Profile; now: Date }) {
   const open = useContext(OpenAgent);
+  const pg = usePg();
   const prs = pullRequests(agent);
+  const was = lastFormerName(agent);
   return (
     <li>
       <button type="button" className="agent" data-agent={agent.name} onClick={() => open(agent.name)}>
-        <Avatar name={agent.name} live={liveness(agent)} />
+        <Avatar name={agent.name} agent={agent} live={liveness(agent)} />
         <span className="who">
           <span className="l1">
             <span className="pgname n" style={pg(agent.name)}>
               {agent.name}
             </span>
+            {was && <span className="was">was {was}</span>}
             <span className="p">
               {projectOf(agent)}
               {prs.length > 0 && <span>·</span>}

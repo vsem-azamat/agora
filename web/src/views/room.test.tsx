@@ -127,6 +127,18 @@ describe('messages in a room', () => {
     expect(container.querySelector('.msg.dim')).toBeNull();
   });
 
+  it('shows a mention of a former name as the agent and addresses it', () => {
+    const renamed = [...agents, agent('docs-writer', 'idle', { formerly: [{ name: 'fixer' }], pigment: 'lapis' })];
+    const talk = [message(1, 'builder', '@fixer please check #57', 9), message(2, 'builder', '@docs-writer fixed', 8)];
+    const { container } = room(talk, { agents: renamed });
+    const mention = tablet(container, 1).querySelector('.tx .mn') as HTMLElement;
+    expect(mention.textContent).toBe('@docs-writer');
+    expect(mention.classList).toContain('former');
+    expect(mention.title).toBe('written as @fixer, now @docs-writer');
+    expect(header(container, 1)).toBe('builder→ docs-writerreply');
+    expect(screen.getByRole('button', { name: /builder ⇄ docs-writer/ }).textContent).toContain('2');
+  });
+
   it('follows and stops following, except the general room', () => {
     const { props } = room(ms, { followed: false });
     fireEvent.click(screen.getByText('follow'));

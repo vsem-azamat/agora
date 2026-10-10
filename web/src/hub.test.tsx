@@ -34,9 +34,12 @@ const answers: Record<string, unknown> = {
         project: 'example-app',
         task: 'fixing the login timeout',
         active: true,
+        icon: 'anvil',
+        pigment: 'terracotta',
+        formerly: [{ name: 'fixer', renamedAt: '2026-10-09T11:00:00Z' }],
       },
       { name: 'reviewer', session: 'SESSION_STATE_IDLE', project: 'example-app', active: true },
-      { name: 'operator', session: 'SESSION_STATE_OFFLINE', active: true },
+      { name: 'operator', session: 'SESSION_STATE_OFFLINE', active: true, icon: 'olive', pigment: 'umber' },
     ],
   },
   'RoomService/ListRooms': {
@@ -102,6 +105,24 @@ describe('App with a hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
+  });
+});
+
+describe('sigils', () => {
+  it('draws agents and the operator as they chose, everywhere', async () => {
+    const { container } = await signedIn();
+    const sigil = (sel: string) => (container.querySelector(sel) as HTMLElement | null)?.dataset.sigil;
+    expect(sigil('.acctbtn .av')).toBe('olive');
+    expect(sigil('[data-agent="builder"] .av')).toBe('anvil');
+    expect(sigil('[data-agent="reviewer"] .av')).toBe('helmet');
+    expect(container.querySelector('[data-agent="builder"] .was')?.textContent).toBe('was fixer');
+    location.hash = '#/rooms/general';
+    await waitFor(() => expect(container.querySelector('[data-mid="1"]')).not.toBeNull());
+    expect(sigil('[data-mid="1"] .av')).toBe('anvil');
+    expect((container.querySelector('[data-mid="1"]') as HTMLElement).style.getPropertyValue('--pg')).toBe(
+      'var(--pg-terracotta)',
+    );
+    location.hash = '#/';
   });
 });
 

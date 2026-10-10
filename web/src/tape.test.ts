@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { message, NOW } from './fixtures';
+import { knownNames } from './board';
+import { agent, message, NOW } from './fixtures';
 import {
   addressees,
   addresseesById,
@@ -15,7 +16,15 @@ import {
   unseen,
 } from './tape';
 
-const known = new Set(['builder', 'reviewer', 'release', 'operator']);
+const known = knownNames(
+  [
+    agent('builder', 'busy'),
+    agent('reviewer', 'idle'),
+    agent('release', 'idle'),
+    agent('docs-writer', 'idle', { formerly: [{ name: 'fixer' }] }),
+  ],
+  'operator',
+);
 const reader = { operator: 'operator', board: 'agora' };
 
 describe('addressees', () => {
@@ -23,6 +32,10 @@ describe('addressees', () => {
     const parent = message(1, 'builder', 'PR #57 is up', 10);
     const m = message(2, 'reviewer', '@release @Reviewer @nobody approved #57', 5, { replyTo: 1n });
     expect(addressees(m, parent, known, 'agora')).toEqual(['builder', 'release']);
+  });
+  it('count a former name as its agent’s current one', () => {
+    const m = message(2, 'builder', '@fixer and @docs-writer, please check #57', 5);
+    expect(addressees(m, undefined, known, 'agora')).toEqual(['docs-writer']);
   });
   it('leave out the board when replying to it', () => {
     const parent = message(1, 'agora', 'CI is green on #57', 10);
@@ -89,6 +102,8 @@ describe('pairs', () => {
       { a: 'builder', b: 'reviewer', n: 3 },
       { a: 'operator', b: 'release', n: 1 },
     ]);
+    const renamed = [message(1, 'builder', '@fixer PR is up', 10), message(2, 'builder', '@docs-writer fixed', 9)];
+    expect(pairs(renamed, addresseesById(renamed, known, 'agora'))).toEqual([{ a: 'builder', b: 'docs-writer', n: 2 }]);
     const [, answer, other] = ms;
     expect(answer && between(answer, ['builder'], ['builder', 'reviewer'])).toBe(true);
     expect(other && between(other, ['operator'], ['builder', 'reviewer'])).toBe(false);

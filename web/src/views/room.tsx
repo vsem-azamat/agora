@@ -1,7 +1,7 @@
 // A room: its messages on the tape, who talks with whom, and the compose box. The tape follows
 // new messages only while the operator is at the bottom; see tape.ts for the decisions.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { type Liveness, liveness as livenessOf, livenessOrder, type RoomCount } from '../board';
+import { knownNames, type Liveness, liveness as livenessOf, livenessOrder, type RoomCount } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message, Room } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
@@ -85,7 +85,7 @@ export function RoomView(props: {
   const firstNew = cameHidden ?? entry.current?.firstNew;
 
   const live = useMemo(() => new Map(props.agents.map((a) => [a.name, livenessOf(a)])), [props.agents]);
-  const known = useMemo(() => new Set([...live.keys(), reader.operator]), [live, reader.operator]);
+  const known = useMemo(() => knownNames(props.agents, reader.operator), [props.agents, reader.operator]);
   const to = useMemo(() => addresseesById(messages ?? [], known, reader.board), [messages, known, reader.board]);
   // the clock only matters for the day headings, so the tape is rebuilt once a day, not every tick
   const today = props.now.toDateString();

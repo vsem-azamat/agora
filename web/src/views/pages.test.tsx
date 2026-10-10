@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
+import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { boardAgents } from '../board';
+import { boardAgents, pigment } from '../board';
 import { agent, ci, lock, message, NOW, proposal, queue } from '../fixtures';
 import { GetCharterResponseSchema } from '../gen/agora/v1/governance_pb';
 import { RoomSchema } from '../gen/agora/v1/rooms_pb';
@@ -52,6 +53,21 @@ describe('Board', () => {
     expect(names(container)).toEqual(['docs-writer']);
   });
 
+  it('draws each agent with its chosen sigil and pigment, else the helmet, and shows a former name', () => {
+    const chosen = [
+      agent('builder', 'busy', { icon: 'anvil', pigment: 'terracotta' }),
+      agent('docs-writer', 'idle', { formerly: [{ name: 'fixer' }] }),
+    ];
+    const { container } = render(<Board agents={chosen} now={NOW} />);
+    const av = (name: string) => container.querySelector(`[data-agent="${name}"] .av`) as HTMLElement;
+    expect(av('builder').dataset.sigil).toBe('anvil');
+    expect(av('builder').style.getPropertyValue('--pg')).toBe('var(--pg-terracotta)');
+    expect(av('docs-writer').dataset.sigil).toBe('helmet');
+    expect(av('docs-writer').style.getPropertyValue('--pg')).toBe(`var(--pg-${pigment('docs-writer')})`);
+    expect(container.querySelector('[data-agent="docs-writer"] .was')?.textContent).toBe('was fixer');
+    expect(container.querySelector('[data-agent="builder"] .was')).toBeNull();
+  });
+
   it('opens an agent’s drawer, in the same pigment', () => {
     const open = vi.fn();
     const { container } = render(
@@ -72,7 +88,7 @@ describe('Board', () => {
         operator="operator"
         rooms={[]}
         general="general"
-        known={new Set()}
+        known={new Map()}
         now={NOW}
         onClose={() => {}}
         onAddress={() => {}}
@@ -105,7 +121,7 @@ describe('Drawer', () => {
         rooms={rooms}
         general="general"
         recent={[message(9, 'builder', 'PR #57 is up', 4)]}
-        known={new Set(['builder'])}
+        known={new Map([['builder', 'builder']])}
         now={NOW}
         onClose={onClose}
         onAddress={onAddress}
@@ -122,6 +138,40 @@ describe('Drawer', () => {
     expect(onAddress).toHaveBeenCalledWith('example-app');
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows the sigil with its names, the names given up, and how agents choose a sigil', () => {
+    const renamed = agent('docs-writer', 'idle', {
+      icon: 'anvil',
+      pigment: 'ochre',
+      formerly: [
+        { name: 'scribe', renamedAt: timestampFromDate(new Date(NOW.getTime() - 30 * 60_000)) },
+        { name: 'fixer', renamedAt: timestampFromDate(new Date(NOW.getTime() - 90 * 60_000)) },
+      ],
+    });
+    const { container } = render(
+      <Drawer
+        name="docs-writer"
+        agent={renamed}
+        operator="operator"
+        rooms={rooms}
+        general="general"
+        known={new Map()}
+        now={NOW}
+        onClose={() => {}}
+        onAddress={() => {}}
+        onGoto={() => {}}
+      />,
+    );
+    expect(container.querySelector('.dhead .was')?.textContent).toBe('was scribe');
+    const history = [...container.querySelectorAll('.history li')].map((li) => li.textContent);
+    expect(history).toHaveLength(2);
+    expect(history[0]).toMatch(/^@scribe until \d\d:\d\d$/);
+    expect(history[1]).toMatch(/^@fixer until /);
+    expect((container.querySelector('.sigil .av') as HTMLElement).dataset.sigil).toBe('anvil');
+    expect(container.querySelector('.sigil')?.textContent).toBe('Anvil · ἄκμων');
+    expect(container.querySelector('.cli')?.textContent).toContain('agora set --icon <name> --pigment <name>');
+    expect(container.querySelector('.drawer input, .sigil button, .rename')).toBeNull();
   });
 
   it('addresses an agent without a project room in the general room', () => {

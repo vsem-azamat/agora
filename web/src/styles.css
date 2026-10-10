@@ -622,6 +622,14 @@ button.pgname:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.was {
+  font-family: var(--body);
+  font-size: 0.8em;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--mute);
+  letter-spacing: 0;
+}
 .agent .age {
   color: var(--mute);
   font-size: 0.85em;
@@ -925,6 +933,10 @@ button.pgname:hover {
 .tx .mn {
   color: var(--pg);
   font-weight: 600;
+}
+.tx .mn.former {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 .tx .mn.other {
   color: var(--accent);
@@ -1534,6 +1546,35 @@ button.pgname:hover {
   letter-spacing: 0.24em;
   font-weight: 500;
   color: var(--mute);
+}
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.88em;
+  color: var(--mute);
+}
+.history s {
+  color: var(--fg);
+  opacity: 0.7;
+}
+.sigil {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--mute);
+}
+.signame {
+  color: var(--fg);
+  font-weight: 500;
+}
+.cli {
+  margin: 8px 0 0;
+  font-size: 0.82em;
+  color: var(--mute);
+}
+.cli code {
+  color: var(--fg);
 }
 .now {
   display: grid;
