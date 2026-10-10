@@ -16,6 +16,7 @@ describe('theme', () => {
     afterEach(() => {
       document.head.innerHTML = '';
       document.documentElement.removeAttribute('style');
+      document.documentElement.removeAttribute('data-theme');
     });
     it('sets the browser theme color from the theme background', () => {
       document.head.innerHTML = '<meta name="theme-color" content="#ece3d2">';
