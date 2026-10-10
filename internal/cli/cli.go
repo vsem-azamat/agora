@@ -86,7 +86,12 @@ type options struct {
 	as     string
 	socket string
 	out    io.Writer
+	client *http.Client // over the socket; built on first use
 }
+
+// baseURL is the URL the RPC clients call; the client dials the socket, so the host is a
+// placeholder.
+const baseURL = "http://agora"
 
 func newRoot(stdout, stderr io.Writer) *cobra.Command {
 	o := &options{out: stdout}
@@ -156,35 +161,38 @@ func (o *options) agent(ctx context.Context) (string, error) {
 	return "", errors.New("who are you? join first (`agora join <name>`), or pass --as <name> or set AGORA_NAME")
 }
 
+// httpClient returns the one HTTP client every RPC client of this command shares.
 func (o *options) httpClient() *http.Client {
-	socket := o.socket
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "unix", socket)
-		},
+	if o.client == nil {
+		socket := o.socket
+		o.client = &http.Client{Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", socket)
+			},
+		}}
 	}
-	return &http.Client{Transport: transport}
+	return o.client
 }
 
 func (o *options) resources() agorav1connect.ResourceServiceClient {
-	return agorav1connect.NewResourceServiceClient(o.httpClient(), "http://agora")
+	return agorav1connect.NewResourceServiceClient(o.httpClient(), baseURL)
 }
 
 func (o *options) sessions() agorav1connect.SessionServiceClient {
-	return agorav1connect.NewSessionServiceClient(o.httpClient(), "http://agora")
+	return agorav1connect.NewSessionServiceClient(o.httpClient(), baseURL)
 }
 
 func (o *options) agents() agorav1connect.AgentServiceClient {
-	return agorav1connect.NewAgentServiceClient(o.httpClient(), "http://agora")
+	return agorav1connect.NewAgentServiceClient(o.httpClient(), baseURL)
 }
 
 func (o *options) rooms() agorav1connect.RoomServiceClient {
-	return agorav1connect.NewRoomServiceClient(o.httpClient(), "http://agora")
+	return agorav1connect.NewRoomServiceClient(o.httpClient(), baseURL)
 }
 
 func (o *options) governance() agorav1connect.GovernanceServiceClient {
-	return agorav1connect.NewGovernanceServiceClient(o.httpClient(), "http://agora")
+	return agorav1connect.NewGovernanceServiceClient(o.httpClient(), baseURL)
 }
 
 // --- hub ------------------------------------------------------------------------
@@ -307,7 +315,7 @@ func loopback(host string) bool {
 // --- web ----------------------------------------------------------------------------
 
 func (o *options) web() agorav1connect.WebServiceClient {
-	return agorav1connect.NewWebServiceClient(o.httpClient(), "http://agora")
+	return agorav1connect.NewWebServiceClient(o.httpClient(), baseURL)
 }
 
 func webCmd(o *options) *cobra.Command {
@@ -507,6 +515,9 @@ func leaveCmd(o *options) *cobra.Command {
 	}
 }
 
+// statusProposals is how many open proposals status lists.
+const statusProposals = 10
+
 func statusCmd(o *options) *cobra.Command {
 	var all bool
 	cmd := &cobra.Command{
@@ -541,11 +552,11 @@ func statusCmd(o *options) *cobra.Command {
 			if err == nil && len(props.Msg.GetProposals()) > 0 {
 				list := props.Msg.GetProposals()
 				fmt.Fprintln(o.out, "OPEN PROPOSALS")
-				for _, p := range list[:min(len(list), 10)] {
+				for _, p := range list[:min(len(list), statusProposals)] {
 					printProposalLine(o.out, p)
 				}
-				if len(list) > 10 {
-					fmt.Fprintf(o.out, "  +%d more: agora proposals\n", len(list)-10)
+				if len(list) > statusProposals {
+					fmt.Fprintf(o.out, "  +%d more: agora proposals\n", len(list)-statusProposals)
 				}
 			}
 			if len(res.Msg.GetResources()) > 0 {
@@ -652,15 +663,17 @@ func orDash(s string) string {
 	return s
 }
 
+// age is how long ago t was, short: minutes under an hour, hours under two days, else days.
 func age(t time.Time) string {
-	m := int(time.Since(t).Minutes())
+	const day = 24 * time.Hour
+	d := time.Since(t)
 	switch {
-	case m < 60:
-		return fmt.Sprintf("%dm", max(m, 0))
-	case m < 48*60:
-		return fmt.Sprintf("%dh", m/60)
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", max(int(d/time.Minute), 0))
+	case d < 2*day:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
 	}
-	return fmt.Sprintf("%dd", m/1440)
+	return fmt.Sprintf("%dd", int(d/day))
 }
 
 func whoamiCmd(o *options) *cobra.Command {
@@ -701,12 +714,21 @@ func sessionsCmd(o *options) *cobra.Command {
 				if agent == "" {
 					agent = "-"
 				}
-				state := strings.ToLower(strings.TrimPrefix(x.GetState().String(), "SESSION_STATE_"))
+				state, ok := sessionStateNames[x.GetState()]
+				if !ok {
+					state = "-"
+				}
 				fmt.Fprintf(o.out, "%-16s %-5s since %s  %-12s %s  %s\n", agent, state, clock(x.GetStateAt().AsTime()), x.GetKind(), x.GetId(), x.GetCwd())
 			}
 			return nil
 		},
 	}
+}
+
+var sessionStateNames = map[agorav1.SessionState]string{
+	agorav1.SessionState_SESSION_STATE_BUSY:  "busy",
+	agorav1.SessionState_SESSION_STATE_IDLE:  "idle",
+	agorav1.SessionState_SESSION_STATE_ENDED: "ended",
 }
 
 func hookCmd(o *options) *cobra.Command {
@@ -716,9 +738,15 @@ func hookCmd(o *options) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// A board problem must never disturb the agent's session: errors show only with
+			// $AGORA_DEBUG set.
 			debug := os.Getenv("AGORA_DEBUG") != ""
 			switch args[0] {
 			case "claude-code":
+				if err := claudecode.Hook(cmd.Context(), o.sessions(), cmd.InOrStdin(), o.out); err != nil && debug {
+					return err
+				}
+				return nil
 			case "claude-code-wait":
 				text, err := claudecode.Wait(cmd.Context(), o.sessions(), cmd.InOrStdin())
 				if err != nil && debug {
@@ -731,30 +759,35 @@ func hookCmd(o *options) *cobra.Command {
 			default:
 				return fmt.Errorf("unknown hook %q", args[0])
 			}
-			err := claudecode.Hook(cmd.Context(), o.sessions(), cmd.InOrStdin(), o.out)
-			if err != nil && os.Getenv("AGORA_DEBUG") != "" {
-				return err
-			}
-			return nil // a board problem must never disturb the agent's session
 		},
 	}
 }
 
 // --- governance ---------------------------------------------------------------------
 
-// textArg joins args, or reads standard input for "-" (or no args when stdin is not a terminal).
-func textArg(cmd *cobra.Command, args []string) (string, error) {
+// textArg joins args, or reads standard input for "-" (or no args when stdin is not a terminal);
+// what names the text in the error for neither.
+func textArg(cmd *cobra.Command, args []string, what string) (string, error) {
 	text := strings.TrimSpace(strings.Join(args, " "))
 	if text != "" && text != "-" {
 		return text, nil
 	}
-	if f, ok := cmd.InOrStdin().(*os.File); ok && text == "" {
-		if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
-			return "", errors.New("no text: pass it as arguments, or '-' to read standard input")
-		}
+	if text == "" && stdinTerminal(cmd) {
+		return "", fmt.Errorf("no %s: pass it as arguments, or '-' to read standard input", what)
 	}
 	b, err := io.ReadAll(cmd.InOrStdin())
 	return strings.TrimSpace(string(b)), err
+}
+
+// stdinTerminal reports whether the command's standard input is a terminal, where reading it
+// would wait for typing.
+func stdinTerminal(cmd *cobra.Command) bool {
+	f, ok := cmd.InOrStdin().(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func proposalID(s string) (int64, error) {
@@ -775,7 +808,7 @@ func proposeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			body, err := textArg(cmd, args[1:])
+			body, err := textArg(cmd, args[1:], "text")
 			if err != nil {
 				return err
 			}
@@ -870,7 +903,7 @@ func proposalsCmd(o *options) *cobra.Command {
 				}
 				p := resp.Msg.GetProposal()
 				fmt.Fprintf(o.out, "#%d %s (%s, by %s, %s)\n\n%s\n\nVotes:\n", p.GetId(), p.GetTitle(), p.GetState(), p.GetAuthor(),
-					p.GetCreatedAt().AsTime().Local().Format("2006-01-02 15:04"), p.GetBody())
+					dateTime(p.GetCreatedAt().AsTime()), p.GetBody())
 				if len(p.GetVotes()) == 0 {
 					fmt.Fprintln(o.out, "  none yet")
 				}
@@ -879,10 +912,10 @@ func proposalsCmd(o *options) *cobra.Command {
 					if who == p.GetAuthor() {
 						who += " (author)"
 					}
-					fmt.Fprintf(o.out, "  %-25s %-7s %s  %s\n", who, v.GetChoice(), v.GetAt().AsTime().Local().Format("15:04"), v.GetReason())
+					fmt.Fprintf(o.out, "  %-25s %-7s %s  %s\n", who, v.GetChoice(), shortClock(v.GetAt().AsTime()), v.GetReason())
 				}
 				if p.GetClosedBy() != "" {
-					fmt.Fprintf(o.out, "\nClosed as %s by %s, %s.\n", p.GetState(), p.GetClosedBy(), p.GetClosedAt().AsTime().Local().Format("2006-01-02 15:04"))
+					fmt.Fprintf(o.out, "\nClosed as %s by %s, %s.\n", p.GetState(), p.GetClosedBy(), dateTime(p.GetClosedAt().AsTime()))
 				}
 				return nil
 			}
@@ -917,7 +950,7 @@ func charterCmd(o *options) *cobra.Command {
 			m := resp.Msg
 			fmt.Fprint(o.out, m.GetBody())
 			if m.GetProposalId() != 0 {
-				fmt.Fprintf(o.out, "\n(changed by %s after proposal #%d, %s)\n", m.GetChangedBy(), m.GetProposalId(), m.GetChangedAt().AsTime().Local().Format("2006-01-02 15:04"))
+				fmt.Fprintf(o.out, "\n(changed by %s after proposal #%d, %s)\n", m.GetChangedBy(), m.GetProposalId(), dateTime(m.GetChangedAt().AsTime()))
 			}
 			return nil
 		},
@@ -944,10 +977,8 @@ func charterCmd(o *options) *cobra.Command {
 				}
 				body = string(b)
 			} else {
-				if f, ok := cmd.InOrStdin().(*os.File); ok {
-					if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
-						return fmt.Errorf("give the new charter as a file, or pipe it: agora charter set --proposal %s < charter.md", proposal)
-					}
+				if stdinTerminal(cmd) {
+					return fmt.Errorf("give the new charter as a file, or pipe it: agora charter set --proposal %s < charter.md", proposal)
 				}
 				b, err := io.ReadAll(cmd.InOrStdin())
 				if err != nil {
@@ -986,6 +1017,9 @@ func (o *options) printRooms(ctx context.Context) error {
 	return nil
 }
 
+// roomArg is a room name as typed, with or without its leading #.
+func roomArg(s string) string { return strings.TrimPrefix(s, "#") }
+
 func roomsCmd(o *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rooms",
@@ -1005,7 +1039,7 @@ func roomCreateCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			room := strings.TrimPrefix(args[0], "#")
+			room := roomArg(args[0])
 			if _, err := o.rooms().CreateRoom(cmd.Context(), connect.NewRequest(&agorav1.CreateRoomRequest{
 				Name: room, Purpose: strings.Join(args[1:], " "), Creator: name,
 			})); err != nil {
@@ -1052,21 +1086,12 @@ func postCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			text := strings.TrimSpace(strings.Join(args[1:], " "))
-			if text == "" || text == "-" {
-				if f, ok := cmd.InOrStdin().(*os.File); ok && text == "" {
-					if info, err := f.Stat(); err == nil && info.Mode()&os.ModeCharDevice != 0 {
-						return errors.New("no message: pass it as arguments, or '-' to read standard input")
-					}
-				}
-				b, err := io.ReadAll(cmd.InOrStdin())
-				if err != nil {
-					return err
-				}
-				text = strings.TrimSpace(string(b))
+			text, err := textArg(cmd, args[1:], "message")
+			if err != nil {
+				return err
 			}
 			resp, err := o.rooms().Post(cmd.Context(), connect.NewRequest(&agorav1.PostRequest{
-				Author: name, Room: strings.TrimPrefix(args[0], "#"), Body: text, ReplyTo: reply,
+				Author: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply,
 			}))
 			if err != nil {
 				return err
@@ -1086,7 +1111,7 @@ func readCmd(o *options) *cobra.Command {
 		Short: "Show a room's recent messages (does not mark anything read)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resp, err := o.rooms().History(cmd.Context(), connect.NewRequest(&agorav1.HistoryRequest{Room: strings.TrimPrefix(args[0], "#"), Last: last}))
+			resp, err := o.rooms().History(cmd.Context(), connect.NewRequest(&agorav1.HistoryRequest{Room: roomArg(args[0]), Last: last}))
 			if err != nil {
 				return err
 			}
@@ -1280,6 +1305,9 @@ func checkLease(flag string, d time.Duration) error {
 // hubGiveUp is how long a wait for a turn tolerates a hub that does not answer.
 var hubGiveUp = 30 * time.Second
 
+// waitRetry is the pause before a wait for a turn reconnects to the hub.
+const waitRetry = time.Second
+
 // waitTurn streams the agent's position until it holds the slot. When the hub restarts, the
 // queue survives, so the wait reconnects instead of failing; once the hub has not answered for
 // hubGiveUp, the wait fails as unreachable.
@@ -1300,7 +1328,7 @@ func (o *options) waitTurn(ctx context.Context, key, agent string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second):
+		case <-time.After(waitRetry):
 		}
 	}
 }
@@ -1490,6 +1518,10 @@ func locksCmd(o *options) *cobra.Command {
 // --- output ---------------------------------------------------------------------------
 
 func clock(t time.Time) string { return t.Local().Format("15:04:05") }
+
+func shortClock(t time.Time) string { return t.Local().Format("15:04") }
+
+func dateTime(t time.Time) string { return t.Local().Format("2006-01-02 15:04") }
 
 func noteSuffix(note string) string {
 	if note == "" {
