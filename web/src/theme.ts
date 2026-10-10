@@ -1,12 +1,11 @@
-// Parchment is the default theme; ink is the dark one. A choice the operator made wins; without
-// one the app follows the system's color scheme.
+// Parchment is the default theme; ink is the dark one the operator can switch to. The system's
+// color scheme is not consulted.
 export type Theme = 'parchment' | 'ink';
 
 const KEY = 'agora.theme';
 
-export function resolveTheme(stored: string | null, prefersDark: boolean): Theme {
-  if (stored === 'parchment' || stored === 'ink') return stored;
-  return prefersDark ? 'ink' : 'parchment';
+export function resolveTheme(stored: string | null): Theme {
+  return stored === 'ink' ? 'ink' : 'parchment';
 }
 
 export function storedTheme(): string | null {
@@ -23,10 +22,6 @@ export function storeTheme(t: Theme) {
   } catch {
     // storage may be off; the choice then lasts for this page only
   }
-}
-
-export function prefersDark(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
 export function applyTheme(t: Theme) {

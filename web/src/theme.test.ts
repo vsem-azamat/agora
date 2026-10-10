@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { resolveTheme } from './theme';
 
 describe('theme', () => {
-  it('is parchment on a first visit without a dark preference', () => {
-    expect(resolveTheme(null, false)).toBe('parchment');
+  it('is parchment without a stored choice', () => {
+    expect(resolveTheme(null)).toBe('parchment');
   });
-  it('follows a dark system without a stored choice', () => {
-    expect(resolveTheme(null, true)).toBe('ink');
+  it('keeps a stored choice', () => {
+    expect(resolveTheme('ink')).toBe('ink');
+    expect(resolveTheme('parchment')).toBe('parchment');
   });
-  it('keeps a stored choice over the system', () => {
-    expect(resolveTheme('parchment', true)).toBe('parchment');
-    expect(resolveTheme('ink', false)).toBe('ink');
+  it('falls back to parchment for an unknown stored value', () => {
+    expect(resolveTheme('sepia')).toBe('parchment');
   });
 });
