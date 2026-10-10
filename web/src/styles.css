@@ -4,13 +4,14 @@
 :root {
   --display: "Cinzel", "Trajan Pro", Georgia, serif;
   --body: "Spectral", Georgia, serif;
+  --size-s: 13px;
+  --size-m: 14px;
 
   --bg: #ece3d2;
   --fg: #2a211b;
   --mute: #7a6857;
   --line: #cdbd9f;
-  --line2: #ddd0b7;
-  --sel: #ddd0b7;
+  --faint: #ddd0b7;
   --accent: #6e4f37;
   --ok: #55693f;
   --warn: #a7792e;
@@ -23,8 +24,7 @@
   --fg: #ece3d2;
   --mute: #ae9d85;
   --line: #4f4136;
-  --line2: #3a2f27;
-  --sel: #3a2f27;
+  --faint: #3a2f27;
   --accent: #dcc6a0;
   --ok: #9bb07a;
   --warn: #d3a056;
@@ -95,6 +95,44 @@ code {
   vertical-align: -3px;
 }
 
+h4 {
+  margin: 0;
+  font-weight: 500;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+h4 a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* one line, cut with an ellipsis */
+.item .name,
+.agent .n,
+.agent .p,
+.agent .t,
+.lock span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* capitals in the display face: section heads, tools, labels, tabs */
+h4,
+.tool,
+.signin label,
+.tabs a {
+  font-family: var(--display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
 /* --- shell ---------------------------------------------------------------------------- */
 
 .app {
@@ -132,7 +170,7 @@ code {
 }
 
 .host {
-  font-size: 13px;
+  font-size: var(--size-s);
   color: var(--mute);
 }
 
@@ -141,11 +179,8 @@ code {
 }
 
 .tool {
-  font-family: var(--display);
   font-size: 10px;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--mute);
 }
 
 .tool:hover {
@@ -190,25 +225,6 @@ code {
   gap: 12px;
 }
 
-h4 {
-  margin: 0;
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--mute);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-h4 a {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 ul,
 ol {
   list-style: none;
@@ -225,7 +241,7 @@ ol {
 .empty {
   color: var(--mute);
   font-style: italic;
-  font-size: 14px;
+  font-size: var(--size-m);
   margin: 0;
 }
 
@@ -243,7 +259,7 @@ ol {
   gap: 2px;
 }
 
-.room {
+.item {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -253,38 +269,31 @@ ol {
   text-align: left;
 }
 
-.room.on {
-  background: var(--sel);
+.item.on,
+.item:hover {
+  background: var(--faint);
 }
 
-.room:hover {
-  background: var(--sel);
+.item .name {
+  font-size: var(--size-m);
 }
 
-.room .rn {
-  font-size: 14px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.room.followed .rn {
+.item.followed .name {
   font-weight: 600;
 }
 
 .count {
-  font-size: 13px;
+  font-size: var(--size-s);
   color: var(--mute);
 }
 
-.room em {
+.item em {
   font-style: normal;
-  font-size: 13px;
+  font-size: var(--size-s);
   font-weight: 600;
 }
 
-.room em.mention {
+.item em.mention {
   color: var(--accent);
 }
 
@@ -307,7 +316,7 @@ ol {
 
 .head .sum {
   color: var(--mute);
-  font-size: 13px;
+  font-size: var(--size-s);
 }
 
 .filters {
@@ -317,7 +326,7 @@ ol {
 }
 
 .chip {
-  font-size: 13px;
+  font-size: var(--size-s);
   padding: 2px 8px;
   color: var(--mute);
   border-bottom: 1px solid transparent;
@@ -326,7 +335,6 @@ ol {
   gap: 4px;
 }
 
-.chip.on,
 .chip[aria-pressed="true"] {
   color: var(--fg);
   border-bottom-color: var(--fg);
@@ -342,7 +350,7 @@ ol {
   gap: 10px;
   align-items: baseline;
   padding: 7px 2px;
-  border-bottom: 1px solid var(--line2);
+  border-bottom: 1px solid var(--faint);
 }
 
 .agent > .ic {
@@ -366,9 +374,6 @@ ol {
   font-size: 15px;
   font-weight: 600;
   color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .agent .n::before {
@@ -379,21 +384,15 @@ ol {
 
 .agent .p {
   color: var(--mute);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: var(--size-s);
 }
 
 .agent .t {
   font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .agent .age {
-  font-size: 13px;
+  font-size: var(--size-s);
   color: var(--mute);
   text-align: right;
 }
@@ -436,21 +435,14 @@ ol {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--size-m);
 }
 
 .slot span:last-child,
 .lock span:last-child {
-  font-size: 13px;
+  font-size: var(--size-s);
   color: var(--mute);
   text-align: right;
-}
-
-.lock span:first-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .slot.hold span:first-child {
@@ -468,7 +460,7 @@ ol {
 }
 
 .prop {
-  font-size: 14px;
+  font-size: var(--size-m);
   display: grid;
   gap: 2px;
 }
@@ -478,7 +470,7 @@ ol {
 }
 
 .votes {
-  font-size: 13px;
+  font-size: var(--size-s);
   color: var(--mute);
 }
 
@@ -536,7 +528,7 @@ ol {
   margin: 0;
   color: var(--mute);
   font-style: italic;
-  font-size: 14px;
+  font-size: var(--size-m);
 }
 
 .msgs {
@@ -557,7 +549,7 @@ ol {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--size-m);
   font-weight: 600;
   color: var(--accent);
 }
@@ -583,10 +575,19 @@ ol {
   font-weight: 600;
 }
 
+.msg.own {
+  border-left: 2px solid var(--line);
+  padding-left: 8px;
+}
+
+.msg.own .who {
+  color: var(--fg);
+}
+
 .msg.sys .tx {
   color: var(--mute);
   font-style: italic;
-  font-size: 14px;
+  font-size: var(--size-m);
 }
 
 .msg.sys .tx::before {
@@ -630,7 +631,7 @@ ol {
 .error {
   margin: 0;
   color: var(--bad);
-  font-size: 14px;
+  font-size: var(--size-m);
 }
 
 /* --- charter -------------------------------------------------------------------------- */
@@ -644,7 +645,7 @@ ol {
 .charter-text h3 {
   font-family: var(--display);
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--size-m);
   letter-spacing: 0.1em;
   margin: 16px 0 4px;
 }
@@ -677,11 +678,7 @@ ol {
 }
 
 .signin label {
-  font-family: var(--display);
   font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--mute);
 }
 
 .signin input {
@@ -702,7 +699,7 @@ ol {
 
 .signin .hint {
   color: var(--mute);
-  font-size: 14px;
+  font-size: var(--size-m);
   margin: 8px 0 0;
 }
 
@@ -783,12 +780,9 @@ ol {
   .tabs a {
     font-size: 10px;
     letter-spacing: 0.08em;
-    color: var(--mute);
     display: grid;
     justify-items: center;
     gap: 3px;
-    font-family: var(--display);
-    text-transform: uppercase;
   }
 
   .tabs a .ic {

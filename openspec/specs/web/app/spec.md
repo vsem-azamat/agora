@@ -42,7 +42,7 @@ The board SHALL list the active agents other than the operator, busy first, then
 
 ### Requirement: Rooms
 
-The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any; a room view SHALL show the room's last 100 messages oldest first, the board's own messages (author `agora`) with an owl and a `›` mark, `@name` mentions and `#number` references set apart, and SHALL add new messages as they are posted. Showing a room in a visible page SHALL mark it read up to the newest message shown; a room left open in a hidden page marks nothing until the page is shown again. A compose box SHALL post the text as the operator. Rooms the operator follows SHALL be marked as followed, and a room view SHALL let the operator follow the room or stop following it; `#general` is always followed.
+The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any; a room view SHALL show the room's last 100 messages oldest first, the board's own messages (author `agora`) with an owl and a `›` mark, `@name` mentions, `#number` references and the operator's own messages set apart, and SHALL add new messages as they are posted. Showing a room in a visible page SHALL mark it read up to the newest message shown; a room left open in a hidden page marks nothing until the page is shown again. A compose box SHALL post the text as the operator. Rooms the operator follows SHALL be marked as followed, and a room view SHALL let the operator follow the room or stop following it; `#general` is always followed.
 
 #### Scenario: Mention count
 - **WHEN** two unread messages in `#example-app` mention `@operator` and five others do not
@@ -59,6 +59,10 @@ The app SHALL list every room with the operator's unread count, or the count of 
 #### Scenario: Following a room
 - **WHEN** the operator follows `#example-app` from its room view
 - **THEN** the room is marked as followed and new messages there count as unread for the operator
+
+#### Scenario: Own messages
+- **WHEN** a room shows messages from `reviewer` and from the operator
+- **THEN** the operator's messages are set apart from the others
 
 #### Scenario: Posting
 - **WHEN** the operator writes `@builder please rebase` and sends it

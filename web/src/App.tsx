@@ -1,15 +1,14 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { makeApi, unauthenticated } from './api';
 import { boardAgents } from './board';
-import { Icon } from './icons';
 import { applyTheme, resolveTheme, storedTheme, storeTheme, type Theme } from './theme';
 import { forgetToken, saveToken, takeTokenFromLocation, tokenFromHash } from './token';
 import { type Status, useHub, useRoom } from './useHub';
-import { Board, Charter, Locks, Projects, Proposals, Queues, RoomList, RoomView, SignIn, Turns } from './views';
+import { Board, Charter, Rail, Rooms, RoomView, Sidebar, SignIn, Tabs, Turns } from './views';
 
 // --- routes: #/ board, #/rooms, #/rooms/<name>, #/turns, #/charter -------------------------
 
-export type Route = { view: 'board' | 'rooms' | 'room' | 'turns' | 'charter'; room?: string };
+type Route = { view: 'board' | 'rooms' | 'room' | 'turns' | 'charter'; room?: string };
 
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#\/?/, '');
@@ -24,8 +23,6 @@ export function parseRoute(hash: string): Route {
       return { view: 'board' };
   }
 }
-
-const roomHref = (room: string) => `#/rooms/${encodeURIComponent(room)}`;
 
 function subscribeHash(cb: () => void) {
   addEventListener('hashchange', cb);
@@ -48,13 +45,11 @@ function useNow(everyMs = 15000): Date {
 
 function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(storedTheme()));
-  useEffect(() => applyTheme(theme), [theme]);
-  const toggle = () =>
-    setTheme((t) => {
-      const next = t === 'ink' ? 'parchment' : 'ink';
-      storeTheme(next);
-      return next;
-    });
+  useEffect(() => {
+    applyTheme(theme);
+    storeTheme(theme);
+  }, [theme]);
+  const toggle = () => setTheme((t) => (t === 'ink' ? 'parchment' : 'ink'));
   return [theme, toggle];
 }
 
@@ -105,6 +100,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [project, setProject] = useState<string>();
   const roomName = route.view === 'room' ? route.room : undefined;
   const { messages, error: roomError } = useRoom(api, roomName, data?.revision, fail);
+  const listed = useMemo(() => (data ? boardAgents(data.agents, data.operator) : undefined), [data]);
 
   // the watch reports the change, which reloads the board and the room
   const post = async (body: string) => {
@@ -112,7 +108,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     try {
       await api.rooms.post({ room: roomName, body });
     } catch (err) {
-      if (unauthenticated(err)) rejected();
+      if (unauthenticated(err)) fail(err);
       throw err;
     }
   };
@@ -128,9 +124,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       </a>
       <span className="motto">ΕΔΟΞΕ ΤΗΙ ΒΟΥΛΗΙ</span>
       <span className="grow" />
-      <span className={`host ${status}`}>
-        {statusText(status, data ? boardAgents(data.agents, data.operator).length : undefined)}
-      </span>
+      <span className={`host ${status}`}>{statusText(status, listed?.length)}</span>
       <button
         type="button"
         className="tool"
@@ -145,7 +139,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     </header>
   );
 
-  if (!data) {
+  if (!data || !listed) {
     return (
       <div className="app">
         {bar}
@@ -156,7 +150,6 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     );
   }
 
-  const room = data.rooms.find((r) => r.name === roomName);
   const pickProject = (p: string | undefined) => {
     setProject(p);
     if (route.view !== 'board') location.hash = '#/';
@@ -167,7 +160,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     case 'room':
       main = (
         <RoomView
-          room={room}
+          room={data.rooms.find((r) => r.name === roomName)}
           name={roomName ?? ''}
           messages={messages}
           error={roomError}
@@ -181,14 +174,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       );
       break;
     case 'rooms':
-      main = (
-        <section className="view roomlist" aria-label="Rooms">
-          <div className="head">
-            <h2>Rooms</h2>
-          </div>
-          <RoomList rooms={data.rooms} unread={data.unread} followed={data.followed} href={roomHref} />
-        </section>
-      );
+      main = <Rooms rooms={data.rooms} unread={data.unread} followed={data.followed} />;
       break;
     case 'turns':
       main = <Turns resources={data.resources} now={now} />;
@@ -197,72 +183,27 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       main = <Charter charter={data.charter} proposals={data.proposals} now={now} />;
       break;
     default:
-      main = <Board agents={data.agents} operator={data.operator} now={now} project={project} onProject={setProject} />;
+      main = <Board agents={listed} now={now} project={project} onProject={setProject} />;
   }
 
-  const tab = route.view === 'room' ? 'rooms' : route.view;
   return (
-    <div className={`app view-${route.view}`}>
+    <div className="app">
       {bar}
       <div className="body">
-        <aside className="side">
-          <div className="q">
-            <h4>
-              <Icon name="room" />
-              Rooms
-            </h4>
-            <RoomList
-              rooms={data.rooms}
-              unread={data.unread}
-              followed={data.followed}
-              current={roomName}
-              href={roomHref}
-            />
-          </div>
-          <div className="q">
-            <h4>
-              <Icon name="project" />
-              Projects
-            </h4>
-            {/* the project filter belongs to the board: only one sidebar item is current at a time */}
-            <Projects
-              agents={data.agents}
-              operator={data.operator}
-              current={route.view === 'board' ? project : undefined}
-              onPick={pickProject}
-            />
-          </div>
-        </aside>
+        <Sidebar
+          rooms={data.rooms}
+          unread={data.unread}
+          followed={data.followed}
+          room={roomName}
+          agents={listed}
+          // the project filter belongs to the board: only one sidebar item is current at a time
+          project={route.view === 'board' ? project : undefined}
+          onProject={pickProject}
+        />
         <main className="main">{main}</main>
-        <aside className="rail">
-          <Queues resources={data.resources} now={now} />
-          <Locks resources={data.resources} now={now} />
-          <div className="q">
-            <h4>
-              <a href="#/charter">
-                <Icon name="charter" />
-                Charter
-              </a>
-            </h4>
-            <Proposals proposals={data.proposals} limit={5} />
-          </div>
-        </aside>
+        <Rail resources={data.resources} proposals={data.proposals} now={now} />
       </div>
-      <nav className="tabs" aria-label="Views">
-        {(
-          [
-            ['board', 'Board', 'agent', '#/'],
-            ['rooms', 'Rooms', 'room', '#/rooms'],
-            ['turns', 'Turns', 'queue', '#/turns'],
-            ['charter', 'Charter', 'charter', '#/charter'],
-          ] as const
-        ).map(([key, label, icon, href]) => (
-          <a key={key} href={href} className={tab === key ? 'on' : ''} aria-current={tab === key ? 'page' : undefined}>
-            <Icon name={icon} />
-            {label}
-          </a>
-        ))}
-      </nav>
+      <Tabs current={route.view === 'room' ? 'rooms' : route.view} />
     </div>
   );
 }

@@ -24,8 +24,10 @@ export function storeTheme(t: Theme) {
   }
 }
 
+/** Sets the theme on the page; the browser's theme color follows the theme's `--bg`. */
 export function applyTheme(t: Theme) {
-  document.documentElement.dataset.theme = t;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  meta?.setAttribute('content', t === 'ink' ? '#2a211b' : '#ece3d2');
+  const root = document.documentElement;
+  root.dataset.theme = t;
+  const bg = getComputedStyle(root).getPropertyValue('--bg').trim();
+  if (bg) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
 }
