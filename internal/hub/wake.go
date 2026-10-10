@@ -89,7 +89,7 @@ func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agor
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-changed:
-		case <-time.After(SweepEvery):
+		case <-time.After(sweepEvery):
 		}
 	}
 }
@@ -125,7 +125,7 @@ func (h *Hub) wakeByCommand(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if key == "" || key == c.WokenFor || now.Sub(c.WokenAt) < WakeGap {
+		if key == "" || key == c.WokenFor || now.Sub(c.WokenAt) < wakeGap {
 			continue
 		}
 		h.waitMu.Lock()
@@ -151,9 +151,9 @@ func (h *Hub) wakeByCommand(ctx context.Context) error {
 }
 
 // runWakeCommand runs the wake command for one terminal in its own process group, killing the
-// whole group after WakeTimeout, and returns "ok" or the error with the end of its output.
+// whole group after wakeTimeout, and returns "ok" or the error with the end of its output.
 func runWakeCommand(ctx context.Context, command, terminal, text string) (string, bool) {
-	ctx, cancel := context.WithTimeout(ctx, WakeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, wakeTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // the wake command is configured by the operator who runs the hub
 	cmd.Env = append(os.Environ(), "AGORA_TERMINAL="+terminal, "AGORA_WAKE_TEXT="+text)

@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// Sweep applies expired leases and claim deadlines every SweepEvery until ctx ends.
+// Sweep applies expired leases and claim deadlines every sweepEvery until ctx ends.
 func (h *Hub) Sweep(ctx context.Context) {
-	t := time.NewTicker(SweepEvery)
+	t := time.NewTicker(sweepEvery)
 	defer t.Stop()
 	for {
 		select {

@@ -15,3 +15,10 @@ func RunWakeCommand(ctx context.Context, command string) (string, bool) {
 
 // SetWakeEvery changes how often the wake loop runs, for tests.
 func SetWakeEvery(h *Hub, d time.Duration) { h.wakeEvery = d }
+
+// Constants tests depend on.
+const (
+	MaxSocketPath = maxSocketPath
+	WakeGap       = wakeGap
+	WatchGap      = watchGap
+)

@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	// WatchGap is the least time between two messages of a watch.
-	WatchGap = time.Second
-	// MaxWebRequest is the largest request body the web listener accepts.
-	MaxWebRequest = 1 << 20
+	// watchGap is the least time between two messages of a watch.
+	watchGap = time.Second
+	// maxWebRequest is the largest request body the web listener accepts.
+	maxWebRequest = 1 << 20
 )
 
 // webProcedures are the calls the web listener serves; every other call is not found there.
@@ -125,7 +125,7 @@ func bearer(r *http.Request) (string, bool) {
 func (h *Hub) WebHandler() http.Handler {
 	opts := connect.WithHandlerOptions(
 		connect.WithInterceptors(operatorInterceptor(h.webAs)),
-		connect.WithReadMaxBytes(MaxWebRequest),
+		connect.WithReadMaxBytes(maxWebRequest),
 	)
 	api := http.NewServeMux()
 	api.Handle(agorav1connect.NewResourceServiceHandler(&resources{h}, opts))
@@ -237,10 +237,10 @@ func (s *webService) Watch(ctx context.Context, _ *connect.Request[agorav1.Watch
 			return ctx.Err()
 		case <-changed:
 		}
-		select { // at most one message per WatchGap; changes meanwhile are in the next one
+		select { // at most one message per watchGap; changes meanwhile are in the next one
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(WatchGap):
+		case <-time.After(watchGap):
 		}
 	}
 }

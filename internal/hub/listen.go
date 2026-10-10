@@ -9,15 +9,15 @@ import (
 	"syscall"
 )
 
-// MaxSocketPath is the longest unix socket path that works on every supported system.
-const MaxSocketPath = 104
+// maxSocketPath is the longest unix socket path that works on every supported system.
+const maxSocketPath = 104
 
 // Listen opens the hub's unix socket at path, readable and writable by the owner only. An
 // exclusive lock on path+".lock" keeps a second hub away, so a socket left by a hub that no
 // longer runs can be replaced safely; a path that is not a socket is never removed.
 func Listen(path string) (net.Listener, error) {
-	if len(path) > MaxSocketPath {
-		return nil, fmt.Errorf("socket path is %d bytes; unix sockets allow at most %d: %s", len(path), MaxSocketPath, path)
+	if len(path) > maxSocketPath {
+		return nil, fmt.Errorf("socket path is %d bytes; unix sockets allow at most %d: %s", len(path), maxSocketPath, path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err

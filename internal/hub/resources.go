@@ -44,7 +44,7 @@ func (s *resources) Wait(ctx context.Context, req *connect.Request[agorav1.WaitR
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-changed:
-		case <-time.After(SweepEvery): // a safety net: re-check even if no change was signalled
+		case <-time.After(sweepEvery): // a safety net: re-check even if no change was signalled
 		}
 	}
 }

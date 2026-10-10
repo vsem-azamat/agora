@@ -13,7 +13,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 //go:embed charter.md
@@ -26,10 +28,27 @@ const (
 	maxCharter = 32000
 )
 
+// State of a proposal.
+type State string
+
+const (
+	Open      State = "open"
+	Accepted  State = "accepted"
+	Rejected  State = "rejected"
+	Withdrawn State = "withdrawn"
+)
+
+// Choice of a vote.
+type Choice string
+
+const (
+	Yes     Choice = "yes"
+	No      Choice = "no"
+	Abstain Choice = "abstain"
+)
+
 var (
-	// ErrInvalid marks an invalid title, text, choice or state.
-	ErrInvalid = errors.New("invalid request")
-	// ErrNotFound means the proposal or agent does not exist.
+	// ErrNotFound means the proposal does not exist.
 	ErrNotFound = errors.New("not found")
 	// ErrClosed means the proposal is no longer open.
 	ErrClosed = errors.New("proposal closed")
@@ -37,8 +56,10 @@ var (
 
 // Vote is one agent's latest vote.
 type Vote struct {
-	Agent, Choice, Reason string
-	At                    time.Time
+	Agent  string
+	Choice Choice
+	Reason string
+	At     time.Time
 }
 
 // Proposal is a proposed rule change with its votes.
@@ -48,21 +69,10 @@ type Proposal struct {
 	Body      string
 	Author    string
 	CreatedAt time.Time
-	State     string
+	State     State
 	ClosedBy  string
 	ClosedAt  time.Time
 	Votes     []Vote
-}
-
-// Count returns how many votes have choice.
-func (p Proposal) Count(choice string) int {
-	n := 0
-	for _, v := range p.Votes {
-		if v.Choice == choice {
-			n++
-		}
-	}
-	return n
 }
 
 // Charter is the board's current charter.
@@ -91,7 +101,7 @@ func New(db *sql.DB, r *rooms.Rooms, now func() time.Time) *Governance {
 
 func checkText(what string, s string, limit int) error {
 	if strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > limit {
-		return fmt.Errorf("%w: %s must be 1 to %d characters", ErrInvalid, what, limit)
+		return fmt.Errorf("%w: %s must be 1 to %d characters", store.ErrInvalid, what, limit)
 	}
 	return nil
 }
@@ -99,7 +109,7 @@ func checkText(what string, s string, limit int) error {
 // checkLine refuses control characters such as newlines in one-line text.
 func checkLine(what, s string) error {
 	if strings.ContainsFunc(s, unicode.IsControl) {
-		return fmt.Errorf("%w: %s must be one line without control characters", ErrInvalid, what)
+		return fmt.Errorf("%w: %s must be one line without control characters", store.ErrInvalid, what)
 	}
 	return nil
 }
@@ -120,8 +130,8 @@ func (g *Governance) Propose(ctx context.Context, author, title, body string) (i
 		return 0, err
 	}
 	var id int64
-	err := g.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, author); err != nil {
+	err := store.InTx(ctx, g.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, author); err != nil {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO proposals (title, body, author, created_at) VALUES (?, ?, ?, ?)`,
@@ -138,21 +148,19 @@ func (g *Governance) Propose(ctx context.Context, author, title, body string) (i
 	return id, err
 }
 
-// Choice returns a vote choice as it is recorded: trimmed and in lowercase.
-func Choice(choice string) string { return strings.ToLower(strings.TrimSpace(choice)) }
-
-// Cast records agent's vote on an open proposal, replacing its earlier vote.
-func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, reason string) error {
-	choice = Choice(choice)
-	if choice != "yes" && choice != "no" && choice != "abstain" {
-		return fmt.Errorf("%w: vote yes, no or abstain", ErrInvalid)
+// Cast records agent's vote on an open proposal, replacing its earlier vote, and returns the
+// choice as recorded: trimmed and in lowercase.
+func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, reason string) (Choice, error) {
+	c := Choice(strings.ToLower(strings.TrimSpace(choice)))
+	if c != Yes && c != No && c != Abstain {
+		return "", fmt.Errorf("%w: vote yes, no or abstain", store.ErrInvalid)
 	}
 	reason = strings.TrimSpace(reason)
 	if utf8.RuneCountInString(reason) > maxReason {
-		return fmt.Errorf("%w: a reason is at most %d characters", ErrInvalid, maxReason)
+		return "", fmt.Errorf("%w: a reason is at most %d characters", store.ErrInvalid, maxReason)
 	}
-	return g.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	return c, store.InTx(ctx, g.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		if err := requireOpen(ctx, tx, id); err != nil {
@@ -160,20 +168,20 @@ func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, r
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO votes (proposal_id, agent, choice, reason, at) VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT (proposal_id, agent) DO UPDATE SET choice = excluded.choice, reason = excluded.reason, at = excluded.at`,
-			id, agent, choice, reason, g.now().UnixMilli())
+			id, agent, c, reason, g.now().UnixMilli())
 		return err
 	})
 }
 
 // Close closes an open proposal as accepted, rejected or withdrawn and announces it.
 func (g *Governance) Close(ctx context.Context, agent string, id int64, state string) error {
-	state = strings.ToLower(strings.TrimSpace(state))
-	if state != "accepted" && state != "rejected" && state != "withdrawn" {
-		return fmt.Errorf("%w: close as accepted, rejected or withdrawn", ErrInvalid)
+	st := State(strings.ToLower(strings.TrimSpace(state)))
+	if st != Accepted && st != Rejected && st != Withdrawn {
+		return fmt.Errorf("%w: close as accepted, rejected or withdrawn", store.ErrInvalid)
 	}
 	var title string
-	return g.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	return store.InTx(ctx, g.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
 		if err := requireOpen(ctx, tx, id); err != nil {
@@ -183,86 +191,96 @@ func (g *Governance) Close(ctx context.Context, agent string, id int64, state st
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE proposals SET state = ?, closed_by = ?, closed_at = ? WHERE id = ?`,
-			state, agent, g.now().UnixMilli(), id); err != nil {
+			st, agent, g.now().UnixMilli(), id); err != nil {
 			return err
 		}
-		return g.announce(ctx, tx, fmt.Sprintf("Proposal #%d %s by %s: %s", id, state, agent, quiet(title)))
+		return g.announce(ctx, tx, fmt.Sprintf("Proposal #%d %s by %s: %s", id, st, agent, quiet(title)))
 	})
 }
 
-// ids runs a query that selects proposal IDs. The rows are closed before it returns, so the
-// single database connection is free for the next query.
-func (g *Governance) ids(ctx context.Context, query string) ([]int64, error) {
-	rows, err := g.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
-}
-
-// List returns proposals in number order: open ones, or all when all is true.
+// List returns proposals in number order with their votes: open ones, or all when all is
+// true. It reads them in one transaction, so the list is consistent.
 func (g *Governance) List(ctx context.Context, all bool) ([]Proposal, error) {
-	query := `SELECT id FROM proposals WHERE state = 'open' ORDER BY id`
-	if all {
-		query = `SELECT id FROM proposals ORDER BY id`
-	}
-	ids, err := g.ids(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Proposal, 0, len(ids))
-	for _, id := range ids {
-		p, err := g.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, nil
+	var out []Proposal
+	err := store.InTx(ctx, g.db, func(tx *sql.Tx) error {
+		var err error
+		out, err = proposals(ctx, tx, 0, all)
+		return err
+	})
+	return out, err
 }
 
 // Get returns one proposal with its votes.
 func (g *Governance) Get(ctx context.Context, id int64) (Proposal, error) {
-	var p Proposal
-	var created int64
-	var closedBy sql.NullString
-	var closedAt sql.NullInt64
-	err := g.db.QueryRowContext(ctx, `SELECT id, title, body, author, created_at, state, closed_by, closed_at FROM proposals WHERE id = ?`, id).
-		Scan(&p.ID, &p.Title, &p.Body, &p.Author, &created, &p.State, &closedBy, &closedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return p, fmt.Errorf("%w: no proposal #%d", ErrNotFound, id)
-	}
+	var out []Proposal
+	err := store.InTx(ctx, g.db, func(tx *sql.Tx) error {
+		var err error
+		out, err = proposals(ctx, tx, id, true)
+		return err
+	})
 	if err != nil {
-		return p, err
+		return Proposal{}, err
 	}
-	p.CreatedAt, p.ClosedBy = time.UnixMilli(created), closedBy.String
-	if closedAt.Valid {
-		p.ClosedAt = time.UnixMilli(closedAt.Int64)
+	if len(out) == 0 {
+		return Proposal{}, fmt.Errorf("%w: no proposal #%d", ErrNotFound, id)
 	}
-	rows, err := g.db.QueryContext(ctx, `SELECT agent, choice, reason, at FROM votes WHERE proposal_id = ? ORDER BY at, agent`, id)
+	return out[0], nil
+}
+
+// proposals reads proposals in number order with their votes: the one with id, or every one
+// for id 0; closed ones only with all.
+func proposals(ctx context.Context, tx *sql.Tx, id int64, all bool) ([]Proposal, error) {
+	const which = `(:id = 0 OR id = :id) AND (:all OR state = :open)`
+	args := []any{sql.Named("id", id), sql.Named("all", all), sql.Named("open", Open)}
+	out, err := func() ([]Proposal, error) {
+		rows, err := tx.QueryContext(ctx, `SELECT id, title, body, author, created_at, state, closed_by, closed_at FROM proposals
+			WHERE `+which+` ORDER BY id`, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close() // before the next statement: the database has one connection
+		var out []Proposal
+		for rows.Next() {
+			var p Proposal
+			var created int64
+			var closedBy sql.NullString
+			var closedAt sql.NullInt64
+			if err := rows.Scan(&p.ID, &p.Title, &p.Body, &p.Author, &created, &p.State, &closedBy, &closedAt); err != nil {
+				return nil, err
+			}
+			p.CreatedAt, p.ClosedBy = time.UnixMilli(created), closedBy.String
+			if closedAt.Valid {
+				p.ClosedAt = time.UnixMilli(closedAt.Int64)
+			}
+			out = append(out, p)
+		}
+		return out, rows.Err()
+	}()
+	if err != nil || len(out) == 0 {
+		return out, err
+	}
+	index := make(map[int64]int, len(out))
+	for i, p := range out {
+		index[p.ID] = i
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT proposal_id, agent, choice, reason, at FROM votes
+		WHERE proposal_id IN (SELECT id FROM proposals WHERE `+which+`) ORDER BY at, agent`, args...)
 	if err != nil {
-		return p, err
+		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
+		var pid, at int64
 		var v Vote
-		var at int64
-		if err := rows.Scan(&v.Agent, &v.Choice, &v.Reason, &at); err != nil {
-			return p, err
+		if err := rows.Scan(&pid, &v.Agent, &v.Choice, &v.Reason, &at); err != nil {
+			return nil, err
 		}
 		v.At = time.UnixMilli(at)
-		p.Votes = append(p.Votes, v)
+		if i, ok := index[pid]; ok {
+			out[i].Votes = append(out[i].Votes, v)
+		}
 	}
-	return p, rows.Err()
+	return out, rows.Err()
 }
 
 // Charter returns the current charter, or the default one if it was never changed.
@@ -283,11 +301,12 @@ func (g *Governance) SetCharter(ctx context.Context, agent string, proposal int6
 	if err := checkText("the charter", body, maxCharter); err != nil {
 		return err
 	}
-	return g.tx(ctx, func(tx *sql.Tx) error {
-		if err := requireAgent(ctx, tx, agent); err != nil {
+	now := g.now().UnixMilli()
+	return store.InTx(ctx, g.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
-		var state string
+		var state State
 		err := tx.QueryRowContext(ctx, `SELECT state FROM proposals WHERE id = ?`, proposal).Scan(&state)
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: no proposal #%d", ErrNotFound, proposal)
@@ -295,23 +314,23 @@ func (g *Governance) SetCharter(ctx context.Context, agent string, proposal int6
 		if err != nil {
 			return err
 		}
-		if state != "accepted" {
-			return fmt.Errorf("%w: proposal #%d is %s; the charter changes only after an accepted proposal", ErrInvalid, proposal, state)
+		if state != Accepted {
+			return fmt.Errorf("%w: proposal #%d is %s; the charter changes only after an accepted proposal", store.ErrInvalid, proposal, state)
 		}
 		var used int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM charter_changes WHERE proposal_id = ?`, proposal).Scan(&used); err != nil {
 			return err
 		}
 		if used > 0 {
-			return fmt.Errorf("%w: proposal #%d already changed the charter; a further change needs a new proposal", ErrInvalid, proposal)
+			return fmt.Errorf("%w: proposal #%d already changed the charter; a further change needs a new proposal", store.ErrInvalid, proposal)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO charter_changes (proposal_id, changed_by, changed_at) VALUES (?, ?, ?)`,
-			proposal, agent, g.now().UnixMilli()); err != nil {
+			proposal, agent, now); err != nil {
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO charter (id, body, changed_by, changed_at, proposal_id) VALUES (1, ?, ?, ?, ?)
 			ON CONFLICT (id) DO UPDATE SET body = excluded.body, changed_by = excluded.changed_by, changed_at = excluded.changed_at,
-				proposal_id = excluded.proposal_id`, strings.TrimSpace(body)+"\n", agent, g.now().UnixMilli(), proposal)
+				proposal_id = excluded.proposal_id`, strings.TrimSpace(body)+"\n", agent, now, proposal)
 		if err != nil {
 			return err
 		}
@@ -330,31 +349,8 @@ func (g *Governance) announce(ctx context.Context, tx *sql.Tx, text string) erro
 	return err
 }
 
-func (g *Governance) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := g.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
-}
-
-func requireAgent(ctx context.Context, tx *sql.Tx, agent string) error {
-	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM agents WHERE name = ?`, agent).Scan(&n); err != nil {
-		return err
-	}
-	if n == 0 {
-		return fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrNotFound, agent, agent)
-	}
-	return nil
-}
-
 func requireOpen(ctx context.Context, tx *sql.Tx, id int64) error {
-	var state string
+	var state State
 	err := tx.QueryRowContext(ctx, `SELECT state FROM proposals WHERE id = ?`, id).Scan(&state)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("%w: no proposal #%d", ErrNotFound, id)
@@ -362,7 +358,7 @@ func requireOpen(ctx context.Context, tx *sql.Tx, id int64) error {
 	if err != nil {
 		return err
 	}
-	if state != "open" {
+	if state != Open {
 		return fmt.Errorf("%w: proposal #%d is %s", ErrClosed, id, state)
 	}
 	return nil

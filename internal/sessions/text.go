@@ -39,46 +39,42 @@ func (s *Sessions) deliver(ctx context.Context, agent string) (string, int, erro
 // which it marks read, and offered slots), or "" when nothing does. when says when the agent
 // should act, e.g. "before you end your turn".
 func (s *Sessions) waiting(ctx context.Context, agent, when string) (string, error) {
-	var parts []string
+	var msgs []rooms.Message
+	var total int
 	if s.rooms != nil {
-		msgs, total, err := s.rooms.Take(ctx, agent, true, DeliverAtOnce)
-		if err != nil {
+		var err error
+		if msgs, total, err = s.rooms.Take(ctx, agent, true, DeliverAtOnce); err != nil {
 			return "", err
-		}
-		if len(msgs) > 0 {
-			lines := []string{fmt.Sprintf("Agora: %s, answer what is addressed to you (%s), "+
-				"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", when, agent)}
-			for _, m := range msgs {
-				lines = append(lines, rooms.Format(m, DeliverChars))
-			}
-			if more := total - len(msgs); more > 0 {
-				lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
-			}
-			parts = append(parts, strings.Join(lines, "\n"))
 		}
 	}
 	entries, err := s.queue.EntriesOf(ctx, agent)
 	if err != nil {
 		return "", err
 	}
-	if hasOffer(entries) {
-		parts = append(parts, note(agent, entries, nil)+
-			" Claim or release the offered slot now; otherwise it passes to the next agent.")
-	}
-	return strings.Join(parts, "\n\n"), nil
+	return attention(when+",", agent, msgs, total-len(msgs), entries), nil
 }
 
+// wakeText is what a connector's wait wakes the agent with.
 func wakeText(agent string, msgs []rooms.Message, entries []queue.Entry) string {
+	return attention("you were woken;", agent, msgs, 0, entries)
+}
+
+// attention is the text for what needs the agent now: the messages addressed to it (and how
+// many more there are) and its offered slots, or "" for none. opening says when it should act.
+func attention(opening, agent string, msgs []rooms.Message, more int, entries []queue.Entry) string {
 	var parts []string
 	if len(msgs) > 0 {
-		lines := []string{fmt.Sprintf("Agora: you were woken; answer what is addressed to you (%s), "+
-			"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", agent)}
+		lines := []string{fmt.Sprintf("Agora: %s answer what is addressed to you (%s), "+
+			"even with \"not me\" or \"later\": agora post <room> '...' --reply <id>.", opening, agent)}
 		for _, m := range msgs {
 			lines = append(lines, rooms.Format(m, DeliverChars))
 		}
+		if more > 0 {
+			lines = append(lines, fmt.Sprintf("... %d more addressed to you: run `agora unread`.", more))
+		}
 		parts = append(parts, strings.Join(lines, "\n"))
 	}
-	if hasOffer(entries) {
+	if len(offered(entries)) > 0 {
 		parts = append(parts, note(agent, entries, nil)+" Claim or release the offered slot now; otherwise it passes to the next agent.")
 	}
 	return strings.Join(parts, "\n\n")

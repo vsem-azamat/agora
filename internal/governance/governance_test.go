@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
@@ -68,11 +69,11 @@ func TestProposingAnnouncesToEveryone(t *testing.T) {
 func TestInvalidProposalsAreRefused(t *testing.T) {
 	e := newEnv(t)
 	for _, c := range [][2]string{{"", "text"}, {"title", " "}, {strings.Repeat("t", 121), "text"}} {
-		if _, err := e.g.Propose(ctx, "builder", c[0], c[1]); !errors.Is(err, governance.ErrInvalid) {
+		if _, err := e.g.Propose(ctx, "builder", c[0], c[1]); !errors.Is(err, store.ErrInvalid) {
 			t.Errorf("%q: err = %v", c[0], err)
 		}
 	}
-	if _, err := e.g.Propose(ctx, "ghost", "t", "x"); !errors.Is(err, governance.ErrNotFound) {
+	if _, err := e.g.Propose(ctx, "ghost", "t", "x"); !errors.Is(err, agents.ErrUnknown) {
 		t.Errorf("unknown author: %v", err)
 	}
 }
@@ -80,17 +81,17 @@ func TestInvalidProposalsAreRefused(t *testing.T) {
 func TestLatestVoteCounts(t *testing.T) {
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "Text")
-	if err := e.g.Cast(ctx, "reviewer", id, "no", "too strict"); err != nil {
+	if _, err := e.g.Cast(ctx, "reviewer", id, "no", "too strict"); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.g.Cast(ctx, "reviewer", id, "yes", "fine after all"); err != nil {
+	if _, err := e.g.Cast(ctx, "reviewer", id, "yes", "fine after all"); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := e.g.Get(ctx, id)
-	if len(p.Votes) != 1 || p.Votes[0].Choice != "yes" || p.Votes[0].Reason != "fine after all" || p.Count("yes") != 1 {
+	if len(p.Votes) != 1 || p.Votes[0].Choice != "yes" || p.Votes[0].Reason != "fine after all" {
 		t.Fatalf("votes %+v", p.Votes)
 	}
-	if err := e.g.Cast(ctx, "reviewer", id, "maybe", ""); !errors.Is(err, governance.ErrInvalid) {
+	if _, err := e.g.Cast(ctx, "reviewer", id, "maybe", ""); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("bad choice: %v", err)
 	}
 }
@@ -98,10 +99,10 @@ func TestLatestVoteCounts(t *testing.T) {
 func TestClosing(t *testing.T) {
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "Text")
-	if err := e.g.Cast(ctx, "reviewer", id, "yes", ""); err != nil {
+	if _, err := e.g.Cast(ctx, "reviewer", id, "yes", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.g.Cast(ctx, "tester", id, "yes", ""); err != nil {
+	if _, err := e.g.Cast(ctx, "tester", id, "yes", ""); err != nil {
 		t.Fatal(err)
 	}
 	if p, _ := e.g.Get(ctx, id); p.State != "open" {
@@ -120,7 +121,7 @@ func TestClosing(t *testing.T) {
 	if err := e.g.Close(ctx, "reviewer", id, "rejected"); !errors.Is(err, governance.ErrClosed) {
 		t.Fatalf("closing twice: %v", err)
 	}
-	if err := e.g.Cast(ctx, "tester", id, "no", ""); !errors.Is(err, governance.ErrClosed) {
+	if _, err := e.g.Cast(ctx, "tester", id, "no", ""); !errors.Is(err, governance.ErrClosed) {
 		t.Fatalf("voting on closed: %v", err)
 	}
 }
@@ -148,7 +149,7 @@ func TestCharter(t *testing.T) {
 		t.Fatalf("default charter %+v", c)
 	}
 	open, _ := e.g.Propose(ctx, "builder", "Rule", "x")
-	if err := e.g.SetCharter(ctx, "builder", open, "# New"); !errors.Is(err, governance.ErrInvalid) {
+	if err := e.g.SetCharter(ctx, "builder", open, "# New"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("open proposal: %v", err)
 	}
 	if err := e.g.SetCharter(ctx, "builder", 99, "# New"); !errors.Is(err, governance.ErrNotFound) {
@@ -157,7 +158,7 @@ func TestCharter(t *testing.T) {
 	if err := e.g.Close(ctx, "builder", open, "accepted"); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.g.SetCharter(ctx, "builder", open, "  "); !errors.Is(err, governance.ErrInvalid) {
+	if err := e.g.SetCharter(ctx, "builder", open, "  "); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("empty: %v", err)
 	}
 	if err := e.g.SetCharter(ctx, "builder", open, "# Agora charter\n\n1. Be kind."); err != nil {
@@ -181,14 +182,14 @@ func TestOneCharterChangePerProposal(t *testing.T) {
 	if err := e.g.SetCharter(ctx, "builder", id, "# One"); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.g.SetCharter(ctx, "builder", id, "# Two"); !errors.Is(err, governance.ErrInvalid) {
+	if err := e.g.SetCharter(ctx, "builder", id, "# Two"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("reused proposal: %v", err)
 	}
 }
 
 func TestTitlesAreOneLineAndMentionNobody(t *testing.T) {
 	e := newEnv(t)
-	if _, err := e.g.Propose(ctx, "builder", "two\nlines", "x"); !errors.Is(err, governance.ErrInvalid) {
+	if _, err := e.g.Propose(ctx, "builder", "two\nlines", "x"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("newline: %v", err)
 	}
 	if _, err := e.g.Propose(ctx, "builder", "ping @reviewer", "x"); err != nil {
@@ -203,7 +204,7 @@ func TestTitlesAreOneLineAndMentionNobody(t *testing.T) {
 func TestChoicesIgnoreCase(t *testing.T) {
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "x")
-	if err := e.g.Cast(ctx, "reviewer", id, "Yes", ""); err != nil {
+	if _, err := e.g.Cast(ctx, "reviewer", id, "Yes", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.g.Close(ctx, "builder", id, "REJECTED"); err != nil {

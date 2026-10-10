@@ -7,7 +7,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
-	"github.com/vsem-azamat/agora/internal/governance"
 )
 
 type governanceService struct{ h *Hub }
@@ -23,11 +22,12 @@ func (s *governanceService) Propose(ctx context.Context, req *connect.Request[ag
 
 func (s *governanceService) Vote(ctx context.Context, req *connect.Request[agorav1.VoteRequest]) (*connect.Response[agorav1.VoteResponse], error) {
 	m := req.Msg
-	if err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), m.GetChoice(), m.GetReason()); err != nil {
+	choice, err := s.h.gov.Cast(ctx, m.GetAgent(), m.GetProposalId(), m.GetChoice(), m.GetReason())
+	if err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.VoteResponse{Choice: governance.Choice(m.GetChoice())}), nil
+	return connect.NewResponse(&agorav1.VoteResponse{Choice: string(choice)}), nil
 }
 
 func (s *governanceService) CloseProposal(ctx context.Context, req *connect.Request[agorav1.CloseProposalRequest]) (*connect.Response[agorav1.CloseProposalResponse], error) {

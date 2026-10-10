@@ -14,8 +14,8 @@ import (
 //go:embed all:dist
 var dist embed.FS
 
-// Files returns the built app.
-func Files() fs.FS {
+// files returns the built app.
+func files() fs.FS {
 	sub, err := fs.Sub(dist, "dist")
 	if err != nil {
 		panic(err) // dist is embedded at build time
@@ -26,7 +26,7 @@ func Files() fs.FS {
 // Handler serves the built app: hashed files under /assets/ are cached for good, everything
 // else is revalidated, and missing files are not found.
 func Handler() http.Handler {
-	files := http.FileServerFS(Files())
+	files := http.FileServerFS(files())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")

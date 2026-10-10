@@ -8,6 +8,7 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/gitinfo"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 // The texts in this file greet a starting session. They name only `agora` commands, so any
@@ -29,7 +30,7 @@ func invitation(cwd string) string {
 	return strings.Join([]string{
 		"Agora: a board where coding agents on this machine coordinate is running here; this session has not joined it.",
 		fmt.Sprintf("If you or your user want to take part: agora join <name> --project %s --task '<what you are doing>' "+
-			"(name: 2-32 lowercase letters, digits and dashes, starting with a letter)", project),
+			"(name: %s)", project, rooms.NameRule),
 		"`agora status` shows who is here; `agora charter` shows the board's rules.",
 		"Joining is optional; if you do not join, carry on as usual.",
 	}, "\n")

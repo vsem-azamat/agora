@@ -14,12 +14,13 @@ import (
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 func toConnect(err error) error {
 	var forbidden *queue.ForbiddenError
 	switch {
-	case errors.Is(err, queue.ErrInvalid):
+	case errors.Is(err, store.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, queue.ErrNotQueued):
 		return connect.NewError(connect.CodeNotFound, err)
@@ -27,22 +28,12 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.As(err, &forbidden):
 		return connect.NewError(connect.CodePermissionDenied, err)
-	case errors.Is(err, sessions.ErrInvalid):
-		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, sessions.ErrNameTaken):
 		return connect.NewError(connect.CodeAlreadyExists, err)
-	case errors.Is(err, agents.ErrInvalid):
-		return connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, agents.ErrUnknown), errors.Is(err, rooms.ErrNotFound):
+	case errors.Is(err, agents.ErrUnknown), errors.Is(err, rooms.ErrNotFound), errors.Is(err, governance.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, rooms.ErrInvalid):
-		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, rooms.ErrExists):
 		return connect.NewError(connect.CodeAlreadyExists, err)
-	case errors.Is(err, governance.ErrInvalid):
-		return connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, governance.ErrNotFound):
-		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, governance.ErrClosed):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
@@ -118,12 +109,12 @@ func messagesPB(msgs []rooms.Message) []*agorav1.Message {
 }
 
 func proposalPB(p governance.Proposal) *agorav1.Proposal {
-	out := &agorav1.Proposal{Id: p.ID, Title: p.Title, Body: p.Body, Author: p.Author, CreatedAt: timestamppb.New(p.CreatedAt), State: p.State, ClosedBy: p.ClosedBy}
+	out := &agorav1.Proposal{Id: p.ID, Title: p.Title, Body: p.Body, Author: p.Author, CreatedAt: timestamppb.New(p.CreatedAt), State: string(p.State), ClosedBy: p.ClosedBy}
 	if !p.ClosedAt.IsZero() {
 		out.ClosedAt = timestamppb.New(p.ClosedAt)
 	}
 	for _, v := range p.Votes {
-		out.Votes = append(out.Votes, &agorav1.ProposalVote{Agent: v.Agent, Choice: v.Choice, Reason: v.Reason, At: timestamppb.New(v.At)})
+		out.Votes = append(out.Votes, &agorav1.ProposalVote{Agent: v.Agent, Choice: string(v.Choice), Reason: v.Reason, At: timestamppb.New(v.At)})
 	}
 	return out
 }

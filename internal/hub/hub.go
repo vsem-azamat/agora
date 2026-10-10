@@ -21,21 +21,21 @@ import (
 )
 
 const (
-	// SweepEvery is how often the hub applies expired leases and claim deadlines.
-	SweepEvery = time.Second
-	// WakeCheckEvery is how often the hub looks for idle sessions to wake with the wake command.
-	WakeCheckEvery = 10 * time.Second
-	// WakeGap is the least time between two command wakes of one session.
-	WakeGap = 2 * time.Minute
-	// DefaultWakeSettle is how long a session stays idle before the wake command may wake it,
+	// sweepEvery is how often the hub applies expired leases and claim deadlines.
+	sweepEvery = time.Second
+	// wakeCheckEvery is how often the hub looks for idle sessions to wake with the wake command.
+	wakeCheckEvery = 10 * time.Second
+	// wakeGap is the least time between two command wakes of one session.
+	wakeGap = 2 * time.Minute
+	// defaultWakeSettle is how long a session stays idle before the wake command may wake it,
 	// so a connector that is about to wait for it gets there first.
-	DefaultWakeSettle = 10 * time.Second
-	// WakeTimeout bounds one run of the wake command.
-	WakeTimeout = time.Minute
-	// DefaultWatchFirst is how long after starting the hub first looks up pull requests.
-	DefaultWatchFirst = 10 * time.Second
-	// DefaultWatchEvery is how often the hub looks up pull requests after that.
-	DefaultWatchEvery = 2 * time.Minute
+	defaultWakeSettle = 10 * time.Second
+	// wakeTimeout bounds one run of the wake command.
+	wakeTimeout = time.Minute
+	// defaultWatchFirst is how long after starting the hub first looks up pull requests.
+	defaultWatchFirst = 10 * time.Second
+	// defaultWatchEvery is how often the hub looks up pull requests after that.
+	defaultWatchEvery = 2 * time.Minute
 
 	// shutdownGrace is how long unary calls may finish once the hub shuts down.
 	shutdownGrace = 5 * time.Second
@@ -69,7 +69,7 @@ type Hub struct {
 	WakeCommand string
 	// WakeSettle is how long a session stays idle before the wake command may wake it.
 	WakeSettle time.Duration
-	wakeEvery  time.Duration // how often the wake loop runs: WakeCheckEvery, shorter in tests
+	wakeEvery  time.Duration // how often the wake loop runs: wakeCheckEvery, shorter in tests
 
 	// Forges, by host, are asked about the pull requests of active agents; with none the hub
 	// does not follow pull requests.
@@ -88,25 +88,19 @@ type Hub struct {
 	waking  map[string]bool    // sessions whose wake command runs now
 }
 
-// New returns a hub over the given domain services.
-func New(q *queue.Queue, s *sessions.Sessions, a *agents.Agents, r *rooms.Rooms, log *slog.Logger) *Hub {
+// Open builds a hub over db with the given clock (time.Now when nil) and logger (none when nil).
+func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Hub{
-		queue: q, sessions: s, agents: a, rooms: r, alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log, waiters: map[string]*waiter{}, waking: map[string]bool{}, WakeSettle: DefaultWakeSettle, wakeEvery: WakeCheckEvery,
-		WatchFirst: DefaultWatchFirst, WatchEvery: DefaultWatchEvery,
-	}
-}
-
-// Open builds a hub over db with the given clock (time.Now when nil).
-func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	q := queue.New(db, now)
 	r := rooms.New(db, now)
-	h := New(q, sessions.New(db, q, r, now), agents.New(db, q, now), r, log)
-	h.gov = governance.New(db, r, now)
-	h.db = db
-	return h
+	return &Hub{
+		db: db, queue: q, sessions: sessions.New(db, q, r, now), agents: agents.New(db, now), rooms: r, gov: governance.New(db, r, now),
+		alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
+		waiters: map[string]*waiter{}, waking: map[string]bool{},
+		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,
+	}
 }
 
 // Handler returns the HTTP handler with every service mounted.

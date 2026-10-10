@@ -15,6 +15,7 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/gitinfo"
 	"github.com/vsem-azamat/agora/internal/queue"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -24,13 +25,12 @@ const (
 	Working = "working"
 	// Left is the status of an agent that left.
 	Left = "left"
+	// Offline is the session state of an agent without a live session.
+	Offline = "offline"
 )
 
 // ErrUnknown means the name never joined.
 var ErrUnknown = errors.New("unknown agent")
-
-// ErrInvalid marks an invalid value.
-var ErrInvalid = errors.New("invalid request")
 
 // Profile is what an agent publishes about its work.
 type Profile struct {
@@ -59,37 +59,36 @@ type Update struct {
 
 // Agents keeps profiles in the hub database.
 type Agents struct {
-	db    *sql.DB
-	queue *queue.Queue
-	now   func() time.Time
+	db  *sql.DB
+	now func() time.Time
 }
 
-// New returns Agents over db; q is used when an agent leaves; now is the clock (time.Now when nil).
-func New(db *sql.DB, q *queue.Queue, now func() time.Time) *Agents {
+// New returns Agents over db; now is the clock (time.Now when nil).
+func New(db *sql.DB, now func() time.Time) *Agents {
 	if now == nil {
 		now = time.Now
 	}
-	return &Agents{db: db, queue: q, now: now}
+	return &Agents{db: db, now: now}
 }
 
 // Update applies u to the profile of name and returns the result.
 func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, error) {
 	if u.Status != nil && (strings.TrimSpace(*u.Status) == "" || len(*u.Status) > 32) {
-		return Profile{}, fmt.Errorf("%w: status must be 1-32 characters", ErrInvalid)
+		return Profile{}, fmt.Errorf("%w: status must be 1-32 characters", store.ErrInvalid)
 	}
 	if u.Status != nil && strings.TrimSpace(*u.Status) == Left {
-		return Profile{}, fmt.Errorf("%w: to leave, use `agora leave`, which also gives up your queue places", ErrInvalid)
+		return Profile{}, fmt.Errorf("%w: to leave, use `agora leave`, which also gives up your queue places", store.ErrInvalid)
 	}
 	if u.CWD != nil && !filepath.IsAbs(*u.CWD) {
-		return Profile{}, fmt.Errorf("%w: directory must be an absolute path", ErrInvalid)
+		return Profile{}, fmt.Errorf("%w: directory must be an absolute path", store.ErrInvalid)
 	}
 	for _, n := range append(slices.Clone(u.AddPRs), u.DropPRs...) {
 		if n <= 0 {
-			return Profile{}, fmt.Errorf("%w: pull request numbers are positive", ErrInvalid)
+			return Profile{}, fmt.Errorf("%w: pull request numbers are positive", store.ErrInvalid)
 		}
 	}
 	now := a.now()
-	err := a.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, a.db, func(tx *sql.Tx) error {
 		p, err := load(ctx, tx, name)
 		if err != nil {
 			return err
@@ -135,21 +134,38 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 // resources it left.
 func (a *Agents) Leave(ctx context.Context, name string) ([]string, error) {
 	var left []string
-	err := a.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := load(ctx, tx, name); err != nil {
+	now := a.now()
+	err := store.InTx(ctx, a.db, func(tx *sql.Tx) error {
+		if err := ExistsTx(ctx, tx, name); err != nil {
 			return err
 		}
-		if err := MarkLeftTx(ctx, tx, name, a.now()); err != nil {
+		if err := MarkLeftTx(ctx, tx, name, now); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL WHERE agent = ?`, name); err != nil {
 			return err
 		}
 		var err error
-		left, err = a.queue.ReleaseAgentTx(ctx, tx, name)
+		left, err = queue.ReleaseAgentTx(ctx, tx, name, now)
 		return err
 	})
 	return left, err
+}
+
+// ExistsTx returns ErrUnknown, saying how to join, when name has not joined.
+func ExistsTx(ctx context.Context, tx *sql.Tx, name string) error {
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM agents WHERE name = ?`, name).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return unknown(name)
+	}
+	return nil
+}
+
+func unknown(name string) error {
+	return fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)
 }
 
 // MarkLeftTx marks name as left inside the caller's transaction.
@@ -193,32 +209,31 @@ func FollowTx(ctx context.Context, tx *sql.Tx, name, sessionDir string, now time
 
 // Get returns the profile of name.
 func (a *Agents) Get(ctx context.Context, name string) (Profile, error) {
-	var p Profile
-	err := a.tx(ctx, func(tx *sql.Tx) error {
-		var err error
-		p, err = load(ctx, tx, name)
-		return err
-	})
-	if err != nil {
-		return p, err
+	p, err := scan(a.db.QueryRowContext(ctx, profileQuery+` WHERE a.name = ?`, Offline, name))
+	if errors.Is(err, sql.ErrNoRows) {
+		return p, unknown(name)
 	}
-	all, err := a.List(ctx, true)
-	for _, x := range all {
-		if x.Name == name {
-			return x, err
-		}
-	}
+	p.Active = active(p, a.now())
 	return p, err
+}
+
+// profileQuery selects full profiles; it takes Offline as its first argument.
+const profileQuery = `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
+	COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
+		ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), ?),
+	COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), ''),
+	` + ciColumn + `
+	FROM agents AS a`
+
+// active reports whether p counts as active at now: not left, and with a live session or
+// updated within StaleAfter.
+func active(p Profile, now time.Time) bool {
+	return p.Status != Left && (p.SessionState != Offline || now.Sub(p.UpdatedAt) < StaleAfter)
 }
 
 // List returns profiles in name order: active agents, or all agents when all is true.
 func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
-	rows, err := a.db.QueryContext(ctx, `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.joined_at, a.updated_at,
-		COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != 'ended'
-			ORDER BY CASE s.state WHEN 'busy' THEN 0 ELSE 1 END LIMIT 1), 'offline'),
-		COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), ''),
-		`+ciColumn+`
-		FROM agents AS a ORDER BY a.name`)
+	rows, err := a.db.QueryContext(ctx, profileQuery+` ORDER BY a.name`, Offline)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +245,7 @@ func (a *Agents) List(ctx context.Context, all bool) ([]Profile, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.Active = p.Status != Left && (p.SessionState != "offline" || now.Sub(p.UpdatedAt) < StaleAfter)
+		p.Active = active(p, now)
 		if all || p.Active {
 			out = append(out, p)
 		}
@@ -268,18 +283,6 @@ func (a *Agents) Who(ctx context.Context, query string, path, all bool) ([]Profi
 }
 
 // --- internals ---------------------------------------------------------------------
-
-func (a *Agents) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := a.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
-}
 
 type scanner interface{ Scan(...any) error }
 
@@ -320,11 +323,11 @@ func scan(r scanner) (Profile, error) {
 }
 
 func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
-	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, 'offline', '',
+	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, joined_at, updated_at, ?, '',
 		`+ciColumn+`
-		FROM agents AS a WHERE name = ?`, name))
+		FROM agents AS a WHERE name = ?`, Offline, name))
 	if errors.Is(err, sql.ErrNoRows) {
-		return p, fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)
+		return p, unknown(name)
 	}
 	return p, err
 }

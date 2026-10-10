@@ -129,7 +129,7 @@ func TestFewerSlotsKeepCurrentHolders(t *testing.T) {
 func TestInvalidKeysAreRefused(t *testing.T) {
 	q, _ := newQueue(t)
 	for _, key := range []string{"../etc", "Example", "", "a..b", "/root"} {
-		if _, _, err := q.Join(ctx, key, "a", "", 0, false); !errors.Is(err, queue.ErrInvalid) {
+		if _, _, err := q.Join(ctx, key, "a", "", 0, false); !errors.Is(err, store.ErrInvalid) {
 			t.Errorf("key %q: err = %v, want ErrInvalid", key, err)
 		}
 	}
@@ -457,7 +457,7 @@ func TestLockOnATakenResourceDoesNotQueue(t *testing.T) {
 	if err != nil || e != nil {
 		t.Fatalf("entry %+v, err %v", e, err)
 	}
-	if h := res.Holders(); len(h) != 1 || h[0].Agent != "a" || h[0].Note != "merging #57" {
+	if h := queue.Holders(res); len(h) != 1 || h[0].Agent != "a" || h[0].Note != "merging #57" {
 		t.Fatalf("holders %+v", h)
 	}
 	if s, _ := state(t, q, "example-app/merge", "b"); s != "" {
@@ -486,8 +486,8 @@ func TestListingShowsHoldersAndWaitersAndHidesIdleResources(t *testing.T) {
 	if len(rs) != 1 || rs[0].Key != "heavy/typecheck" {
 		t.Fatalf("resources %+v", rs)
 	}
-	if len(rs[0].Holders()) != 3 {
-		t.Fatalf("holders %d", len(rs[0].Holders()))
+	if len(queue.Holders(rs[0])) != 3 {
+		t.Fatalf("holders %d", len(queue.Holders(rs[0])))
 	}
 	expect(t, q, "heavy/typecheck", "d", queue.Waiting, 1)
 	expect(t, q, "heavy/typecheck", "e", queue.Waiting, 2)
@@ -542,15 +542,15 @@ func TestLockingAgainRenewsTheLease(t *testing.T) {
 func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
 	q, _ := newQueue(t)
 	for _, lease := range []time.Duration{-time.Minute, time.Millisecond, time.Second - time.Millisecond, queue.MaxLease + time.Second} {
-		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, queue.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
+		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, store.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
 			t.Errorf("lease %v: err = %v", lease, err)
 		}
-		if _, _, err := q.Join(ctx, "r", "a", "", lease, true); !errors.Is(err, queue.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
+		if _, _, err := q.Join(ctx, "r", "a", "", lease, true); !errors.Is(err, store.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
 			t.Errorf("lock for %v: err = %v", lease, err)
 		}
 	}
 	for _, n := range []int{0, queue.MaxSlots + 1} {
-		if _, err := q.SetSlots(ctx, "r", n); !errors.Is(err, queue.ErrInvalid) {
+		if _, err := q.SetSlots(ctx, "r", n); !errors.Is(err, store.ErrInvalid) {
 			t.Errorf("slots %d: err = %v", n, err)
 		}
 	}

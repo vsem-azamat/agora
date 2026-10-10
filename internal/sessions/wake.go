@@ -10,6 +10,7 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 // Turn returns the session's turn count, which grows with every prompt and start.
@@ -17,7 +18,7 @@ func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
 	var turn int64
 	err := s.db.QueryRowContext(ctx, `SELECT turn FROM sessions WHERE id = ?`, sessionID).Scan(&turn)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("%w: unknown session", ErrInvalid)
+		return 0, fmt.Errorf("%w: unknown session", store.ErrInvalid)
 	}
 	return turn, err
 }
@@ -37,15 +38,15 @@ type Wake struct {
 // it was not already woken for); otherwise keep waiting. Nothing is consumed until ConfirmWake.
 func (s *Sessions) CheckWake(ctx context.Context, sessionID string, turn int64) (w *Wake, done bool, err error) {
 	var state, agent, wokenFor string
-	var now int64
+	var current int64
 	err = s.db.QueryRowContext(ctx, `SELECT state, COALESCE(agent, ''), turn, woken_for FROM sessions WHERE id = ?`, sessionID).
-		Scan(&state, &agent, &now, &wokenFor)
+		Scan(&state, &agent, &current, &wokenFor)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return nil, true, nil
 	case err != nil:
 		return nil, false, err
-	case state == string(Ended) || now != turn:
+	case state == string(Ended) || current != turn:
 		return nil, true, nil
 	case state != string(Idle):
 		return nil, false, nil
@@ -83,20 +84,19 @@ func (s *Sessions) ConfirmWake(ctx context.Context, sessionID string, w *Wake) e
 		}
 	}
 	now := s.now().UnixMilli()
-	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET state = 'busy', state_at = ?, turn = turn + 1, woken_for = ?, woken_at = ?
-		WHERE id = ? AND turn = ? AND state = 'idle'`, now, w.Key, now, sessionID, w.Turn)
+	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET state = ?, state_at = ?, turn = turn + 1, woken_for = ?, woken_at = ?
+		WHERE id = ? AND turn = ? AND state = ?`, Busy, now, w.Key, now, sessionID, w.Turn, Idle)
 	return err
 }
 
 // Now is the clock Sessions uses.
 func (s *Sessions) Now() time.Time { return s.now() }
 
+// offerKey identifies the offered slots, to tell whether the agent was woken for them.
 func offerKey(entries []queue.Entry) string {
 	var keys []string
-	for _, e := range entries {
-		if e.State == queue.Offered {
-			keys = append(keys, "o"+e.Key)
-		}
+	for _, e := range offered(entries) {
+		keys = append(keys, "o"+e.Key)
 	}
 	return strings.Join(keys, " ")
 }
@@ -129,11 +129,9 @@ func (s *Sessions) Pending(ctx context.Context, agent string) (key, text string,
 	if err != nil {
 		return "", "", err
 	}
-	for _, e := range entries {
-		if e.State == queue.Offered {
-			keys = append(keys, "o"+e.Key)
-			parts = append(parts, "your turn on "+e.Key)
-		}
+	for _, e := range offered(entries) {
+		keys = append(keys, "o"+e.Key)
+		parts = append(parts, "your turn on "+e.Key)
 	}
 	if len(keys) == 0 {
 		return "", "", nil
@@ -155,8 +153,8 @@ type CommandWake struct {
 // first).
 func (s *Sessions) IdleWithTerminal(ctx context.Context, settle time.Duration) ([]CommandWake, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, agent, terminal, woken_for, woken_at, pid, pid_start FROM sessions
-		WHERE state = 'idle' AND agent IS NOT NULL AND terminal != '' AND pid > 0 AND state_at <= ? ORDER BY id`,
-		s.now().Add(-settle).UnixMilli())
+		WHERE state = ? AND agent IS NOT NULL AND terminal != '' AND pid > 0 AND state_at <= ? ORDER BY id`,
+		Idle, s.now().Add(-settle).UnixMilli())
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -43,6 +44,9 @@ const (
 // EndReasonClear is the end reason of a session replaced by a new conversation in the same
 // process; the name and places move to the new session when it starts.
 const EndReasonClear = "clear"
+
+// UnknownKind is the kind of a session whose connector did not say.
+const UnknownKind = "unknown"
 
 // State of a session.
 type State string
@@ -88,33 +92,28 @@ type Session struct {
 	Terminal  string
 }
 
-var (
-	// ErrInvalid marks an invalid name or session identifier.
-	ErrInvalid = errors.New("invalid request")
-	// ErrNameTaken means the name is bound to another live session.
-	ErrNameTaken = errors.New("name taken")
-)
+// ErrNameTaken means the name is bound to another live session.
+var ErrNameTaken = errors.New("name taken")
 
 var (
-	nameRE    = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 	sessionRE = regexp.MustCompile(`^[A-Za-z0-9_-]{6,80}$`)
 	reserved  = map[string]bool{"all": true, "agora": true}
 )
 
-// CheckName reports why name cannot be an agent name, or nil.
-func CheckName(name string) error {
+// checkName reports why name cannot be an agent name, or nil.
+func checkName(name string) error {
 	if reserved[name] {
-		return fmt.Errorf("%w: %q is reserved", ErrInvalid, name)
+		return fmt.Errorf("%w: %q is reserved", store.ErrInvalid, name)
 	}
-	if !nameRE.MatchString(name) {
-		return fmt.Errorf("%w: name %q: 2-32 lowercase letters, digits and dashes, starting with a letter", ErrInvalid, name)
+	if !rooms.ValidName(name) {
+		return fmt.Errorf("%w: name %q: %s", store.ErrInvalid, name, rooms.NameRule)
 	}
 	return nil
 }
 
 func checkSession(id string) error {
 	if !sessionRE.MatchString(id) {
-		return fmt.Errorf("%w: session id: 6-80 letters, digits, '_' and '-'", ErrInvalid)
+		return fmt.Errorf("%w: session id: 6-80 letters, digits, '_' and '-'", store.ErrInvalid)
 	}
 	return nil
 }
@@ -146,7 +145,7 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	}
 	now := s.now()
 	var agent string
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 		if err := register(ctx, tx, r, now); err != nil {
 			return err
 		}
@@ -245,7 +244,7 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		return nil, nil, false, false, err
 	}
 	sig := signature(entries)
-	err = s.tx(ctx, func(tx *sql.Tx) error {
+	err = store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 		var noted string
 		var checkedAt int64
 		if err := tx.QueryRowContext(ctx, `SELECT noted, checked_at FROM sessions WHERE id = ?`, r.SessionID).Scan(&noted, &checkedAt); err != nil {
@@ -272,7 +271,7 @@ func (s *Sessions) remind(ctx context.Context, r Report, agent string, now time.
 		if len(entries) == 0 && len(lost) == 0 {
 			return nil
 		}
-		show = r.Event == Start || sig != noted || hasOffer(entries)
+		show = r.Event == Start || sig != noted || len(offered(entries)) > 0
 		return nil
 	})
 	return entries, lost, show, checked, err
@@ -291,14 +290,14 @@ func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Ti
 			return Reply{Block: true, BlockReason: text}, nil
 		}
 	}
-	return Reply{}, s.tx(ctx, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
+	return Reply{}, store.InTx(ctx, s.db, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
 }
 
 // Join registers name and binds it to sessionID when that session has not ended; without
 // force, a name bound to another live session is refused. It reports whether the name is now
 // bound to the session.
 func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool) (bool, error) {
-	if err := CheckName(name); err != nil {
+	if err := checkName(name); err != nil {
 		return false, err
 	}
 	if sessionID != "" {
@@ -308,7 +307,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 	}
 	now := s.now()
 	bound := false
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (name, joined_at, read_from) VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM messages))
 			ON CONFLICT (name) DO NOTHING`, name, now.UnixMilli()); err != nil {
 			return err
@@ -320,8 +319,8 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 		switch err := tx.QueryRowContext(ctx, `SELECT state FROM sessions WHERE id = ?`, sessionID).Scan(&state); {
 		case errors.Is(err, sql.ErrNoRows):
 			t := now.UnixMilli()
-			if _, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, state, state_at, started_at, seen_at) VALUES (?, 'unknown', 'busy', ?, ?, ?)`,
-				sessionID, t, t, t); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, state, state_at, started_at, seen_at) VALUES (?, ?, ?, ?, ?, ?)`,
+				sessionID, UnknownKind, Busy, t, t, t); err != nil {
 				return err
 			}
 		case err != nil:
@@ -330,7 +329,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 			return nil // an ended session is not brought back; the name is only registered
 		}
 		var holder string
-		err := tx.QueryRowContext(ctx, `SELECT id FROM sessions WHERE agent = ? AND state != 'ended' AND id != ?`, name, sessionID).Scan(&holder)
+		err := tx.QueryRowContext(ctx, `SELECT id FROM sessions WHERE agent = ? AND state != ? AND id != ?`, name, Ended, sessionID).Scan(&holder)
 		switch {
 		case err == nil && !force:
 			return fmt.Errorf("%w: %q belongs to a live session; pick another name, or force the claim if it is you", ErrNameTaken, name)
@@ -356,7 +355,7 @@ func (s *Sessions) Resolve(ctx context.Context, sessionID string) (string, error
 		return "", nil //nolint:nilerr // a malformed session ID is bound to no name
 	}
 	var agent sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT agent FROM sessions WHERE id = ? AND state != 'ended'`, sessionID).Scan(&agent)
+	err := s.db.QueryRowContext(ctx, `SELECT agent FROM sessions WHERE id = ? AND state != ?`, sessionID, Ended).Scan(&agent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -366,7 +365,7 @@ func (s *Sessions) Resolve(ctx context.Context, sessionID string) (string, error
 // List returns sessions that have not ended, newest first.
 func (s *Sessions) List(ctx context.Context) ([]Session, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, COALESCE(agent, ''), state, state_at, started_at, seen_at, pid, pid_start, cwd, terminal
-		FROM sessions WHERE state != 'ended' ORDER BY started_at DESC, id`)
+		FROM sessions WHERE state != ? ORDER BY started_at DESC, id`, Ended)
 	if err != nil {
 		return nil, err
 	}
@@ -402,11 +401,11 @@ func (s *Sessions) EndDead(ctx context.Context, alive func(pid int, start int64)
 			continue
 		}
 		done := false
-		err := s.tx(ctx, func(tx *sql.Tx) error {
+		err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
 			// only if nothing re-registered the session with another process meanwhile
 			var same int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE id = ? AND state != 'ended' AND pid = ? AND pid_start = ? AND seen_at = ?`,
-				x.ID, x.PID, x.PIDStart, x.SeenAt.UnixMilli()).Scan(&same); err != nil || same == 0 {
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE id = ? AND state != ? AND pid = ? AND pid_start = ? AND seen_at = ?`,
+				x.ID, Ended, x.PID, x.PIDStart, x.SeenAt.UnixMilli()).Scan(&same); err != nil || same == 0 {
 				return err
 			}
 			done = true
@@ -420,18 +419,6 @@ func (s *Sessions) EndDead(ctx context.Context, alive func(pid int, start int64)
 		}
 	}
 	return ended, nil
-}
-
-func (s *Sessions) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
 }
 
 // endTx ends the session and, unless its agent is bound to another live session, removes the
@@ -448,7 +435,7 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 		return nil
 	}
 	var live int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE agent = ? AND state != 'ended'`, agent).Scan(&live); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE agent = ? AND state != ?`, agent, Ended).Scan(&live); err != nil {
 		return err
 	}
 	if live > 0 {
@@ -457,7 +444,7 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 	if err := agents.MarkLeftTx(ctx, tx, agent, now); err != nil {
 		return err
 	}
-	_, err := s.queue.ReleaseAgentTx(ctx, tx, agent)
+	_, err := queue.ReleaseAgentTx(ctx, tx, agent, now)
 	return err
 }
 
@@ -466,22 +453,24 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 func register(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 	kind := r.Kind
 	if kind == "" {
-		kind = "unknown"
+		kind = UnknownKind
 	}
 	t := now.UnixMilli()
 	_, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, pid, pid_start, cwd, terminal, state, state_at, started_at, seen_at)
-		VALUES (?, ?, ?, ?, ?, ?, 'busy', ?, ?, ?)
+		VALUES (:id, :kind, :pid, :pid_start, :cwd, :terminal, :busy, :t, :t, :t)
 		ON CONFLICT (id) DO UPDATE SET
-			kind = CASE WHEN excluded.kind != 'unknown' THEN excluded.kind ELSE kind END,
+			kind = CASE WHEN excluded.kind != :unknown THEN excluded.kind ELSE kind END,
 			pid = CASE WHEN excluded.pid > 0 THEN excluded.pid ELSE pid END,
 			pid_start = CASE WHEN excluded.pid > 0 THEN excluded.pid_start ELSE pid_start END,
 			cwd = CASE WHEN excluded.cwd != '' THEN excluded.cwd ELSE cwd END,
 			terminal = CASE WHEN excluded.terminal != '' THEN excluded.terminal ELSE terminal END,
 			seen_at = excluded.seen_at,
-			agent = CASE WHEN state = 'ended' AND EXISTS (SELECT 1 FROM sessions AS other
-				WHERE other.agent = sessions.agent AND other.state != 'ended' AND other.id != sessions.id) THEN NULL ELSE agent END,
-			state = CASE WHEN state = 'ended' THEN 'busy' ELSE state END`,
-		r.SessionID, kind, r.PID, r.PIDStart, r.CWD, r.Terminal, t, t, t)
+			agent = CASE WHEN state = :ended AND EXISTS (SELECT 1 FROM sessions AS other
+				WHERE other.agent = sessions.agent AND other.state != :ended AND other.id != sessions.id) THEN NULL ELSE agent END,
+			state = CASE WHEN state = :ended THEN :busy ELSE state END`,
+		sql.Named("id", r.SessionID), sql.Named("kind", kind), sql.Named("pid", r.PID), sql.Named("pid_start", r.PIDStart),
+		sql.Named("cwd", r.CWD), sql.Named("terminal", r.Terminal), sql.Named("t", t),
+		sql.Named("busy", Busy), sql.Named("ended", Ended), sql.Named("unknown", UnknownKind))
 	return err
 }
 
@@ -495,7 +484,7 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 	type old struct{ id, agent string }
 	olds, err := func() ([]old, error) {
 		rows, err := tx.QueryContext(ctx, `SELECT id, COALESCE(agent, '') FROM sessions
-		WHERE pid = ? AND pid_start = ? AND state != 'ended' AND id != ? ORDER BY started_at DESC`, r.PID, r.PIDStart, r.SessionID)
+		WHERE pid = ? AND pid_start = ? AND state != ? AND id != ? ORDER BY started_at DESC`, r.PID, r.PIDStart, Ended, r.SessionID)
 		if err != nil {
 			return nil, err
 		}
@@ -514,7 +503,7 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 		return err
 	}
 	for _, o := range olds {
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL, state = 'ended', state_at = ? WHERE id = ?`, now.UnixMilli(), o.id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL, state = ?, state_at = ? WHERE id = ?`, Ended, now.UnixMilli(), o.id); err != nil {
 			return err
 		}
 		if o.agent == "" {
@@ -532,13 +521,15 @@ func setState(ctx context.Context, tx *sql.Tx, id string, st State, now time.Tim
 	return err
 }
 
-func hasOffer(entries []queue.Entry) bool {
+// offered returns the entries whose slot is offered to the agent.
+func offered(entries []queue.Entry) []queue.Entry {
+	var out []queue.Entry
 	for _, e := range entries {
 		if e.State == queue.Offered {
-			return true
+			out = append(out, e)
 		}
 	}
-	return false
+	return out
 }
 
 // signature identifies the agent's places without times, to tell whether they changed.

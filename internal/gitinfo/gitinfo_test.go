@@ -24,14 +24,14 @@ func TestBranchOfACheckoutAndItsWorktree(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, "src", "deep"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if b := gitinfo.Branch(filepath.Join(repo, "src", "deep")); b != "main" {
+	if b := gitinfo.Read(filepath.Join(repo, "src", "deep")).Branch; b != "main" {
 		t.Fatalf("branch %q", b)
 	}
 	wt := filepath.Join(repo, ".worktrees", "login-fix")
 	gitdir := filepath.Join(repo, ".git", "worktrees", "login-fix")
 	write(t, filepath.Join(gitdir, "HEAD"), "ref: refs/heads/fix/login-timeout\n")
 	write(t, filepath.Join(wt, ".git"), "gitdir: "+gitdir+"\n")
-	if b := gitinfo.Branch(wt); b != "fix/login-timeout" {
+	if b := gitinfo.Read(wt).Branch; b != "fix/login-timeout" {
 		t.Fatalf("worktree branch %q", b)
 	}
 }
@@ -47,7 +47,7 @@ func TestDetachedAndOutside(t *testing.T) {
 	if h := gitinfo.Read(repo); h.Detached || h.Branch != "deadbeefcafe" {
 		t.Fatalf("hex-named branch taken for a commit: %+v", h)
 	}
-	if b := gitinfo.Branch(t.TempDir()); b != "" {
+	if b := gitinfo.Read(t.TempDir()).Branch; b != "" {
 		t.Fatalf("outside: %q", b)
 	}
 }

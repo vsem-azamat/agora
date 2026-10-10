@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 const (
@@ -55,20 +57,7 @@ type Resource struct {
 	Entries []Entry
 }
 
-// Holders returns the entries that hold a slot.
-func (r Resource) Holders() []Entry {
-	var out []Entry
-	for _, e := range r.Entries {
-		if e.State == Held {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
 var (
-	// ErrInvalid marks a request with an invalid key, agent name or value.
-	ErrInvalid = errors.New("invalid request")
 	// ErrNotQueued means the agent neither holds nor waits for the resource.
 	ErrNotQueued = errors.New("not queued")
 	// ErrNotYourTurn means the agent waits and has no slot to renew.
@@ -84,8 +73,8 @@ func (e *ForbiddenError) Error() string {
 
 var keyRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]{0,63}$`)
 
-// ValidKey reports whether key may name a resource.
-func ValidKey(key string) bool {
+// validKey reports whether key may name a resource.
+func validKey(key string) bool {
 	return keyRE.MatchString(key) && !strings.Contains(key, "..")
 }
 
@@ -104,15 +93,15 @@ func New(db *sql.DB, now func() time.Time) *Queue {
 }
 
 func checkKey(key string) error {
-	if !ValidKey(key) {
-		return fmt.Errorf("%w: resource key %q: up to 64 lowercase letters, digits, '.', '_', '-', '/', no '..'", ErrInvalid, key)
+	if !validKey(key) {
+		return fmt.Errorf("%w: resource key %q: up to 64 lowercase letters, digits, '.', '_', '-', '/', no '..'", store.ErrInvalid, key)
 	}
 	return nil
 }
 
 func checkAgent(agent string) error {
 	if strings.TrimSpace(agent) == "" {
-		return fmt.Errorf("%w: agent name is required", ErrInvalid)
+		return fmt.Errorf("%w: agent name is required", store.ErrInvalid)
 	}
 	return nil
 }
@@ -135,7 +124,7 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 		lease = DefaultLease
 	}
 	if lease < MinLease || lease > MaxLease {
-		return nil, Resource{}, fmt.Errorf("%w: lease must be between %s and %s", ErrInvalid, MinLease, MaxLease)
+		return nil, Resource{}, fmt.Errorf("%w: lease must be between %s and %s", store.ErrInvalid, MinLease, MaxLease)
 	}
 	var res Resource
 	var joined bool
@@ -305,7 +294,7 @@ func (q *Queue) SetSlots(ctx context.Context, key string, slots int) (Resource, 
 		return Resource{}, err
 	}
 	if slots < 1 || slots > MaxSlots {
-		return Resource{}, fmt.Errorf("%w: slots must be between 1 and %d", ErrInvalid, MaxSlots)
+		return Resource{}, fmt.Errorf("%w: slots must be between 1 and %d", store.ErrInvalid, MaxSlots)
 	}
 	var res Resource
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
@@ -323,9 +312,8 @@ func (q *Queue) SetSlots(ctx context.Context, key string, slots int) (Resource, 
 	return res, err
 }
 
-// List returns resources that someone holds or waits for, or whose slots were set, and whether
-// settling them changed any queue; only key
-// when key is not empty.
+// List returns resources that someone holds or waits for, or whose slots were set (only key
+// when key is not empty), and whether settling them changed any queue.
 func (q *Queue) List(ctx context.Context, key string) ([]Resource, bool, error) {
 	if key != "" {
 		if err := checkKey(key); err != nil {
@@ -387,21 +375,10 @@ func (q *Queue) EntriesOf(ctx context.Context, agent string) ([]Entry, error) {
 	return out, err
 }
 
-// ReleaseAgent removes agent from every resource queue and returns the keys it left.
-func (q *Queue) ReleaseAgent(ctx context.Context, agent string) ([]string, error) {
-	var left []string
-	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		var err error
-		left, err = q.ReleaseAgentTx(ctx, tx, agent)
-		return err
-	})
-	return left, err
-}
-
-// ReleaseAgentTx is ReleaseAgent inside the caller's transaction, so other packages can give
-// back an agent's places atomically with their own changes.
-func (q *Queue) ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	now := q.now()
+// ReleaseAgentTx removes agent from every resource queue inside the caller's transaction, so
+// other packages can give back an agent's places atomically with their own changes, and
+// returns the keys it left.
+func ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string, now time.Time) ([]string, error) {
 	keys, err := keysOf(ctx, tx, agent)
 	if err != nil {
 		return nil, err
@@ -418,20 +395,7 @@ func (q *Queue) ReleaseAgentTx(ctx context.Context, tx *sql.Tx, agent string) ([
 }
 
 func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT key FROM entries WHERE agent = ? ORDER BY key`, agent)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
-	}
-	return keys, rows.Err()
+	return store.Strings(ctx, tx, `SELECT key FROM entries WHERE agent = ? ORDER BY key`, agent)
 }
 
 // Sweep settles every resource with an expired lease or claim deadline and returns the keys
@@ -439,7 +403,7 @@ func keysOf(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
 func (q *Queue) Sweep(ctx context.Context) ([]string, error) {
 	var changed []string
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		keys, err := column(ctx, tx, `SELECT DISTINCT key FROM entries WHERE expires_at IS NOT NULL AND expires_at <= ? ORDER BY key`, ms(now))
+		keys, err := store.Strings(ctx, tx, `SELECT DISTINCT key FROM entries WHERE expires_at IS NOT NULL AND expires_at <= ? ORDER BY key`, ms(now))
 		if err != nil {
 			return err
 		}
@@ -456,35 +420,10 @@ func (q *Queue) Sweep(ctx context.Context) ([]string, error) {
 
 // --- internals ---------------------------------------------------------------
 
+// tx runs fn in a transaction with the time it starts.
 func (q *Queue) tx(ctx context.Context, fn func(*sql.Tx, time.Time) error) error {
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx, q.now()); err != nil {
-		_ = tx.Rollback() // report the error that failed the transaction
-		return err
-	}
-	return tx.Commit()
-}
-
-// column runs a query that selects one text column and returns its values. The rows are closed
-// before it returns, so the transaction's single connection is free for the next statement.
-func column(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
+	now := q.now()
+	return store.InTx(ctx, q.db, func(tx *sql.Tx) error { return fn(tx, now) })
 }
 
 func ensureResource(ctx context.Context, tx *sql.Tx, key string) error {
@@ -519,7 +458,7 @@ func settled(ctx context.Context, tx *sql.Tx, key string, now time.Time) (bool, 
 		key, t, MaxMissedTurns); err != nil {
 		return false, err
 	}
-	missed, err := column(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
+	missed, err := store.Strings(ctx, tx, `SELECT agent FROM entries WHERE key = ? AND state = 'offered' AND expires_at <= ? ORDER BY seq`, key, t)
 	if err != nil {
 		return false, err
 	}
@@ -585,20 +524,7 @@ func listKeys(ctx context.Context, tx *sql.Tx, key string) ([]string, error) {
 	if key != "" {
 		query, args = `SELECT key FROM resources WHERE key = ?`, []any{key}
 	}
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
-	}
-	return keys, rows.Err()
+	return store.Strings(ctx, tx, query, args...)
 }
 
 func find(r Resource, agent string) *Entry {
