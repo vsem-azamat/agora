@@ -184,6 +184,13 @@ describe('Board messages', () => {
   });
 });
 
+describe('Own messages', () => {
+  it('are set apart by a rule', () => {
+    const css = readFileSync('src/styles.css', 'utf8');
+    expect(css).toMatch(/\.msg\.own \{\s*border-left: 2px solid var\(--line\);/);
+  });
+});
+
 describe('Phone layout', () => {
   it('shows tabs instead of the sidebars at 520 pixels and below', () => {
     const css = readFileSync('src/styles.css', 'utf8'); // vitest runs in web/

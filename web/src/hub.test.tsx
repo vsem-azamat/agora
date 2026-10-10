@@ -95,6 +95,13 @@ describe('sidebar', () => {
 });
 
 describe('theme', () => {
+  it('stores nothing until the operator chooses', async () => {
+    vi.stubGlobal('fetch', fakeHub([]));
+    history.replaceState(null, '', '/#token=good-token');
+    render(<App />);
+    await screen.findByText('Ink');
+    expect(localStorage.getItem('agora.theme')).toBeNull();
+  });
   it('switches to ink and remembers it', async () => {
     vi.stubGlobal('fetch', fakeHub([]));
     history.replaceState(null, '', '/#token=good-token');

@@ -42,6 +42,7 @@ export function Board(props: {
   const [filter, setFilter] = useState<Filter>('all');
   const counts = filterCounts(props.agents, props.project);
   const shown = props.agents.filter((a) => matches(a, filter, props.project));
+  // the summary counts the whole board; the chips above count within the chosen project
   const { busy, idle } = filterCounts(props.agents);
   const offline = props.agents.length - busy - idle;
   return (
@@ -61,8 +62,7 @@ export function Board(props: {
         {props.project !== undefined && (
           <button
             type="button"
-            className="chip"
-            aria-pressed
+            className="chip filtered"
             onClick={() => props.onProject?.(undefined)}
             aria-label={`Show every project, not only ${props.project}`}
           >

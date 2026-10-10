@@ -335,7 +335,8 @@ ol {
   gap: 4px;
 }
 
-.chip[aria-pressed="true"] {
+.chip[aria-pressed="true"],
+.chip.filtered {
   color: var(--fg);
   border-bottom-color: var(--fg);
 }
