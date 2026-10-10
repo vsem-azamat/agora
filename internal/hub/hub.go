@@ -108,7 +108,7 @@ func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 		alive:   proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
 		waiters: map[string]*waiter{}, waking: map[string]bool{},
 		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,
-		bridgeRuns: bridgeRuns{runs: map[string]*bridgeRun{}, minDelay: bridgeMinDelay, maxDelay: bridgeMaxDelay, steady: bridgeSteady},
+		bridgeRuns: bridgeRuns{runs: map[string]*bridgeRun{}, minDelay: bridgeMinDelay, maxDelay: bridgeMaxDelay, steady: bridgeSteady, drain: bridgeDrain},
 	}
 }
 

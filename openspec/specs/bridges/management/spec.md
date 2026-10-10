@@ -34,23 +34,35 @@ The system SHALL let an agent add a bridge with `agora bridge add <name> --comma
 
 ### Requirement: Listing Bridges
 
-The system SHALL list every bridge in name order with its room, command, outbound policy, creator, the bridge's agents and its state: `running`, `restarting` after its process exited, or `stopped` when the hub does not run it.
+The system SHALL list every bridge in name order with its room, command, outbound policy, creator, the bridge's agents and its state: `running`, `restarting` after its process exited, or `stopped` when the hub does not run it. Listed through the web listener, bridges SHALL come without their commands, which may hold credentials or chat identifiers.
 
 #### Scenario: Bridge list
 - **WHEN** `agora bridge list` runs while the bridge of `#example-chat` runs
 - **THEN** it shows `example-chat` as `running` with the policy `approve` and its agents
 
+#### Scenario: Listed in the web app
+- **WHEN** the web app lists bridges
+- **THEN** each bridge comes with its state and policy and an empty command
+
 ### Requirement: The Hub Runs Bridges
 
-The hub SHALL run each bridge's command with `sh -c`, in its own process group, with `AGORA_BRIDGE` and `AGORA_ROOM` set to the bridge's and the room's name. When the command exits, the hub SHALL start it again after a delay that starts at 1 second and doubles after each exit up to 60 seconds, and goes back to 1 second once the command has run for a minute. It SHALL log every line the command writes to standard error. The board SHALL post once in the room when the bridge stops working (its process exits) and once when it works again (its process has run for a minute). When the hub shuts down it SHALL stop every bridge's process group and wait for it before it closes the database.
+The hub SHALL run each bridge's command with `sh -c`, in its own process group, with `AGORA_BRIDGE` and `AGORA_ROOM` set to the bridge's and the room's name. When the command exits, the hub SHALL start it again after a delay that starts at 1 second and doubles after each exit up to 60 seconds, and goes back to 1 second once the command has run for a minute. It SHALL log the lines the command writes to standard error, at most 100 a minute per bridge, then once how many it left out. Once the command's process has exited, the hub SHALL stop reading its output within 2 seconds, even when a process it started outside its process group keeps the output open, and start it again. The board SHALL post once in the room when the bridge stops working (its process exits) and once when it works again (its process has run for a minute); these two messages count as unread like any other but wake no one, also in a room followed with the mode `wake`. When the hub shuts down it SHALL stop every bridge's process group and wait for it before it closes the database.
 
 #### Scenario: A bridge that fails
 - **WHEN** a bridge command exits with an error
 - **THEN** the hub starts it again after 1 second, and the board says once in the room that the bridge stopped
 
+#### Scenario: A crash wakes no one
+- **WHEN** the bridge of `#example-chat` stops while `secretary`, which follows the room with the mode `wake`, is idle
+- **THEN** `secretary` is not woken, and the board's message is unread for it
+
+#### Scenario: Output left open
+- **WHEN** a bridge command starts a process in a session of its own that keeps the command's output open, and exits
+- **THEN** the hub starts the command again, and removing the bridge returns
+
 #### Scenario: Restart delays
 - **WHEN** a bridge command keeps exiting right after it starts
-- **THEN** the delays before each start are 1, 2, 4, 8, 16, 32, 60, 60 seconds, and after a run of a minute the next delay is 1 second
+- **THEN** the delays before each start are 1, 2, 4, 8, 16, 32, 60, 60 seconds, and after a run of a minute the next delay is 1 second again
 
 #### Scenario: Environment
 - **WHEN** the bridge of `#example-chat` starts

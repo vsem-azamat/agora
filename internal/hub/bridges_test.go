@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -36,13 +37,20 @@ func TestMain(m *testing.M) {
 
 // fakeBridge is a bridge driven through files in dir: it appends every line it reads to
 // received, its environment and pid to starts, writes the lines a test appends to send (once,
-// across restarts), exits with code 3 when a file exit appears, and answers out lines by the
+// across restarts), exits with code 3 when a file exit appears or at once while the number in
+// crashes is above 0 (counting it down), and answers out lines by the
 // content of mode: sent (the default, with the ext_id e<id>), fail, or silent.
 func fakeBridge(dir string) {
 	if err := os.Chdir(dir); err != nil {
 		os.Exit(2)
 	}
-	appendLine("starts", fmt.Sprintf("%s %s %d", os.Getenv("AGORA_BRIDGE"), os.Getenv("AGORA_ROOM"), os.Getpid()))
+	appendLine("starts", fmt.Sprintf("%s %s %d %d", os.Getenv("AGORA_BRIDGE"), os.Getenv("AGORA_ROOM"), os.Getpid(), time.Now().UnixNano()))
+	if raw, err := os.ReadFile("crashes"); err == nil { // crash at once this many more times
+		if n, _ := strconv.Atoi(string(raw)); n > 0 {
+			_ = os.WriteFile("crashes", []byte(strconv.Itoa(n-1)), 0o600) //nolint:gosec // a constant file name in the fake's own directory
+			os.Exit(3)
+		}
+	}
 	var mu sync.Mutex
 	write := func(b []byte) {
 		mu.Lock()
@@ -52,6 +60,7 @@ func fakeBridge(dir string) {
 	go func() {
 		for {
 			if os.Remove("exit") == nil {
+				appendLine("exits", strconv.FormatInt(time.Now().UnixNano(), 10))
 				os.Exit(3)
 			}
 			data, _ := os.ReadFile("send")
@@ -152,6 +161,26 @@ func (f fake) starts() int {
 	return 0
 }
 
+// pid returns the pid of the fake's start i, counting from 0.
+func (f fake) pid(i int) int {
+	pid, _ := strconv.Atoi(strings.Fields(f.lines("starts")[i])[2])
+	return pid
+}
+
+// times returns the times in the fake's file name: of its starts or of its exits.
+func (f fake) times(name string) []time.Time {
+	var out []time.Time
+	for _, l := range f.lines(name) {
+		fields := strings.Fields(l)
+		if len(fields) == 0 {
+			continue
+		}
+		ns, _ := strconv.ParseInt(fields[len(fields)-1], 10, 64)
+		out = append(out, time.Unix(0, ns))
+	}
+	return out
+}
+
 func (f fake) send(lines ...string) {
 	for _, l := range lines {
 		appendLine(filepath.Join(f.dir, "send"), l)
@@ -179,6 +208,7 @@ func eventually(t *testing.T, what string, ok func() bool) {
 // where secretary and builder joined.
 type bridgeHub struct {
 	*webHub
+	hub        *hub.Hub
 	bridges    agorav1connect.BridgeServiceClient // over the socket
 	webBridges agorav1connect.BridgeServiceClient // over the web listener, with the token
 	webRooms   agorav1connect.RoomServiceClient
@@ -190,8 +220,11 @@ func startBridgeHub(t *testing.T, steady time.Duration) *bridgeHub {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := startWith(t, func(h *hub.Hub) {
+	var h *hub.Hub
+	r := startWith(t, func(hh *hub.Hub) {
+		h = hh
 		hub.SetBridgeDelays(h, 50*time.Millisecond, 200*time.Millisecond, steady)
+		hub.SetBridgeDrain(h, 200*time.Millisecond)
 		if err := h.EnableWeb(context.Background(), l, "owner"); err != nil {
 			t.Fatal(err)
 		}
@@ -200,6 +233,7 @@ func startBridgeHub(t *testing.T, steady time.Duration) *bridgeHub {
 	w.web = agorav1connect.NewWebServiceClient(r.httpClient, "http://agora")
 	token := w.token(t, false)
 	b := &bridgeHub{
+		hub:        h,
 		webHub:     w,
 		bridges:    agorav1connect.NewBridgeServiceClient(r.httpClient, "http://agora"),
 		webBridges: agorav1connect.NewBridgeServiceClient(w.client(token), w.base),
@@ -534,8 +568,7 @@ func TestShutdownStopsBridges(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
-	fields := strings.Fields(f.lines("starts")[0])
-	pid, _ := strconv.Atoi(fields[len(fields)-1])
+	pid := f.pid(0)
 	b.stop()
 	<-b.done
 	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
@@ -556,8 +589,7 @@ func TestRemovingABridge(t *testing.T) {
 	if b.state(t).GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING {
 		t.Fatal("the bridge stopped")
 	}
-	fields := strings.Fields(f.lines("starts")[0])
-	pid, _ := strconv.Atoi(fields[len(fields)-1])
+	pid := f.pid(0)
 	if _, err := b.bridges.RemoveBridge(context.Background(), connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "builder", Name: "example-chat"})); err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +610,7 @@ func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	for _, p := range []string{
 		agorav1connect.BridgeServiceSetBridgePolicyProcedure, agorav1connect.BridgeServiceSendPendingProcedure, agorav1connect.BridgeServiceDeclinePendingProcedure,
-		"//agora.v1.BridgeService/SendPending", "/agora.v1.BridgeService/../BridgeService/SendPending",
+		"//agora.v1.BridgeService/SendPending", "/agora.v1.BridgeService/./SendPending", "/agora.v1.BridgeService/x/../SendPending",
 	} {
 		req, _ := http.NewRequest(http.MethodPost, "http://agora"+p, strings.NewReader(`{"messageId":"1"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -586,9 +618,165 @@ func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			t.Errorf("%s over the socket: %d", p, resp.StatusCode)
+		if resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), `"code":"not_found"`) {
+			t.Errorf("%s over the socket: %d %s", p, resp.StatusCode, body)
 		}
+	}
+}
+
+func TestAMessageSentAfterANewerOneGoesOut(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	f.set("mode", "silent")
+	b.add(t, f)
+	older := b.post(t, "secretary", "older, waits")
+	newer, err := b.webRooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Room: "example-chat", Body: "newer, from the app"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the operator's message", func() bool { return len(f.outs()) == 1 })
+	send := func(id int64) {
+		if _, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send(older)
+	eventually(t, "the older message", func() bool { return len(f.outs()) == 2 })
+	first := b.post(t, "secretary", "first pending")
+	second := b.post(t, "secretary", "second pending")
+	send(second)
+	eventually(t, "the second pending message", func() bool { return len(f.outs()) == 3 })
+	send(first)
+	eventually(t, "the first pending message", func() bool { return len(f.outs()) == 4 })
+	time.Sleep(200 * time.Millisecond)
+	want := []int64{newer.Msg.GetId(), older, second, first}
+	if got := f.outs(); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("outs %v, want %v", got, want)
+	}
+}
+
+func TestOutputLeftOpenByAnEscapedProcess(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	dir := shortDir(t)
+	cmd := fmt.Sprintf("echo started >> '%s/starts'; setsid sleep 5 & sleep 0.2; exit 3", dir) // the pause lets setsid run before the group is killed
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: cmd})); err != nil {
+		t.Fatal(err)
+	}
+	f := fake{t, dir}
+	eventually(t, "a restart", func() bool { return f.starts() >= 2 })
+	done := make(chan error, 1)
+	go func() {
+		_, err := b.bridges.RemoveBridge(context.Background(), connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "builder", Name: "example-chat"}))
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("removing the bridge hangs")
+	}
+}
+
+func TestConcurrentRemovesLeaveNothingRunning(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Go(func() {
+			_, _ = b.bridges.RemoveBridge(context.Background(), connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "builder", Name: "example-chat"}))
+		})
+	}
+	wg.Wait()
+	time.Sleep(300 * time.Millisecond)
+	if hub.RunsBridge(b.hub, "example-chat") || f.starts() != 1 {
+		t.Fatalf("after removing: running %v, starts %d", hub.RunsBridge(b.hub, "example-chat"), f.starts())
+	}
+}
+
+func TestASupervisorWhoseBridgeIsGoneStops(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	if _, err := b.db.Exec(`DELETE FROM bridges WHERE name = 'example-chat'`); err != nil {
+		t.Fatal(err)
+	}
+	f.set("exit", "")
+	eventually(t, "the supervisor to stop", func() bool { return !hub.RunsBridge(b.hub, "example-chat") })
+	time.Sleep(200 * time.Millisecond)
+	if f.starts() != 1 {
+		t.Fatalf("starts %d", f.starts())
+	}
+	for _, m := range b.history(t) {
+		if strings.Contains(m.GetBody(), "stopped") {
+			t.Fatalf("notice for a bridge that is gone: %v", m)
+		}
+	}
+}
+
+func TestTheWebAppListsBridgesWithoutCommands(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	resp, err := b.webBridges.ListBridges(context.Background(), connect.NewRequest(&agorav1.ListBridgesRequest{}))
+	if err != nil || len(resp.Msg.GetBridges()) != 1 {
+		t.Fatalf("list: %v %v", resp, err)
+	}
+	if got := resp.Msg.GetBridges()[0]; got.GetCommand() != "" || got.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || got.GetPolicy() != agorav1.BridgePolicy_BRIDGE_POLICY_APPROVE {
+		t.Fatalf("bridge over the web: %v", got)
+	}
+	if b.state(t).GetCommand() != f.command() {
+		t.Fatal("the socket lost the command")
+	}
+}
+
+func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
+	var h *hub.Hub
+	r := startWith(t, func(hh *hub.Hub) {
+		h = hh
+		hub.SetBridgeDelays(h, 50*time.Millisecond, 5*time.Second, 400*time.Millisecond)
+	})
+	if _, err := r.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	f := newFake(t)
+	f.set("crashes", "4")
+	bridges := agorav1connect.NewBridgeServiceClient(r.httpClient, "http://agora")
+	if _, err := bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: f.command()})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the fifth start", func() bool { return f.starts() == 5 })
+	starts := f.times("starts")
+	for i, want := range []time.Duration{50, 100, 200, 400} {
+		if gap := starts[i+1].Sub(starts[i]); gap < want*time.Millisecond {
+			t.Fatalf("delay %d: %v, want at least %vms", i, gap, want)
+		}
+	}
+	time.Sleep(600 * time.Millisecond) // a steady run
+	f.set("exit", "")
+	eventually(t, "the sixth start", func() bool { return f.starts() == 6 })
+	if gap := f.times("starts")[5].Sub(f.times("exits")[0]); gap > 500*time.Millisecond {
+		t.Fatalf("delay after a steady run: %v; it did not go back to the first delay", gap)
+	}
+}
+
+func TestACrashWakesNoOne(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f) // secretary follows #example-chat with the mode wake
+	b.idleAgentWithPID(t, "secretary", "session-1", "", int32(os.Getpid()))
+	woke := b.wake(t, "session-1")
+	f.set("exit", "")
+	eventually(t, "the notice", func() bool { return len(b.history(t)) == 1 })
+	if text, ended := within(t, woke, time.Second); ended {
+		t.Fatalf("woken by the notice: %q", text)
+	}
+	unread, err := b.rooms.Unread(context.Background(), connect.NewRequest(&agorav1.UnreadRequest{Agent: "secretary", Peek: true}))
+	if err != nil || len(unread.Msg.GetMessages()) != 1 || !strings.Contains(unread.Msg.GetMessages()[0].GetBody(), "The bridge stopped") {
+		t.Fatalf("unread: %v %v", unread, err)
 	}
 }

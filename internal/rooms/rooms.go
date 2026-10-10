@@ -86,6 +86,8 @@ type Message struct {
 	// here), and DeliveryError why it failed.
 	Delivery      Delivery
 	DeliveryError string
+	// Quiet is set for the board's notices about a bridge: they wake no one.
+	Quiet bool
 }
 
 // External reports whether the message came from outside through a bridge.
@@ -421,9 +423,9 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 		delivery = string(m.Delivery)
 	}
 	names, all := Mentions(m.Body)
-	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery)
+	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet)
 	if err != nil {
 		return 0, err
 	}
@@ -490,33 +492,54 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 }
 
 // SettleTx moves message id, in room (any room when ""), from the delivery state from to to,
-// inside the caller's transaction. A message that is sent keeps its identifier outside extID,
-// unless another message of the room has it (one that came in before the bridge answered); a
-// failed one keeps reason. It returns the message's room and author, and whether it was in
-// the state from.
+// inside the caller's transaction. A message that is sent keeps its identifier outside extID;
+// a message of the room that came in with it before the bridge answered (its echo) is merged
+// into it: replies to the echo reply to it, and the echo is deleted. A failed message keeps
+// reason. It returns the message's room and author, and whether it was in the state from.
 func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to Delivery, extID, reason string) (string, string, bool, error) {
-	var ext, why any
-	if extID != "" {
-		taken, err := extMessageTx(ctx, tx, room, extID)
-		if err != nil {
-			return "", "", false, err
-		}
-		if taken == 0 {
-			ext = extID
-		}
-	}
+	var why any
 	if reason != "" {
 		why = reason
 	}
 	var author string
-	err := tx.QueryRowContext(ctx, `UPDATE messages SET delivery = :to, ext_id = COALESCE(:ext, ext_id), delivery_error = :why
+	err := tx.QueryRowContext(ctx, `UPDATE messages SET delivery = :to, delivery_error = :why
 		WHERE id = :id AND delivery = :from AND (:room = '' OR room = :room) RETURNING room, author`,
-		sql.Named("to", string(to)), sql.Named("ext", ext), sql.Named("why", why), sql.Named("id", id),
+		sql.Named("to", string(to)), sql.Named("why", why), sql.Named("id", id),
 		sql.Named("from", string(from)), sql.Named("room", room)).Scan(&room, &author)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
 	}
+	if err != nil || extID == "" {
+		return room, author, err == nil, err
+	}
+	echo, err := extMessageTx(ctx, tx, room, extID)
+	if err != nil {
+		return "", "", false, err
+	}
+	if echo != 0 && echo != id {
+		for _, q := range []string{
+			`UPDATE messages SET reply_to = :id WHERE reply_to = :echo`,
+			`DELETE FROM mentions WHERE message_id = :echo`,
+			`DELETE FROM read_marks WHERE message_id = :echo`,
+			`DELETE FROM messages WHERE id = :echo`,
+		} {
+			if _, err := tx.ExecContext(ctx, q, sql.Named("id", id), sql.Named("echo", echo)); err != nil {
+				return "", "", false, err
+			}
+		}
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE messages SET ext_id = ? WHERE id = ?`, extID, id)
 	return room, author, err == nil, err
+}
+
+// NoticeTx posts a notice of the board about room's bridge inside the caller's transaction:
+// unread like any message, but it wakes no one.
+func (r *Rooms) NoticeTx(ctx context.Context, tx *sql.Tx, room, body string) error {
+	if err := requireRoom(ctx, tx, room); err != nil {
+		return err
+	}
+	_, err := insert(ctx, tx, Message{Room: room, Author: Board, Body: strings.TrimSpace(body), At: r.now(), Quiet: true}, "", nil)
+	return err
 }
 
 // extMessageTx returns the message of room with the identifier outside extID, or 0.
@@ -630,7 +653,7 @@ WITH followed(room, mode, wake_from) AS (
 )
 SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed,
-	EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from) AS wake_room,
+	(NOT m.quiet AND EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from)) AS wake_room,
 	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), COALESCE(m.delivery, ''), COALESCE(m.delivery_error, '')
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)

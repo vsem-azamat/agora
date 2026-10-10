@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/vsem-azamat/agora/internal/agents"
@@ -30,7 +31,13 @@ const (
 const (
 	// Truncated ends a message from outside that was shortened to rooms.MaxBody characters.
 	Truncated = " … [truncated]"
-	// maxError bounds the reason a failed message keeps.
+	// Empty is the text of a message from outside that came without one.
+	Empty = "[empty]"
+	// MaxIdentifier bounds, in bytes, an identifier outside or a cursor.
+	MaxIdentifier = 256
+	// maxName bounds an external author's name and id, in characters.
+	maxName = 100
+	// maxError bounds the reason a failed message keeps, in characters.
 	maxError = 500
 )
 
@@ -220,20 +227,30 @@ type In struct {
 }
 
 // Receive stores a message that came in through the bridge name, once per identifier outside,
-// and keeps its cursor. A message marked Self is attributed to operator, when there is one. It
-// returns the stored message's identifier, or 0 when the message was already stored.
+// and keeps its cursor. A message marked Self is attributed to operator, when there is one. A
+// line without an identifier only moves the cursor; one without text is stored as Empty. It
+// returns the stored message's identifier, or 0 when nothing was stored.
 func (b *Bridges) Receive(ctx context.Context, name string, in In, operator string) (int64, error) {
-	if in.ID == "" || strings.TrimSpace(in.Text) == "" {
-		return 0, fmt.Errorf("%w: an in line needs an id and text", store.ErrInvalid)
+	if in.ID == "" && in.Cursor == "" {
+		return 0, fmt.Errorf("%w: an in line needs an id or a cursor", store.ErrInvalid)
+	}
+	for _, v := range []string{in.ID, in.ReplyTo, in.Cursor} {
+		if len(v) > MaxIdentifier {
+			return 0, fmt.Errorf("%w: identifiers and cursors are at most %d bytes", store.ErrInvalid, MaxIdentifier)
+		}
 	}
 	text := strings.TrimSpace(in.Text)
+	if text == "" {
+		text = Empty
+	}
 	if utf8.RuneCountInString(text) > rooms.MaxBody {
 		keep := rooms.MaxBody - utf8.RuneCountInString(Truncated)
 		text = string([]rune(text)[:keep]) + Truncated
 	}
-	authorName := strings.TrimSpace(in.AuthorName)
+	authorID := clean(in.AuthorID, maxName)
+	authorName := clean(in.AuthorName, maxName)
 	if authorName == "" {
-		authorName = in.AuthorID
+		authorName = authorID
 	}
 	if authorName == "" {
 		authorName = "unknown"
@@ -247,6 +264,9 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 		if n, _ := res.RowsAffected(); n == 0 {
 			return fmt.Errorf("%w: no bridge %s", ErrNotFound, name)
 		}
+		if in.ID == "" {
+			return nil // only the cursor
+		}
 		var addressees []string
 		if in.Addressed {
 			if addressees, err = store.Strings(ctx, tx, `SELECT agent FROM bridge_agents WHERE bridge = ? ORDER BY agent`, name); err != nil {
@@ -254,7 +274,7 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 			}
 		}
 		msg := rooms.Incoming{
-			Room: name, ExtID: in.ID, AuthorID: in.AuthorID, AuthorName: authorName, Body: text, ReplyExtID: in.ReplyTo, At: in.At, Addressees: addressees,
+			Room: name, ExtID: in.ID, AuthorID: authorID, AuthorName: authorName, Body: text, ReplyExtID: in.ReplyTo, At: in.At, Addressees: addressees,
 		}
 		if in.Self && operator != "" {
 			msg.Author = operator
@@ -265,20 +285,35 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 	return id, err
 }
 
+// clean replaces control characters, line breaks included, with spaces, so a value from
+// outside stays on the line it is shown on, trims it and cuts it to limit characters.
+func clean(s string, limit int) string {
+	s = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s))
+	if utf8.RuneCountInString(s) > limit {
+		s = strings.TrimSpace(string([]rune(s)[:limit]))
+	}
+	return s
+}
+
 // Out is a message to hand to a bridge.
 type Out struct {
 	ID      int64
 	Author  string
 	Text    string
-	ReplyTo string // the identifier outside of the message it replies to, if any
+	ReplyTo string // the identifier outside of the message of the same room it replies to, if any
 }
 
-// Outgoing returns up to limit messages of the bridge's room after the message after that the
-// bridge has to send, in posting order.
-func (b *Bridges) Outgoing(ctx context.Context, name string, after int64, limit int) ([]Out, error) {
+// Outgoing returns every message of the bridge's room that the bridge has to send and has not
+// answered, in posting order.
+func (b *Bridges) Outgoing(ctx context.Context, name string) ([]Out, error) {
 	rows, err := b.db.QueryContext(ctx, `SELECT m.id, m.author, m.body, COALESCE(r.ext_id, '') FROM messages AS m
-		LEFT JOIN messages AS r ON r.id = m.reply_to
-		WHERE m.room = ? AND m.delivery = 'sending' AND m.id > ? ORDER BY m.id LIMIT ?`, name, after, limit)
+		LEFT JOIN messages AS r ON r.id = m.reply_to AND r.room = m.room
+		WHERE m.room = ? AND m.delivery = 'sending' ORDER BY m.id`, name)
 	if err != nil {
 		return nil, err
 	}
@@ -295,9 +330,13 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, after int64, limit 
 }
 
 // Sent marks message id of the bridge's room, handed to the bridge, as sent with the identifier
-// outside extID, which later in lines with the same identifier repeat. It reports whether the
-// message was waiting for the answer.
+// outside extID, so later in lines with that identifier, its echo, are ignored; an echo stored
+// before the answer is merged into it. It reports whether the message was waiting for the
+// answer.
 func (b *Bridges) Sent(ctx context.Context, name string, id int64, extID string) (bool, error) {
+	if len(extID) > MaxIdentifier {
+		return false, fmt.Errorf("%w: identifiers are at most %d bytes", store.ErrInvalid, MaxIdentifier)
+	}
 	changed := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var err error
@@ -311,12 +350,9 @@ func (b *Bridges) Sent(ctx context.Context, name string, id int64, extID string)
 // and the board tells its author in the room. It reports whether the message was waiting for
 // the answer.
 func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason string) (bool, error) {
-	reason = strings.TrimSpace(reason)
+	reason = clean(reason, maxError)
 	if reason == "" {
 		reason = "the bridge gave no reason"
-	}
-	if utf8.RuneCountInString(reason) > maxError {
-		reason = string([]rune(reason)[:maxError]) + " …"
 	}
 	changed := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
@@ -379,10 +415,7 @@ func (b *Bridges) tell(ctx context.Context, tx *sql.Tx, author, room string, id 
 	return err
 }
 
-// Notice has the board post text in the bridge's room.
+// Notice has the board post text in the bridge's room, waking no one.
 func (b *Bridges) Notice(ctx context.Context, name, text string) error {
-	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		_, err := b.rooms.PostTx(ctx, tx, rooms.Board, name, text, 0)
-		return err
-	})
+	return store.InTx(ctx, b.db, func(tx *sql.Tx) error { return b.rooms.NoticeTx(ctx, tx, name, text) })
 }

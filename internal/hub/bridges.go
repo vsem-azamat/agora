@@ -39,8 +39,10 @@ const (
 	maxBridgeLine = 1 << 20
 	// maxLogLine bounds a line of a bridge's standard error in the hub's log.
 	maxLogLine = 1000
-	// outBatch is how many messages the hub reads at once to hand to a bridge.
-	outBatch = 100
+	// bridgeDrain is how long the hub reads a bridge's output after its process exited.
+	bridgeDrain = 2 * time.Second
+	// stderrLines is how many lines of a bridge's standard error the hub logs a minute.
+	stderrLines = 100
 )
 
 // operatorProcedures are served only by the web listener; the socket refuses them as not found.
@@ -76,7 +78,7 @@ type bridgeRuns struct {
 	runs   map[string]*bridgeRun
 	wg     sync.WaitGroup
 
-	minDelay, maxDelay, steady time.Duration
+	minDelay, maxDelay, steady, drain time.Duration
 }
 
 // serveBridges starts every stored bridge; bridges added later start when added.
@@ -159,10 +161,21 @@ func nextBridgeDelay(d, limit time.Duration) time.Duration { return min(2*d, lim
 func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 	br := &h.bridgeRuns
 	delay := br.minDelay
+	gone := func() bool { // removed meanwhile, but not stopped: nothing is left to run
+		if _, err := h.bridges.Get(context.WithoutCancel(ctx), r.name); !errors.Is(err, bridges.ErrNotFound) {
+			return false
+		}
+		br.mu.Lock()
+		if br.runs[r.name] == r {
+			delete(br.runs, r.name)
+		}
+		br.mu.Unlock()
+		return true
+	}
 	for {
 		started := time.Now()
 		exit := h.runBridge(ctx, r)
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || gone() {
 			return
 		}
 		if time.Since(started) >= br.steady {
@@ -195,8 +208,10 @@ func (h *Hub) bridgeNotice(ctx context.Context, name, text string) {
 }
 
 // runBridge runs the bridge's command once, in its own process group, and returns how it ended.
-// When ctx ends it stops the group with SIGTERM, then SIGKILL after bridgeStopWait. It returns
-// only once the command's output is read and every goroutine it started has ended.
+// When ctx ends it stops the group with SIGTERM, then
+// SIGKILL after bridgeStopWait. After the command's process exited it reads the output for at
+// most drain more, since a process that left the group may hold it open. It returns only once
+// every goroutine it started has ended.
 func (h *Hub) runBridge(ctx context.Context, r *bridgeRun) string {
 	b, err := h.bridges.Get(ctx, r.name)
 	if err != nil {
@@ -266,17 +281,32 @@ func (h *Hub) runBridge(ctx context.Context, r *bridgeRun) string {
 			}
 		}
 	})
+	read := make(chan struct{}) // closed once both outputs are read to their end
 	wg.Go(func() {
-		readLines(errR, maxLogLine, func(line []byte) {
-			h.log.Warn("bridge stderr", "bridge", b.Name, "line", string(line))
-		}, func() {
-			h.log.Warn("bridge stderr line too long; skipped", "bridge", b.Name, "max", maxLogLine)
-		})
+		select {
+		case <-read:
+			return
+		case <-exited:
+		}
+		select {
+		case <-read:
+		case <-time.After(h.bridgeRuns.drain):
+			h.log.Warn("bridge output still open after its process exited, held by a process outside its group; no longer read", "bridge", b.Name)
+			_ = outR.SetReadDeadline(time.Now())
+			_ = errR.SetReadDeadline(time.Now())
+		}
 	})
+	stderrRead := make(chan struct{})
+	go func() {
+		defer close(stderrRead)
+		h.logStderr(b.Name, errR)
+	}()
 	wg.Go(func() { h.feedBridge(ctx, exited, stdin, b) })
 	readLines(outR, maxBridgeLine, func(line []byte) { h.bridgeLine(ctx, b.Name, line) }, func() {
 		h.log.Warn("bridge line too long; skipped", "bridge", b.Name, "max", maxBridgeLine)
 	})
+	<-stderrRead
+	close(read)
 	<-exited
 	wg.Wait()
 	var ee *exec.ExitError
@@ -287,6 +317,50 @@ func (h *Hub) runBridge(ctx context.Context, r *bridgeRun) string {
 		return ee.Error()
 	}
 	return waitErr.Error()
+}
+
+// logStderr logs the lines of a bridge's standard error, at most stderrLines a minute, and how
+// many it left out.
+func (h *Hub) logStderr(name string, r io.Reader) {
+	limit := logLimit{max: stderrLines, window: time.Minute}
+	report := func(dropped int) {
+		if dropped > 0 {
+			h.log.Warn("bridge stderr: lines left out", "bridge", name, "lines", dropped)
+		}
+	}
+	readLines(r, maxLogLine, func(line []byte) {
+		ok, dropped := limit.allow(time.Now())
+		report(dropped)
+		if ok {
+			h.log.Warn("bridge stderr", "bridge", name, "line", string(line))
+		}
+	}, func() {
+		h.log.Warn("bridge stderr line too long; skipped", "bridge", name, "max", maxLogLine)
+	})
+	report(limit.dropped)
+}
+
+// logLimit lets at most max lines a window through and counts the others.
+type logLimit struct {
+	max     int
+	window  time.Duration
+	start   time.Time
+	n       int // lines let through in this window
+	dropped int // lines left out in this window
+}
+
+// allow reports whether a line at now is let through, and how many lines the window that ended
+// before it left out.
+func (l *logLimit) allow(now time.Time) (ok bool, dropped int) {
+	if l.start.IsZero() || now.Sub(l.start) >= l.window {
+		dropped, l.start, l.n, l.dropped = l.dropped, now, 0, 0
+	}
+	if l.n < l.max {
+		l.n++
+		return true, dropped
+	}
+	l.dropped++
+	return false, dropped
 }
 
 // readLines calls line with every line of r, without its line end; a line longer than limit
@@ -337,29 +411,39 @@ type outLine struct {
 	ReplyTo string `json:"reply_to,omitempty"`
 }
 
-// feedBridge writes hello and then, in posting order, every message the bridge has to send,
-// until the command exits or ctx ends. A restarted bridge gets the unanswered ones again.
+// feedBridge writes hello and then every message the bridge has to send, each once, as it
+// becomes sendable (in posting order among those found together), until the command exits or
+// ctx ends. A restarted bridge gets the unanswered ones again.
 func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Writer, b bridges.Bridge) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(helloLine{Type: "hello", Version: ProtocolVersion, Bridge: b.Name, Room: b.Name, Cursor: b.Cursor}); err != nil {
 		return
 	}
-	var last int64
+	handed := map[int64]bool{} // handed in this run and not answered when last looked
 	for {
 		changed := h.changes.wait()
-		outs, err := h.bridges.Outgoing(ctx, b.Name, last, outBatch)
+		outs, err := h.bridges.Outgoing(ctx, b.Name)
 		if err != nil && ctx.Err() == nil {
 			h.log.Error("bridge: messages to send", "bridge", b.Name, "err", err)
 		}
-		for _, o := range outs {
-			if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: o.Author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
-				return
+		if err == nil {
+			unanswered := make(map[int64]bool, len(outs))
+			for _, o := range outs {
+				unanswered[o.ID] = true
+				if handed[o.ID] {
+					continue
+				}
+				if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: o.Author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
+					return
+				}
+				handed[o.ID] = true
 			}
-			last = o.ID
-		}
-		if len(outs) == outBatch {
-			continue
+			for id := range handed {
+				if !unanswered[id] {
+					delete(handed, id)
+				}
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -479,7 +563,7 @@ func (s *bridgeService) RemoveBridge(ctx context.Context, req *connect.Request[a
 	name := req.Msg.GetName()
 	ran := s.h.stopBridge(name) // first, so a stopping bridge does not find itself gone
 	if err := s.h.bridges.Remove(ctx, req.Msg.GetAgent(), name); err != nil {
-		if ran {
+		if ran && !errors.Is(err, bridges.ErrNotFound) {
 			s.h.startBridge(name) //nolint:contextcheck // not removed: it keeps running, under Serve's context
 		}
 		return nil, toConnect(err)
@@ -495,6 +579,9 @@ func (s *bridgeService) ListBridges(ctx context.Context, _ *connect.Request[agor
 	}
 	out := &agorav1.ListBridgesResponse{}
 	for _, b := range list {
+		if fromOperator(ctx) {
+			b.Command = "" // it may hold credentials; the web app does not need it
+		}
 		state, exit := s.h.bridgeState(b.Name)
 		out.Bridges = append(out.Bridges, &agorav1.Bridge{
 			Name: b.Name, Command: b.Command, Policy: bridgePolicies[b.Policy], CreatedBy: b.CreatedBy, CreatedAt: timestamppb.New(b.CreatedAt),

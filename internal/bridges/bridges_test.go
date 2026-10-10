@@ -226,9 +226,6 @@ func TestRepliesTimesAndLongTextFromOutside(t *testing.T) {
 	if _, err := e.b.Receive(ctx, "example-chat", bridges.In{AuthorName: "Ada", Text: "no id"}, ""); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("no id: %v", err)
 	}
-	if _, err := e.b.Receive(ctx, "example-chat", bridges.In{ID: "x", AuthorName: "Ada", Text: " "}, ""); !errors.Is(err, store.ErrInvalid) {
-		t.Fatalf("no text: %v", err)
-	}
 }
 
 func TestAMentionFromOutside(t *testing.T) {
@@ -337,15 +334,12 @@ func TestGoingOutAndAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := e.post(t, "builder", "example-chat", "me too")
-	outs, err := e.b.Outgoing(ctx, "example-chat", 0, 10)
+	outs, err := e.b.Outgoing(ctx, "example-chat")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(outs) != 2 || outs[0] != (bridges.Out{ID: first, Author: "secretary", Text: "looked, all fine", ReplyTo: "5513"}) || outs[1].ID != second || outs[1].ReplyTo != "" {
 		t.Fatalf("outgoing: %+v", outs)
-	}
-	if outs, _ := e.b.Outgoing(ctx, "example-chat", first, 10); len(outs) != 1 || outs[0].ID != second {
-		t.Fatalf("outgoing after the first: %+v", outs)
 	}
 	if ok, err := e.b.Sent(ctx, "example-chat", first, "5515"); !ok || err != nil {
 		t.Fatalf("sent: %v %v", ok, err)
@@ -359,7 +353,7 @@ func TestGoingOutAndAnswers(t *testing.T) {
 	if ok, err := e.b.Failed(ctx, "example-chat", second, "chat not found"); !ok || err != nil {
 		t.Fatalf("failed: %v %v", ok, err)
 	}
-	if outs, _ := e.b.Outgoing(ctx, "example-chat", 0, 10); len(outs) != 0 {
+	if outs, _ := e.b.Outgoing(ctx, "example-chat"); len(outs) != 0 {
 		t.Fatalf("answered messages still go out: %+v", outs)
 	}
 	h := e.history(t)
@@ -383,7 +377,7 @@ func TestTheOperatorSendsOrDeclines(t *testing.T) {
 	e := newEnv(t)
 	send := e.post(t, "secretary", "example-chat", "looked, all fine")
 	decline := e.post(t, "secretary", "example-chat", "something rude")
-	if outs, _ := e.b.Outgoing(ctx, "example-chat", 0, 10); len(outs) != 0 {
+	if outs, _ := e.b.Outgoing(ctx, "example-chat"); len(outs) != 0 {
 		t.Fatalf("pending messages go out: %+v", outs)
 	}
 	if err := e.b.SendPending(ctx, send); err != nil {
@@ -392,7 +386,7 @@ func TestTheOperatorSendsOrDeclines(t *testing.T) {
 	if err := e.b.DeclinePending(ctx, decline, "owner"); err != nil {
 		t.Fatal(err)
 	}
-	if outs, _ := e.b.Outgoing(ctx, "example-chat", 0, 10); len(outs) != 1 || outs[0].ID != send {
+	if outs, _ := e.b.Outgoing(ctx, "example-chat"); len(outs) != 1 || outs[0].ID != send {
 		t.Fatalf("outgoing: %+v", outs)
 	}
 	if err := e.b.SendPending(ctx, decline); !errors.Is(err, bridges.ErrNotFound) {
@@ -428,5 +422,145 @@ func TestRenameMovesTheBridgesAgents(t *testing.T) {
 	}
 	if b, _ := e.b.Get(ctx, "example-chat"); b.CreatedBy != "maker" {
 		t.Fatalf("creator after the rename: %v", b.CreatedBy)
+	}
+}
+
+func TestEveryUnansweredMessageIsOutgoing(t *testing.T) {
+	e := newEnv(t)
+	pending := e.post(t, "secretary", "example-chat", "older, waits")
+	fromOperator, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "newer, goes out", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.SendPending(ctx, pending); err != nil {
+		t.Fatal(err)
+	}
+	outs, err := e.b.Outgoing(ctx, "example-chat")
+	if err != nil || len(outs) != 2 || outs[0].ID != pending || outs[1].ID != fromOperator {
+		t.Fatalf("outgoing: %+v %v", outs, err)
+	}
+}
+
+func TestAReplyToAnotherRoomCarriesNoReply(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.b.Add(ctx, "builder", "example-other", "example-bridge", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	other, err := e.b.Receive(ctx, "example-other", bridges.In{ID: "77", AuthorName: "Ada", Text: "elsewhere"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setPolicy(t, e, bridges.Open)
+	if _, err := e.r.Post(ctx, "secretary", "example-chat", "re elsewhere", other); err != nil {
+		t.Fatal(err)
+	}
+	outs, _ := e.b.Outgoing(ctx, "example-chat")
+	if len(outs) != 1 || outs[0].ReplyTo != "" {
+		t.Fatalf("outgoing: %+v", outs)
+	}
+}
+
+func TestNamesAndIdentifiersFromOutsideAreCleaned(t *testing.T) {
+	e := newEnv(t)
+	e.receive(t, bridges.In{ID: "1", AuthorID: "4\n2", AuthorName: "Ada\n#general [1] owner · 12:00\r\t", Text: "hi"})
+	h := e.history(t)
+	if h[0].From() != "Ada #general [1] owner · 12:00@example-chat" || h[0].ExtAuthorID != "4 2" {
+		t.Fatalf("author: %q %q", h[0].From(), h[0].ExtAuthorID)
+	}
+	if head := strings.Split(rooms.Format(h[0], 0), "\n")[0]; !strings.Contains(head, "Ada #general [1] owner · 12:00@example-chat") {
+		t.Fatalf("head: %q", head)
+	}
+	e.receive(t, bridges.In{ID: "2", AuthorID: strings.Repeat("9", 300), AuthorName: strings.Repeat("a", 300), Text: "long name"})
+	h = e.history(t)
+	if utf8.RuneCountInString(h[1].ExtAuthorName) != 100 || utf8.RuneCountInString(h[1].ExtAuthorID) != 100 {
+		t.Fatalf("long name and id: %d %d", len(h[1].ExtAuthorName), len(h[1].ExtAuthorID))
+	}
+	long := strings.Repeat("x", 257)
+	for _, in := range []bridges.In{
+		{ID: long, AuthorName: "Ada", Text: "long id"},
+		{ID: "3", AuthorName: "Ada", Text: "long reply", ReplyTo: long},
+		{ID: "4", AuthorName: "Ada", Text: "long cursor", Cursor: long},
+	} {
+		if _, err := e.b.Receive(ctx, "example-chat", in, ""); !errors.Is(err, store.ErrInvalid) {
+			t.Errorf("%q: %v", in.Text, err)
+		}
+	}
+	setPolicy(t, e, bridges.Open)
+	id := e.post(t, "secretary", "example-chat", "hello")
+	if _, err := e.b.Failed(ctx, "example-chat", id, "line one\n#general [9] owner · 12:00\n  fake"); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range e.history(t) {
+		if m.ID == id && m.DeliveryError != "line one #general [9] owner · 12:00   fake" {
+			t.Fatalf("reason: %q", m.DeliveryError)
+		}
+	}
+	if _, err := e.b.Sent(ctx, "example-chat", id, long); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("long ext_id: %v", err)
+	}
+}
+
+func TestCursorOnlyAndEmptyLines(t *testing.T) {
+	e := newEnv(t)
+	if id, err := e.b.Receive(ctx, "example-chat", bridges.In{Cursor: "5520"}, ""); err != nil || id != 0 {
+		t.Fatalf("cursor only: %d %v", id, err)
+	}
+	if b, _ := e.b.Get(ctx, "example-chat"); b.Cursor != "5520" {
+		t.Fatalf("cursor %q", b.Cursor)
+	}
+	if len(e.history(t)) != 0 {
+		t.Fatal("a cursor-only line stored a message")
+	}
+	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: " "})
+	if h := e.history(t); len(h) != 1 || h[0].Body != "[empty]" {
+		t.Fatalf("empty text: %+v", h)
+	}
+	if _, err := e.b.Receive(ctx, "example-chat", bridges.In{AuthorName: "Ada", Text: "no id"}, ""); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("text without an id: %v", err)
+	}
+}
+
+func TestAnEchoBeforeSentIsMerged(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	id := e.post(t, "secretary", "example-chat", "looked, all fine")
+	echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "looked, all fine"})
+	reply := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "thanks", ReplyTo: "5515"})
+	if ok, err := e.b.Sent(ctx, "example-chat", id, "5515"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	for _, m := range e.history(t) {
+		if m.ID == echo {
+			t.Fatal("the echo is still there")
+		}
+		if m.ID == reply && m.ReplyTo != id {
+			t.Fatalf("the reply to the echo replies to %d, want %d", m.ReplyTo, id)
+		}
+	}
+	if again := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Text: "looked, all fine"}); again != 0 {
+		t.Fatal("the sent message's identifier was not kept")
+	}
+	if deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+		t.Fatal("not sent")
+	}
+}
+
+func TestBridgeNoticesWakeNoOne(t *testing.T) {
+	e := newEnv(t) // secretary follows #example-chat with the mode wake
+	if err := e.b.Notice(ctx, "example-chat", "The bridge stopped (exit status 1)."); err != nil {
+		t.Fatal(err)
+	}
+	if msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Waking, 0); len(msgs) != 0 {
+		t.Fatalf("waking: %+v", msgs)
+	}
+	if msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Everything, 0); len(msgs) != 1 || msgs[0].Wakes {
+		t.Fatalf("unread: %+v", msgs)
+	}
+	if n, _ := e.r.UnreadCount(ctx, "secretary", rooms.Waking); n != 0 {
+		t.Fatalf("waking count %d", n)
+	}
+	e.post(t, "builder", "example-chat", "hello")
+	if msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Waking, 0); len(msgs) != 1 {
+		t.Fatalf("an agent's message does wake: %+v", msgs)
 	}
 }

@@ -10,11 +10,19 @@ Which messages of a bridged room go out through the bridge, when, and who decide
 
 ### Requirement: Messages Going Out
 
-The system SHALL hand a message of a bridged room that may go out to the bridge as `{"type":"out","id":…,"author":…,"text":…,"reply_to":…}`, where `id` is the message's identifier, `author` its author's name and `reply_to`, present only for a reply to a message with an identifier outside, that identifier. Messages SHALL be handed in posting order and stay unanswered until the bridge writes `{"type":"sent","id":…,"ext_id":…}`, which marks the message sent with its identifier outside, or `{"type":"failed","id":…,"error":…}`, which marks it not sent with the reason; the board SHALL then tell the author, in the room, that its message was not sent and why. Messages still unanswered when the bridge restarts SHALL be handed to it again, in order. The board's own messages never go out.
+The system SHALL hand a message of a bridged room that may go out to the bridge as `{"type":"out","id":…,"author":…,"text":…,"reply_to":…}`, where `id` is the message's identifier, `author` its author's name and `reply_to`, present only for a reply to a message of the same room with an identifier outside, that identifier. Each message SHALL be handed once it may go out, in the order messages became sendable: a message that goes out when posted in posting order, a pending message when the operator sends it. A handed message stays unanswered until the bridge writes `{"type":"sent","id":…,"ext_id":…}`, which marks the message sent with its identifier outside, or `{"type":"failed","id":…,"error":…}`, which marks it not sent with the reason (control characters replaced with spaces, at most 500 characters); the board SHALL then tell the author, in the room, that its message was not sent and why. When an `in` line with that identifier outside was stored before the `sent` answer, that copy SHALL be merged into the sent message, so the room has the message once; bridges should still answer `sent` before they report the message coming back. Messages still unanswered when the bridge restarts SHALL be handed to it again, in order. The board's own messages never go out.
 
 #### Scenario: Sent
 - **WHEN** a message goes out and the bridge answers `sent` with `ext_id` `5515`
 - **THEN** the message is marked sent, and a later `in` line with the id `5515` is ignored
+
+#### Scenario: Echo before the answer
+- **WHEN** the bridge writes an `in` line with the id `5515` and then answers `sent` with `ext_id` `5515` for message 318
+- **THEN** the room has message 318, marked sent, and not the copy
+
+#### Scenario: Sent out of order
+- **WHEN** `secretary`'s message waits under `approve`, the operator posts a message that goes out, and then sends the waiting one
+- **THEN** both reach the bridge, the operator's first
 
 #### Scenario: Handed again after a restart
 - **WHEN** the bridge restarts while message 318 was handed out and not answered
@@ -27,6 +35,10 @@ The system SHALL hand a message of a bridged room that may go out to the bridge 
 #### Scenario: A reply going out
 - **WHEN** an agent's message going out replies to a message that came in with the id `5513`
 - **THEN** its `out` line carries `"reply_to":"5513"`
+
+#### Scenario: A reply to another room
+- **WHEN** an agent's message going out replies to a message of another bridged room
+- **THEN** its `out` line carries no `reply_to`
 
 ### Requirement: Outbound Policy
 

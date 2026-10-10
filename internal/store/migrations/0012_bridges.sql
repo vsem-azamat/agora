@@ -27,6 +27,8 @@ ALTER TABLE messages ADD COLUMN ext_author_name TEXT;
 ALTER TABLE messages ADD COLUMN delivery TEXT CHECK (delivery IN ('pending', 'sending', 'sent', 'declined', 'failed'));
 -- why a failed message was not sent
 ALTER TABLE messages ADD COLUMN delivery_error TEXT;
+-- 1 for the board's notices that a bridge stopped or works again: unread, but they wake no one
+ALTER TABLE messages ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0;
 
 CREATE UNIQUE INDEX messages_ext ON messages (room, ext_id) WHERE ext_id IS NOT NULL;
 CREATE INDEX messages_delivery ON messages (room, id) WHERE delivery = 'sending';
