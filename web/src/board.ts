@@ -8,7 +8,7 @@ import { type Entry, EntryState, type Resource } from './gen/agora/v1/resources_
 /** The board posts its own messages under this name. */
 export const BOARD = 'agora';
 
-export type Liveness = 'busy' | 'idle' | 'offline';
+type Liveness = 'busy' | 'idle' | 'offline';
 
 export function liveness(p: Pick<Profile, 'sessionState'>): Liveness {
   return p.sessionState === 'busy' || p.sessionState === 'idle' ? p.sessionState : 'offline';
@@ -28,7 +28,7 @@ export function pullRequests(p: Pick<Profile, 'prs' | 'foundPrs'>): number[] {
   return [...new Set([...p.prs, ...p.foundPrs])].sort((a, b) => a - b);
 }
 
-export type CIMark = 'green' | 'red' | undefined;
+type CIMark = 'green' | 'red' | undefined;
 
 /** The icon for a pull request's last reported CI state: laurel for green, ostrakon for red or a conflict. */
 export function ciMark(p: Pick<Profile, 'ci'>, pr: number): CIMark {
@@ -60,7 +60,7 @@ export function filterCounts(agents: Profile[], project?: string): Record<Filter
 }
 
 /** Agents without a project are listed under this name. */
-export const OTHER = 'other';
+const OTHER = 'other';
 
 export function projectOf(p: Pick<Profile, 'project'>): string {
   return p.project.trim() || OTHER;
@@ -100,7 +100,7 @@ export function timeLeft(until: Date | undefined, now: Date): string {
 
 // --- turns ---------------------------------------------------------------------------
 
-export type Turn = { agent: string; label: string; holds: boolean };
+type Turn = { agent: string; label: string; holds: boolean };
 
 /** How each entry of a queue reads: holders with their lease left, `offered`, `next`, then `#n`. */
 export function turns(r: Resource, now: Date): Turn[] {
@@ -121,7 +121,7 @@ export function splitResources(rs: Resource[]): { locks: Resource[]; queues: Res
   return { locks: rs.filter((r) => r.slots <= 1), queues: rs.filter((r) => r.slots > 1) };
 }
 
-export type LockState = { holder?: string; left: string; waiting: number };
+type LockState = { holder?: string; left: string; waiting: number };
 
 export function lockState(r: Resource, now: Date): LockState {
   const held = r.entries.find((e) => e.state === EntryState.HELD);
@@ -131,7 +131,7 @@ export function lockState(r: Resource, now: Date): LockState {
 
 // --- charter -------------------------------------------------------------------------
 
-export type Pebble = 'yes' | 'no' | 'abstain';
+type Pebble = 'yes' | 'no' | 'abstain';
 
 /** One pebble per vote, yes first, then no, then abstain. */
 export function pebbles(p: Pick<Proposal, 'votes'>): { agent: string; choice: Pebble }[] {
@@ -151,7 +151,7 @@ export function proposalOrder(ps: Proposal[]): Proposal[] {
 
 // --- messages ------------------------------------------------------------------------
 
-export type Part = { text: string; kind: 'text' | 'mention' | 'ref'; at: number };
+type Part = { text: string; kind: 'text' | 'mention' | 'ref'; at: number };
 
 // A mention is @name not preceded by a letter, digit, `.`, `_`, `-` or `@` (as the hub parses it);
 // a reference is #123.

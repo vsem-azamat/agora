@@ -94,6 +94,18 @@ describe('sidebar', () => {
   });
 });
 
+describe('theme', () => {
+  it('switches to ink and remembers it', async () => {
+    vi.stubGlobal('fetch', fakeHub([]));
+    history.replaceState(null, '', '/#token=good-token');
+    render(<App />);
+    expect(document.documentElement.dataset.theme).toBe('parchment');
+    fireEvent.click(screen.getByText('Ink'));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('ink'));
+    expect(localStorage.getItem('agora.theme')).toBe('ink');
+  });
+});
+
 // --- reading a room ----------------------------------------------------------------------
 
 function fakeRoomApi(history: () => Promise<unknown>) {
@@ -123,6 +135,17 @@ describe('useRoom', () => {
     vi.restoreAllMocks();
     document.dispatchEvent(new Event('visibilitychange'));
     await waitFor(() => expect(markRoomRead).toHaveBeenCalled());
+  });
+
+  it('starts another room empty instead of showing the previous room', async () => {
+    const { api } = fakeRoomApi(async () => msgs);
+    const { result, rerender } = renderHook(({ room }) => useRoom(api, room, 1n, vi.fn()), {
+      initialProps: { room: 'example-app' },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    vi.mocked(api.rooms.history).mockReturnValue(new Promise(() => {}) as never);
+    rerender({ room: 'general' });
+    expect(result.current.messages).toBeUndefined();
   });
 
   it('shows a missing room as an error without signing out', async () => {

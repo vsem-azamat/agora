@@ -4,6 +4,7 @@ import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, parseRoute } from './App';
+import { boardAgents } from './board';
 import { agent, lock, NOW, proposal, queue } from './fixtures';
 import { GetCharterResponseSchema } from './gen/agora/v1/governance_pb';
 import { MessageSchema, RoomSchema } from './gen/agora/v1/rooms_pb';
@@ -27,8 +28,9 @@ describe('Board', () => {
   ];
 
   it('lists agents busy first with helmets, CI icons and filter counts', () => {
-    const { container } = render(<Board agents={agents} operator="operator" now={NOW} />);
+    const { container } = render(<Board agents={boardAgents(agents, 'operator')} now={NOW} />);
     expect(names(container)).toEqual(['reviewer', 'builder', 'docs-writer']);
+    expect(container.querySelector('.head .sum')?.textContent).toBe('1 busy · 1 idle · 1 offline');
     expect(container.querySelector('[data-agent="reviewer"] .ic.busy')).not.toBeNull();
     expect(container.querySelector('[data-agent="docs-writer"] .ic.offline')).not.toBeNull();
     const chips = [...container.querySelectorAll('.filters .chip')].map((c) => c.textContent);
@@ -39,10 +41,10 @@ describe('Board', () => {
   });
 
   it('narrows to agents with a pull request and to a project', () => {
-    const { container, rerender } = render(<Board agents={agents} operator="operator" now={NOW} />);
+    const { container, rerender } = render(<Board agents={boardAgents(agents, 'operator')} now={NOW} />);
     fireEvent.click(screen.getByText('with PR 1'));
     expect(names(container)).toEqual(['builder']);
-    rerender(<Board agents={agents} operator="operator" now={NOW} project="website" />);
+    rerender(<Board agents={boardAgents(agents, 'operator')} now={NOW} project="website" />);
     fireEvent.click(screen.getByText('all 1'));
     expect(names(container)).toEqual(['docs-writer']);
   });
@@ -57,22 +59,18 @@ describe('Rooms', () => {
   it('shows mention counts as @n and marks followed rooms', () => {
     const unread = new Map([['example-app', { unread: 7, addressed: 2 }]]);
     const { container } = render(
-      <RoomList
-        rooms={rooms}
-        unread={unread}
-        followed={new Set(['general', 'example-app'])}
-        href={(r) => `#/rooms/${r}`}
-      />,
+      <RoomList rooms={rooms} unread={unread} followed={new Set(['general', 'example-app'])} />,
     );
     expect(container.querySelector('em.mention')?.textContent).toBe('@2');
-    expect(container.querySelectorAll('.room.followed')).toHaveLength(2);
+    expect(container.querySelectorAll('.item.followed')).toHaveLength(2);
   });
 
-  it('shows the board with an owl, sets mentions apart, posts and follows', async () => {
+  it('shows the board with an owl, sets mentions and own messages apart, posts and follows', async () => {
     const at = timestampFromDate(NOW);
     const messages = [
       create(MessageSchema, { id: 1n, room: 'example-app', author: 'agora', body: '@builder CI is green on #57.', at }),
       create(MessageSchema, { id: 2n, room: 'example-app', author: 'reviewer', body: 'thanks @builder', at }),
+      create(MessageSchema, { id: 3n, room: 'example-app', author: 'operator', body: 'merging now', at }),
     ];
     const onPost = vi.fn(async () => {});
     const onFollow = vi.fn();
@@ -91,6 +89,7 @@ describe('Rooms', () => {
     const sys = container.querySelector('.msg.sys') as HTMLElement;
     expect(sys.querySelector('.who svg title')?.textContent).toBe('the board');
     expect([...sys.querySelectorAll('.tx b')].map((b) => b.textContent)).toEqual(['@builder', '#57']);
+    expect([...container.querySelectorAll('.msg.own .tx')].map((t) => t.textContent)).toEqual(['merging now']);
     const box = screen.getByLabelText('Message #example-app');
     fireEvent.change(box, { target: { value: '@builder please rebase' } });
     fireEvent.keyDown(box, { key: 'Enter' });

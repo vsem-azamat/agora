@@ -26,9 +26,7 @@ const paths = {
   red: 'M5 7.5 13.5 4 19.5 9 16.8 19 7.2 20.5 4 13z M9 10.5l2.2 3.5M11.2 10.5 9 14M13.5 11v4',
 } as const;
 
-export type IconName = keyof typeof paths;
-
-export const iconNames = Object.keys(paths) as IconName[];
+type IconName = keyof typeof paths;
 
 export function Icon({ name, className, title }: { name: IconName; className?: string; title?: string }) {
   const cls = className ? `ic ${className}` : 'ic';

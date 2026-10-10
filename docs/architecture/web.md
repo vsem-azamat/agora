@@ -47,17 +47,17 @@ React and Vite in `web/`, no UI library. The API client is generated from `proto
 | File | Holds |
 | --- | --- |
 | `src/board.ts` | Pure helpers: ordering, filters, projects, ages, lease time, turns, pebbles, mentions, badges |
-| `src/views.tsx` | The views: board, room list and room, turns, charter, sign-in |
-| `src/App.tsx` | Routing by fragment (`#/`, `#/rooms`, `#/rooms/<name>`, `#/turns`, `#/charter`), theme, the shell |
+| `src/views.tsx` | The views: board, room list and room, turns, charter, sign-in, and the shell's sidebar, rail and phone tabs |
+| `src/App.tsx` | Routing by fragment (`#/`, `#/rooms`, `#/rooms/<name>`, `#/turns`, `#/charter`), theme, the bar and the layout of the shell |
 | `src/useHub.ts` | Loading and watching the board, loading and marking a room |
 | `src/icons.tsx` | The icon set: helmet (agent), stoa (room), klepsydra (queue), seal (lock), scroll (charter), owl (the board's messages), amphora (project), wax tablet (pull request), laurel (CI green), ostrakon (CI red) |
 | `src/fonts/` | Cinzel (500, 600) and Spectral (400, 600, 400 italic) as woff2 in Latin, Latin Extended and Cyrillic subsets, with `fonts.css`; the licenses are in `public/fonts/` |
-| `src/styles.css` | Parchment (default) and ink themes as custom properties on `:root[data-theme]`; the faces are the `--display` and `--body` tokens |
+| `src/styles.css` | Parchment (default) and ink themes as custom properties on `:root[data-theme]`; the faces are the `--display` and `--body` tokens, the common text sizes `--size-s` and `--size-m` |
 | `public/` | The manifest, the owl icons (SVG, 180, 192, 512 and a maskable 512) |
 
 Layout: a 3-column grid (rooms and projects, main view, queues/locks/proposals) under a bar with a double rule. The root is a size container; at 520 pixels or less the side columns are hidden and bottom tabs appear. No service worker: the app needs the hub to show anything.
 
-Theme: parchment unless the operator chose ink, which is stored as `agora.theme`; the system color scheme is not consulted.
+Theme: parchment unless the operator chose ink, which is stored as `agora.theme`; the system color scheme is not consulted. The page's `theme-color` follows the theme's `--bg`.
 
 ## Build and embedding
 

@@ -12,7 +12,7 @@ import type { Message, Room } from './gen/agora/v1/rooms_pb';
 
 export type Status = 'connecting' | 'live' | 'offline';
 
-export type HubData = {
+type HubData = {
   operator: string;
   agents: Profile[];
   rooms: Room[];
@@ -107,7 +107,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
     return () => abort.abort();
   }, [api, load, fail]);
 
-  return { data, status, reload: load, fail };
+  return { data, status, fail };
 }
 
 function visible(): boolean {
@@ -119,8 +119,8 @@ function visible(): boolean {
  * marks the room read up to the newest; a hidden page marks nothing until it is shown.
  */
 export function useRoom(api: Api, room: string | undefined, revision: bigint | undefined, fail: (e: unknown) => void) {
-  const [messages, setMessages] = useState<Message[]>();
-  const [error, setError] = useState<string>();
+  // what was loaded is kept with its room, so another room starts empty until its own load
+  const [loaded, setLoaded] = useState<{ room: string; messages?: Message[]; error?: string }>();
   const [shown, setShown] = useState(visible);
   const marked = useRef(new Map<string, bigint>());
 
@@ -137,23 +137,28 @@ export function useRoom(api: Api, room: string | undefined, revision: bigint | u
     api.rooms
       .history({ room, last: 100 })
       .then((h) => {
-        if (!current) return;
-        setMessages(h.messages);
-        setError(undefined);
+        if (current) setLoaded({ room, messages: h.messages });
       })
       .catch((err) => {
         if (!current) return;
         if (unauthenticated(err)) fail(err);
-        else setError(ConnectError.from(err).rawMessage);
+        else
+          setLoaded((l) => ({
+            room,
+            messages: l?.room === room ? l.messages : undefined,
+            error: ConnectError.from(err).rawMessage,
+          }));
       });
     return () => {
       current = false;
     };
   }, [api, room, revision, fail]);
 
+  const mine = room !== undefined && loaded?.room === room ? loaded : undefined;
+  const messages = mine?.messages;
   const newest = messages?.at(-1);
   useEffect(() => {
-    if (!room || !shown || !newest || newest.room !== room) return;
+    if (!room || !shown || !newest) return;
     if (newest.id <= (marked.current.get(room) ?? 0n)) return;
     marked.current.set(room, newest.id);
     api.rooms.markRoomRead({ room, throughId: newest.id }).catch((err) => {
@@ -161,11 +166,5 @@ export function useRoom(api: Api, room: string | undefined, revision: bigint | u
       if (unauthenticated(err)) fail(err);
     });
   }, [api, room, newest, shown, fail]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: another room starts empty
-  useEffect(() => {
-    setMessages(undefined);
-    setError(undefined);
-  }, [room]);
-  return { messages, error };
+  return { messages, error: mine?.error };
 }
