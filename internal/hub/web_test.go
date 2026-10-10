@@ -211,7 +211,7 @@ func TestWebServesOnlyTheAppsCalls(t *testing.T) {
 		t.Fatalf("lock after a refused release: %v", rs)
 	}
 	gov := agorav1connect.NewGovernanceServiceClient(w.client(token), w.base)
-	if _, err := gov.Vote(context.Background(), connect.NewRequest(&agorav1.VoteRequest{Agent: "operator", ProposalId: 1, Choice: "yes"})); code(err) != connect.CodeNotFound {
+	if _, err := gov.Vote(context.Background(), connect.NewRequest(&agorav1.VoteRequest{Agent: "operator", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_YES})); code(err) != connect.CodeNotFound {
 		t.Fatalf("vote over the web: %v", err)
 	}
 	if _, err := gov.GetCharter(context.Background(), connect.NewRequest(&agorav1.GetCharterRequest{})); err != nil {
@@ -410,6 +410,7 @@ func TestWatchSendsChangesAndIgnoresReads(t *testing.T) {
 		_, _ = agorav1connect.NewAgentServiceClient(c, w.base).ListAgents(ctx, connect.NewRequest(&agorav1.ListAgentsRequest{}))
 		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{}))
 		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Follow: true}))
+		_, _ = agorav1connect.NewRoomServiceClient(c, w.base).ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{}))
 	}
 	select {
 	case rev := <-got:
@@ -536,6 +537,11 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 	if got := followed.Msg.GetRooms(); len(got) != 2 || got[1] != "example-app" {
 		t.Fatalf("operator follows %v", got)
 	}
+	// the request names an agent that never joined: only the operator override makes it work
+	listed, err := rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{Agent: "ghost"}))
+	if err != nil || len(listed.Msg.GetRooms()) != 2 || listed.Msg.GetRooms()[1] != "example-app" {
+		t.Fatalf("listed for the operator: %v %v", listed, err)
+	}
 	first, _ := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "example-app", Body: "one"}))
 	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Author: "builder", Room: "example-app", Body: "two"})); err != nil {
 		t.Fatal(err)
@@ -607,7 +613,7 @@ func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
 			return err
 		}},
 		{"vote", func() error {
-			_, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "builder", ProposalId: 1, Choice: "yes"}))
+			_, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "builder", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_YES}))
 			return err
 		}},
 		{"mark read", func() error {

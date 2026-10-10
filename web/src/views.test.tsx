@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, parseRoute } from './App';
 import { boardAgents } from './board';
-import { agent, lock, NOW, proposal, queue } from './fixtures';
+import { agent, ci, lock, NOW, proposal, queue } from './fixtures';
 import { GetCharterResponseSchema } from './gen/agora/v1/governance_pb';
 import { MessageSchema, RoomSchema } from './gen/agora/v1/rooms_pb';
 import { Board, Charter, RoomList, RoomView, Turns } from './views';
@@ -21,7 +21,7 @@ const names = (container: HTMLElement) => [...container.querySelectorAll('.agent
 
 describe('Board', () => {
   const agents = [
-    agent('builder', 'idle', { foundPrs: [57], prs: [58], ci: { 57: 'green', 58: 'red' } }),
+    agent('builder', 'idle', { foundPrs: [57], prs: [58], ciState: ci({ 57: 'green', 58: 'red' }) }),
     agent('reviewer', 'busy'),
     agent('docs-writer', 'offline', { project: 'website' }),
     agent('operator', 'offline'),

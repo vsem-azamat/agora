@@ -200,6 +200,9 @@ func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add
 func (r *Rooms) Followed(ctx context.Context, agent string) ([]string, error) {
 	var out []string
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+			return err
+		}
 		var err error
 		out, err = followed(ctx, tx, agent)
 		return err

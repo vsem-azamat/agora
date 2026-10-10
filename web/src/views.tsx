@@ -15,6 +15,7 @@ import {
   projectOf,
   projects,
   proposalOrder,
+  proposalState,
   pullRequests,
   type RoomCount,
   roomBadge,
@@ -381,7 +382,7 @@ function Proposals({ proposals, limit }: { proposals: Proposal[]; limit?: number
             <span className="num">{String(p.id)}.</span> {p.title}
           </span>
           <span className="votes">
-            {p.state}
+            {proposalState(p)}
             <Pebbles proposal={p} />
           </span>
         </li>

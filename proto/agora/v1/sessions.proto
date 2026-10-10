@@ -36,6 +36,8 @@ enum SessionState {
   SESSION_STATE_BUSY = 1;
   SESSION_STATE_IDLE = 2;
   SESSION_STATE_ENDED = 3;
+  // Only in profiles: the agent has no live session.
+  SESSION_STATE_OFFLINE = 4;
 }
 
 message Session {

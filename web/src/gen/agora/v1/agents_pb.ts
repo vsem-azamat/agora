@@ -2,8 +2,10 @@
 // @generated from file agora/v1/agents.proto (package agora.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { SessionState } from "./sessions_pb";
+import { file_agora_v1_sessions } from "./sessions_pb";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/agents.proto.
  */
 export const file_agora_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIvgCCgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFQoNc2Vzc2lvbl9zdGF0ZRgMIAEoCRIOCgZhY3RpdmUYDSABKAgSEQoJZm91bmRfcHJzGA4gAygFEiUKAmNpGA8gAygLMhkuYWdvcmEudjEuUHJvZmlsZS5DaUVudHJ5GikKB0NpRW50cnkSCwoDa2V5GAEgASgFEg0KBXZhbHVlGAIgASgJOgI4ASL5AQoUVXBkYXRlUHJvZmlsZVJlcXVlc3QSDAoEbmFtZRgBIAEoCRIRCgRraW5kGAIgASgJSACIAQESFAoHcHJvamVjdBgDIAEoCUgBiAEBEhEKBHRhc2sYBCABKAlIAogBARITCgZzdGF0dXMYBSABKAlIA4gBARIQCgNjd2QYBiABKAlIBIgBARISCgVhYm91dBgHIAEoCUgFiAEBEg8KB2FkZF9wcnMYCCADKAUSEAoIZHJvcF9wcnMYCSADKAVCBwoFX2tpbmRCCgoIX3Byb2plY3RCBwoFX3Rhc2tCCQoHX3N0YXR1c0IGCgRfY3dkQggKBl9hYm91dCI7ChVVcGRhdGVQcm9maWxlUmVzcG9uc2USIgoHcHJvZmlsZRgBIAEoCzIRLmFnb3JhLnYxLlByb2ZpbGUiHAoMTGVhdmVSZXF1ZXN0EgwKBG5hbWUYASABKAkiIQoNTGVhdmVSZXNwb25zZRIQCghyZWxlYXNlZBgBIAMoCSIgChFMaXN0QWdlbnRzUmVxdWVzdBILCgNhbGwYASABKAgiNwoSTGlzdEFnZW50c1Jlc3BvbnNlEiEKBmFnZW50cxgBIAMoCzIRLmFnb3JhLnYxLlByb2ZpbGUiNgoKV2hvUmVxdWVzdBINCgVxdWVyeRgBIAEoCRIMCgRwYXRoGAIgASgIEgsKA2FsbBgDIAEoCCIwCgtXaG9SZXNwb25zZRIhCgZhZ2VudHMYASADKAsyES5hZ29yYS52MS5Qcm9maWxlMpcCCgxBZ2VudFNlcnZpY2USUAoNVXBkYXRlUHJvZmlsZRIeLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXF1ZXN0Gh8uYWdvcmEudjEuVXBkYXRlUHJvZmlsZVJlc3BvbnNlEjgKBUxlYXZlEhYuYWdvcmEudjEuTGVhdmVSZXF1ZXN0GhcuYWdvcmEudjEuTGVhdmVSZXNwb25zZRJHCgpMaXN0QWdlbnRzEhsuYWdvcmEudjEuTGlzdEFnZW50c1JlcXVlc3QaHC5hZ29yYS52MS5MaXN0QWdlbnRzUmVzcG9uc2USMgoDV2hvEhQuYWdvcmEudjEuV2hvUmVxdWVzdBoVLmFnb3JhLnYxLldob1Jlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIp4ECgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASGQoNc2Vzc2lvbl9zdGF0ZRgMIAEoCUICGAESDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRIpCgJjaRgPIAMoCzIZLmFnb3JhLnYxLlByb2ZpbGUuQ2lFbnRyeUICGAESJwoHc2Vzc2lvbhgQIAEoDjIWLmFnb3JhLnYxLlNlc3Npb25TdGF0ZRIwCghjaV9zdGF0ZRgRIAMoCzIeLmFnb3JhLnYxLlByb2ZpbGUuQ2lTdGF0ZUVudHJ5GikKB0NpRW50cnkSCwoDa2V5GAEgASgFEg0KBXZhbHVlGAIgASgJOgI4ARpBCgxDaVN0YXRlRW50cnkSCwoDa2V5GAEgASgFEiAKBXZhbHVlGAIgASgOMhEuYWdvcmEudjEuQ2lTdGF0ZToCOAEi+QEKFFVwZGF0ZVByb2ZpbGVSZXF1ZXN0EgwKBG5hbWUYASABKAkSEQoEa2luZBgCIAEoCUgAiAEBEhQKB3Byb2plY3QYAyABKAlIAYgBARIRCgR0YXNrGAQgASgJSAKIAQESEwoGc3RhdHVzGAUgASgJSAOIAQESEAoDY3dkGAYgASgJSASIAQESEgoFYWJvdXQYByABKAlIBYgBARIPCgdhZGRfcHJzGAggAygFEhAKCGRyb3BfcHJzGAkgAygFQgcKBV9raW5kQgoKCF9wcm9qZWN0QgcKBV90YXNrQgkKB19zdGF0dXNCBgoEX2N3ZEIICgZfYWJvdXQiOwoVVXBkYXRlUHJvZmlsZVJlc3BvbnNlEiIKB3Byb2ZpbGUYASABKAsyES5hZ29yYS52MS5Qcm9maWxlIhwKDExlYXZlUmVxdWVzdBIMCgRuYW1lGAEgASgJIiEKDUxlYXZlUmVzcG9uc2USEAoIcmVsZWFzZWQYASADKAkiIAoRTGlzdEFnZW50c1JlcXVlc3QSCwoDYWxsGAEgASgIIjcKEkxpc3RBZ2VudHNSZXNwb25zZRIhCgZhZ2VudHMYASADKAsyES5hZ29yYS52MS5Qcm9maWxlIjYKCldob1JlcXVlc3QSDQoFcXVlcnkYASABKAkSDAoEcGF0aBgCIAEoCBILCgNhbGwYAyABKAgiMAoLV2hvUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSpgCgdDaVN0YXRlEhgKFENJX1NUQVRFX1VOU1BFQ0lGSUVEEAASEgoOQ0lfU1RBVEVfR1JFRU4QARIQCgxDSV9TVEFURV9SRUQQAhIVChFDSV9TVEFURV9DT05GTElDVBADMpcCCgxBZ2VudFNlcnZpY2USUAoNVXBkYXRlUHJvZmlsZRIeLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXF1ZXN0Gh8uYWdvcmEudjEuVXBkYXRlUHJvZmlsZVJlc3BvbnNlEjgKBUxlYXZlEhYuYWdvcmEudjEuTGVhdmVSZXF1ZXN0GhcuYWdvcmEudjEuTGVhdmVSZXNwb25zZRJHCgpMaXN0QWdlbnRzEhsuYWdvcmEudjEuTGlzdEFnZW50c1JlcXVlc3QaHC5hZ29yYS52MS5MaXN0QWdlbnRzUmVzcG9uc2USMgoDV2hvEhQuYWdvcmEudjEuV2hvUmVxdWVzdBoVLmFnb3JhLnYxLldob1Jlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Profile
@@ -76,9 +78,10 @@ export type Profile = Message<"agora.v1.Profile"> & {
   updatedAt?: Timestamp | undefined;
 
   /**
-   * busy, idle or offline
+   * busy, idle or offline. Deprecated: use session.
    *
-   * @generated from field: string session_state = 12;
+   * @generated from field: string session_state = 12 [deprecated = true];
+   * @deprecated
    */
   sessionState: string;
 
@@ -96,11 +99,27 @@ export type Profile = Message<"agora.v1.Profile"> & {
 
   /**
    * The CI state last reported for a followed pull request, by number: green, red or conflict.
-   * A pull request without a reported state is absent.
+   * A pull request without a reported state is absent. Deprecated: use ci_state.
    *
-   * @generated from field: map<int32, string> ci = 15;
+   * @generated from field: map<int32, string> ci = 15 [deprecated = true];
+   * @deprecated
    */
   ci: { [key: number]: string };
+
+  /**
+   * The state of the agent's live session: busy or idle, else offline.
+   *
+   * @generated from field: agora.v1.SessionState session = 16;
+   */
+  session: SessionState;
+
+  /**
+   * The CI state last reported for a followed pull request, by number. A pull request without
+   * a reported state is absent.
+   *
+   * @generated from field: map<int32, agora.v1.CiState> ci_state = 17;
+   */
+  ciState: { [key: number]: CiState };
 };
 
 /**
@@ -299,6 +318,45 @@ export type WhoResponse = Message<"agora.v1.WhoResponse"> & {
  */
 export const WhoResponseSchema: GenMessage<WhoResponse> = /*@__PURE__*/
   messageDesc(file_agora_v1_agents, 8);
+
+/**
+ * CiState is the CI state of a pull request as the board reports it.
+ *
+ * @generated from enum agora.v1.CiState
+ */
+export enum CiState {
+  /**
+   * @generated from enum value: CI_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Every check that finished succeeded.
+   *
+   * @generated from enum value: CI_STATE_GREEN = 1;
+   */
+  GREEN = 1,
+
+  /**
+   * A check failed.
+   *
+   * @generated from enum value: CI_STATE_RED = 2;
+   */
+  RED = 2,
+
+  /**
+   * The pull request conflicts with its base branch, so CI does not run.
+   *
+   * @generated from enum value: CI_STATE_CONFLICT = 3;
+   */
+  CONFLICT = 3,
+}
+
+/**
+ * Describes the enum agora.v1.CiState.
+ */
+export const CiStateSchema: GenEnum<CiState> = /*@__PURE__*/
+  enumDesc(file_agora_v1_agents, 0);
 
 /**
  * AgentService keeps agent profiles and finds who works on what.

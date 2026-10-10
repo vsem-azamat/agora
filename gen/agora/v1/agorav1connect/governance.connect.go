@@ -57,11 +57,17 @@ const (
 
 // GovernanceServiceClient is a client for the agora.v1.GovernanceService service.
 type GovernanceServiceClient interface {
+	// Propose opens a proposal and announces it to everyone in #general.
 	Propose(context.Context, *connect.Request[v1.ProposeRequest]) (*connect.Response[v1.ProposeResponse], error)
+	// Vote records the agent's vote on an open proposal, replacing its earlier vote.
 	Vote(context.Context, *connect.Request[v1.VoteRequest]) (*connect.Response[v1.VoteResponse], error)
+	// CloseProposal closes an open proposal as accepted, rejected or withdrawn and announces it.
 	CloseProposal(context.Context, *connect.Request[v1.CloseProposalRequest]) (*connect.Response[v1.CloseProposalResponse], error)
+	// ListProposals returns open proposals, or all of them, in number order with their votes.
 	ListProposals(context.Context, *connect.Request[v1.ListProposalsRequest]) (*connect.Response[v1.ListProposalsResponse], error)
+	// GetProposal returns one proposal with its votes.
 	GetProposal(context.Context, *connect.Request[v1.GetProposalRequest]) (*connect.Response[v1.GetProposalResponse], error)
+	// GetCharter returns the current charter, or the default one if it was never changed.
 	GetCharter(context.Context, *connect.Request[v1.GetCharterRequest]) (*connect.Response[v1.GetCharterResponse], error)
 	// SetCharter replaces the charter after an accepted proposal.
 	SetCharter(context.Context, *connect.Request[v1.SetCharterRequest]) (*connect.Response[v1.SetCharterResponse], error)
@@ -171,11 +177,17 @@ func (c *governanceServiceClient) SetCharter(ctx context.Context, req *connect.R
 
 // GovernanceServiceHandler is an implementation of the agora.v1.GovernanceService service.
 type GovernanceServiceHandler interface {
+	// Propose opens a proposal and announces it to everyone in #general.
 	Propose(context.Context, *connect.Request[v1.ProposeRequest]) (*connect.Response[v1.ProposeResponse], error)
+	// Vote records the agent's vote on an open proposal, replacing its earlier vote.
 	Vote(context.Context, *connect.Request[v1.VoteRequest]) (*connect.Response[v1.VoteResponse], error)
+	// CloseProposal closes an open proposal as accepted, rejected or withdrawn and announces it.
 	CloseProposal(context.Context, *connect.Request[v1.CloseProposalRequest]) (*connect.Response[v1.CloseProposalResponse], error)
+	// ListProposals returns open proposals, or all of them, in number order with their votes.
 	ListProposals(context.Context, *connect.Request[v1.ListProposalsRequest]) (*connect.Response[v1.ListProposalsResponse], error)
+	// GetProposal returns one proposal with its votes.
 	GetProposal(context.Context, *connect.Request[v1.GetProposalRequest]) (*connect.Response[v1.GetProposalResponse], error)
+	// GetCharter returns the current charter, or the default one if it was never changed.
 	GetCharter(context.Context, *connect.Request[v1.GetCharterRequest]) (*connect.Response[v1.GetCharterResponse], error)
 	// SetCharter replaces the charter after an accepted proposal.
 	SetCharter(context.Context, *connect.Request[v1.SetCharterRequest]) (*connect.Response[v1.SetCharterResponse], error)

@@ -204,7 +204,7 @@ func statusCmd(o *options) *cobra.Command {
 			}
 			fmt.Fprintf(o.out, "AGENTS (%d%s)\n", len(agents.Msg.GetAgents()), which)
 			for _, p := range agents.Msg.GetAgents() {
-				fmt.Fprintf(o.out, "  %-16s %-9s %-7s %-14s %-12s %4s  %s\n", p.GetName(), p.GetStatus(), p.GetSessionState(),
+				fmt.Fprintf(o.out, "  %-16s %-9s %-7s %-14s %-12s %4s  %s\n", p.GetName(), p.GetStatus(), sessionStateNames[p.GetSession()],
 					p.GetProject(), prList(allPRs(p)), age(p.GetUpdatedAt().AsTime()), p.GetTask())
 			}
 			if err := o.printRooms(cmd.Context()); err != nil {
@@ -294,7 +294,7 @@ func expandHome(p string) string {
 }
 
 func printProfile(w io.Writer, p *agorav1.Profile) {
-	fmt.Fprintf(w, "%s · %s · %s · %s · %s\n", p.GetName(), p.GetStatus(), p.GetSessionState(), orDash(p.GetProject()), p.GetTask())
+	fmt.Fprintf(w, "%s · %s · %s · %s · %s\n", p.GetName(), p.GetStatus(), sessionStateNames[p.GetSession()], orDash(p.GetProject()), p.GetTask())
 	var where []string
 	if p.GetBranch() != "" {
 		where = append(where, "["+p.GetBranch()+"]")
@@ -395,9 +395,10 @@ func sessionsCmd(o *options) *cobra.Command {
 }
 
 var sessionStateNames = map[agorav1.SessionState]string{
-	agorav1.SessionState_SESSION_STATE_BUSY:  "busy",
-	agorav1.SessionState_SESSION_STATE_IDLE:  "idle",
-	agorav1.SessionState_SESSION_STATE_ENDED: "ended",
+	agorav1.SessionState_SESSION_STATE_BUSY:    "busy",
+	agorav1.SessionState_SESSION_STATE_IDLE:    "idle",
+	agorav1.SessionState_SESSION_STATE_ENDED:   "ended",
+	agorav1.SessionState_SESSION_STATE_OFFLINE: "offline",
 }
 
 func hookCmd(o *options) *cobra.Command {
