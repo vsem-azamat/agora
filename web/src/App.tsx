@@ -45,11 +45,13 @@ function useNow(everyMs = 15000): Date {
 
 function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(storedTheme()));
-  useEffect(() => {
-    applyTheme(theme);
-    storeTheme(theme);
-  }, [theme]);
-  const toggle = () => setTheme((t) => (t === 'ink' ? 'parchment' : 'ink'));
+  useEffect(() => applyTheme(theme), [theme]);
+  // only an explicit choice is stored; without one the app keeps opening in parchment
+  const toggle = () => {
+    const next = theme === 'ink' ? 'parchment' : 'ink';
+    storeTheme(next);
+    setTheme(next);
+  };
   return [theme, toggle];
 }
 
