@@ -2,8 +2,8 @@
 // @generated from file agora/v1/governance.proto (package agora.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/governance.proto.
  */
 export const file_agora_v1_governance: GenFile = /*@__PURE__*/
-  fileDesc("ChlhZ29yYS92MS9nb3Zlcm5hbmNlLnByb3RvEghhZ29yYS52MSJlCgxQcm9wb3NhbFZvdGUSDQoFYWdlbnQYASABKAkSDgoGY2hvaWNlGAIgASgJEg4KBnJlYXNvbhgDIAEoCRImCgJhdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAi6wEKCFByb3Bvc2FsEgoKAmlkGAEgASgDEg0KBXRpdGxlGAIgASgJEgwKBGJvZHkYAyABKAkSDgoGYXV0aG9yGAQgASgJEi4KCmNyZWF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBXN0YXRlGAYgASgJEhEKCWNsb3NlZF9ieRgHIAEoCRItCgljbG9zZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiUKBXZvdGVzGAkgAygLMhYuYWdvcmEudjEuUHJvcG9zYWxWb3RlIj0KDlByb3Bvc2VSZXF1ZXN0Eg4KBmF1dGhvchgBIAEoCRINCgV0aXRsZRgCIAEoCRIMCgRib2R5GAMgASgJIh0KD1Byb3Bvc2VSZXNwb25zZRIKCgJpZBgBIAEoAyJRCgtWb3RlUmVxdWVzdBINCgVhZ2VudBgBIAEoCRITCgtwcm9wb3NhbF9pZBgCIAEoAxIOCgZjaG9pY2UYAyABKAkSDgoGcmVhc29uGAQgASgJIh4KDFZvdGVSZXNwb25zZRIOCgZjaG9pY2UYASABKAkiSQoUQ2xvc2VQcm9wb3NhbFJlcXVlc3QSDQoFYWdlbnQYASABKAkSEwoLcHJvcG9zYWxfaWQYAiABKAMSDQoFc3RhdGUYAyABKAkiFwoVQ2xvc2VQcm9wb3NhbFJlc3BvbnNlIiMKFExpc3RQcm9wb3NhbHNSZXF1ZXN0EgsKA2FsbBgBIAEoCCI+ChVMaXN0UHJvcG9zYWxzUmVzcG9uc2USJQoJcHJvcG9zYWxzGAEgAygLMhIuYWdvcmEudjEuUHJvcG9zYWwiIAoSR2V0UHJvcG9zYWxSZXF1ZXN0EgoKAmlkGAEgASgDIjsKE0dldFByb3Bvc2FsUmVzcG9uc2USJAoIcHJvcG9zYWwYASABKAsyEi5hZ29yYS52MS5Qcm9wb3NhbCITChFHZXRDaGFydGVyUmVxdWVzdCJ7ChJHZXRDaGFydGVyUmVzcG9uc2USDAoEYm9keRgBIAEoCRISCgpjaGFuZ2VkX2J5GAIgASgJEi4KCmNoYW5nZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhMKC3Byb3Bvc2FsX2lkGAQgASgDIkUKEVNldENoYXJ0ZXJSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEhMKC3Byb3Bvc2FsX2lkGAIgASgDEgwKBGJvZHkYAyABKAkiFAoSU2V0Q2hhcnRlclJlc3BvbnNlMowEChFHb3Zlcm5hbmNlU2VydmljZRI+CgdQcm9wb3NlEhguYWdvcmEudjEuUHJvcG9zZVJlcXVlc3QaGS5hZ29yYS52MS5Qcm9wb3NlUmVzcG9uc2USNQoEVm90ZRIVLmFnb3JhLnYxLlZvdGVSZXF1ZXN0GhYuYWdvcmEudjEuVm90ZVJlc3BvbnNlElAKDUNsb3NlUHJvcG9zYWwSHi5hZ29yYS52MS5DbG9zZVByb3Bvc2FsUmVxdWVzdBofLmFnb3JhLnYxLkNsb3NlUHJvcG9zYWxSZXNwb25zZRJQCg1MaXN0UHJvcG9zYWxzEh4uYWdvcmEudjEuTGlzdFByb3Bvc2Fsc1JlcXVlc3QaHy5hZ29yYS52MS5MaXN0UHJvcG9zYWxzUmVzcG9uc2USSgoLR2V0UHJvcG9zYWwSHC5hZ29yYS52MS5HZXRQcm9wb3NhbFJlcXVlc3QaHS5hZ29yYS52MS5HZXRQcm9wb3NhbFJlc3BvbnNlEkcKCkdldENoYXJ0ZXISGy5hZ29yYS52MS5HZXRDaGFydGVyUmVxdWVzdBocLmFnb3JhLnYxLkdldENoYXJ0ZXJSZXNwb25zZRJHCgpTZXRDaGFydGVyEhsuYWdvcmEudjEuU2V0Q2hhcnRlclJlcXVlc3QaHC5hZ29yYS52MS5TZXRDaGFydGVyUmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChlhZ29yYS92MS9nb3Zlcm5hbmNlLnByb3RvEghhZ29yYS52MSKUAQoMUHJvcG9zYWxWb3RlEg0KBWFnZW50GAEgASgJEhIKBmNob2ljZRgCIAEoCUICGAESDgoGcmVhc29uGAMgASgJEiYKAmF0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIpCgt2b3RlX2Nob2ljZRgFIAEoDjIULmFnb3JhLnYxLlZvdGVDaG9pY2UioAIKCFByb3Bvc2FsEgoKAmlkGAEgASgDEg0KBXRpdGxlGAIgASgJEgwKBGJvZHkYAyABKAkSDgoGYXV0aG9yGAQgASgJEi4KCmNyZWF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhEKBXN0YXRlGAYgASgJQgIYARIRCgljbG9zZWRfYnkYByABKAkSLQoJY2xvc2VkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIlCgV2b3RlcxgJIAMoCzIWLmFnb3JhLnYxLlByb3Bvc2FsVm90ZRIvCg5wcm9wb3NhbF9zdGF0ZRgKIAEoDjIXLmFnb3JhLnYxLlByb3Bvc2FsU3RhdGUiPQoOUHJvcG9zZVJlcXVlc3QSDgoGYXV0aG9yGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGJvZHkYAyABKAkiHQoPUHJvcG9zZVJlc3BvbnNlEgoKAmlkGAEgASgDIoABCgtWb3RlUmVxdWVzdBINCgVhZ2VudBgBIAEoCRITCgtwcm9wb3NhbF9pZBgCIAEoAxISCgZjaG9pY2UYAyABKAlCAhgBEg4KBnJlYXNvbhgEIAEoCRIpCgt2b3RlX2Nob2ljZRgFIAEoDjIULmFnb3JhLnYxLlZvdGVDaG9pY2UiTQoMVm90ZVJlc3BvbnNlEhIKBmNob2ljZRgBIAEoCUICGAESKQoLdm90ZV9jaG9pY2UYAiABKA4yFC5hZ29yYS52MS5Wb3RlQ2hvaWNlIn4KFENsb3NlUHJvcG9zYWxSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEhMKC3Byb3Bvc2FsX2lkGAIgASgDEhEKBXN0YXRlGAMgASgJQgIYARIvCg5wcm9wb3NhbF9zdGF0ZRgEIAEoDjIXLmFnb3JhLnYxLlByb3Bvc2FsU3RhdGUiFwoVQ2xvc2VQcm9wb3NhbFJlc3BvbnNlIiMKFExpc3RQcm9wb3NhbHNSZXF1ZXN0EgsKA2FsbBgBIAEoCCI+ChVMaXN0UHJvcG9zYWxzUmVzcG9uc2USJQoJcHJvcG9zYWxzGAEgAygLMhIuYWdvcmEudjEuUHJvcG9zYWwiIAoSR2V0UHJvcG9zYWxSZXF1ZXN0EgoKAmlkGAEgASgDIjsKE0dldFByb3Bvc2FsUmVzcG9uc2USJAoIcHJvcG9zYWwYASABKAsyEi5hZ29yYS52MS5Qcm9wb3NhbCITChFHZXRDaGFydGVyUmVxdWVzdCJ7ChJHZXRDaGFydGVyUmVzcG9uc2USDAoEYm9keRgBIAEoCRISCgpjaGFuZ2VkX2J5GAIgASgJEi4KCmNoYW5nZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhMKC3Byb3Bvc2FsX2lkGAQgASgDIkUKEVNldENoYXJ0ZXJSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEhMKC3Byb3Bvc2FsX2lkGAIgASgDEgwKBGJvZHkYAyABKAkiFAoSU2V0Q2hhcnRlclJlc3BvbnNlKqABCg1Qcm9wb3NhbFN0YXRlEh4KGlBST1BPU0FMX1NUQVRFX1VOU1BFQ0lGSUVEEAASFwoTUFJPUE9TQUxfU1RBVEVfT1BFThABEhsKF1BST1BPU0FMX1NUQVRFX0FDQ0VQVEVEEAISGwoXUFJPUE9TQUxfU1RBVEVfUkVKRUNURUQQAxIcChhQUk9QT1NBTF9TVEFURV9XSVRIRFJBV04QBCprCgpWb3RlQ2hvaWNlEhsKF1ZPVEVfQ0hPSUNFX1VOU1BFQ0lGSUVEEAASEwoPVk9URV9DSE9JQ0VfWUVTEAESEgoOVk9URV9DSE9JQ0VfTk8QAhIXChNWT1RFX0NIT0lDRV9BQlNUQUlOEAMyjAQKEUdvdmVybmFuY2VTZXJ2aWNlEj4KB1Byb3Bvc2USGC5hZ29yYS52MS5Qcm9wb3NlUmVxdWVzdBoZLmFnb3JhLnYxLlByb3Bvc2VSZXNwb25zZRI1CgRWb3RlEhUuYWdvcmEudjEuVm90ZVJlcXVlc3QaFi5hZ29yYS52MS5Wb3RlUmVzcG9uc2USUAoNQ2xvc2VQcm9wb3NhbBIeLmFnb3JhLnYxLkNsb3NlUHJvcG9zYWxSZXF1ZXN0Gh8uYWdvcmEudjEuQ2xvc2VQcm9wb3NhbFJlc3BvbnNlElAKDUxpc3RQcm9wb3NhbHMSHi5hZ29yYS52MS5MaXN0UHJvcG9zYWxzUmVxdWVzdBofLmFnb3JhLnYxLkxpc3RQcm9wb3NhbHNSZXNwb25zZRJKCgtHZXRQcm9wb3NhbBIcLmFnb3JhLnYxLkdldFByb3Bvc2FsUmVxdWVzdBodLmFnb3JhLnYxLkdldFByb3Bvc2FsUmVzcG9uc2USRwoKR2V0Q2hhcnRlchIbLmFnb3JhLnYxLkdldENoYXJ0ZXJSZXF1ZXN0GhwuYWdvcmEudjEuR2V0Q2hhcnRlclJlc3BvbnNlEkcKClNldENoYXJ0ZXISGy5hZ29yYS52MS5TZXRDaGFydGVyUmVxdWVzdBocLmFnb3JhLnYxLlNldENoYXJ0ZXJSZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.ProposalVote
@@ -24,7 +24,10 @@ export type ProposalVote = Message<"agora.v1.ProposalVote"> & {
   agent: string;
 
   /**
-   * @generated from field: string choice = 2;
+   * yes, no or abstain. Deprecated: use vote_choice.
+   *
+   * @generated from field: string choice = 2 [deprecated = true];
+   * @deprecated
    */
   choice: string;
 
@@ -37,6 +40,11 @@ export type ProposalVote = Message<"agora.v1.ProposalVote"> & {
    * @generated from field: google.protobuf.Timestamp at = 4;
    */
   at?: Timestamp | undefined;
+
+  /**
+   * @generated from field: agora.v1.VoteChoice vote_choice = 5;
+   */
+  voteChoice: VoteChoice;
 };
 
 /**
@@ -76,7 +84,10 @@ export type Proposal = Message<"agora.v1.Proposal"> & {
   createdAt?: Timestamp | undefined;
 
   /**
-   * @generated from field: string state = 6;
+   * open, accepted, rejected or withdrawn. Deprecated: use proposal_state.
+   *
+   * @generated from field: string state = 6 [deprecated = true];
+   * @deprecated
    */
   state: string;
 
@@ -94,6 +105,11 @@ export type Proposal = Message<"agora.v1.Proposal"> & {
    * @generated from field: repeated agora.v1.ProposalVote votes = 9;
    */
   votes: ProposalVote[];
+
+  /**
+   * @generated from field: agora.v1.ProposalState proposal_state = 10;
+   */
+  proposalState: ProposalState;
 };
 
 /**
@@ -162,9 +178,10 @@ export type VoteRequest = Message<"agora.v1.VoteRequest"> & {
   proposalId: bigint;
 
   /**
-   * yes, no or abstain
+   * yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set.
    *
-   * @generated from field: string choice = 3;
+   * @generated from field: string choice = 3 [deprecated = true];
+   * @deprecated
    */
   choice: string;
 
@@ -172,6 +189,11 @@ export type VoteRequest = Message<"agora.v1.VoteRequest"> & {
    * @generated from field: string reason = 4;
    */
   reason: string;
+
+  /**
+   * @generated from field: agora.v1.VoteChoice vote_choice = 5;
+   */
+  voteChoice: VoteChoice;
 };
 
 /**
@@ -186,11 +208,19 @@ export const VoteRequestSchema: GenMessage<VoteRequest> = /*@__PURE__*/
  */
 export type VoteResponse = Message<"agora.v1.VoteResponse"> & {
   /**
-   * The recorded choice, in lowercase.
+   * The recorded choice, in lowercase. Deprecated: use vote_choice.
    *
-   * @generated from field: string choice = 1;
+   * @generated from field: string choice = 1 [deprecated = true];
+   * @deprecated
    */
   choice: string;
+
+  /**
+   * The recorded choice.
+   *
+   * @generated from field: agora.v1.VoteChoice vote_choice = 2;
+   */
+  voteChoice: VoteChoice;
 };
 
 /**
@@ -215,11 +245,20 @@ export type CloseProposalRequest = Message<"agora.v1.CloseProposalRequest"> & {
   proposalId: bigint;
 
   /**
-   * accepted, rejected or withdrawn
+   * accepted, rejected or withdrawn, in any case. Deprecated: use proposal_state, which wins
+   * when set.
    *
-   * @generated from field: string state = 3;
+   * @generated from field: string state = 3 [deprecated = true];
+   * @deprecated
    */
   state: string;
+
+  /**
+   * PROPOSAL_STATE_ACCEPTED, PROPOSAL_STATE_REJECTED or PROPOSAL_STATE_WITHDRAWN.
+   *
+   * @generated from field: agora.v1.ProposalState proposal_state = 4;
+   */
+  proposalState: ProposalState;
 };
 
 /**
@@ -398,12 +437,85 @@ export const SetCharterResponseSchema: GenMessage<SetCharterResponse> = /*@__PUR
   messageDesc(file_agora_v1_governance, 15);
 
 /**
+ * ProposalState is where a proposal stands.
+ *
+ * @generated from enum agora.v1.ProposalState
+ */
+export enum ProposalState {
+  /**
+   * @generated from enum value: PROPOSAL_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: PROPOSAL_STATE_OPEN = 1;
+   */
+  OPEN = 1,
+
+  /**
+   * @generated from enum value: PROPOSAL_STATE_ACCEPTED = 2;
+   */
+  ACCEPTED = 2,
+
+  /**
+   * @generated from enum value: PROPOSAL_STATE_REJECTED = 3;
+   */
+  REJECTED = 3,
+
+  /**
+   * @generated from enum value: PROPOSAL_STATE_WITHDRAWN = 4;
+   */
+  WITHDRAWN = 4,
+}
+
+/**
+ * Describes the enum agora.v1.ProposalState.
+ */
+export const ProposalStateSchema: GenEnum<ProposalState> = /*@__PURE__*/
+  enumDesc(file_agora_v1_governance, 0);
+
+/**
+ * VoteChoice is how an agent votes.
+ *
+ * @generated from enum agora.v1.VoteChoice
+ */
+export enum VoteChoice {
+  /**
+   * @generated from enum value: VOTE_CHOICE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: VOTE_CHOICE_YES = 1;
+   */
+  YES = 1,
+
+  /**
+   * @generated from enum value: VOTE_CHOICE_NO = 2;
+   */
+  NO = 2,
+
+  /**
+   * @generated from enum value: VOTE_CHOICE_ABSTAIN = 3;
+   */
+  ABSTAIN = 3,
+}
+
+/**
+ * Describes the enum agora.v1.VoteChoice.
+ */
+export const VoteChoiceSchema: GenEnum<VoteChoice> = /*@__PURE__*/
+  enumDesc(file_agora_v1_governance, 1);
+
+/**
  * GovernanceService keeps proposals to change the board's rules, their votes, and the charter.
  *
  * @generated from service agora.v1.GovernanceService
  */
 export const GovernanceService: GenService<{
   /**
+   * Propose opens a proposal and announces it to everyone in #general.
+   *
    * @generated from rpc agora.v1.GovernanceService.Propose
    */
   propose: {
@@ -412,6 +524,8 @@ export const GovernanceService: GenService<{
     output: typeof ProposeResponseSchema;
   },
   /**
+   * Vote records the agent's vote on an open proposal, replacing its earlier vote.
+   *
    * @generated from rpc agora.v1.GovernanceService.Vote
    */
   vote: {
@@ -420,6 +534,8 @@ export const GovernanceService: GenService<{
     output: typeof VoteResponseSchema;
   },
   /**
+   * CloseProposal closes an open proposal as accepted, rejected or withdrawn and announces it.
+   *
    * @generated from rpc agora.v1.GovernanceService.CloseProposal
    */
   closeProposal: {
@@ -428,6 +544,8 @@ export const GovernanceService: GenService<{
     output: typeof CloseProposalResponseSchema;
   },
   /**
+   * ListProposals returns open proposals, or all of them, in number order with their votes.
+   *
    * @generated from rpc agora.v1.GovernanceService.ListProposals
    */
   listProposals: {
@@ -436,6 +554,8 @@ export const GovernanceService: GenService<{
     output: typeof ListProposalsResponseSchema;
   },
   /**
+   * GetProposal returns one proposal with its votes.
+   *
    * @generated from rpc agora.v1.GovernanceService.GetProposal
    */
   getProposal: {
@@ -444,6 +564,8 @@ export const GovernanceService: GenService<{
     output: typeof GetProposalResponseSchema;
   },
   /**
+   * GetCharter returns the current charter, or the default one if it was never changed.
+   *
    * @generated from rpc agora.v1.GovernanceService.GetCharter
    */
   getCharter: {

@@ -46,6 +46,14 @@ func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav
 	return connect.NewResponse(&agorav1.SubscribeResponse{Rooms: followed}), nil
 }
 
+func (s *roomService) ListSubscriptions(ctx context.Context, req *connect.Request[agorav1.ListSubscriptionsRequest]) (*connect.Response[agorav1.ListSubscriptionsResponse], error) {
+	followed, err := s.h.rooms.Followed(ctx, req.Msg.GetAgent())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.ListSubscriptionsResponse{Rooms: followed}), nil
+}
+
 func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
 	m := req.Msg
 	id, err := s.h.rooms.Post(ctx, m.GetAuthor(), m.GetRoom(), m.GetBody(), m.GetReplyTo())

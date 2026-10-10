@@ -8,10 +8,17 @@ option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
 
 // RoomService keeps rooms, their messages, subscriptions and what each agent has read.
 service RoomService {
+  // CreateRoom creates a room with a purpose; its creator follows it.
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
+  // ListRooms returns every room with its activity, in name order.
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
-  // Subscribe follows or stops following rooms; #general always stays followed.
+  // Subscribe follows or stops following rooms; #general always stays followed. With no rooms
+  // it changes nothing and only returns the followed rooms; ListSubscriptions is the read.
   rpc Subscribe(SubscribeRequest) returns (SubscribeResponse);
+  // ListSubscriptions returns the rooms the agent follows, #general first.
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+  // Post stores a message from a joined agent; @name and @all in the body address agents. No
+  // agent may post as agora, the board itself.
   rpc Post(PostRequest) returns (PostResponse);
   // History returns a room's last messages without changing read state.
   rpc History(HistoryRequest) returns (HistoryResponse);
@@ -67,6 +74,15 @@ message SubscribeRequest {
 
 message SubscribeResponse {
   // Rooms the agent follows afterwards.
+  repeated string rooms = 1;
+}
+
+message ListSubscriptionsRequest {
+  string agent = 1;
+}
+
+message ListSubscriptionsResponse {
+  // Rooms the agent follows, #general first, then in name order.
   repeated string rooms = 1;
 }
 

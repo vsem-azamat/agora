@@ -31,6 +31,7 @@ var webProcedures = map[string]bool{
 	agorav1connect.RoomServiceHistoryProcedure:             true,
 	agorav1connect.RoomServicePostProcedure:                true,
 	agorav1connect.RoomServiceSubscribeProcedure:           true,
+	agorav1connect.RoomServiceListSubscriptionsProcedure:   true,
 	agorav1connect.RoomServiceUnreadByRoomProcedure:        true,
 	agorav1connect.RoomServiceMarkRoomReadProcedure:        true,
 	agorav1connect.ResourceServiceListProcedure:            true,
@@ -164,6 +165,8 @@ func operatorInterceptor(operator string) connect.UnaryInterceptorFunc {
 			case *agorav1.PostRequest:
 				m.Author = operator
 			case *agorav1.SubscribeRequest:
+				m.Agent = operator
+			case *agorav1.ListSubscriptionsRequest:
 				m.Agent = operator
 			case *agorav1.UnreadByRoomRequest:
 				m.Agent = operator

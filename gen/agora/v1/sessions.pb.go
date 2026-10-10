@@ -87,6 +87,8 @@ const (
 	SessionState_SESSION_STATE_BUSY        SessionState = 1
 	SessionState_SESSION_STATE_IDLE        SessionState = 2
 	SessionState_SESSION_STATE_ENDED       SessionState = 3
+	// Only in profiles: the agent has no live session.
+	SessionState_SESSION_STATE_OFFLINE SessionState = 4
 )
 
 // Enum value maps for SessionState.
@@ -96,12 +98,14 @@ var (
 		1: "SESSION_STATE_BUSY",
 		2: "SESSION_STATE_IDLE",
 		3: "SESSION_STATE_ENDED",
+		4: "SESSION_STATE_OFFLINE",
 	}
 	SessionState_value = map[string]int32{
 		"SESSION_STATE_UNSPECIFIED": 0,
 		"SESSION_STATE_BUSY":        1,
 		"SESSION_STATE_IDLE":        2,
 		"SESSION_STATE_ENDED":       3,
+		"SESSION_STATE_OFFLINE":     4,
 	}
 )
 
@@ -844,12 +848,13 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x14SESSION_EVENT_PROMPT\x10\x02\x12\x16\n" +
 	"\x12SESSION_EVENT_TOOL\x10\x03\x12\x16\n" +
 	"\x12SESSION_EVENT_STOP\x10\x04\x12\x15\n" +
-	"\x11SESSION_EVENT_END\x10\x05*v\n" +
+	"\x11SESSION_EVENT_END\x10\x05*\x91\x01\n" +
 	"\fSessionState\x12\x1d\n" +
 	"\x19SESSION_STATE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12SESSION_STATE_BUSY\x10\x01\x12\x16\n" +
 	"\x12SESSION_STATE_IDLE\x10\x02\x12\x17\n" +
-	"\x13SESSION_STATE_ENDED\x10\x032\xe4\x02\n" +
+	"\x13SESSION_STATE_ENDED\x10\x03\x12\x19\n" +
+	"\x15SESSION_STATE_OFFLINE\x10\x042\xe4\x02\n" +
 	"\x0eSessionService\x12;\n" +
 	"\x06Report\x12\x17.agora.v1.ReportRequest\x1a\x18.agora.v1.ReportResponse\x12A\n" +
 	"\bJoinName\x12\x19.agora.v1.JoinNameRequest\x1a\x1a.agora.v1.JoinNameResponse\x12>\n" +

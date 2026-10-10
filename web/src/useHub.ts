@@ -47,7 +47,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.agents.listAgents({}),
       api.rooms.listRooms({}),
       api.rooms.unreadByRoom({}),
-      api.rooms.subscribe({ rooms: [], follow: true }),
+      api.rooms.listSubscriptions({}),
       api.resources.list({}),
       api.governance.listProposals({ all: true }),
       api.governance.getCharter({}),

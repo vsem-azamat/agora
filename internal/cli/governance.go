@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -36,6 +37,31 @@ func stdinTerminal(cmd *cobra.Command) bool {
 	}
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+var proposalStateNames = map[agorav1.ProposalState]string{
+	agorav1.ProposalState_PROPOSAL_STATE_OPEN:      "open",
+	agorav1.ProposalState_PROPOSAL_STATE_ACCEPTED:  "accepted",
+	agorav1.ProposalState_PROPOSAL_STATE_REJECTED:  "rejected",
+	agorav1.ProposalState_PROPOSAL_STATE_WITHDRAWN: "withdrawn",
+}
+
+var voteChoiceNames = map[agorav1.VoteChoice]string{
+	agorav1.VoteChoice_VOTE_CHOICE_YES:     "yes",
+	agorav1.VoteChoice_VOTE_CHOICE_NO:      "no",
+	agorav1.VoteChoice_VOTE_CHOICE_ABSTAIN: "abstain",
+}
+
+// parseName finds the value that names has for s, in any case.
+func parseName[E comparable](names map[E]string, s string) (E, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	for v, name := range names {
+		if name == s {
+			return v, true
+		}
+	}
+	var zero E
+	return zero, false
 }
 
 func proposalID(s string) (int64, error) {
@@ -84,13 +110,17 @@ func voteCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			choice, ok := parseName(voteChoiceNames, args[1])
+			if !ok {
+				return errors.New("vote yes, no or abstain")
+			}
 			resp, err := o.governance().Vote(cmd.Context(), connect.NewRequest(&agorav1.VoteRequest{
-				Agent: name, ProposalId: id, Choice: args[1], Reason: strings.Join(args[2:], " "),
+				Agent: name, ProposalId: id, VoteChoice: choice, Reason: strings.Join(args[2:], " "),
 			}))
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(o.out, "%s voted %s on #%d\n", name, resp.Msg.GetChoice(), id)
+			fmt.Fprintf(o.out, "%s voted %s on #%d\n", name, voteChoiceNames[resp.Msg.GetVoteChoice()], id)
 			return nil
 		},
 	}
@@ -110,10 +140,14 @@ func closeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := o.governance().CloseProposal(cmd.Context(), connect.NewRequest(&agorav1.CloseProposalRequest{Agent: name, ProposalId: id, State: args[1]})); err != nil {
+			state, ok := parseName(proposalStateNames, args[1])
+			if !ok || state == agorav1.ProposalState_PROPOSAL_STATE_OPEN {
+				return errors.New("close as accepted, rejected or withdrawn")
+			}
+			if _, err := o.governance().CloseProposal(cmd.Context(), connect.NewRequest(&agorav1.CloseProposalRequest{Agent: name, ProposalId: id, ProposalState: state})); err != nil {
 				return err
 			}
-			fmt.Fprintf(o.out, "#%d %s\n", id, args[1])
+			fmt.Fprintf(o.out, "#%d %s\n", id, proposalStateNames[state])
 			return nil
 		},
 	}
@@ -122,14 +156,14 @@ func closeCmd(o *options) *cobra.Command {
 func printProposalLine(w io.Writer, p *agorav1.Proposal) {
 	yes, no := 0, 0
 	for _, v := range p.GetVotes() {
-		switch v.GetChoice() {
-		case "yes":
+		switch v.GetVoteChoice() {
+		case agorav1.VoteChoice_VOTE_CHOICE_YES:
 			yes++
-		case "no":
+		case agorav1.VoteChoice_VOTE_CHOICE_NO:
 			no++
 		}
 	}
-	fmt.Fprintf(w, "  #%-4d %-9s +%d/-%d  by %-14s %s\n", p.GetId(), p.GetState(), yes, no, p.GetAuthor(), p.GetTitle())
+	fmt.Fprintf(w, "  #%-4d %-9s +%d/-%d  by %-14s %s\n", p.GetId(), proposalStateNames[p.GetProposalState()], yes, no, p.GetAuthor(), p.GetTitle())
 }
 
 func proposalsCmd(o *options) *cobra.Command {
@@ -150,7 +184,7 @@ func proposalsCmd(o *options) *cobra.Command {
 					return err
 				}
 				p := resp.Msg.GetProposal()
-				fmt.Fprintf(o.out, "#%d %s (%s, by %s, %s)\n\n%s\n\nVotes:\n", p.GetId(), p.GetTitle(), p.GetState(), p.GetAuthor(),
+				fmt.Fprintf(o.out, "#%d %s (%s, by %s, %s)\n\n%s\n\nVotes:\n", p.GetId(), p.GetTitle(), proposalStateNames[p.GetProposalState()], p.GetAuthor(),
 					dateTime(p.GetCreatedAt().AsTime()), p.GetBody())
 				if len(p.GetVotes()) == 0 {
 					fmt.Fprintln(o.out, "  none yet")
@@ -160,10 +194,10 @@ func proposalsCmd(o *options) *cobra.Command {
 					if who == p.GetAuthor() {
 						who += " (author)"
 					}
-					fmt.Fprintf(o.out, "  %-25s %-7s %s  %s\n", who, v.GetChoice(), shortClock(v.GetAt().AsTime()), v.GetReason())
+					fmt.Fprintf(o.out, "  %-25s %-7s %s  %s\n", who, voteChoiceNames[v.GetVoteChoice()], shortClock(v.GetAt().AsTime()), v.GetReason())
 				}
 				if p.GetClosedBy() != "" {
-					fmt.Fprintf(o.out, "\nClosed as %s by %s, %s.\n", p.GetState(), p.GetClosedBy(), dateTime(p.GetClosedAt().AsTime()))
+					fmt.Fprintf(o.out, "\nClosed as %s by %s, %s.\n", proposalStateNames[p.GetProposalState()], p.GetClosedBy(), dateTime(p.GetClosedAt().AsTime()))
 				}
 				return nil
 			}

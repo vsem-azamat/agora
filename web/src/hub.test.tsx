@@ -26,13 +26,19 @@ const answers: Record<string, unknown> = {
   'WebService/Whoami': { name: 'operator' },
   'AgentService/ListAgents': {
     agents: [
-      { name: 'builder', sessionState: 'busy', project: 'example-app', task: 'fixing the login timeout', active: true },
-      { name: 'operator', sessionState: 'offline', active: true },
+      {
+        name: 'builder',
+        session: 'SESSION_STATE_BUSY',
+        project: 'example-app',
+        task: 'fixing the login timeout',
+        active: true,
+      },
+      { name: 'operator', session: 'SESSION_STATE_OFFLINE', active: true },
     ],
   },
   'RoomService/ListRooms': { rooms: [{ name: 'general', messages: 2 }] },
   'RoomService/UnreadByRoom': { rooms: [{ room: 'general', unread: 2, addressed: 1 }] },
-  'RoomService/Subscribe': { rooms: ['general'] },
+  'RoomService/ListSubscriptions': { rooms: ['general'] },
   'ResourceService/List': {},
   'GovernanceService/ListProposals': {},
   'GovernanceService/GetCharter': { body: 'Be kind.' },

@@ -22,12 +22,125 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ProposalState is where a proposal stands.
+type ProposalState int32
+
+const (
+	ProposalState_PROPOSAL_STATE_UNSPECIFIED ProposalState = 0
+	ProposalState_PROPOSAL_STATE_OPEN        ProposalState = 1
+	ProposalState_PROPOSAL_STATE_ACCEPTED    ProposalState = 2
+	ProposalState_PROPOSAL_STATE_REJECTED    ProposalState = 3
+	ProposalState_PROPOSAL_STATE_WITHDRAWN   ProposalState = 4
+)
+
+// Enum value maps for ProposalState.
+var (
+	ProposalState_name = map[int32]string{
+		0: "PROPOSAL_STATE_UNSPECIFIED",
+		1: "PROPOSAL_STATE_OPEN",
+		2: "PROPOSAL_STATE_ACCEPTED",
+		3: "PROPOSAL_STATE_REJECTED",
+		4: "PROPOSAL_STATE_WITHDRAWN",
+	}
+	ProposalState_value = map[string]int32{
+		"PROPOSAL_STATE_UNSPECIFIED": 0,
+		"PROPOSAL_STATE_OPEN":        1,
+		"PROPOSAL_STATE_ACCEPTED":    2,
+		"PROPOSAL_STATE_REJECTED":    3,
+		"PROPOSAL_STATE_WITHDRAWN":   4,
+	}
+)
+
+func (x ProposalState) Enum() *ProposalState {
+	p := new(ProposalState)
+	*p = x
+	return p
+}
+
+func (x ProposalState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ProposalState) Descriptor() protoreflect.EnumDescriptor {
+	return file_agora_v1_governance_proto_enumTypes[0].Descriptor()
+}
+
+func (ProposalState) Type() protoreflect.EnumType {
+	return &file_agora_v1_governance_proto_enumTypes[0]
+}
+
+func (x ProposalState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ProposalState.Descriptor instead.
+func (ProposalState) EnumDescriptor() ([]byte, []int) {
+	return file_agora_v1_governance_proto_rawDescGZIP(), []int{0}
+}
+
+// VoteChoice is how an agent votes.
+type VoteChoice int32
+
+const (
+	VoteChoice_VOTE_CHOICE_UNSPECIFIED VoteChoice = 0
+	VoteChoice_VOTE_CHOICE_YES         VoteChoice = 1
+	VoteChoice_VOTE_CHOICE_NO          VoteChoice = 2
+	VoteChoice_VOTE_CHOICE_ABSTAIN     VoteChoice = 3
+)
+
+// Enum value maps for VoteChoice.
+var (
+	VoteChoice_name = map[int32]string{
+		0: "VOTE_CHOICE_UNSPECIFIED",
+		1: "VOTE_CHOICE_YES",
+		2: "VOTE_CHOICE_NO",
+		3: "VOTE_CHOICE_ABSTAIN",
+	}
+	VoteChoice_value = map[string]int32{
+		"VOTE_CHOICE_UNSPECIFIED": 0,
+		"VOTE_CHOICE_YES":         1,
+		"VOTE_CHOICE_NO":          2,
+		"VOTE_CHOICE_ABSTAIN":     3,
+	}
+)
+
+func (x VoteChoice) Enum() *VoteChoice {
+	p := new(VoteChoice)
+	*p = x
+	return p
+}
+
+func (x VoteChoice) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (VoteChoice) Descriptor() protoreflect.EnumDescriptor {
+	return file_agora_v1_governance_proto_enumTypes[1].Descriptor()
+}
+
+func (VoteChoice) Type() protoreflect.EnumType {
+	return &file_agora_v1_governance_proto_enumTypes[1]
+}
+
+func (x VoteChoice) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use VoteChoice.Descriptor instead.
+func (VoteChoice) EnumDescriptor() ([]byte, []int) {
+	return file_agora_v1_governance_proto_rawDescGZIP(), []int{1}
+}
+
 type ProposalVote struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Agent string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// yes, no or abstain. Deprecated: use vote_choice.
+	//
+	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 	Choice        string                 `protobuf:"bytes,2,opt,name=choice,proto3" json:"choice,omitempty"`
 	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	At            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=at,proto3" json:"at,omitempty"`
+	VoteChoice    VoteChoice             `protobuf:"varint,5,opt,name=vote_choice,json=voteChoice,proto3,enum=agora.v1.VoteChoice" json:"vote_choice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -69,6 +182,7 @@ func (x *ProposalVote) GetAgent() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 func (x *ProposalVote) GetChoice() string {
 	if x != nil {
 		return x.Choice
@@ -90,17 +204,28 @@ func (x *ProposalVote) GetAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ProposalVote) GetVoteChoice() VoteChoice {
+	if x != nil {
+		return x.VoteChoice
+	}
+	return VoteChoice_VOTE_CHOICE_UNSPECIFIED
+}
+
 type Proposal struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Body          string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
-	Author        string                 `protobuf:"bytes,4,opt,name=author,proto3" json:"author,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Title     string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Body      string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	Author    string                 `protobuf:"bytes,4,opt,name=author,proto3" json:"author,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// open, accepted, rejected or withdrawn. Deprecated: use proposal_state.
+	//
+	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 	State         string                 `protobuf:"bytes,6,opt,name=state,proto3" json:"state,omitempty"`
 	ClosedBy      string                 `protobuf:"bytes,7,opt,name=closed_by,json=closedBy,proto3" json:"closed_by,omitempty"`
 	ClosedAt      *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=closed_at,json=closedAt,proto3" json:"closed_at,omitempty"`
 	Votes         []*ProposalVote        `protobuf:"bytes,9,rep,name=votes,proto3" json:"votes,omitempty"`
+	ProposalState ProposalState          `protobuf:"varint,10,opt,name=proposal_state,json=proposalState,proto3,enum=agora.v1.ProposalState" json:"proposal_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -170,6 +295,7 @@ func (x *Proposal) GetCreatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 func (x *Proposal) GetState() string {
 	if x != nil {
 		return x.State
@@ -196,6 +322,13 @@ func (x *Proposal) GetVotes() []*ProposalVote {
 		return x.Votes
 	}
 	return nil
+}
+
+func (x *Proposal) GetProposalState() ProposalState {
+	if x != nil {
+		return x.ProposalState
+	}
+	return ProposalState_PROPOSAL_STATE_UNSPECIFIED
 }
 
 type ProposeRequest struct {
@@ -306,9 +439,12 @@ type VoteRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Agent      string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
 	ProposalId int64                  `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"`
-	// yes, no or abstain
-	Choice        string `protobuf:"bytes,3,opt,name=choice,proto3" json:"choice,omitempty"`
-	Reason        string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	// yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set.
+	//
+	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
+	Choice        string     `protobuf:"bytes,3,opt,name=choice,proto3" json:"choice,omitempty"`
+	Reason        string     `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	VoteChoice    VoteChoice `protobuf:"varint,5,opt,name=vote_choice,json=voteChoice,proto3,enum=agora.v1.VoteChoice" json:"vote_choice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,6 +493,7 @@ func (x *VoteRequest) GetProposalId() int64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 func (x *VoteRequest) GetChoice() string {
 	if x != nil {
 		return x.Choice
@@ -371,10 +508,21 @@ func (x *VoteRequest) GetReason() string {
 	return ""
 }
 
+func (x *VoteRequest) GetVoteChoice() VoteChoice {
+	if x != nil {
+		return x.VoteChoice
+	}
+	return VoteChoice_VOTE_CHOICE_UNSPECIFIED
+}
+
 type VoteResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The recorded choice, in lowercase.
-	Choice        string `protobuf:"bytes,1,opt,name=choice,proto3" json:"choice,omitempty"`
+	// The recorded choice, in lowercase. Deprecated: use vote_choice.
+	//
+	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
+	Choice string `protobuf:"bytes,1,opt,name=choice,proto3" json:"choice,omitempty"`
+	// The recorded choice.
+	VoteChoice    VoteChoice `protobuf:"varint,2,opt,name=vote_choice,json=voteChoice,proto3,enum=agora.v1.VoteChoice" json:"vote_choice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -409,6 +557,7 @@ func (*VoteResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_governance_proto_rawDescGZIP(), []int{5}
 }
 
+// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 func (x *VoteResponse) GetChoice() string {
 	if x != nil {
 		return x.Choice
@@ -416,12 +565,24 @@ func (x *VoteResponse) GetChoice() string {
 	return ""
 }
 
+func (x *VoteResponse) GetVoteChoice() VoteChoice {
+	if x != nil {
+		return x.VoteChoice
+	}
+	return VoteChoice_VOTE_CHOICE_UNSPECIFIED
+}
+
 type CloseProposalRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Agent      string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
 	ProposalId int64                  `protobuf:"varint,2,opt,name=proposal_id,json=proposalId,proto3" json:"proposal_id,omitempty"`
-	// accepted, rejected or withdrawn
-	State         string `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	// accepted, rejected or withdrawn, in any case. Deprecated: use proposal_state, which wins
+	// when set.
+	//
+	// Deprecated: Marked as deprecated in agora/v1/governance.proto.
+	State string `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	// PROPOSAL_STATE_ACCEPTED, PROPOSAL_STATE_REJECTED or PROPOSAL_STATE_WITHDRAWN.
+	ProposalState ProposalState `protobuf:"varint,4,opt,name=proposal_state,json=proposalState,proto3,enum=agora.v1.ProposalState" json:"proposal_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -470,11 +631,19 @@ func (x *CloseProposalRequest) GetProposalId() int64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in agora/v1/governance.proto.
 func (x *CloseProposalRequest) GetState() string {
 	if x != nil {
 		return x.State
 	}
 	return ""
+}
+
+func (x *CloseProposalRequest) GetProposalState() ProposalState {
+	if x != nil {
+		return x.ProposalState
+	}
+	return ProposalState_PROPOSAL_STATE_UNSPECIFIED
 }
 
 type CloseProposalResponse struct {
@@ -894,42 +1063,51 @@ var File_agora_v1_governance_proto protoreflect.FileDescriptor
 
 const file_agora_v1_governance_proto_rawDesc = "" +
 	"\n" +
-	"\x19agora/v1/governance.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x80\x01\n" +
+	"\x19agora/v1/governance.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbb\x01\n" +
 	"\fProposalVote\x12\x14\n" +
-	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
-	"\x06choice\x18\x02 \x01(\tR\x06choice\x12\x16\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1a\n" +
+	"\x06choice\x18\x02 \x01(\tB\x02\x18\x01R\x06choice\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12*\n" +
-	"\x02at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xb1\x02\n" +
+	"\x02at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x125\n" +
+	"\vvote_choice\x18\x05 \x01(\x0e2\x14.agora.v1.VoteChoiceR\n" +
+	"voteChoice\"\xf5\x02\n" +
 	"\bProposal\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12\x16\n" +
 	"\x06author\x18\x04 \x01(\tR\x06author\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
-	"\x05state\x18\x06 \x01(\tR\x05state\x12\x1b\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x18\n" +
+	"\x05state\x18\x06 \x01(\tB\x02\x18\x01R\x05state\x12\x1b\n" +
 	"\tclosed_by\x18\a \x01(\tR\bclosedBy\x127\n" +
 	"\tclosed_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\bclosedAt\x12,\n" +
-	"\x05votes\x18\t \x03(\v2\x16.agora.v1.ProposalVoteR\x05votes\"R\n" +
+	"\x05votes\x18\t \x03(\v2\x16.agora.v1.ProposalVoteR\x05votes\x12>\n" +
+	"\x0eproposal_state\x18\n" +
+	" \x01(\x0e2\x17.agora.v1.ProposalStateR\rproposalState\"R\n" +
 	"\x0eProposeRequest\x12\x16\n" +
 	"\x06author\x18\x01 \x01(\tR\x06author\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\"!\n" +
 	"\x0fProposeResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"t\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"\xaf\x01\n" +
 	"\vVoteRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1f\n" +
 	"\vproposal_id\x18\x02 \x01(\x03R\n" +
-	"proposalId\x12\x16\n" +
-	"\x06choice\x18\x03 \x01(\tR\x06choice\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"&\n" +
-	"\fVoteResponse\x12\x16\n" +
-	"\x06choice\x18\x01 \x01(\tR\x06choice\"c\n" +
+	"proposalId\x12\x1a\n" +
+	"\x06choice\x18\x03 \x01(\tB\x02\x18\x01R\x06choice\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x125\n" +
+	"\vvote_choice\x18\x05 \x01(\x0e2\x14.agora.v1.VoteChoiceR\n" +
+	"voteChoice\"a\n" +
+	"\fVoteResponse\x12\x1a\n" +
+	"\x06choice\x18\x01 \x01(\tB\x02\x18\x01R\x06choice\x125\n" +
+	"\vvote_choice\x18\x02 \x01(\x0e2\x14.agora.v1.VoteChoiceR\n" +
+	"voteChoice\"\xa7\x01\n" +
 	"\x14CloseProposalRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1f\n" +
 	"\vproposal_id\x18\x02 \x01(\x03R\n" +
-	"proposalId\x12\x14\n" +
-	"\x05state\x18\x03 \x01(\tR\x05state\"\x17\n" +
+	"proposalId\x12\x18\n" +
+	"\x05state\x18\x03 \x01(\tB\x02\x18\x01R\x05state\x12>\n" +
+	"\x0eproposal_state\x18\x04 \x01(\x0e2\x17.agora.v1.ProposalStateR\rproposalState\"\x17\n" +
 	"\x15CloseProposalResponse\"(\n" +
 	"\x14ListProposalsRequest\x12\x10\n" +
 	"\x03all\x18\x01 \x01(\bR\x03all\"I\n" +
@@ -953,7 +1131,19 @@ const file_agora_v1_governance_proto_rawDesc = "" +
 	"\vproposal_id\x18\x02 \x01(\x03R\n" +
 	"proposalId\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\"\x14\n" +
-	"\x12SetCharterResponse2\x8c\x04\n" +
+	"\x12SetCharterResponse*\xa0\x01\n" +
+	"\rProposalState\x12\x1e\n" +
+	"\x1aPROPOSAL_STATE_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13PROPOSAL_STATE_OPEN\x10\x01\x12\x1b\n" +
+	"\x17PROPOSAL_STATE_ACCEPTED\x10\x02\x12\x1b\n" +
+	"\x17PROPOSAL_STATE_REJECTED\x10\x03\x12\x1c\n" +
+	"\x18PROPOSAL_STATE_WITHDRAWN\x10\x04*k\n" +
+	"\n" +
+	"VoteChoice\x12\x1b\n" +
+	"\x17VOTE_CHOICE_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fVOTE_CHOICE_YES\x10\x01\x12\x12\n" +
+	"\x0eVOTE_CHOICE_NO\x10\x02\x12\x17\n" +
+	"\x13VOTE_CHOICE_ABSTAIN\x10\x032\x8c\x04\n" +
 	"\x11GovernanceService\x12>\n" +
 	"\aPropose\x12\x18.agora.v1.ProposeRequest\x1a\x19.agora.v1.ProposeResponse\x125\n" +
 	"\x04Vote\x12\x15.agora.v1.VoteRequest\x1a\x16.agora.v1.VoteResponse\x12P\n" +
@@ -977,53 +1167,61 @@ func file_agora_v1_governance_proto_rawDescGZIP() []byte {
 	return file_agora_v1_governance_proto_rawDescData
 }
 
+var file_agora_v1_governance_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_agora_v1_governance_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_agora_v1_governance_proto_goTypes = []any{
-	(*ProposalVote)(nil),          // 0: agora.v1.ProposalVote
-	(*Proposal)(nil),              // 1: agora.v1.Proposal
-	(*ProposeRequest)(nil),        // 2: agora.v1.ProposeRequest
-	(*ProposeResponse)(nil),       // 3: agora.v1.ProposeResponse
-	(*VoteRequest)(nil),           // 4: agora.v1.VoteRequest
-	(*VoteResponse)(nil),          // 5: agora.v1.VoteResponse
-	(*CloseProposalRequest)(nil),  // 6: agora.v1.CloseProposalRequest
-	(*CloseProposalResponse)(nil), // 7: agora.v1.CloseProposalResponse
-	(*ListProposalsRequest)(nil),  // 8: agora.v1.ListProposalsRequest
-	(*ListProposalsResponse)(nil), // 9: agora.v1.ListProposalsResponse
-	(*GetProposalRequest)(nil),    // 10: agora.v1.GetProposalRequest
-	(*GetProposalResponse)(nil),   // 11: agora.v1.GetProposalResponse
-	(*GetCharterRequest)(nil),     // 12: agora.v1.GetCharterRequest
-	(*GetCharterResponse)(nil),    // 13: agora.v1.GetCharterResponse
-	(*SetCharterRequest)(nil),     // 14: agora.v1.SetCharterRequest
-	(*SetCharterResponse)(nil),    // 15: agora.v1.SetCharterResponse
-	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
+	(ProposalState)(0),            // 0: agora.v1.ProposalState
+	(VoteChoice)(0),               // 1: agora.v1.VoteChoice
+	(*ProposalVote)(nil),          // 2: agora.v1.ProposalVote
+	(*Proposal)(nil),              // 3: agora.v1.Proposal
+	(*ProposeRequest)(nil),        // 4: agora.v1.ProposeRequest
+	(*ProposeResponse)(nil),       // 5: agora.v1.ProposeResponse
+	(*VoteRequest)(nil),           // 6: agora.v1.VoteRequest
+	(*VoteResponse)(nil),          // 7: agora.v1.VoteResponse
+	(*CloseProposalRequest)(nil),  // 8: agora.v1.CloseProposalRequest
+	(*CloseProposalResponse)(nil), // 9: agora.v1.CloseProposalResponse
+	(*ListProposalsRequest)(nil),  // 10: agora.v1.ListProposalsRequest
+	(*ListProposalsResponse)(nil), // 11: agora.v1.ListProposalsResponse
+	(*GetProposalRequest)(nil),    // 12: agora.v1.GetProposalRequest
+	(*GetProposalResponse)(nil),   // 13: agora.v1.GetProposalResponse
+	(*GetCharterRequest)(nil),     // 14: agora.v1.GetCharterRequest
+	(*GetCharterResponse)(nil),    // 15: agora.v1.GetCharterResponse
+	(*SetCharterRequest)(nil),     // 16: agora.v1.SetCharterRequest
+	(*SetCharterResponse)(nil),    // 17: agora.v1.SetCharterResponse
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
 }
 var file_agora_v1_governance_proto_depIdxs = []int32{
-	16, // 0: agora.v1.ProposalVote.at:type_name -> google.protobuf.Timestamp
-	16, // 1: agora.v1.Proposal.created_at:type_name -> google.protobuf.Timestamp
-	16, // 2: agora.v1.Proposal.closed_at:type_name -> google.protobuf.Timestamp
-	0,  // 3: agora.v1.Proposal.votes:type_name -> agora.v1.ProposalVote
-	1,  // 4: agora.v1.ListProposalsResponse.proposals:type_name -> agora.v1.Proposal
-	1,  // 5: agora.v1.GetProposalResponse.proposal:type_name -> agora.v1.Proposal
-	16, // 6: agora.v1.GetCharterResponse.changed_at:type_name -> google.protobuf.Timestamp
-	2,  // 7: agora.v1.GovernanceService.Propose:input_type -> agora.v1.ProposeRequest
-	4,  // 8: agora.v1.GovernanceService.Vote:input_type -> agora.v1.VoteRequest
-	6,  // 9: agora.v1.GovernanceService.CloseProposal:input_type -> agora.v1.CloseProposalRequest
-	8,  // 10: agora.v1.GovernanceService.ListProposals:input_type -> agora.v1.ListProposalsRequest
-	10, // 11: agora.v1.GovernanceService.GetProposal:input_type -> agora.v1.GetProposalRequest
-	12, // 12: agora.v1.GovernanceService.GetCharter:input_type -> agora.v1.GetCharterRequest
-	14, // 13: agora.v1.GovernanceService.SetCharter:input_type -> agora.v1.SetCharterRequest
-	3,  // 14: agora.v1.GovernanceService.Propose:output_type -> agora.v1.ProposeResponse
-	5,  // 15: agora.v1.GovernanceService.Vote:output_type -> agora.v1.VoteResponse
-	7,  // 16: agora.v1.GovernanceService.CloseProposal:output_type -> agora.v1.CloseProposalResponse
-	9,  // 17: agora.v1.GovernanceService.ListProposals:output_type -> agora.v1.ListProposalsResponse
-	11, // 18: agora.v1.GovernanceService.GetProposal:output_type -> agora.v1.GetProposalResponse
-	13, // 19: agora.v1.GovernanceService.GetCharter:output_type -> agora.v1.GetCharterResponse
-	15, // 20: agora.v1.GovernanceService.SetCharter:output_type -> agora.v1.SetCharterResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	18, // 0: agora.v1.ProposalVote.at:type_name -> google.protobuf.Timestamp
+	1,  // 1: agora.v1.ProposalVote.vote_choice:type_name -> agora.v1.VoteChoice
+	18, // 2: agora.v1.Proposal.created_at:type_name -> google.protobuf.Timestamp
+	18, // 3: agora.v1.Proposal.closed_at:type_name -> google.protobuf.Timestamp
+	2,  // 4: agora.v1.Proposal.votes:type_name -> agora.v1.ProposalVote
+	0,  // 5: agora.v1.Proposal.proposal_state:type_name -> agora.v1.ProposalState
+	1,  // 6: agora.v1.VoteRequest.vote_choice:type_name -> agora.v1.VoteChoice
+	1,  // 7: agora.v1.VoteResponse.vote_choice:type_name -> agora.v1.VoteChoice
+	0,  // 8: agora.v1.CloseProposalRequest.proposal_state:type_name -> agora.v1.ProposalState
+	3,  // 9: agora.v1.ListProposalsResponse.proposals:type_name -> agora.v1.Proposal
+	3,  // 10: agora.v1.GetProposalResponse.proposal:type_name -> agora.v1.Proposal
+	18, // 11: agora.v1.GetCharterResponse.changed_at:type_name -> google.protobuf.Timestamp
+	4,  // 12: agora.v1.GovernanceService.Propose:input_type -> agora.v1.ProposeRequest
+	6,  // 13: agora.v1.GovernanceService.Vote:input_type -> agora.v1.VoteRequest
+	8,  // 14: agora.v1.GovernanceService.CloseProposal:input_type -> agora.v1.CloseProposalRequest
+	10, // 15: agora.v1.GovernanceService.ListProposals:input_type -> agora.v1.ListProposalsRequest
+	12, // 16: agora.v1.GovernanceService.GetProposal:input_type -> agora.v1.GetProposalRequest
+	14, // 17: agora.v1.GovernanceService.GetCharter:input_type -> agora.v1.GetCharterRequest
+	16, // 18: agora.v1.GovernanceService.SetCharter:input_type -> agora.v1.SetCharterRequest
+	5,  // 19: agora.v1.GovernanceService.Propose:output_type -> agora.v1.ProposeResponse
+	7,  // 20: agora.v1.GovernanceService.Vote:output_type -> agora.v1.VoteResponse
+	9,  // 21: agora.v1.GovernanceService.CloseProposal:output_type -> agora.v1.CloseProposalResponse
+	11, // 22: agora.v1.GovernanceService.ListProposals:output_type -> agora.v1.ListProposalsResponse
+	13, // 23: agora.v1.GovernanceService.GetProposal:output_type -> agora.v1.GetProposalResponse
+	15, // 24: agora.v1.GovernanceService.GetCharter:output_type -> agora.v1.GetCharterResponse
+	17, // 25: agora.v1.GovernanceService.SetCharter:output_type -> agora.v1.SetCharterResponse
+	19, // [19:26] is the sub-list for method output_type
+	12, // [12:19] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_governance_proto_init() }
@@ -1036,13 +1234,14 @@ func file_agora_v1_governance_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_governance_proto_rawDesc), len(file_agora_v1_governance_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      2,
 			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_agora_v1_governance_proto_goTypes,
 		DependencyIndexes: file_agora_v1_governance_proto_depIdxs,
+		EnumInfos:         file_agora_v1_governance_proto_enumTypes,
 		MessageInfos:      file_agora_v1_governance_proto_msgTypes,
 	}.Build()
 	File_agora_v1_governance_proto = out.File

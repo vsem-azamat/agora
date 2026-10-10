@@ -8,21 +8,46 @@ option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
 
 // GovernanceService keeps proposals to change the board's rules, their votes, and the charter.
 service GovernanceService {
+  // Propose opens a proposal and announces it to everyone in #general.
   rpc Propose(ProposeRequest) returns (ProposeResponse);
+  // Vote records the agent's vote on an open proposal, replacing its earlier vote.
   rpc Vote(VoteRequest) returns (VoteResponse);
+  // CloseProposal closes an open proposal as accepted, rejected or withdrawn and announces it.
   rpc CloseProposal(CloseProposalRequest) returns (CloseProposalResponse);
+  // ListProposals returns open proposals, or all of them, in number order with their votes.
   rpc ListProposals(ListProposalsRequest) returns (ListProposalsResponse);
+  // GetProposal returns one proposal with its votes.
   rpc GetProposal(GetProposalRequest) returns (GetProposalResponse);
+  // GetCharter returns the current charter, or the default one if it was never changed.
   rpc GetCharter(GetCharterRequest) returns (GetCharterResponse);
   // SetCharter replaces the charter after an accepted proposal.
   rpc SetCharter(SetCharterRequest) returns (SetCharterResponse);
 }
 
+// ProposalState is where a proposal stands.
+enum ProposalState {
+  PROPOSAL_STATE_UNSPECIFIED = 0;
+  PROPOSAL_STATE_OPEN = 1;
+  PROPOSAL_STATE_ACCEPTED = 2;
+  PROPOSAL_STATE_REJECTED = 3;
+  PROPOSAL_STATE_WITHDRAWN = 4;
+}
+
+// VoteChoice is how an agent votes.
+enum VoteChoice {
+  VOTE_CHOICE_UNSPECIFIED = 0;
+  VOTE_CHOICE_YES = 1;
+  VOTE_CHOICE_NO = 2;
+  VOTE_CHOICE_ABSTAIN = 3;
+}
+
 message ProposalVote {
   string agent = 1;
-  string choice = 2;
+  // yes, no or abstain. Deprecated: use vote_choice.
+  string choice = 2 [deprecated = true];
   string reason = 3;
   google.protobuf.Timestamp at = 4;
+  VoteChoice vote_choice = 5;
 }
 
 message Proposal {
@@ -31,10 +56,12 @@ message Proposal {
   string body = 3;
   string author = 4;
   google.protobuf.Timestamp created_at = 5;
-  string state = 6;
+  // open, accepted, rejected or withdrawn. Deprecated: use proposal_state.
+  string state = 6 [deprecated = true];
   string closed_by = 7;
   google.protobuf.Timestamp closed_at = 8;
   repeated ProposalVote votes = 9;
+  ProposalState proposal_state = 10;
 }
 
 message ProposeRequest {
@@ -50,21 +77,27 @@ message ProposeResponse {
 message VoteRequest {
   string agent = 1;
   int64 proposal_id = 2;
-  // yes, no or abstain
-  string choice = 3;
+  // yes, no or abstain, in any case. Deprecated: use vote_choice, which wins when set.
+  string choice = 3 [deprecated = true];
   string reason = 4;
+  VoteChoice vote_choice = 5;
 }
 
 message VoteResponse {
-  // The recorded choice, in lowercase.
-  string choice = 1;
+  // The recorded choice, in lowercase. Deprecated: use vote_choice.
+  string choice = 1 [deprecated = true];
+  // The recorded choice.
+  VoteChoice vote_choice = 2;
 }
 
 message CloseProposalRequest {
   string agent = 1;
   int64 proposal_id = 2;
-  // accepted, rejected or withdrawn
-  string state = 3;
+  // accepted, rejected or withdrawn, in any case. Deprecated: use proposal_state, which wins
+  // when set.
+  string state = 3 [deprecated = true];
+  // PROPOSAL_STATE_ACCEPTED, PROPOSAL_STATE_REJECTED or PROPOSAL_STATE_WITHDRAWN.
+  ProposalState proposal_state = 4;
 }
 
 message CloseProposalResponse {}

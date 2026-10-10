@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -464,7 +465,7 @@ func TestHubWatchesPullRequestsAndPostsCI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a := list.Msg.GetAgents(); len(a) != 1 || a[0].GetCi()[57] != "green" {
+			if a := list.Msg.GetAgents(); len(a) != 1 || a[0].GetCiState()[57] != agorav1.CiState_CI_STATE_GREEN {
 				t.Fatalf("the profile lacks the reported CI state: %v", a)
 			}
 			break
@@ -580,5 +581,83 @@ func TestServeReturnsWhenTheListenerFails(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Serve did not return after its listener failed")
+	}
+}
+
+func TestProfilesCarryEnumStates(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	if _, err := r.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "reviewer"})); err != nil {
+		t.Fatal(err)
+	}
+	list, err := r.agents.ListAgents(context.Background(), connect.NewRequest(&agorav1.ListAgentsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]agorav1.SessionState{"builder": agorav1.SessionState_SESSION_STATE_IDLE, "reviewer": agorav1.SessionState_SESSION_STATE_OFFLINE}
+	for _, p := range list.Msg.GetAgents() {
+		if p.GetSession() != want[p.GetName()] {
+			t.Errorf("%s: session %v, want %v", p.GetName(), p.GetSession(), want[p.GetName()])
+		}
+	}
+}
+
+func TestVotesAndClosingTakeEnumsOrStrings(t *testing.T) {
+	r := start(t)
+	ctx := context.Background()
+	gov := agorav1connect.NewGovernanceServiceClient(r.httpClient, "http://agora")
+	for _, name := range []string{"builder", "reviewer"} {
+		if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: name})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := gov.Propose(ctx, connect.NewRequest(&agorav1.ProposeRequest{Author: "builder", Title: "Rule", Body: "Text"})); err != nil {
+		t.Fatal(err)
+	}
+	old, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "builder", ProposalId: 1, Choice: "No"})) //nolint:staticcheck // an older client sends the choice as a string
+	if err != nil || old.Msg.GetVoteChoice() != agorav1.VoteChoice_VOTE_CHOICE_NO {
+		t.Fatalf("string vote: %v %v", old, err)
+	}
+	if _, err := gov.Vote(ctx, connect.NewRequest(&agorav1.VoteRequest{Agent: "reviewer", ProposalId: 1, VoteChoice: agorav1.VoteChoice_VOTE_CHOICE_YES, Choice: "no"})); err != nil { //nolint:staticcheck // the enum wins over the string
+		t.Fatal(err)
+	}
+	if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: agorav1.ProposalState_PROPOSAL_STATE_OPEN})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("closing as open: %v", err)
+	}
+	if _, err := gov.CloseProposal(ctx, connect.NewRequest(&agorav1.CloseProposalRequest{Agent: "builder", ProposalId: 1, ProposalState: agorav1.ProposalState_PROPOSAL_STATE_ACCEPTED})); err != nil {
+		t.Fatal(err)
+	}
+	got, err := gov.GetProposal(ctx, connect.NewRequest(&agorav1.GetProposalRequest{Id: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := got.Msg.GetProposal()
+	if p.GetProposalState() != agorav1.ProposalState_PROPOSAL_STATE_ACCEPTED || p.GetState() != "accepted" { //nolint:staticcheck // the deprecated string stays filled
+		t.Fatalf("proposal %v", p)
+	}
+	choices := map[string]agorav1.VoteChoice{}
+	for _, v := range p.GetVotes() {
+		choices[v.GetAgent()] = v.GetVoteChoice()
+	}
+	if choices["builder"] != agorav1.VoteChoice_VOTE_CHOICE_NO || choices["reviewer"] != agorav1.VoteChoice_VOTE_CHOICE_YES {
+		t.Fatalf("votes %v", choices)
+	}
+}
+
+func TestListSubscriptionsReadsTheFollowedRooms(t *testing.T) {
+	r := start(t)
+	ctx := context.Background()
+	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "example-app", Purpose: "the app", Creator: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{Agent: "builder"}))
+	if err != nil || !slices.Equal(got.Msg.GetRooms(), []string{"general", "example-app"}) {
+		t.Fatalf("followed %v %v", got, err)
+	}
+	if _, err := r.rooms.ListSubscriptions(ctx, connect.NewRequest(&agorav1.ListSubscriptionsRequest{Agent: "ghost"})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("unknown agent: %v", err)
 	}
 }

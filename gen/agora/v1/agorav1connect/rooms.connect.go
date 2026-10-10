@@ -39,6 +39,9 @@ const (
 	RoomServiceListRoomsProcedure = "/agora.v1.RoomService/ListRooms"
 	// RoomServiceSubscribeProcedure is the fully-qualified name of the RoomService's Subscribe RPC.
 	RoomServiceSubscribeProcedure = "/agora.v1.RoomService/Subscribe"
+	// RoomServiceListSubscriptionsProcedure is the fully-qualified name of the RoomService's
+	// ListSubscriptions RPC.
+	RoomServiceListSubscriptionsProcedure = "/agora.v1.RoomService/ListSubscriptions"
 	// RoomServicePostProcedure is the fully-qualified name of the RoomService's Post RPC.
 	RoomServicePostProcedure = "/agora.v1.RoomService/Post"
 	// RoomServiceHistoryProcedure is the fully-qualified name of the RoomService's History RPC.
@@ -55,10 +58,17 @@ const (
 
 // RoomServiceClient is a client for the agora.v1.RoomService service.
 type RoomServiceClient interface {
+	// CreateRoom creates a room with a purpose; its creator follows it.
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
+	// ListRooms returns every room with its activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
-	// Subscribe follows or stops following rooms; #general always stays followed.
+	// Subscribe follows or stops following rooms; #general always stays followed. With no rooms
+	// it changes nothing and only returns the followed rooms; ListSubscriptions is the read.
 	Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error)
+	// ListSubscriptions returns the rooms the agent follows, #general first.
+	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
+	// Post stores a message from a joined agent; @name and @all in the body address agents. No
+	// agent may post as agora, the board itself.
 	Post(context.Context, *connect.Request[v1.PostRequest]) (*connect.Response[v1.PostResponse], error)
 	// History returns a room's last messages without changing read state.
 	History(context.Context, *connect.Request[v1.HistoryRequest]) (*connect.Response[v1.HistoryResponse], error)
@@ -99,6 +109,12 @@ func NewRoomServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(roomServiceMethods.ByName("Subscribe")),
 			connect.WithClientOptions(opts...),
 		),
+		listSubscriptions: connect.NewClient[v1.ListSubscriptionsRequest, v1.ListSubscriptionsResponse](
+			httpClient,
+			baseURL+RoomServiceListSubscriptionsProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("ListSubscriptions")),
+			connect.WithClientOptions(opts...),
+		),
 		post: connect.NewClient[v1.PostRequest, v1.PostResponse](
 			httpClient,
 			baseURL+RoomServicePostProcedure,
@@ -134,14 +150,15 @@ func NewRoomServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // roomServiceClient implements RoomServiceClient.
 type roomServiceClient struct {
-	createRoom   *connect.Client[v1.CreateRoomRequest, v1.CreateRoomResponse]
-	listRooms    *connect.Client[v1.ListRoomsRequest, v1.ListRoomsResponse]
-	subscribe    *connect.Client[v1.SubscribeRequest, v1.SubscribeResponse]
-	post         *connect.Client[v1.PostRequest, v1.PostResponse]
-	history      *connect.Client[v1.HistoryRequest, v1.HistoryResponse]
-	unread       *connect.Client[v1.UnreadRequest, v1.UnreadResponse]
-	unreadByRoom *connect.Client[v1.UnreadByRoomRequest, v1.UnreadByRoomResponse]
-	markRoomRead *connect.Client[v1.MarkRoomReadRequest, v1.MarkRoomReadResponse]
+	createRoom        *connect.Client[v1.CreateRoomRequest, v1.CreateRoomResponse]
+	listRooms         *connect.Client[v1.ListRoomsRequest, v1.ListRoomsResponse]
+	subscribe         *connect.Client[v1.SubscribeRequest, v1.SubscribeResponse]
+	listSubscriptions *connect.Client[v1.ListSubscriptionsRequest, v1.ListSubscriptionsResponse]
+	post              *connect.Client[v1.PostRequest, v1.PostResponse]
+	history           *connect.Client[v1.HistoryRequest, v1.HistoryResponse]
+	unread            *connect.Client[v1.UnreadRequest, v1.UnreadResponse]
+	unreadByRoom      *connect.Client[v1.UnreadByRoomRequest, v1.UnreadByRoomResponse]
+	markRoomRead      *connect.Client[v1.MarkRoomReadRequest, v1.MarkRoomReadResponse]
 }
 
 // CreateRoom calls agora.v1.RoomService.CreateRoom.
@@ -157,6 +174,11 @@ func (c *roomServiceClient) ListRooms(ctx context.Context, req *connect.Request[
 // Subscribe calls agora.v1.RoomService.Subscribe.
 func (c *roomServiceClient) Subscribe(ctx context.Context, req *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error) {
 	return c.subscribe.CallUnary(ctx, req)
+}
+
+// ListSubscriptions calls agora.v1.RoomService.ListSubscriptions.
+func (c *roomServiceClient) ListSubscriptions(ctx context.Context, req *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error) {
+	return c.listSubscriptions.CallUnary(ctx, req)
 }
 
 // Post calls agora.v1.RoomService.Post.
@@ -186,10 +208,17 @@ func (c *roomServiceClient) MarkRoomRead(ctx context.Context, req *connect.Reque
 
 // RoomServiceHandler is an implementation of the agora.v1.RoomService service.
 type RoomServiceHandler interface {
+	// CreateRoom creates a room with a purpose; its creator follows it.
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
+	// ListRooms returns every room with its activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
-	// Subscribe follows or stops following rooms; #general always stays followed.
+	// Subscribe follows or stops following rooms; #general always stays followed. With no rooms
+	// it changes nothing and only returns the followed rooms; ListSubscriptions is the read.
 	Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error)
+	// ListSubscriptions returns the rooms the agent follows, #general first.
+	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
+	// Post stores a message from a joined agent; @name and @all in the body address agents. No
+	// agent may post as agora, the board itself.
 	Post(context.Context, *connect.Request[v1.PostRequest]) (*connect.Response[v1.PostResponse], error)
 	// History returns a room's last messages without changing read state.
 	History(context.Context, *connect.Request[v1.HistoryRequest]) (*connect.Response[v1.HistoryResponse], error)
@@ -224,6 +253,12 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 		RoomServiceSubscribeProcedure,
 		svc.Subscribe,
 		connect.WithSchema(roomServiceMethods.ByName("Subscribe")),
+		connect.WithHandlerOptions(opts...),
+	)
+	roomServiceListSubscriptionsHandler := connect.NewUnaryHandler(
+		RoomServiceListSubscriptionsProcedure,
+		svc.ListSubscriptions,
+		connect.WithSchema(roomServiceMethods.ByName("ListSubscriptions")),
 		connect.WithHandlerOptions(opts...),
 	)
 	roomServicePostHandler := connect.NewUnaryHandler(
@@ -264,6 +299,8 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 			roomServiceListRoomsHandler.ServeHTTP(w, r)
 		case RoomServiceSubscribeProcedure:
 			roomServiceSubscribeHandler.ServeHTTP(w, r)
+		case RoomServiceListSubscriptionsProcedure:
+			roomServiceListSubscriptionsHandler.ServeHTTP(w, r)
 		case RoomServicePostProcedure:
 			roomServicePostHandler.ServeHTTP(w, r)
 		case RoomServiceHistoryProcedure:
@@ -293,6 +330,10 @@ func (UnimplementedRoomServiceHandler) ListRooms(context.Context, *connect.Reque
 
 func (UnimplementedRoomServiceHandler) Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.Subscribe is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.ListSubscriptions is not implemented"))
 }
 
 func (UnimplementedRoomServiceHandler) Post(context.Context, *connect.Request[v1.PostRequest]) (*connect.Response[v1.PostResponse], error) {

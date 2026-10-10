@@ -11,6 +11,7 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/governance"
+	"github.com/vsem-azamat/agora/internal/pullrequests"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -79,11 +80,25 @@ var sessionStates = map[sessions.State]agorav1.SessionState{
 	sessions.Ended: agorav1.SessionState_SESSION_STATE_ENDED,
 }
 
+// profileSessions maps the session state of a profile to the API's.
+var profileSessions = map[string]agorav1.SessionState{
+	string(sessions.Busy): agorav1.SessionState_SESSION_STATE_BUSY,
+	string(sessions.Idle): agorav1.SessionState_SESSION_STATE_IDLE,
+	agents.Offline:        agorav1.SessionState_SESSION_STATE_OFFLINE,
+}
+
+var ciStates = map[string]agorav1.CiState{
+	string(pullrequests.Green):    agorav1.CiState_CI_STATE_GREEN,
+	string(pullrequests.Red):      agorav1.CiState_CI_STATE_RED,
+	string(pullrequests.Conflict): agorav1.CiState_CI_STATE_CONFLICT,
+}
+
 func profilePB(p agents.Profile) *agorav1.Profile {
 	out := &agorav1.Profile{
 		Name: p.Name, Kind: p.Kind, Project: p.Project, Task: p.Task, Status: p.Status, Cwd: p.CWD, Branch: p.Branch,
 		About: p.About, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
-		SessionState: p.SessionState, Active: p.Active,
+		SessionState: p.SessionState, //nolint:staticcheck // the deprecated string stays filled for older clients
+		Session:      profileSessions[p.SessionState], Active: p.Active,
 	}
 	for _, n := range p.PRs {
 		out.Prs = append(out.Prs, int32(n))
@@ -92,10 +107,13 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 		out.FoundPrs = append(out.FoundPrs, int32(n))
 	}
 	if len(p.CI) > 0 {
-		out.Ci = make(map[int32]string, len(p.CI))
+		ci := make(map[int32]string, len(p.CI))
+		out.CiState = make(map[int32]agorav1.CiState, len(p.CI))
 		for n, state := range p.CI {
-			out.Ci[int32(n)] = state
+			ci[int32(n)] = state
+			out.CiState[int32(n)] = ciStates[state]
 		}
+		out.Ci = ci //nolint:staticcheck // the deprecated strings stay filled for older clients
 	}
 	return out
 }
@@ -108,13 +126,54 @@ func messagesPB(msgs []rooms.Message) []*agorav1.Message {
 	return out
 }
 
+var proposalStates = map[governance.State]agorav1.ProposalState{
+	governance.Open:      agorav1.ProposalState_PROPOSAL_STATE_OPEN,
+	governance.Accepted:  agorav1.ProposalState_PROPOSAL_STATE_ACCEPTED,
+	governance.Rejected:  agorav1.ProposalState_PROPOSAL_STATE_REJECTED,
+	governance.Withdrawn: agorav1.ProposalState_PROPOSAL_STATE_WITHDRAWN,
+}
+
+var voteChoices = map[governance.Choice]agorav1.VoteChoice{
+	governance.Yes:     agorav1.VoteChoice_VOTE_CHOICE_YES,
+	governance.No:      agorav1.VoteChoice_VOTE_CHOICE_NO,
+	governance.Abstain: agorav1.VoteChoice_VOTE_CHOICE_ABSTAIN,
+}
+
+// choiceName is the governance choice for an API vote choice, "" for an unknown one.
+func choiceName(c agorav1.VoteChoice) string {
+	for name, v := range voteChoices {
+		if v == c {
+			return string(name)
+		}
+	}
+	return ""
+}
+
+// stateName is the governance state for an API proposal state, "" for an unknown one.
+func stateName(s agorav1.ProposalState) string {
+	for name, v := range proposalStates {
+		if v == s {
+			return string(name)
+		}
+	}
+	return ""
+}
+
 func proposalPB(p governance.Proposal) *agorav1.Proposal {
-	out := &agorav1.Proposal{Id: p.ID, Title: p.Title, Body: p.Body, Author: p.Author, CreatedAt: timestamppb.New(p.CreatedAt), State: string(p.State), ClosedBy: p.ClosedBy}
+	out := &agorav1.Proposal{
+		Id: p.ID, Title: p.Title, Body: p.Body, Author: p.Author, CreatedAt: timestamppb.New(p.CreatedAt), ClosedBy: p.ClosedBy,
+		State:         string(p.State), //nolint:staticcheck // the deprecated string stays filled for older clients
+		ProposalState: proposalStates[p.State],
+	}
 	if !p.ClosedAt.IsZero() {
 		out.ClosedAt = timestamppb.New(p.ClosedAt)
 	}
 	for _, v := range p.Votes {
-		out.Votes = append(out.Votes, &agorav1.ProposalVote{Agent: v.Agent, Choice: string(v.Choice), Reason: v.Reason, At: timestamppb.New(v.At)})
+		out.Votes = append(out.Votes, &agorav1.ProposalVote{
+			Agent: v.Agent, Reason: v.Reason, At: timestamppb.New(v.At),
+			Choice:     string(v.Choice), //nolint:staticcheck // the deprecated string stays filled for older clients
+			VoteChoice: voteChoices[v.Choice],
+		})
 	}
 	return out
 }

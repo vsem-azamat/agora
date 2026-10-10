@@ -16,7 +16,7 @@ import {
   timeLeft,
   turns,
 } from './board';
-import { agent, lock, NOW, proposal, queue } from './fixtures';
+import { agent, ci, lock, NOW, proposal, queue } from './fixtures';
 
 describe('board', () => {
   const agents = [
@@ -38,7 +38,7 @@ describe('board', () => {
     const a = agent('builder', 'idle', {
       prs: [58],
       foundPrs: [57, 59],
-      ci: { 57: 'green', 58: 'red', 59: 'conflict' },
+      ciState: ci({ 57: 'green', 58: 'red', 59: 'conflict' }),
     });
     expect(pullRequests(a)).toEqual([57, 58, 59]);
     expect([57, 58, 59, 60].map((n) => ciMark(a, n))).toEqual(['green', 'red', 'red', undefined]);

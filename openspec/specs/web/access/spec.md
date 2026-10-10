@@ -78,7 +78,7 @@ The web listener SHALL refuse with HTTP 403 any request whose `Origin` header na
 
 ### Requirement: The App Reaches Only What It Needs
 
-The web listener SHALL serve only these calls: listing agents, rooms, resources and proposals; reading a proposal, the charter and a room's history; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, leaving, reporting sessions, taking unread messages, the web token) SHALL be refused as not found, also with the valid token. Requests larger than 1 MiB SHALL be refused.
+The web listener SHALL serve only these calls: listing agents, rooms, resources and proposals; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, leaving, reporting sessions, taking unread messages, the web token) SHALL be refused as not found, also with the valid token. Requests larger than 1 MiB SHALL be refused.
 
 #### Scenario: Releasing a lock
 - **WHEN** a request with the valid token asks the web listener to release another agent's lock

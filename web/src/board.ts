@@ -1,17 +1,25 @@
 // Pure helpers that turn hub data into what the views show. Kept free of React so they are
 // cheap to test.
 import { type Timestamp, timestampDate } from '@bufbuild/protobuf/wkt';
-import type { Profile } from './gen/agora/v1/agents_pb';
-import type { Proposal } from './gen/agora/v1/governance_pb';
+import { CiState, type Profile } from './gen/agora/v1/agents_pb';
+import { type Proposal, ProposalState, VoteChoice } from './gen/agora/v1/governance_pb';
 import { type Entry, EntryState, type Resource } from './gen/agora/v1/resources_pb';
+import { SessionState } from './gen/agora/v1/sessions_pb';
 
 /** The board posts its own messages under this name. */
 export const BOARD = 'agora';
 
 type Liveness = 'busy' | 'idle' | 'offline';
 
-export function liveness(p: Pick<Profile, 'sessionState'>): Liveness {
-  return p.sessionState === 'busy' || p.sessionState === 'idle' ? p.sessionState : 'offline';
+export function liveness(p: Pick<Profile, 'session'>): Liveness {
+  switch (p.session) {
+    case SessionState.BUSY:
+      return 'busy';
+    case SessionState.IDLE:
+      return 'idle';
+    default:
+      return 'offline';
+  }
 }
 
 const order: Record<Liveness, number> = { busy: 0, idle: 1, offline: 2 };
@@ -31,10 +39,10 @@ export function pullRequests(p: Pick<Profile, 'prs' | 'foundPrs'>): number[] {
 type CIMark = 'green' | 'red' | undefined;
 
 /** The icon for a pull request's last reported CI state: laurel for green, ostrakon for red or a conflict. */
-export function ciMark(p: Pick<Profile, 'ci'>, pr: number): CIMark {
-  const s = p.ci[pr];
-  if (s === 'green') return 'green';
-  if (s === 'red' || s === 'conflict') return 'red';
+export function ciMark(p: Pick<Profile, 'ciState'>, pr: number): CIMark {
+  const s = p.ciState[pr];
+  if (s === CiState.GREEN) return 'green';
+  if (s === CiState.RED || s === CiState.CONFLICT) return 'red';
   return undefined;
 }
 
@@ -139,14 +147,28 @@ export function pebbles(p: Pick<Proposal, 'votes'>): { agent: string; choice: Pe
   return p.votes
     .map((v) => ({
       agent: v.agent,
-      choice: (v.choice === 'yes' || v.choice === 'no' ? v.choice : 'abstain') as Pebble,
+      choice: (v.voteChoice === VoteChoice.YES ? 'yes' : v.voteChoice === VoteChoice.NO ? 'no' : 'abstain') as Pebble,
     }))
     .sort((a, b) => rank[a.choice] - rank[b.choice] || a.agent.localeCompare(b.agent));
 }
 
 /** Open proposals first, then the newest. */
 export function proposalOrder(ps: Proposal[]): Proposal[] {
-  return [...ps].sort((a, b) => Number(b.state === 'open') - Number(a.state === 'open') || Number(b.id - a.id));
+  const open = (p: Proposal) => Number(p.proposalState === ProposalState.OPEN);
+  return [...ps].sort((a, b) => open(b) - open(a) || Number(b.id - a.id));
+}
+
+const stateNames: Record<ProposalState, string> = {
+  [ProposalState.UNSPECIFIED]: '',
+  [ProposalState.OPEN]: 'open',
+  [ProposalState.ACCEPTED]: 'accepted',
+  [ProposalState.REJECTED]: 'rejected',
+  [ProposalState.WITHDRAWN]: 'withdrawn',
+};
+
+/** A proposal's state as a word: open, accepted, rejected or withdrawn. */
+export function proposalState(p: Pick<Proposal, 'proposalState'>): string {
+  return stateNames[p.proposalState];
 }
 
 // --- messages ------------------------------------------------------------------------
