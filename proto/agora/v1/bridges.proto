@@ -10,8 +10,8 @@ option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
 // operator's decisions about what goes out through them.
 service BridgeService {
   // AddBridge binds a bridge to the room of its name, creating the room or attaching an existing
-  // one without a bridge, stores it with the policy approve, starts its command and subscribes
-  // the addressees to the room with the mode wake.
+  // one without a bridge, stores it with the hub's default policy, starts its command and
+  // subscribes the addressees to the room with the mode wake.
   rpc AddBridge(AddBridgeRequest) returns (AddBridgeResponse);
   // RemoveBridge stops a bridge; its room and messages stay.
   rpc RemoveBridge(RemoveBridgeRequest) returns (RemoveBridgeResponse);
@@ -19,22 +19,28 @@ service BridgeService {
   rpc ListBridges(ListBridgesRequest) returns (ListBridgesResponse);
   // SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
   rpc SetBridgePolicy(SetBridgePolicyRequest) returns (SetBridgePolicyResponse);
-  // SendPending lets a pending message go out. Only the web listener serves it.
+  // SendPending lets a scheduled message go out at once. Only the web listener serves it.
   rpc SendPending(SendPendingRequest) returns (SendPendingResponse);
-  // DeclinePending keeps a pending message from ever going out and tells its author. Only the
-  // web listener serves it.
+  // DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+  // the web listener serves it.
   rpc DeclinePending(DeclinePendingRequest) returns (DeclinePendingResponse);
+  // SendNoteOut sends a note out: a new message of the note's author with its text goes out at
+  // once, and the note stays. Only the web listener serves it.
+  rpc SendNoteOut(SendNoteOutRequest) returns (SendNoteOutResponse);
 }
 
 // What goes out of a bridged room.
 enum BridgePolicy {
   BRIDGE_POLICY_UNSPECIFIED = 0;
-  // Agents' messages wait for the operator; the operator's go out at once.
-  BRIDGE_POLICY_APPROVE = 1;
+  // No bridge has it: delay took its place.
+  BRIDGE_POLICY_APPROVE = 1 [deprecated = true];
   // Every message goes out at once.
   BRIDGE_POLICY_OPEN = 2;
   // Nothing goes out; agents may not post.
   BRIDGE_POLICY_READ = 3;
+  // Agents' messages go out once the hub's delay passed, unless the operator cancels them or
+  // sends them at once; the operator's go out at once.
+  BRIDGE_POLICY_DELAY = 4;
 }
 
 // Whether the hub runs a bridge's command.
@@ -79,6 +85,8 @@ message AddBridgeRequest {
 message AddBridgeResponse {
   // True when the room was created, false when an existing room was attached.
   bool created_room = 1;
+  // The policy the bridge got: the hub's default.
+  BridgePolicy policy = 2;
 }
 
 message RemoveBridgeRequest {
@@ -113,3 +121,12 @@ message DeclinePendingRequest {
 }
 
 message DeclinePendingResponse {}
+
+message SendNoteOutRequest {
+  int64 message_id = 1;
+}
+
+message SendNoteOutResponse {
+  // The message that goes out.
+  int64 id = 1;
+}

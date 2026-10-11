@@ -10,7 +10,7 @@ Which messages of a bridged room go out through the bridge, when, and who decide
 
 ### Requirement: Messages Going Out
 
-The system SHALL hand a message of a bridged room that may go out to the bridge as `{"type":"out","id":…,"author":…,"text":…,"reply_to":…}`, where `id` is the message's identifier, `author` its author's name and `reply_to`, present only for a reply to a message of the same room with an identifier outside, that identifier. Each message SHALL be handed once it may go out, in the order messages became sendable: a message that goes out when posted in posting order, a pending message when the operator sends it. A handed message stays unanswered until the bridge writes `{"type":"sent","id":…,"ext_id":…}`, which marks the message sent with its identifier outside, or `{"type":"failed","id":…,"error":…}`, which marks it not sent with the reason (control characters, line and paragraph separators and bidirectional controls replaced with spaces, at most 500 characters); the board SHALL then tell the author, in the room, that its message was not sent and why. When the message's echo, an `in` line with that identifier outside stored after the message was posted, came before the `sent` answer, the echo SHALL be merged into the sent message, so the room has the message once; bridges should still answer `sent` before they report the message coming back. When any other message of the room has that identifier, the message SHALL be marked sent without it, and nothing else changes. Messages still unanswered when the bridge restarts SHALL be handed to it again, in order. The board's own messages never go out.
+The system SHALL hand a message of a bridged room that may go out to the bridge as `{"type":"out","id":…,"author":…,"text":…,"reply_to":…}`, where `id` is the message's identifier, `author` its author's name and `reply_to`, present only for a reply to a message of the same room with an identifier outside, that identifier. Each message SHALL be handed once it may go out, in the order messages became sendable: a message that goes out when posted in posting order, a scheduled message when its delay has passed or the operator sends it, a note the operator sends out when it is sent out. A handed message stays unanswered until the bridge writes `{"type":"sent","id":…,"ext_id":…}`, which marks the message sent with its identifier outside, or `{"type":"failed","id":…,"error":…}`, which marks it not sent with the reason (control characters, line and paragraph separators and bidirectional controls replaced with spaces, at most 500 characters); the board SHALL then tell the author, in the room, that its message was not sent and why. When the message's echo, an `in` line with that identifier outside stored after the message was posted, came before the `sent` answer, the echo SHALL be merged into the sent message, so the room has the message once; bridges should still answer `sent` before they report the message coming back. When any other message of the room has that identifier, the message SHALL be marked sent without it, and nothing else changes. Messages still unanswered when the bridge restarts SHALL be handed to it again, in order. The board's own messages never go out.
 
 #### Scenario: Sent
 - **WHEN** a message goes out and the bridge answers `sent` with `ext_id` `5515`
@@ -25,7 +25,7 @@ The system SHALL hand a message of a bridged room that may go out to the bridge 
 - **THEN** `secretary`'s message is marked sent, and the other message stays as it was
 
 #### Scenario: Sent out of order
-- **WHEN** `secretary`'s message waits under `approve`, the operator posts a message that goes out, and then sends the waiting one
+- **WHEN** `secretary`'s message is scheduled under `delay`, the operator posts a message that goes out, and then sends the scheduled one
 - **THEN** both reach the bridge, the operator's first
 
 #### Scenario: Handed again after a restart
@@ -46,15 +46,19 @@ The system SHALL hand a message of a bridged room that may go out to the bridge 
 
 ### Requirement: Outbound Policy
 
-A bridged room SHALL have the outbound policy `approve` (the default), `open` or `read`. Under `approve` an agent's message SHALL wait as pending until the operator sends or declines it; under `open` it SHALL go out at once; under `read` a post by an agent SHALL be refused, unless it is a note (see [Notes Stay In Agora](#requirement-notes-stay-in-agora)). Messages the operator posts through the web app SHALL go out at once under `approve` and `open`, unless they are notes, and under `read` SHALL be stored as notes, since nothing goes out. A pending message the operator declines SHALL never go out, and the board SHALL tell its author in the room. Messages posted through the socket are agents' messages, whatever name they are posted as.
+A bridged room SHALL have the outbound policy `open`, `delay` or `read`; a bridge gets the hub's default policy when it is added (see [Adding And Removing Bridges](../management/spec.md#requirement-adding-and-removing-bridges)). Under `open` an agent's message SHALL go out at once. Under `delay` it SHALL be scheduled: it goes out once the hub's delay (`agora hub --bridge-delay`, 60 seconds when not given) has passed since it was posted, unless the operator cancels it first or sends it at once. Under `read` a post by an agent SHALL be refused, unless it is a note (see [Notes Stay In Agora](#requirement-notes-stay-in-agora)). A scheduled message SHALL go out when its delay has passed under `open` and `delay`, and not while the policy is `read`, when it stays scheduled until the policy changes or the operator cancels it; changing the policy does not otherwise touch scheduled messages. Messages the operator posts through the web app SHALL go out at once under `open` and `delay`, unless they are notes, and under `read` SHALL be stored as notes, since nothing goes out. A scheduled message the operator cancels SHALL never go out, and the board SHALL tell its author in the room. Messages posted through the socket are agents' messages, whatever name they are posted as.
 
-#### Scenario: Waiting for the operator
-- **WHEN** `secretary` posts in `#example-chat` under `approve`
-- **THEN** the message is pending and nothing reaches the bridge until the operator sends it
+#### Scenario: Scheduled
+- **WHEN** `secretary` posts in `#example-chat` under `delay` with a delay of 60 seconds
+- **THEN** the message is scheduled, nothing reaches the bridge for 60 seconds, and then it does
 
-#### Scenario: Declined
-- **WHEN** the operator declines that message
+#### Scenario: Cancelled
+- **WHEN** the operator cancels that message before its delay has passed
 - **THEN** it never reaches the bridge, and the board tells `secretary` that it was not sent
+
+#### Scenario: Sent at once
+- **WHEN** the operator sends that message at once before its delay has passed
+- **THEN** it reaches the bridge without waiting for the rest of the delay
 
 #### Scenario: Open
 - **WHEN** `secretary` posts in `#example-chat` under `open`
@@ -64,8 +68,12 @@ A bridged room SHALL have the outbound policy `approve` (the default), `open` or
 - **WHEN** `secretary` posts in `#example-chat` under `read`
 - **THEN** the post is refused, saying that agents post only notes there, and nothing is stored
 
+#### Scenario: Read only with a scheduled message
+- **WHEN** a message of `secretary` is scheduled in `#example-chat`, the policy becomes `read` and the delay passes
+- **THEN** nothing reaches the bridge until the policy is `open` or `delay` again, and then the message does
+
 #### Scenario: The operator writes
-- **WHEN** the operator posts in `#example-chat` from the web app under `approve`
+- **WHEN** the operator posts in `#example-chat` from the web app under `delay`
 - **THEN** the message reaches the bridge without waiting
 
 #### Scenario: The operator writes in a read-only room
@@ -74,15 +82,15 @@ A bridged room SHALL have the outbound policy `approve` (the default), `open` or
 
 ### Requirement: Only The Operator Decides
 
-Only the web listener SHALL serve changing a bridge's outbound policy and sending or declining a pending message; the hub's socket SHALL refuse these calls as not found, whatever name they act as. Sending a pending message SHALL be refused while the room's policy is `read` or the room has no bridge; only pending messages can be sent or declined. A refusal SHALL say only what was refused, without the name of its kind in front.
+Only the web listener SHALL serve changing a bridge's outbound policy, sending a scheduled message at once, cancelling one and sending a note out; the hub's socket SHALL refuse these calls as not found, whatever name they act as. Sending a scheduled message at once or a note out SHALL be refused while the room's policy is `read` or the room has no bridge; only scheduled messages can be sent at once or cancelled, and only notes can be sent out. A refusal SHALL say only what was refused, without the name of its kind in front.
 
 #### Scenario: From the socket
-- **WHEN** a command on the socket tries to send a pending message, acting as any name
-- **THEN** it is refused as not found and the message stays pending
+- **WHEN** a command on the socket tries to send a scheduled message at once or cancel it, acting as any name
+- **THEN** it is refused as not found and the message stays scheduled
 
 #### Scenario: Sending while read only
-- **WHEN** the operator sends a pending message of `#example-chat` while its policy is `read`
-- **THEN** it is refused with the message `#example-chat is read-only; nothing goes out`, and the message stays pending
+- **WHEN** the operator sends a scheduled message of `#example-chat` at once while its policy is `read`
+- **THEN** it is refused with the message `#example-chat is read-only; nothing goes out`, and the message stays scheduled
 
 #### Scenario: Changing the policy
 - **WHEN** the operator sets the policy of `#example-chat` to `open` in the web app
@@ -90,11 +98,11 @@ Only the web listener SHALL serve changing a bridge's outbound policy and sendin
 
 ### Requirement: Agents See Whether Their Messages Went Out
 
-The system SHALL show what the outside chat saw of a bridged room: with every message that goes out or waits to, its delivery state (pending, sending, sent, declined, or not sent with the reason); with every message that came in from the chat, also one the operator wrote there, `from outside`; and with every note, `note`. It SHALL show them in a room's history, in unread messages and in the messages delivered into an agent's context.
+The system SHALL show what the outside chat saw of a bridged room: with every message that goes out or waits to, its delivery state (scheduled, sending, sent, cancelled, or not sent with the reason); with every message that came in from the chat, also one the operator wrote there, `from outside`; and with every note, `note`. It SHALL show them in a room's history, in unread messages and in the messages delivered into an agent's context.
 
 #### Scenario: History of a bridged room
-- **WHEN** an agent reads the history of `#example-chat` after one message was sent and one declined
-- **THEN** the first shows as sent and the second as declined
+- **WHEN** an agent reads the history of `#example-chat` after one message was sent, one cancelled and one is scheduled
+- **THEN** they show as sent, cancelled and scheduled
 
 #### Scenario: What the chat saw
 - **WHEN** `Ada` and the operator wrote in the chat, the operator posted a note, and `secretary`'s answer was sent
@@ -102,15 +110,19 @@ The system SHALL show what the outside chat saw of a bridged room: with every me
 
 ### Requirement: Notes Stay In Agora
 
-A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be pending and SHALL have no delivery state, so it can be neither sent nor declined; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room.
+A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be scheduled and SHALL have no delivery state, so it can be neither sent at once nor cancelled; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. The operator MAY send a note out under `open` and `delay`: that posts a new message of the note's author with the note's text, replying to what the note replies to, which goes out at once, while the note stays as it was. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room.
 
 #### Scenario: A note under every policy
-- **WHEN** `secretary` and the operator post notes in `#example-chat` under `approve`, `open` and `read`
+- **WHEN** `secretary` and the operator post notes in `#example-chat` under `open`, `delay` and `read`
 - **THEN** every note is stored without a delivery state and none reaches the bridge
 
-#### Scenario: Nothing to send
-- **WHEN** the operator tries to send or decline a note
-- **THEN** it is refused as not pending
+#### Scenario: Nothing to send at once
+- **WHEN** the operator tries to send a note at once or cancel it
+- **THEN** it is refused as not scheduled
+
+#### Scenario: Sending a note out
+- **WHEN** `secretary` posts the note `Draft: the fix ships tonight` in `#example-chat` under `delay` and the operator sends it out
+- **THEN** a new message of `secretary` with that text reaches the bridge at once, and the note stays a note
 
 #### Scenario: A reply to a note goes out
 - **WHEN** under `open` the operator posts the note `@secretary say the release is on Friday` and `secretary` replies to it with `The release is on Friday.`

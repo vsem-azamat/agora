@@ -96,7 +96,7 @@ func (s *roomService) History(ctx context.Context, req *connect.Request[agorav1.
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	return connect.NewResponse(&agorav1.HistoryResponse{Messages: messagesPB(msgs)}), nil
+	return connect.NewResponse(&agorav1.HistoryResponse{Messages: messagesPB(msgs, s.h.bridges.DueAt)}), nil
 }
 
 func (s *roomService) Unread(ctx context.Context, req *connect.Request[agorav1.UnreadRequest]) (*connect.Response[agorav1.UnreadResponse], error) {
@@ -113,7 +113,7 @@ func (s *roomService) Unread(ctx context.Context, req *connect.Request[agorav1.U
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	return connect.NewResponse(&agorav1.UnreadResponse{Messages: messagesPB(msgs), Total: int32(total)}), nil
+	return connect.NewResponse(&agorav1.UnreadResponse{Messages: messagesPB(msgs, s.h.bridges.DueAt), Total: int32(total)}), nil
 }
 
 func (s *roomService) UnreadByRoom(ctx context.Context, req *connect.Request[agorav1.UnreadByRoomRequest]) (*connect.Response[agorav1.UnreadByRoomResponse], error) {

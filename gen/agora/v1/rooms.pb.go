@@ -28,13 +28,14 @@ type DeliveryState int32
 const (
 	// The message does not go out: it is not in a bridged room, came from outside, or is the board's.
 	DeliveryState_DELIVERY_STATE_UNSPECIFIED DeliveryState = 0
-	// It waits for the operator to send or decline it.
+	// It is scheduled: it goes out once the hub's delay passed (due_at), unless the operator cancels
+	// it or sends it at once.
 	DeliveryState_DELIVERY_STATE_PENDING DeliveryState = 1
 	// It is handed to the bridge, which has not answered yet.
 	DeliveryState_DELIVERY_STATE_SENDING DeliveryState = 2
 	// The bridge sent it.
 	DeliveryState_DELIVERY_STATE_SENT DeliveryState = 3
-	// The operator declined it; it never goes out.
+	// The operator cancelled it; it never goes out.
 	DeliveryState_DELIVERY_STATE_DECLINED DeliveryState = 4
 	// The bridge could not send it; delivery_error says why.
 	DeliveryState_DELIVERY_STATE_FAILED DeliveryState = 5
@@ -153,7 +154,7 @@ type Room struct {
 	Messages  int32                  `protobuf:"varint,5,opt,name=messages,proto3" json:"messages,omitempty"`
 	// Unset when the room has no messages.
 	LastAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
-	// Messages of the room's bridge that wait for the operator to send or decline them.
+	// Messages of the room that are scheduled to go out through its bridge.
 	Pending int32 `protobuf:"varint,7,opt,name=pending,proto3" json:"pending,omitempty"`
 	// The agent that archived the room; empty when it is not archived.
 	ArchivedBy string `protobuf:"bytes,8,opt,name=archived_by,json=archivedBy,proto3" json:"archived_by,omitempty"`
@@ -278,7 +279,9 @@ type Message struct {
 	Note bool `protobuf:"varint,11,opt,name=note,proto3" json:"note,omitempty"`
 	// The message came in from the outside chat through the room's bridge: from someone there
 	// (external_author), or from the operator writing there.
-	Incoming      bool `protobuf:"varint,12,opt,name=incoming,proto3" json:"incoming,omitempty"`
+	Incoming bool `protobuf:"varint,12,opt,name=incoming,proto3" json:"incoming,omitempty"`
+	// When a scheduled message goes out; unset for every other message.
+	DueAt         *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=due_at,json=dueAt,proto3" json:"due_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -395,6 +398,13 @@ func (x *Message) GetIncoming() bool {
 		return x.Incoming
 	}
 	return false
+}
+
+func (x *Message) GetDueAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DueAt
+	}
+	return nil
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -1629,7 +1639,7 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\varchived_by\x18\b \x01(\tR\n" +
 	"archivedBy\x12;\n" +
 	"\varchived_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"archivedAt\"\x98\x03\n" +
+	"archivedAt\"\xcb\x03\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x16\n" +
@@ -1643,7 +1653,8 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x0edelivery_error\x18\n" +
 	" \x01(\tR\rdeliveryError\x12\x12\n" +
 	"\x04note\x18\v \x01(\bR\x04note\x12\x1a\n" +
-	"\bincoming\x18\f \x01(\bR\bincoming\"L\n" +
+	"\bincoming\x18\f \x01(\bR\bincoming\x121\n" +
+	"\x06due_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x05dueAt\"L\n" +
 	"\x0eExternalAuthor\x12\x16\n" +
 	"\x06bridge\x18\x01 \x01(\tR\x06bridge\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
@@ -1790,39 +1801,40 @@ var file_agora_v1_rooms_proto_depIdxs = []int32{
 	27, // 3: agora.v1.Message.at:type_name -> google.protobuf.Timestamp
 	4,  // 4: agora.v1.Message.external_author:type_name -> agora.v1.ExternalAuthor
 	0,  // 5: agora.v1.Message.delivery_state:type_name -> agora.v1.DeliveryState
-	1,  // 6: agora.v1.Subscription.mode:type_name -> agora.v1.SubscriptionMode
-	2,  // 7: agora.v1.ListRoomsResponse.rooms:type_name -> agora.v1.Room
-	1,  // 8: agora.v1.SubscribeRequest.mode:type_name -> agora.v1.SubscriptionMode
-	5,  // 9: agora.v1.SubscribeResponse.subscriptions:type_name -> agora.v1.Subscription
-	5,  // 10: agora.v1.ListSubscriptionsResponse.subscriptions:type_name -> agora.v1.Subscription
-	3,  // 11: agora.v1.HistoryResponse.messages:type_name -> agora.v1.Message
-	3,  // 12: agora.v1.UnreadResponse.messages:type_name -> agora.v1.Message
-	23, // 13: agora.v1.UnreadByRoomResponse.rooms:type_name -> agora.v1.RoomUnread
-	6,  // 14: agora.v1.RoomService.CreateRoom:input_type -> agora.v1.CreateRoomRequest
-	8,  // 15: agora.v1.RoomService.ListRooms:input_type -> agora.v1.ListRoomsRequest
-	10, // 16: agora.v1.RoomService.ArchiveRoom:input_type -> agora.v1.ArchiveRoomRequest
-	12, // 17: agora.v1.RoomService.Subscribe:input_type -> agora.v1.SubscribeRequest
-	14, // 18: agora.v1.RoomService.ListSubscriptions:input_type -> agora.v1.ListSubscriptionsRequest
-	16, // 19: agora.v1.RoomService.Post:input_type -> agora.v1.PostRequest
-	18, // 20: agora.v1.RoomService.History:input_type -> agora.v1.HistoryRequest
-	20, // 21: agora.v1.RoomService.Unread:input_type -> agora.v1.UnreadRequest
-	22, // 22: agora.v1.RoomService.UnreadByRoom:input_type -> agora.v1.UnreadByRoomRequest
-	25, // 23: agora.v1.RoomService.MarkRoomRead:input_type -> agora.v1.MarkRoomReadRequest
-	7,  // 24: agora.v1.RoomService.CreateRoom:output_type -> agora.v1.CreateRoomResponse
-	9,  // 25: agora.v1.RoomService.ListRooms:output_type -> agora.v1.ListRoomsResponse
-	11, // 26: agora.v1.RoomService.ArchiveRoom:output_type -> agora.v1.ArchiveRoomResponse
-	13, // 27: agora.v1.RoomService.Subscribe:output_type -> agora.v1.SubscribeResponse
-	15, // 28: agora.v1.RoomService.ListSubscriptions:output_type -> agora.v1.ListSubscriptionsResponse
-	17, // 29: agora.v1.RoomService.Post:output_type -> agora.v1.PostResponse
-	19, // 30: agora.v1.RoomService.History:output_type -> agora.v1.HistoryResponse
-	21, // 31: agora.v1.RoomService.Unread:output_type -> agora.v1.UnreadResponse
-	24, // 32: agora.v1.RoomService.UnreadByRoom:output_type -> agora.v1.UnreadByRoomResponse
-	26, // 33: agora.v1.RoomService.MarkRoomRead:output_type -> agora.v1.MarkRoomReadResponse
-	24, // [24:34] is the sub-list for method output_type
-	14, // [14:24] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	27, // 6: agora.v1.Message.due_at:type_name -> google.protobuf.Timestamp
+	1,  // 7: agora.v1.Subscription.mode:type_name -> agora.v1.SubscriptionMode
+	2,  // 8: agora.v1.ListRoomsResponse.rooms:type_name -> agora.v1.Room
+	1,  // 9: agora.v1.SubscribeRequest.mode:type_name -> agora.v1.SubscriptionMode
+	5,  // 10: agora.v1.SubscribeResponse.subscriptions:type_name -> agora.v1.Subscription
+	5,  // 11: agora.v1.ListSubscriptionsResponse.subscriptions:type_name -> agora.v1.Subscription
+	3,  // 12: agora.v1.HistoryResponse.messages:type_name -> agora.v1.Message
+	3,  // 13: agora.v1.UnreadResponse.messages:type_name -> agora.v1.Message
+	23, // 14: agora.v1.UnreadByRoomResponse.rooms:type_name -> agora.v1.RoomUnread
+	6,  // 15: agora.v1.RoomService.CreateRoom:input_type -> agora.v1.CreateRoomRequest
+	8,  // 16: agora.v1.RoomService.ListRooms:input_type -> agora.v1.ListRoomsRequest
+	10, // 17: agora.v1.RoomService.ArchiveRoom:input_type -> agora.v1.ArchiveRoomRequest
+	12, // 18: agora.v1.RoomService.Subscribe:input_type -> agora.v1.SubscribeRequest
+	14, // 19: agora.v1.RoomService.ListSubscriptions:input_type -> agora.v1.ListSubscriptionsRequest
+	16, // 20: agora.v1.RoomService.Post:input_type -> agora.v1.PostRequest
+	18, // 21: agora.v1.RoomService.History:input_type -> agora.v1.HistoryRequest
+	20, // 22: agora.v1.RoomService.Unread:input_type -> agora.v1.UnreadRequest
+	22, // 23: agora.v1.RoomService.UnreadByRoom:input_type -> agora.v1.UnreadByRoomRequest
+	25, // 24: agora.v1.RoomService.MarkRoomRead:input_type -> agora.v1.MarkRoomReadRequest
+	7,  // 25: agora.v1.RoomService.CreateRoom:output_type -> agora.v1.CreateRoomResponse
+	9,  // 26: agora.v1.RoomService.ListRooms:output_type -> agora.v1.ListRoomsResponse
+	11, // 27: agora.v1.RoomService.ArchiveRoom:output_type -> agora.v1.ArchiveRoomResponse
+	13, // 28: agora.v1.RoomService.Subscribe:output_type -> agora.v1.SubscribeResponse
+	15, // 29: agora.v1.RoomService.ListSubscriptions:output_type -> agora.v1.ListSubscriptionsResponse
+	17, // 30: agora.v1.RoomService.Post:output_type -> agora.v1.PostResponse
+	19, // 31: agora.v1.RoomService.History:output_type -> agora.v1.HistoryResponse
+	21, // 32: agora.v1.RoomService.Unread:output_type -> agora.v1.UnreadResponse
+	24, // 33: agora.v1.RoomService.UnreadByRoom:output_type -> agora.v1.UnreadByRoomResponse
+	26, // 34: agora.v1.RoomService.MarkRoomRead:output_type -> agora.v1.MarkRoomReadResponse
+	25, // [25:35] is the sub-list for method output_type
+	15, // [15:25] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_rooms_proto_init() }

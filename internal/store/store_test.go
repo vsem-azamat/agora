@@ -7,8 +7,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestProfilesMigrationMarksDepartedAgentsLeft applies the first two migrations, adds an agent
@@ -285,5 +287,65 @@ func TestNotesMigrationKeepsMessagesAndNotesNeverGoOut(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO messages (room, author, body, at, note, delivery) VALUES ('general', 'secretary', 'out', 3, 1, 'sending')`); err == nil {
 		t.Fatal("a note with a delivery state was stored")
+	}
+}
+
+func TestDelayMigrationKeepsBridgesAndSchedulesWaitingMessages(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0016_bridge_delay.sql")
+	for _, q := range []string{
+		`PRAGMA foreign_keys = ON`,
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1), ('secretary', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('example-chat', 'chat', 'builder', 1), ('example-feed', 'feed', 'builder', 1)`,
+		`INSERT INTO bridges (name, command, policy, created_by, created_at, cursor) VALUES
+			('example-chat', 'example-bridge --chat 42', 'approve', 'builder', 1, 'c7'), ('example-feed', 'example-bridge --feed', 'read', 'builder', 2, '')`,
+		`INSERT INTO bridge_agents (bridge, agent) VALUES ('example-chat', 'secretary')`,
+		`INSERT INTO messages (room, author, body, at, delivery) VALUES ('example-chat', 'secretary', 'waits', 5, 'pending'), ('example-chat', 'secretary', 'went', 6, 'sent')`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	before := time.Now().Add(-time.Second).UnixMilli()
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err := Strings(ctx, db, `SELECT name || '|' || command || '|' || policy || '|' || cursor FROM bridges ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"example-chat|example-bridge --chat 42|delay|c7", "example-feed|example-bridge --feed|read|"}; !slices.Equal(got, want) {
+		t.Errorf("bridges %q, want %q", got, want)
+	}
+	var agent string
+	if err := db.QueryRowContext(ctx, `SELECT agent FROM bridge_agents WHERE bridge = 'example-chat'`).Scan(&agent); err != nil || agent != "secretary" {
+		t.Errorf("bridge agent %q err %v", agent, err)
+	}
+	var waiting, went sql.NullInt64
+	if err := db.QueryRowContext(ctx, `SELECT (SELECT scheduled_at FROM messages WHERE body = 'waits'), (SELECT scheduled_at FROM messages WHERE body = 'went')`).Scan(&waiting, &went); err != nil {
+		t.Fatal(err)
+	}
+	if !waiting.Valid || waiting.Int64 < before || went.Valid {
+		t.Errorf("scheduled at %v and %v", waiting, went)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE bridges SET policy = 'approve'`); err == nil {
+		t.Error("the policy approve was stored")
+	}
+	// the bridge's agents still go with it
+	if _, err := db.ExecContext(ctx, `DELETE FROM bridges WHERE name = 'example-chat'`); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bridge_agents`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("bridge agents left %d err %v", n, err)
 	}
 }

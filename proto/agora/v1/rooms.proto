@@ -45,7 +45,7 @@ message Room {
   int32 messages = 5;
   // Unset when the room has no messages.
   google.protobuf.Timestamp last_at = 6;
-  // Messages of the room's bridge that wait for the operator to send or decline them.
+  // Messages of the room that are scheduled to go out through its bridge.
   int32 pending = 7;
   // The agent that archived the room; empty when it is not archived.
   string archived_by = 8;
@@ -75,6 +75,8 @@ message Message {
   // The message came in from the outside chat through the room's bridge: from someone there
   // (external_author), or from the operator writing there.
   bool incoming = 12;
+  // When a scheduled message goes out; unset for every other message.
+  google.protobuf.Timestamp due_at = 13;
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -91,13 +93,14 @@ message ExternalAuthor {
 enum DeliveryState {
   // The message does not go out: it is not in a bridged room, came from outside, or is the board's.
   DELIVERY_STATE_UNSPECIFIED = 0;
-  // It waits for the operator to send or decline it.
+  // It is scheduled: it goes out once the hub's delay passed (due_at), unless the operator cancels
+  // it or sends it at once.
   DELIVERY_STATE_PENDING = 1;
   // It is handed to the bridge, which has not answered yet.
   DELIVERY_STATE_SENDING = 2;
   // The bridge sent it.
   DELIVERY_STATE_SENT = 3;
-  // The operator declined it; it never goes out.
+  // The operator cancelled it; it never goes out.
   DELIVERY_STATE_DECLINED = 4;
   // The bridge could not send it; delivery_error says why.
   DELIVERY_STATE_FAILED = 5;

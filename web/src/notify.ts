@@ -29,7 +29,7 @@ export function alerts(
     const parts: string[] = [];
     if ((pref === 'all' || wake.has(room)) && fresh > waiting) parts.push(`${fresh - waiting} new`);
     if (forYou > waiting) parts.push(`${forYou - waiting} for you`);
-    if (waiting > 0) parts.push(`${waiting} waiting for you to send`);
+    if (waiting > 0) parts.push(`${waiting} scheduled to go out`);
     if (parts.length > 0) out.push({ room, body: parts.join(' · ') });
   }
   return out;

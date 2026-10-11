@@ -42,7 +42,7 @@ func bridgeAddCmd(o *options) *cobra.Command {
 			if resp.Msg.GetCreatedRoom() {
 				room = "created #" + bridge
 			}
-			fmt.Fprintf(o.out, "%s; its bridge runs with the outbound policy approve: the operator sends or declines agents' messages in the web app\n", room)
+			fmt.Fprintf(o.out, "%s; its bridge runs with the outbound policy %s%s\n", room, bridgePolicyNames[resp.Msg.GetPolicy()], policyHints[resp.Msg.GetPolicy()])
 			if len(addressees) > 0 {
 				fmt.Fprintf(o.out, "subscribed %s to #%s with the mode wake; messages from outside marked as addressed address them too\n", strings.Join(addressees, ", "), bridge)
 			}
@@ -83,9 +83,16 @@ var bridgeStateNames = map[agorav1.BridgeState]string{
 }
 
 var bridgePolicyNames = map[agorav1.BridgePolicy]string{
-	agorav1.BridgePolicy_BRIDGE_POLICY_APPROVE: "approve",
-	agorav1.BridgePolicy_BRIDGE_POLICY_OPEN:    "open",
-	agorav1.BridgePolicy_BRIDGE_POLICY_READ:    "read",
+	agorav1.BridgePolicy_BRIDGE_POLICY_OPEN:  "open",
+	agorav1.BridgePolicy_BRIDGE_POLICY_DELAY: "delay",
+	agorav1.BridgePolicy_BRIDGE_POLICY_READ:  "read",
+}
+
+// policyHints say after a policy's name what it means for agents.
+var policyHints = map[agorav1.BridgePolicy]string{
+	agorav1.BridgePolicy_BRIDGE_POLICY_OPEN:  ": agents' messages go out at once",
+	agorav1.BridgePolicy_BRIDGE_POLICY_DELAY: ": agents' messages go out after the hub's delay unless the operator cancels them in the web app",
+	agorav1.BridgePolicy_BRIDGE_POLICY_READ:  ": nothing goes out and agents post only notes",
 }
 
 func bridgeListCmd(o *options) *cobra.Command {

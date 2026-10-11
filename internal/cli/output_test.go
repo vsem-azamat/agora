@@ -32,7 +32,11 @@ func TestMessageLayout(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 	pending := &agorav1.Message{Id: 16, Room: "example-chat", Author: "secretary", Body: "hi", At: timestamppb.New(at), DeliveryState: agorav1.DeliveryState_DELIVERY_STATE_PENDING}
-	if got := cli.FormatMessage(pending); got != "#example-chat [16] secretary · 22:50 · pending\n  hi" {
+	if got := cli.FormatMessage(pending); got != "#example-chat [16] secretary · 22:50 · scheduled\n  hi" {
+		t.Fatalf("got %q", got)
+	}
+	cancelled := &agorav1.Message{Id: 19, Room: "example-chat", Author: "secretary", Body: "hi", At: timestamppb.New(at), DeliveryState: agorav1.DeliveryState_DELIVERY_STATE_DECLINED}
+	if got := cli.FormatMessage(cancelled); got != "#example-chat [19] secretary · 22:50 · cancelled\n  hi" {
 		t.Fatalf("got %q", got)
 	}
 	note := &agorav1.Message{Id: 17, Room: "example-chat", Author: "secretary", Body: "a draft", At: timestamppb.New(at), Note: true}

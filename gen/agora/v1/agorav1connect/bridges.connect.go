@@ -50,13 +50,16 @@ const (
 	// BridgeServiceDeclinePendingProcedure is the fully-qualified name of the BridgeService's
 	// DeclinePending RPC.
 	BridgeServiceDeclinePendingProcedure = "/agora.v1.BridgeService/DeclinePending"
+	// BridgeServiceSendNoteOutProcedure is the fully-qualified name of the BridgeService's SendNoteOut
+	// RPC.
+	BridgeServiceSendNoteOutProcedure = "/agora.v1.BridgeService/SendNoteOut"
 )
 
 // BridgeServiceClient is a client for the agora.v1.BridgeService service.
 type BridgeServiceClient interface {
 	// AddBridge binds a bridge to the room of its name, creating the room or attaching an existing
-	// one without a bridge, stores it with the policy approve, starts its command and subscribes
-	// the addressees to the room with the mode wake.
+	// one without a bridge, stores it with the hub's default policy, starts its command and
+	// subscribes the addressees to the room with the mode wake.
 	AddBridge(context.Context, *connect.Request[v1.AddBridgeRequest]) (*connect.Response[v1.AddBridgeResponse], error)
 	// RemoveBridge stops a bridge; its room and messages stay.
 	RemoveBridge(context.Context, *connect.Request[v1.RemoveBridgeRequest]) (*connect.Response[v1.RemoveBridgeResponse], error)
@@ -64,11 +67,14 @@ type BridgeServiceClient interface {
 	ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error)
 	// SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
 	SetBridgePolicy(context.Context, *connect.Request[v1.SetBridgePolicyRequest]) (*connect.Response[v1.SetBridgePolicyResponse], error)
-	// SendPending lets a pending message go out. Only the web listener serves it.
+	// SendPending lets a scheduled message go out at once. Only the web listener serves it.
 	SendPending(context.Context, *connect.Request[v1.SendPendingRequest]) (*connect.Response[v1.SendPendingResponse], error)
-	// DeclinePending keeps a pending message from ever going out and tells its author. Only the
-	// web listener serves it.
+	// DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+	// the web listener serves it.
 	DeclinePending(context.Context, *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error)
+	// SendNoteOut sends a note out: a new message of the note's author with its text goes out at
+	// once, and the note stays. Only the web listener serves it.
+	SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error)
 }
 
 // NewBridgeServiceClient constructs a client for the agora.v1.BridgeService service. By default, it
@@ -118,6 +124,12 @@ func NewBridgeServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(bridgeServiceMethods.ByName("DeclinePending")),
 			connect.WithClientOptions(opts...),
 		),
+		sendNoteOut: connect.NewClient[v1.SendNoteOutRequest, v1.SendNoteOutResponse](
+			httpClient,
+			baseURL+BridgeServiceSendNoteOutProcedure,
+			connect.WithSchema(bridgeServiceMethods.ByName("SendNoteOut")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -129,6 +141,7 @@ type bridgeServiceClient struct {
 	setBridgePolicy *connect.Client[v1.SetBridgePolicyRequest, v1.SetBridgePolicyResponse]
 	sendPending     *connect.Client[v1.SendPendingRequest, v1.SendPendingResponse]
 	declinePending  *connect.Client[v1.DeclinePendingRequest, v1.DeclinePendingResponse]
+	sendNoteOut     *connect.Client[v1.SendNoteOutRequest, v1.SendNoteOutResponse]
 }
 
 // AddBridge calls agora.v1.BridgeService.AddBridge.
@@ -161,11 +174,16 @@ func (c *bridgeServiceClient) DeclinePending(ctx context.Context, req *connect.R
 	return c.declinePending.CallUnary(ctx, req)
 }
 
+// SendNoteOut calls agora.v1.BridgeService.SendNoteOut.
+func (c *bridgeServiceClient) SendNoteOut(ctx context.Context, req *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error) {
+	return c.sendNoteOut.CallUnary(ctx, req)
+}
+
 // BridgeServiceHandler is an implementation of the agora.v1.BridgeService service.
 type BridgeServiceHandler interface {
 	// AddBridge binds a bridge to the room of its name, creating the room or attaching an existing
-	// one without a bridge, stores it with the policy approve, starts its command and subscribes
-	// the addressees to the room with the mode wake.
+	// one without a bridge, stores it with the hub's default policy, starts its command and
+	// subscribes the addressees to the room with the mode wake.
 	AddBridge(context.Context, *connect.Request[v1.AddBridgeRequest]) (*connect.Response[v1.AddBridgeResponse], error)
 	// RemoveBridge stops a bridge; its room and messages stay.
 	RemoveBridge(context.Context, *connect.Request[v1.RemoveBridgeRequest]) (*connect.Response[v1.RemoveBridgeResponse], error)
@@ -173,11 +191,14 @@ type BridgeServiceHandler interface {
 	ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error)
 	// SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
 	SetBridgePolicy(context.Context, *connect.Request[v1.SetBridgePolicyRequest]) (*connect.Response[v1.SetBridgePolicyResponse], error)
-	// SendPending lets a pending message go out. Only the web listener serves it.
+	// SendPending lets a scheduled message go out at once. Only the web listener serves it.
 	SendPending(context.Context, *connect.Request[v1.SendPendingRequest]) (*connect.Response[v1.SendPendingResponse], error)
-	// DeclinePending keeps a pending message from ever going out and tells its author. Only the
-	// web listener serves it.
+	// DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+	// the web listener serves it.
 	DeclinePending(context.Context, *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error)
+	// SendNoteOut sends a note out: a new message of the note's author with its text goes out at
+	// once, and the note stays. Only the web listener serves it.
+	SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error)
 }
 
 // NewBridgeServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -223,6 +244,12 @@ func NewBridgeServiceHandler(svc BridgeServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(bridgeServiceMethods.ByName("DeclinePending")),
 		connect.WithHandlerOptions(opts...),
 	)
+	bridgeServiceSendNoteOutHandler := connect.NewUnaryHandler(
+		BridgeServiceSendNoteOutProcedure,
+		svc.SendNoteOut,
+		connect.WithSchema(bridgeServiceMethods.ByName("SendNoteOut")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.BridgeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BridgeServiceAddBridgeProcedure:
@@ -237,6 +264,8 @@ func NewBridgeServiceHandler(svc BridgeServiceHandler, opts ...connect.HandlerOp
 			bridgeServiceSendPendingHandler.ServeHTTP(w, r)
 		case BridgeServiceDeclinePendingProcedure:
 			bridgeServiceDeclinePendingHandler.ServeHTTP(w, r)
+		case BridgeServiceSendNoteOutProcedure:
+			bridgeServiceSendNoteOutHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -268,4 +297,8 @@ func (UnimplementedBridgeServiceHandler) SendPending(context.Context, *connect.R
 
 func (UnimplementedBridgeServiceHandler) DeclinePending(context.Context, *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.DeclinePending is not implemented"))
+}
+
+func (UnimplementedBridgeServiceHandler) SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.SendNoteOut is not implemented"))
 }

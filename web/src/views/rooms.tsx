@@ -39,10 +39,10 @@ function Waiting({ count }: { count: RoomCount | undefined }) {
   const n = count?.pending ?? 0;
   if (n === 0) return null;
   return (
-    <em className="pending" title={`${n} waiting for you to send`}>
+    <em className="pending" title={`${n} scheduled to go out`}>
       <Icon name="send" />
       {n}
-      <span className="sr"> waiting for you to send</span>
+      <span className="sr"> scheduled to go out</span>
     </em>
   );
 }

@@ -81,7 +81,7 @@ func TestAddingABridge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Name != "example-chat" || list[0].Policy != bridges.Approve || list[0].CreatedBy != "builder" ||
+	if len(list) != 1 || list[0].Name != "example-chat" || list[0].Policy != bridges.Delay || list[0].CreatedBy != "builder" ||
 		!slices.Equal(list[0].Addressees, []string{"secretary"}) || list[0].Command != "example-bridge --chat 42" {
 		t.Fatalf("bridges: %+v", list)
 	}
@@ -182,7 +182,7 @@ func TestArchivingAndBridges(t *testing.T) {
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.r.Archive(ctx, "builder", "example-chat", true); !errors.Is(err, rooms.ErrUndelivered) || !strings.Contains(err.Error(), "decline it first") {
+	if err := e.r.Archive(ctx, "builder", "example-chat", true); !errors.Is(err, rooms.ErrUndelivered) || !strings.Contains(err.Error(), "cancel it first") {
 		t.Fatalf("archiving with a message waiting: %v", err)
 	}
 	if err := e.b.DeclinePending(ctx, waiting, "owner"); err != nil {
@@ -451,7 +451,7 @@ func TestTheOperatorSendsOrDeclines(t *testing.T) {
 		t.Fatalf("declining a sending message: %v", err)
 	}
 	msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Addressed, 0)
-	if len(msgs) != 1 || msgs[0].Body != "@secretary your message "+itoa(decline)+" was not sent: owner declined it." {
+	if len(msgs) != 1 || msgs[0].Body != "@secretary your message "+itoa(decline)+" was not sent: owner cancelled it." {
 		t.Fatalf("secretary is told: %+v", msgs)
 	}
 	if deliveryOf(t, e, "example-chat", decline) != rooms.Declined {
@@ -695,7 +695,7 @@ func (e env) note(t *testing.T, author, room, body string, replyTo int64) int64 
 func TestNotesNeverGoOut(t *testing.T) {
 	e := newEnv(t)
 	var notes []int64
-	for _, p := range []bridges.Policy{bridges.Approve, bridges.Open, bridges.Read} {
+	for _, p := range []bridges.Policy{bridges.Delay, bridges.Open, bridges.Read} {
 		setPolicy(t, e, p)
 		notes = append(notes,
 			e.note(t, "secretary", "example-chat", "here is a draft, unsure about the date ("+string(p)+")", 0),
