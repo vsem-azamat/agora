@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/web.proto.
  */
 export const file_agora_v1_web: GenFile = /*@__PURE__*/
-  fileDesc("ChJhZ29yYS92MS93ZWIucHJvdG8SCGFnb3JhLnYxIh4KDFRva2VuUmVxdWVzdBIOCgZyb3RhdGUYASABKAgiMwoNVG9rZW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRITCgt3ZWJfYWRkcmVzcxgCIAEoCSIPCg1XaG9hbWlSZXF1ZXN0IkMKDldob2FtaVJlc3BvbnNlEgwKBG5hbWUYASABKAkSDQoFYm9hcmQYAiABKAkSFAoMZ2VuZXJhbF9yb29tGAMgASgJIg4KDFdhdGNoUmVxdWVzdCIhCg1XYXRjaFJlc3BvbnNlEhAKCHJldmlzaW9uGAEgASgDMr8BCgpXZWJTZXJ2aWNlEjgKBVRva2VuEhYuYWdvcmEudjEuVG9rZW5SZXF1ZXN0GhcuYWdvcmEudjEuVG9rZW5SZXNwb25zZRI7CgZXaG9hbWkSFy5hZ29yYS52MS5XaG9hbWlSZXF1ZXN0GhguYWdvcmEudjEuV2hvYW1pUmVzcG9uc2USOgoFV2F0Y2gSFi5hZ29yYS52MS5XYXRjaFJlcXVlc3QaFy5hZ29yYS52MS5XYXRjaFJlc3BvbnNlMAFCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z");
+  fileDesc("ChJhZ29yYS92MS93ZWIucHJvdG8SCGFnb3JhLnYxIh4KDFRva2VuUmVxdWVzdBIOCgZyb3RhdGUYASABKAgiMwoNVG9rZW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRITCgt3ZWJfYWRkcmVzcxgCIAEoCSIPCg1XaG9hbWlSZXF1ZXN0ImQKDldob2FtaVJlc3BvbnNlEgwKBG5hbWUYASABKAkSDQoFYm9hcmQYAiABKAkSFAoMZ2VuZXJhbF9yb29tGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSDgoGY29tbWl0GAUgASgJIg4KDFdhdGNoUmVxdWVzdCIhCg1XYXRjaFJlc3BvbnNlEhAKCHJldmlzaW9uGAEgASgDMr8BCgpXZWJTZXJ2aWNlEjgKBVRva2VuEhYuYWdvcmEudjEuVG9rZW5SZXF1ZXN0GhcuYWdvcmEudjEuVG9rZW5SZXNwb25zZRI7CgZXaG9hbWkSFy5hZ29yYS52MS5XaG9hbWlSZXF1ZXN0GhguYWdvcmEudjEuV2hvYW1pUmVzcG9uc2USOgoFV2F0Y2gSFi5hZ29yYS52MS5XYXRjaFJlcXVlc3QaFy5hZ29yYS52MS5XYXRjaFJlc3BvbnNlMAFCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z");
 
 /**
  * @generated from message agora.v1.TokenRequest
@@ -90,6 +90,21 @@ export type WhoamiResponse = Message<"agora.v1.WhoamiResponse"> & {
    * @generated from field: string general_room = 3;
    */
   generalRoom: string;
+
+  /**
+   * The hub's version: the release version, or dev for a build from a checkout.
+   *
+   * @generated from field: string version = 4;
+   */
+  version: string;
+
+  /**
+   * The commit the hub was built from: a short revision, with -dirty for a tree with changes, or
+   * unknown.
+   *
+   * @generated from field: string commit = 5;
+   */
+  commit: string;
 };
 
 /**

@@ -386,7 +386,7 @@ The app SHALL offer five themes: Parchment, Marble, Ivory, Ink and Patina, in Se
 
 ### Requirement: Settings
 
-The app SHALL have a Settings view (`#/settings`) with only: the theme; the text size (small, medium, large), kept in the browser; notifications; and access, which shows the name the app acts as, a Sign out button and that the token is rotated with `agora web token --rotate` on the hub's machine.
+The app SHALL have a Settings view (`#/settings`) with only: the theme; the text size (small, medium, large), kept in the browser; notifications; access, which shows the name the app acts as, a Sign out button and that the token is rotated with `agora web token --rotate` on the hub's machine; and the version and commit of the hub that serves the app (see [Reporting The Version](../../setup/install/spec.md#requirement-reporting-the-version)).
 
 #### Scenario: Text size
 - **WHEN** the operator chooses Large
@@ -395,6 +395,10 @@ The app SHALL have a Settings view (`#/settings`) with only: the theme; the text
 #### Scenario: Access
 - **WHEN** the operator opens Settings
 - **THEN** it shows `@operator`, Sign out and the hint `agora web token --rotate`
+
+#### Scenario: Version
+- **WHEN** the operator opens Settings of a hub built as `v0.4.0` from commit `3bc332799d4c`
+- **THEN** it shows `Hub v0.4.0 · 3bc332799d4c`
 
 ### Requirement: Notifications
 

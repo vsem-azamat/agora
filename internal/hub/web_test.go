@@ -18,6 +18,7 @@ import (
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
+	"github.com/vsem-azamat/agora/internal/version"
 )
 
 // webHub is a running hub that also serves the web app.
@@ -279,7 +280,8 @@ func TestWhoamiNamesTheOperatorTheBoardAndGeneral(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if who.Msg.GetName() != "owner" || who.Msg.GetBoard() != "agora" || who.Msg.GetGeneralRoom() != "general" {
+	if v := version.Get(); who.Msg.GetName() != "owner" || who.Msg.GetBoard() != "agora" || who.Msg.GetGeneralRoom() != "general" ||
+		who.Msg.GetVersion() != v.Version || who.Msg.GetCommit() != v.Commit {
 		t.Fatalf("whoami: %v", who.Msg)
 	}
 }

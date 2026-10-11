@@ -36,6 +36,11 @@ message WhoamiResponse {
   string board = 2;
   // The room every agent follows.
   string general_room = 3;
+  // The hub's version: the release version, or dev for a build from a checkout.
+  string version = 4;
+  // The commit the hub was built from: a short revision, with -dirty for a tree with changes, or
+  // unknown.
+  string commit = 5;
 }
 
 message WatchRequest {}

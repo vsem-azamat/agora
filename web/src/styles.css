@@ -1970,6 +1970,12 @@ button.pgname:hover {
   margin: 8px 0 0;
 }
 
+.settings .ver {
+  margin: 10px 0 0;
+  color: var(--mute);
+  font-size: 0.85em;
+}
+
 /* --- motion and pointers --------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: no-preference) {

@@ -161,7 +161,12 @@ type WhoamiResponse struct {
 	// The author name of the messages the board posts itself.
 	Board string `protobuf:"bytes,2,opt,name=board,proto3" json:"board,omitempty"`
 	// The room every agent follows.
-	GeneralRoom   string `protobuf:"bytes,3,opt,name=general_room,json=generalRoom,proto3" json:"general_room,omitempty"`
+	GeneralRoom string `protobuf:"bytes,3,opt,name=general_room,json=generalRoom,proto3" json:"general_room,omitempty"`
+	// The hub's version: the release version, or dev for a build from a checkout.
+	Version string `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
+	// The commit the hub was built from: a short revision, with -dirty for a tree with changes, or
+	// unknown.
+	Commit        string `protobuf:"bytes,5,opt,name=commit,proto3" json:"commit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -213,6 +218,20 @@ func (x *WhoamiResponse) GetBoard() string {
 func (x *WhoamiResponse) GetGeneralRoom() string {
 	if x != nil {
 		return x.GeneralRoom
+	}
+	return ""
+}
+
+func (x *WhoamiResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *WhoamiResponse) GetCommit() string {
+	if x != nil {
+		return x.Commit
 	}
 	return ""
 }
@@ -309,11 +328,13 @@ const file_agora_v1_web_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1f\n" +
 	"\vweb_address\x18\x02 \x01(\tR\n" +
 	"webAddress\"\x0f\n" +
-	"\rWhoamiRequest\"]\n" +
+	"\rWhoamiRequest\"\x8f\x01\n" +
 	"\x0eWhoamiResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05board\x18\x02 \x01(\tR\x05board\x12!\n" +
-	"\fgeneral_room\x18\x03 \x01(\tR\vgeneralRoom\"\x0e\n" +
+	"\fgeneral_room\x18\x03 \x01(\tR\vgeneralRoom\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\tR\aversion\x12\x16\n" +
+	"\x06commit\x18\x05 \x01(\tR\x06commit\"\x0e\n" +
 	"\fWatchRequest\"+\n" +
 	"\rWatchResponse\x12\x1a\n" +
 	"\brevision\x18\x01 \x01(\x03R\brevision2\xbf\x01\n" +

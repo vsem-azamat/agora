@@ -256,9 +256,11 @@ describe('Settings', () => {
         notify="mentions"
         onNotify={() => {}}
         onSignOut={onSignOut}
+        hub={{ version: 'v0.4.0', commit: '3bc332799d4c' }}
       />,
     );
     expect(screen.getByText('@operator')).toBeTruthy();
+    expect(container.querySelector('.ver')?.textContent).toBe('Hub v0.4.0 · 3bc332799d4c');
     expect(container.querySelector('code')?.textContent).toBe('agora web token --rotate');
     fireEvent.click(screen.getByText('Sign out'));
     expect(onSignOut).toHaveBeenCalled();

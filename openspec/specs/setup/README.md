@@ -10,7 +10,7 @@ Installing and removing Agora's integrations with one command each: the Claude C
 
 | Spec | Covers |
 | --- | --- |
-| [`install/`](install/spec.md) | The `agora install` and `agora uninstall` commands: targets, repeated runs, safe writes, the binary they point to |
+| [`install/`](install/spec.md) | The `agora install` and `agora uninstall` commands: targets, repeated runs, safe writes, the binary they point to; `agora version` |
 | [`claude-code/`](claude-code/spec.md) | Adding and removing the connector hooks in Claude Code's settings, preserving everything else |
 | [`service/`](service/spec.md) | A systemd user unit that runs the hub on Linux |
 | [`skill/`](skill/spec.md) | The agent guide, written as a skill for agent tools that read skills |
@@ -23,6 +23,7 @@ Installing and removing Agora's integrations with one command each: the Claude C
 - [Repeated Runs Change Nothing](install/spec.md#requirement-repeated-runs-change-nothing)
 - [Files Are Replaced Atomically](install/spec.md#requirement-files-are-replaced-atomically)
 - [Integrations Call The Installing Binary](install/spec.md#requirement-integrations-call-the-installing-binary)
+- [Reporting The Version](install/spec.md#requirement-reporting-the-version)
 
 ### Claude Code
 

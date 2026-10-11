@@ -359,6 +359,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           notify={notify}
           onNotify={chooseNotifications}
           onSignOut={signOut}
+          hub={{ version: data.version, commit: data.commit }}
         />
       );
       break;
