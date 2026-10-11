@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -249,9 +250,12 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 // --- greeting (Claude Code connector) ------------------------------------------------
 
 // exampleRepo returns a directory inside a git repository named example-app.
-func exampleRepo(t *testing.T) string {
+func exampleRepo(t *testing.T) string { return repoNamed(t, "example-app") }
+
+// repoNamed returns a directory inside a git repository named name.
+func repoNamed(t *testing.T, name string) string {
 	t.Helper()
-	repo := filepath.Join(t.TempDir(), "example-app")
+	repo := filepath.Join(t.TempDir(), name)
 	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -294,6 +298,19 @@ func TestJoiningExpected(t *testing.T) {
 	}
 	if !strings.Contains(r.Context, "Rooms: #example-app (your project's room), #general.") || strings.Contains(r.Context, "room-create") {
 		t.Fatalf("invitation with the project's room: %q", r.Context)
+	}
+	// the project's room is named in lowercase; a project that is no room name has none
+	for i, c := range []struct{ repo, want, not string }{
+		{"Example-App", "#example-app (your project's room)", "room-create"},
+		{"my.app", "Rooms: #example-app, #general.", "room-create"},
+	} {
+		r, err := e.s.Report(ctx, sessions.Report{SessionID: fmt.Sprintf("session-%d", i+3), Kind: "claude-code", Event: sessions.Start, PID: 4250 + i, PIDStart: 120, CWD: repoNamed(t, c.repo)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(r.Context, c.want) || strings.Contains(r.Context, c.not) {
+			t.Fatalf("invitation in %s: %q", c.repo, r.Context)
+		}
 	}
 }
 

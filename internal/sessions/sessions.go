@@ -206,8 +206,7 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	}
 	if agent == "" {
 		if r.Event == Start {
-			text, err := s.invitation(ctx, r.CWD)
-			return Reply{Context: text}, err
+			return Reply{Context: s.invitation(ctx, r.CWD)}, nil
 		}
 		return Reply{}, nil
 	}

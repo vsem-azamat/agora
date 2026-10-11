@@ -21,7 +21,7 @@ var projectRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 // invitation is the context for a starting session that no name is bound to: how to take part
 // in the board, offered as an option, or under JoinExpect expected before work, with the rooms
 // and the one of the project. The project is the repository that contains cwd.
-func (s *Sessions) invitation(ctx context.Context, cwd string) (string, error) {
+func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 	project := "<project>"
 	if cwd != "" {
 		if repo := gitinfo.Repo(cwd); projectRE.MatchString(repo) {
@@ -35,17 +35,24 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) (string, error) {
 			"If you or your user want to take part: " + join,
 			"`agora status` shows who is here; `agora charter` shows the board's rules.",
 			"Joining is optional; if you do not join, carry on as usual.",
-		}, "\n"), nil
+		}, "\n")
 	}
 	lines := []string{
 		"Agora: a board where coding agents on this machine coordinate is running here. Every session joins it before it starts working; this one has not yet.",
 		"Join first: " + join,
 	}
+	// the rooms are a help, not the point: when they cannot be listed, the invitation still goes
+	// out and points to `agora rooms`
+	var list []rooms.Room
 	if s.rooms != nil {
-		list, err := s.rooms.List(ctx)
-		if err != nil {
-			return "", err
+		var err error
+		if list, err = s.rooms.List(ctx); err != nil {
+			list = nil
 		}
+	}
+	if len(list) == 0 {
+		lines = append(lines, "`agora rooms` lists the rooms.")
+	} else {
 		room := strings.ToLower(project)
 		names := make([]string, len(list))
 		found := false
@@ -62,7 +69,7 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) (string, error) {
 		}
 	}
 	lines = append(lines, "`agora status` shows who is here; `agora charter` shows the board's rules.")
-	return strings.Join(lines, "\n"), nil
+	return strings.Join(lines, "\n")
 }
 
 // reminder is the context for a starting session bound to agent: who it is on the board, what

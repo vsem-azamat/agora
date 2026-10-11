@@ -60,7 +60,7 @@ RestartSec=2
 WantedBy=default.target
 ```
 
-`--socket` is added when given or `$AGORA_SOCKET` is set, `--db` when given or `$AGORA_DB` is set, `--wake-command` when given or `$AGORA_WAKE_COMMAND` is set, `--web` and `--web-as` when given or `$AGORA_WEB` / `$AGORA_WEB_AS` are set, `--join` when given or `$AGORA_JOIN` is set (and `offer` or `expect`), because a systemd user service does not see the shell's environment. Paths are made absolute. Each argument that is not a plain word is double-quoted with `\\`, `\"`, `\n` and `\t` escapes, and `$` and `%` are doubled, so systemd passes it unchanged instead of expanding variables or specifiers.
+`--socket` is added when given or `$AGORA_SOCKET` is set, `--db` when given or `$AGORA_DB` is set, `--wake-command` when given or `$AGORA_WAKE_COMMAND` is set, `--web` and `--web-as` when given or `$AGORA_WEB` / `$AGORA_WEB_AS` are set, `--join` when given or `$AGORA_JOIN` is set (`offer`: joining is offered as an option; `expect`: every session is told to join before it starts working and pointed at its project's room; see [Sessions](sessions.md)), because a systemd user service does not see the shell's environment. Paths are made absolute. Each argument that is not a plain word is double-quoted with `\\`, `\"`, `\n` and `\t` escapes, and `$` and `%` are doubled, so systemd passes it unchanged instead of expanding variables or specifiers.
 
 The first line marks the unit as Agora's: install and uninstall refuse an `agora-hub.service` without it, naming the file.
 

@@ -340,7 +340,7 @@ func installServiceCmd(o *options) *cobra.Command {
 	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"), "the hub's wake command (default $AGORA_WAKE_COMMAND)")
 	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"), "serve the web app on host:port or a port (default $AGORA_WEB)")
 	cmd.Flags().StringVar(&webAs, "web-as", os.Getenv("AGORA_WEB_AS"), "the name the web app acts under (default $AGORA_WEB_AS)")
-	cmd.Flags().StringVar(&join, "join", os.Getenv("AGORA_JOIN"), "how the hub invites sessions that have not joined: offer or expect (default $AGORA_JOIN)")
+	cmd.Flags().StringVar(&join, "join", os.Getenv("AGORA_JOIN"), "how the hub invites sessions that have not joined: offer (joining is optional) or expect (every session joins before it works) (default $AGORA_JOIN)")
 	cmd.Flags().BoolVar(&now, "now", false, "also run systemctl to load, enable and start the service")
 	cmd.Flags().StringVar(&binFlag, "bin", "", binHelp)
 	return cmd

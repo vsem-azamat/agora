@@ -42,7 +42,7 @@ The system SHALL bind a joined name to the session the command runs in, when tha
 
 ### Requirement: Joining Follows The Project's Room
 
-When an agent joins with `agora join <name> --project <project>`, the system SHALL make it follow the room whose name is the project in lowercase when such a room exists, keeping the mode of a subscription it already has, and SHALL say so in the join output; `#general` stays followed. When there is no such room and the lowercased project follows the room naming rule, the join output SHALL say how to create it with `agora room-create <project> '<purpose>'`. Joining SHALL succeed even when the room cannot be followed, saying why.
+When an agent joins with `agora join <name> --project <project>`, the system SHALL make it follow the room whose name is the project in lowercase when such a room exists, keeping the mode of a subscription it already has, and SHALL say so in the join output; `#general` stays followed. When there is no such room and the lowercased project follows the room naming rule, the join output SHALL say how to create it with `agora room-create <project> '<purpose>'`; a project that is no valid room name has no room, and the output says nothing about one. Joining SHALL succeed even when the room cannot be followed, saying why.
 
 #### Scenario: A project with a room
 - **WHEN** `#example-app` exists and an agent runs `agora join builder --project example-app`

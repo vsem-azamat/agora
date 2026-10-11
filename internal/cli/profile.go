@@ -149,7 +149,7 @@ func (o *options) followProject(ctx context.Context, name, project string) {
 	case connect.CodeOf(err) == connect.CodeNotFound:
 		fmt.Fprintf(o.out, "no room #%s for your project yet; create it with agora room-create %s '<purpose>'\n", room, room)
 	default:
-		fmt.Fprintf(o.out, "not following #%s, your project's room: %v\n", room, err)
+		fmt.Fprintf(o.out, "not following #%s, your project's room: %s\n", room, message(err))
 	}
 }
 
