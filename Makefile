@@ -19,7 +19,7 @@ define clean-check
 	{ echo "$(1) is out of date: run $(2) and commit the result" >&2; exit 1; }
 endef
 
-.PHONY: check fmt lint lint-go lint-proto lint-web breaking test test-go test-web \
+.PHONY: check fmt lint lint-go lint-proto lint-web breaking test test-go test-web test-deploy deploy \
 	generate generate-check generate-web generate-check-web build-web build-check repo help
 
 ## check: everything CI runs
@@ -52,11 +52,15 @@ breaking:
 	$(BUF) breaking --against "$(BREAKING_AGAINST)"
 
 ## test: Go and web tests
-test: test-go test-web
+test: test-go test-web test-deploy
 
 ## test-go: unit and end-to-end tests with the race detector
 test-go:
 	go test -race ./...
+
+## test-deploy: make deploy on a clone of HEAD, without a service
+test-deploy:
+	scripts/deploy-test.sh
 
 ## test-web: web app tests (Vitest)
 test-web: $(WEB_DEPS)
@@ -92,6 +96,10 @@ repo:
 	node scripts/docs-check.mjs
 	scripts/spec-layout-check.sh
 	npx -y @fission-ai/openspec@1.12.0 validate --specs --no-interactive
+
+## deploy: pull, check, build and install this checkout, restart the hub and verify it (see docs/development/deploying.md)
+deploy:
+	scripts/deploy.sh
 
 ## help: list the targets
 help:
