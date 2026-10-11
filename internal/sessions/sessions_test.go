@@ -314,6 +314,23 @@ func TestJoiningExpected(t *testing.T) {
 	}
 }
 
+func TestJoiningExpectedWhenTheRoomsCannotBeListed(t *testing.T) {
+	e := newEnv(t)
+	e.s.JoinMode = sessions.JoinExpect
+	// listing the rooms counts their messages; without the table it fails, the report does not
+	if _, err := e.db.Exec(`ALTER TABLE messages RENAME TO messages_gone`); err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: exampleRepo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Context, "Every session joins it before it starts working") || !strings.Contains(r.Context, "`agora rooms` lists the rooms.") ||
+		strings.Contains(r.Context, "Rooms:") {
+		t.Fatalf("invitation: %q", r.Context)
+	}
+}
+
 func TestUnboundStartIsInvited(t *testing.T) {
 	e := newEnv(t)
 	repo := filepath.Join(t.TempDir(), "example-app")
