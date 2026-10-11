@@ -1,7 +1,7 @@
 // A chip that opens a menu of choices, one of them current: the follow mode and a bridge's
 // outbound policy. The value changes only when the operator picks a choice, never while moving
 // through the menu.
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export function ChoiceMenu<T extends string>(props: {
   /** What is chosen, such as `Follow mode`; it names the menu and labels the chip. */
@@ -16,10 +16,19 @@ export function ChoiceMenu<T extends string>(props: {
 }) {
   const choices = Object.keys(props.labels) as T[];
   const [open, setOpen] = useState(false);
+  // the menu hangs from the chip's right end, or from its left one where it would leave the screen
+  const [start, setStart] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const items = useRef<(HTMLButtonElement | null)[]>([]);
   const at = choices.indexOf(props.value);
+
+  useLayoutEffect(() => {
+    if (!open) return setStart(false);
+    const r = menu.current?.getBoundingClientRect();
+    if (r && r.left < 0) setStart(true);
+  }, [open]);
 
   // a press outside closes the menu; opening it focuses the current choice
   useEffect(() => {
@@ -79,7 +88,15 @@ export function ChoiceMenu<T extends string>(props: {
         <span className="chev">▾</span>
       </button>
       {open && (
-        <div className="menu" id={props.id} role="menu" aria-label={props.name} tabIndex={-1} onKeyDown={onKey}>
+        <div
+          className={start ? 'menu start' : 'menu'}
+          ref={menu}
+          id={props.id}
+          role="menu"
+          aria-label={props.name}
+          tabIndex={-1}
+          onKeyDown={onKey}
+        >
           {choices.map((v, i) => (
             <button
               key={v}

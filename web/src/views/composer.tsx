@@ -19,6 +19,11 @@ import { Icon } from '../icons';
 import { Avatar, usePg } from './common';
 import { OUTSIDE } from './outside';
 
+/** Whether the browser sizes a text box from its content (CSS field-sizing; not Safari). */
+function sizesItself(): boolean {
+  return typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('field-sizing', 'content');
+}
+
 // `@` and the start of a name, right before the caret
 const typing = /(?:^|\s)@([a-z0-9-]*)$/i;
 
@@ -82,6 +87,16 @@ export function Composer(props: {
   const box = props.inputRef;
   const listId = useId();
   const pg = usePg();
+
+  // where the browser cannot size the box from its content (CSS field-sizing), the box is sized
+  // here: it grows with the text up to its max-height, then scrolls; empty, it is one line again
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sized again whenever the text changes
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || sizesItself()) return;
+    el.style.height = '';
+    if (props.draft) el.style.height = `${el.scrollHeight}px`;
+  }, [props.draft]);
 
   // after a completion the caret goes right after the inserted name
   useLayoutEffect(() => {
@@ -219,6 +234,7 @@ export function Composer(props: {
         <button
           type="submit"
           className="send"
+          onMouseDown={(e) => e.preventDefault()} // the focus, and a phone's keyboard, stay in the box
           disabled={sending || !props.draft.trim()}
           aria-label={!out ? 'Send' : note ? 'Post the note' : `Send to ${out.chat}`}
         >
