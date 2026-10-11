@@ -18,7 +18,15 @@ function fakeViewport(height: number) {
 }
 
 const root = document.documentElement;
+// every watcher stops after its test, also a failed one, so it cannot break the next
+const stops: (() => void)[] = [];
+function watch(...args: Parameters<typeof watchViewport>) {
+  const stop = watchViewport(...args);
+  stops.push(stop);
+  return stop;
+}
 afterEach(() => {
+  for (const stop of stops.splice(0)) stop();
   root.removeAttribute('data-typing');
   root.style.removeProperty('--vvh');
   document.body.innerHTML = '';
@@ -28,7 +36,7 @@ describe('the part of the screen the app may use', () => {
   it('follows the visual viewport as the keyboard opens and closes, scrolled back to the top', () => {
     const vv = fakeViewport(844);
     const top = vi.fn();
-    const stop = watchViewport(document, vv, top);
+    const stop = watch(document, vv, top);
     expect(root.style.getPropertyValue('--vvh')).toBe('844px');
     vv.resize(480);
     expect(root.style.getPropertyValue('--vvh')).toBe('480px');
@@ -40,7 +48,7 @@ describe('the part of the screen the app may use', () => {
   it('keeps the height and the place on the page while zoomed in', () => {
     const vv = fakeViewport(844);
     const top = vi.fn();
-    const stop = watchViewport(document, vv, top);
+    const stop = watch(document, vv, top);
     top.mockClear();
     vv.scale = 2;
     vv.resize(422);
@@ -52,7 +60,7 @@ describe('the part of the screen the app may use', () => {
   it('scrolls back to the top when the visible part moves', () => {
     const vv = fakeViewport(480);
     const top = vi.fn();
-    const stop = watchViewport(document, vv, top);
+    const stop = watch(document, vv, top);
     top.mockClear();
     vv.listeners.get('scroll')?.();
     expect(top).toHaveBeenCalledOnce();
@@ -60,7 +68,7 @@ describe('the part of the screen the app may use', () => {
   });
 
   it('keeps typing while the focus moves to the send button of the same form', () => {
-    const stop = watchViewport(document, undefined, vi.fn());
+    const stop = watch(document, undefined, vi.fn());
     document.body.innerHTML = '<form><textarea></textarea><button>Send</button></form><button id="away">x</button>';
     document.querySelector('textarea')?.focus();
     (document.querySelector('form button') as HTMLElement).focus();
@@ -70,8 +78,16 @@ describe('the part of the screen the app may use', () => {
     stop();
   });
 
+  it('stops typing when the focus lands outside a form, though the field left without a word', () => {
+    watch(document, undefined, vi.fn());
+    document.body.innerHTML = '<button id="away">x</button>';
+    root.setAttribute('data-typing', ''); // as if a removed field never reported leaving
+    (document.getElementById('away') as HTMLElement).focus();
+    expect(root.hasAttribute('data-typing')).toBe(false);
+  });
+
   it('marks the page while a text field has the focus', () => {
-    const stop = watchViewport(document, undefined, vi.fn());
+    const stop = watch(document, undefined, vi.fn());
     document.body.innerHTML = '<textarea></textarea><input type="radio"><button>x</button>';
     const [box, radio] = [document.querySelector('textarea'), document.querySelector('input')] as HTMLElement[];
     box?.focus();

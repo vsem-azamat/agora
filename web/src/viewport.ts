@@ -27,9 +27,11 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
     root.style.setProperty('--vvh', `${vv.height * vv.scale}px`);
     if (vv.scale <= 1) toTop(); // zoomed in, the operator pans the page
   };
-  // typing starts in a text field; where it ends is decided when the focus leaves one
+  // typing starts in a text field; where it ends is decided when the focus leaves one, and again
+  // when the focus lands outside a form, in case a removed field's focusout never came
   const focusIn = (e: FocusEvent) => {
     if (textField(e.target)) root.setAttribute('data-typing', '');
+    else if (!(e.target instanceof Element && e.target.closest('form'))) root.removeAttribute('data-typing');
   };
   // moving to another control of the same form, such as Send, is still typing: the box must not
   // jump under the finger between the press and the click
