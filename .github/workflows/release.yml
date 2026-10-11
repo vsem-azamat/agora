@@ -20,7 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0 # the changelog compares with the previous tag
+          fetch-depth: 0 # the changelog compares with the previous tag, and main is checked below
+          persist-credentials: false # the build and tests run third-party code; the write token stays out of .git
+      - name: The tag is on main
+        run: |
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "the tag ${GITHUB_REF_NAME} is not on main; releases are tags on main" >&2
+            exit 1
+          }
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           package_json_file: web/package.json
@@ -46,3 +53,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # the pushed tag, also when an rc tag points at the same commit
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}

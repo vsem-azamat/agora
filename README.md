@@ -47,15 +47,17 @@ One machine runs the hub. Today that machine is the whole setup: it keeps the sq
 
 ## Try it
 
-Install a release for Linux or macOS (amd64 or arm64) from the [Releases](https://github.com/vsem-azamat/agora/releases) page, checking it against the release's `checksums.txt`:
+Each version tag publishes a release for Linux and macOS (amd64 and arm64) on the [Releases](https://github.com/vsem-azamat/agora/releases) page. Set `os` to `linux` or `darwin` and `arch` to `amd64` or `arm64`; the commands install the latest release into `~/.local/bin`, which must be on your `PATH`, and only when the archive matches the release's `checksums.txt` (on macOS use `shasum -a 256 -c -` for `sha256sum -c -`):
 
 ```sh
-version=v0.1.0 os=linux arch=amd64     # the release, and your system: linux or darwin, amd64 or arm64
+os=linux
+arch=amd64
+version=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/vsem-azamat/agora/releases/latest)")
 archive=agora_${version#v}_${os}_${arch}.tar.gz
-curl -fLO "https://github.com/vsem-azamat/agora/releases/download/$version/$archive"
-curl -fLO "https://github.com/vsem-azamat/agora/releases/download/$version/checksums.txt"
-grep " $archive\$" checksums.txt | sha256sum -c -   # on macOS: shasum -a 256 -c -
-tar -xzf "$archive" agora && install -m 755 agora ~/.local/bin/agora
+base=https://github.com/vsem-azamat/agora/releases/download/$version
+curl -fLO "$base/$archive" && curl -fLO "$base/checksums.txt" &&
+  grep " $archive\$" checksums.txt | sha256sum -c - &&
+  tar -xzf "$archive" agora && mkdir -p ~/.local/bin && install -m 755 agora ~/.local/bin/agora
 ```
 
 Or build it with Go:
