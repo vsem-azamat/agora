@@ -35,6 +35,14 @@ func TestMessageLayout(t *testing.T) {
 	if got := cli.FormatMessage(pending); got != "#example-chat [16] secretary · 22:50 · pending\n  hi" {
 		t.Fatalf("got %q", got)
 	}
+	note := &agorav1.Message{Id: 17, Room: "example-chat", Author: "secretary", Body: "a draft", At: timestamppb.New(at), Note: true}
+	if got := cli.FormatMessage(note); got != "#example-chat [17] secretary · 22:50 · note\n  a draft" {
+		t.Fatalf("got %q", got)
+	}
+	in := &agorav1.Message{Id: 18, Room: "example-chat", Author: "owner", Body: "checking", At: timestamppb.New(at), Incoming: true}
+	if got := cli.FormatMessage(in); got != "#example-chat [18] owner · 22:50 · from outside\n  checking" {
+		t.Fatalf("got %q", got)
+	}
 	plain := &agorav1.Message{Id: 13, Room: "general", Author: "agora", Body: "hi", At: timestamppb.New(at)}
 	if got := cli.FormatMessage(plain); got != "#general [13] agora · 22:50\n  hi" {
 		t.Fatalf("got %q", got)

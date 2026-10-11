@@ -59,6 +59,12 @@ message Message {
   DeliveryState delivery_state = 9;
   // Why a message in DELIVERY_STATE_FAILED was not sent.
   string delivery_error = 10;
+  // A note: a message of a bridged room that stays in Agora; it is never handed to the bridge and
+  // has no delivery state.
+  bool note = 11;
+  // The message came in from the outside chat through the room's bridge: from someone there
+  // (external_author), or from the operator writing there.
+  bool incoming = 12;
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -154,6 +160,9 @@ message PostRequest {
   string room = 2;
   string body = 3;
   int64 reply_to = 4;
+  // Post a note: in a bridged room the message stays in Agora under every outbound policy and is
+  // never handed to the bridge; in a room without a bridge it is an ordinary message.
+  bool note = 5;
 }
 
 message PostResponse {

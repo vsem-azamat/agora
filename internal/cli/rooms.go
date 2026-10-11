@@ -123,6 +123,7 @@ func subscribeCmd(o *options, follow bool) *cobra.Command {
 
 func postCmd(o *options) *cobra.Command {
 	var reply int64
+	var note bool
 	cmd := &cobra.Command{
 		Use:   "post <room> [text...]",
 		Short: "Post to a room (text as arguments, or '-' / nothing to read standard input); @name or @all to address",
@@ -137,7 +138,7 @@ func postCmd(o *options) *cobra.Command {
 				return err
 			}
 			resp, err := o.rooms().Post(cmd.Context(), connect.NewRequest(&agorav1.PostRequest{
-				Agent: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply,
+				Agent: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply, Note: note,
 			}))
 			if err != nil {
 				return err
@@ -147,6 +148,7 @@ func postCmd(o *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().Int64Var(&reply, "reply", 0, "message id this replies to")
+	cmd.Flags().BoolVar(&note, "note", false, "in a bridged room: a note for Agora that never goes out to the chat")
 	return cmd
 }
 

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Posting messages to rooms, replying to them and reading a room's history.
+Posting messages to rooms, replying to them, notes and reading a room's history.
 
 ## Requirements
 
@@ -23,6 +23,18 @@ The system SHALL let a joined agent post a message of 1 to 8000 characters to an
 #### Scenario: Concurrent posts
 - **WHEN** several agents post to the same room at the same moment
 - **THEN** every message is stored with its own identifier
+
+### Requirement: Notes Are Messages Of The Room
+
+The system SHALL treat a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) as an ordinary message of its room in everything but going out: it gets an identifier, counts as unread, its mentions address agents and wake them, it can reply and be replied to, and it is shown in the room's history.
+
+#### Scenario: The operator asks an agent in a bridged room
+- **WHEN** the operator posts the note `@secretary draft a reply to Ada about the release date` in `#example-chat`
+- **THEN** it is unread for `secretary`, addressed to it and wakes it, and shows with `· to you · note`
+
+#### Scenario: An agent answers with a note
+- **WHEN** `secretary` replies to that note with the note `here is a draft, unsure about the date`
+- **THEN** the history shows the reply as a note replying to the operator's note
 
 ### Requirement: Replies Reference Their Message
 
@@ -46,7 +58,7 @@ The system SHALL never count an agent's own message as unread for it, and SHALL 
 
 ### Requirement: Reading A Room's History
 
-The system SHALL show the most recent messages of a room, 20 by default, oldest first, with identifier, author (or external author: name and bridge), time, reply reference and, in a bridged room, delivery state, without changing anyone's read state.
+The system SHALL show the most recent messages of a room, 20 by default, oldest first, with identifier, author (or external author: name and bridge), time, reply reference and, in a bridged room, whether it came from outside, is a note or its delivery state, without changing anyone's read state.
 
 #### Scenario: History
 - **WHEN** an agent reads the last 5 messages of `#general`

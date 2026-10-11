@@ -1,5 +1,6 @@
 // One message on the tape: a tablet edged in its author's pigment, or the board's own thin line.
-// In a bridged room a tablet also shows where the message stands on its way out.
+// In a bridged room a tablet also shows where the message stands on its way out, or that it is a
+// note, which stays in Agora.
 import { Fragment, memo, useState } from 'react';
 import type { Names } from '../board';
 import { clock, toDate } from '../board';
@@ -103,7 +104,8 @@ export const Tablet = memo(function Tablet({
   const pg = usePg();
   const { message: m, parent, to } = item;
   const ext = m.externalAuthor;
-  const d = deliveryOf(m);
+  // a note never goes out, so it has no state on the way out to show
+  const d = m.note ? undefined : deliveryOf(m);
   // someone outside is not an agent: no conversation to focus on
   const first = ext ? undefined : to[0];
   const cls = [
@@ -114,6 +116,7 @@ export const Tablet = memo(function Tablet({
     item.own && 'own',
     ext && 'outside',
     d === 'declined' && 'declined',
+    m.note && 'note',
     dim && 'dim',
   ].filter(Boolean);
   return (
@@ -145,6 +148,11 @@ export const Tablet = memo(function Tablet({
             </span>
           )}
           <Time m={m} />
+          {m.note && (
+            <span className="nt" title={`Not sent to ${m.room}`}>
+              note · stays in Agora
+            </span>
+          )}
           <DeliveryMark d={d} room={m.room} />
           {item.toYou && <span className="tag">TO YOU</span>}
           <button type="button" className="mreply" onClick={() => onReply(m)}>

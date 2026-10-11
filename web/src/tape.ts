@@ -98,6 +98,7 @@ export function tape(
     const cont =
       prev !== undefined &&
       authorKey(prev) === authorKey(m) &&
+      prev.note === m.note &&
       m.replyTo === 0n &&
       mto.length === 0 &&
       deliveryOf(m) === undefined &&
@@ -111,7 +112,7 @@ export function tape(
       cont,
       toYou: m.author !== reader.operator && mto.includes(reader.operator),
       own: m.author === reader.operator,
-      waiting: deliveryOf(m) === 'pending',
+      waiting: !m.note && deliveryOf(m) === 'pending',
     });
     prev = m;
   }

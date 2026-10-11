@@ -142,3 +142,8 @@ export function goingOut(id: number, author: string, body: string, min: number, 
     deliveryError: error,
   });
 }
+
+/** A note of `author` in `#example-chat`, which stays in Agora, posted `min` minutes before NOW. */
+export function note(id: number, author: string, body: string, min: number): Message {
+  return message(id, author, body, min, { room: 'example-chat', note: true });
+}

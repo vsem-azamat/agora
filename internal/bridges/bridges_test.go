@@ -303,6 +303,10 @@ func TestOutboundPolicy(t *testing.T) {
 		if m.Body == "read only" {
 			t.Error("a refused post was stored")
 		}
+		// what the operator writes under read stays in Agora, so it is a note
+		if m.ID == stays && !m.Note {
+			t.Errorf("the operator's message under read is not a note: %+v", m)
+		}
 	}
 	// outside a bridged room nothing goes out, and the board's messages never do
 	if id := e.post(t, "secretary", "general", "hello"); deliveryOf(t, e, "general", id) != "" {
@@ -625,5 +629,137 @@ func TestEmojiSequencesInNamesStayWhole(t *testing.T) {
 	e.receive(t, bridges.In{ID: "1", AuthorName: family + " Ada\u202Eexe.txt\u200C!", Text: "hi"})
 	if got, want := e.history(t)[0].ExtAuthorName, family+" Ada exe.txt\u200C!"; got != want {
 		t.Fatalf("name %q, want %q", got, want)
+	}
+}
+
+func (e env) note(t *testing.T, author, room, body string, replyTo int64) int64 {
+	t.Helper()
+	id, err := e.r.PostNote(ctx, author, room, body, replyTo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestNotesNeverGoOut(t *testing.T) {
+	e := newEnv(t)
+	var notes []int64
+	for _, p := range []bridges.Policy{bridges.Approve, bridges.Open, bridges.Read} {
+		setPolicy(t, e, p)
+		notes = append(notes,
+			e.note(t, "secretary", "example-chat", "here is a draft, unsure about the date ("+string(p)+")", 0),
+			e.note(t, "owner", "example-chat", "@secretary draft a reply to Ada ("+string(p)+")", 0))
+	}
+	setPolicy(t, e, bridges.Open)
+	if outs, err := outgoing(t, e); err != nil || len(outs) != 0 {
+		t.Fatalf("notes go out: %+v %v", outs, err)
+	}
+	for _, m := range e.history(t) {
+		if !m.Note || m.Delivery != "" {
+			t.Errorf("note %d: note %v, delivery %q", m.ID, m.Note, m.Delivery)
+		}
+	}
+	// a note has nothing to send or decline
+	if err := e.b.SendPending(ctx, notes[0]); !errors.Is(err, bridges.ErrNotFound) {
+		t.Fatalf("sending a note: %v", err)
+	}
+	if err := e.b.DeclinePending(ctx, notes[1], "owner"); !errors.Is(err, bridges.ErrNotFound) {
+		t.Fatalf("declining a note: %v", err)
+	}
+	// still a note once the bridge is gone
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if h := e.history(t); !h[0].Note {
+		t.Fatalf("after the bridge was removed: %+v", h[0])
+	}
+}
+
+func TestANoteInARoomWithoutABridgeIsAMessage(t *testing.T) {
+	e := newEnv(t)
+	id := e.note(t, "secretary", "general", "nothing goes out of here anyway", 0)
+	h, err := e.r.History(ctx, "general", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h[0].ID != id || h[0].Note || h[0].Delivery != "" || strings.Contains(rooms.Format(h[0], 0), "note") {
+		t.Fatalf("a note in #general: %+v", h[0])
+	}
+}
+
+func TestAReplyToANoteCarriesNoReply(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	note := e.note(t, "owner", "example-chat", "@secretary say the release is on Friday", 0)
+	reply, err := e.r.Post(ctx, "secretary", "example-chat", "The release is on Friday.", note)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 1 || outs[0] != (bridges.Out{ID: reply, Author: "secretary", Text: "The release is on Friday."}) {
+		t.Fatalf("outgoing: %+v %v", outs, err)
+	}
+	if ok, _, err := e.b.Sent(ctx, "example-chat", reply, "5515"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	if h := e.history(t); h[0].ID != note || !h[0].Note || h[1].ReplyTo != note {
+		t.Fatalf("history: %+v", h)
+	}
+}
+
+func TestNotesAreMessagesOfTheRoom(t *testing.T) {
+	e := newEnv(t)
+	note := e.note(t, "owner", "example-chat", "@secretary draft a reply to Ada about the release date", 0)
+	msgs, _, err := e.r.Unread(ctx, "secretary", rooms.Waking, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 || msgs[0].ID != note || !msgs[0].Addressed || !msgs[0].Note {
+		t.Fatalf("secretary's waking messages: %+v", msgs)
+	}
+	if head := strings.Split(rooms.Format(msgs[0], 0), "\n")[0]; !strings.HasSuffix(head, "owner · "+msgs[0].At.Local().Format("15:04")+" · to you · note") {
+		t.Fatalf("head: %q", head)
+	}
+	reply := e.note(t, "secretary", "example-chat", "here is a draft, unsure about the date", note)
+	if h := e.history(t); h[1].ID != reply || h[1].ReplyTo != note || !h[1].Note {
+		t.Fatalf("a note replying to a note: %+v", h)
+	}
+}
+
+func TestHistoryTellsWhatTheChatSaw(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	e.receive(t, bridges.In{ID: "5513", AuthorID: "42", AuthorName: "Ada", Text: "when is the release?"})
+	e.receive(t, bridges.In{ID: "5514", AuthorID: "7", AuthorName: "Owner Outside", Self: true, Text: "checking"})
+	e.note(t, "owner", "example-chat", "@secretary draft a reply", 0)
+	sent := e.post(t, "secretary", "example-chat", "Friday.")
+	if ok, _, err := e.b.Sent(ctx, "example-chat", sent, "5515"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	var heads []string
+	for _, m := range e.history(t) {
+		head := strings.Split(rooms.Format(m, 0), "\n")[0]
+		heads = append(heads, head[strings.Index(head, "] ")+2:])
+	}
+	at := time.Now().Local().Format("15:04")
+	want := []string{
+		"Ada@example-chat · " + at + " · from outside",
+		"owner · " + at + " · from outside",
+		"owner · " + at + " · note",
+		"secretary · " + at + " · sent",
+	}
+	if !slices.Equal(heads, want) {
+		t.Fatalf("heads:\n%q\nwant\n%q", heads, want)
+	}
+}
+
+func TestAgentsPostOnlyNotesUnderRead(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Read)
+	if _, err := e.r.Post(ctx, "secretary", "example-chat", "to the chat", 0); !errors.Is(err, rooms.ErrReadOnly) || !strings.Contains(err.Error(), "--note") {
+		t.Fatalf("post under read: %v", err)
+	}
+	if id := e.note(t, "secretary", "example-chat", "for Agora only", 0); deliveryOf(t, e, "example-chat", id) != "" {
+		t.Fatal("a note under read has a delivery state")
 	}
 }

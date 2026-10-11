@@ -133,7 +133,7 @@ func messagesPB(msgs []rooms.Message) []*agorav1.Message {
 	for _, m := range msgs {
 		pb := &agorav1.Message{
 			Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed,
-			DeliveryState: deliveryStates[m.Delivery], DeliveryError: m.DeliveryError,
+			DeliveryState: deliveryStates[m.Delivery], DeliveryError: m.DeliveryError, Note: m.Note, Incoming: m.Incoming,
 		}
 		if m.External() {
 			pb.ExternalAuthor = &agorav1.ExternalAuthor{Bridge: m.Room, Id: m.ExtAuthorID, Name: m.ExtAuthorName}

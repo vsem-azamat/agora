@@ -536,6 +536,53 @@ func TestPoliciesOpenAndRead(t *testing.T) {
 	}
 }
 
+func TestNotesNeverReachTheBridge(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_OPEN)
+	resp, err := b.webRooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Room: "example-chat", Body: "@secretary say the release is on Friday", Note: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromApp := resp.Msg.GetId()
+	resp, err = b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "here is a draft, unsure about the date", Note: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromAgent := resp.Msg.GetId()
+	resp, err = b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "The release is on Friday.", ReplyTo: fromApp}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply := resp.Msg.GetId()
+	eventually(t, "the reply sent", func() bool {
+		return b.message(t, reply).GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_SENT
+	})
+	if outs := f.outs(); len(outs) != 1 || outs[0] != reply {
+		t.Fatalf("outs %v, want only %d", outs, reply)
+	}
+	for _, m := range f.received() {
+		if _, ok := m["reply_to"]; ok && m["type"] == "out" {
+			t.Fatalf("the reply to a note refers to it: %v", m)
+		}
+	}
+	for _, id := range []int64{fromApp, fromAgent} {
+		if m := b.message(t, id); !m.GetNote() || m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
+			t.Fatalf("note %d: %v", id, m)
+		}
+		_, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id}))
+		if connect.CodeOf(err) != connect.CodeNotFound {
+			t.Fatalf("sending note %d: %v", id, err)
+		}
+	}
+	// under read an agent may still post a note
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_READ)
+	if _, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "for Agora only", Note: true})); err != nil {
+		t.Fatalf("a note under read: %v", err)
+	}
+}
+
 func TestFailedMessagesTellTheAuthor(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)

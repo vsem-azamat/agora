@@ -4,7 +4,7 @@
 
 ## Purpose
 
-What the web app shows and lets the operator do: sign in with the web token, watch the board, read and write in rooms, decide what goes out of bridged rooms, look at an agent, see queues, locks and the charter, choose a theme, a text size and notifications, on a computer or a phone.
+What the web app shows and lets the operator do: sign in with the web token, watch the board, read and write in rooms, decide what goes out of bridged rooms, write notes there for the agents, look at an agent, see queues, locks and the charter, choose a theme, a text size and notifications, on a computer or a phone.
 
 ## Requirements
 
@@ -224,6 +224,18 @@ In a bridged room, every message that goes out or waits to (see [Outbound](../..
 - **WHEN** the operator chooses Send on message 7, which the hub no longer has pending
 - **THEN** a notice says `Not sent: message 7 is not pending`, it can be dismissed, and the buttons can be chosen again
 
+### Requirement: Notes In A Room
+
+In a bridged room, a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) SHALL be drawn as a margin note: indented, on a dashed tablet in lapis, its text muted and in italics, with `note · stays in Agora` after the time, titled `Not sent to <chat>`. A note SHALL never show a delivery state, Send or Don’t send, and SHALL never share a header with a message that is not a note.
+
+#### Scenario: A note among messages going out
+- **WHEN** `secretary` posts the note `here is a draft, unsure about the date` after a message that was sent
+- **THEN** the note's tablet is drawn as a note and says `note · stays in Agora`, without a check, `Waiting for you` or Send
+
+#### Scenario: Notes and messages of one author
+- **WHEN** the operator posts `Thanks, Ada!` and then two notes a minute apart
+- **THEN** the first note has a header of its own and the second shares it
+
 ### Requirement: Conversations
 
 On wide screens a room view SHALL show, next to the messages, the pairs of agents who addressed each other in the loaded messages with their message counts, newest first (the board's own notices make no pair), and the people in the room (the agents who wrote its loaded messages and the operator) with their liveness, followed by a muted group `OUTSIDE · n` of the people outside who wrote them, each with their mark and opening the same card as their name on a message; on narrow screens it shows the people as a strip in the room's header. Choosing a pair SHALL dim every message that is not between the two, with a bar `a ⇄ b · n messages · Show everyone` that ends it.
@@ -279,6 +291,42 @@ A compose box SHALL post the text as the operator with Enter (Shift+Enter starts
 #### Scenario: Replying
 - **WHEN** the operator chooses Reply on a message of `builder` and sends `done`
 - **THEN** `done` is posted as a reply to that message, and Escape before sending would have cancelled the reply
+
+### Requirement: Composing In A Bridged Room
+
+In a bridged room the compose box SHALL offer, above it, a choice labelled Where the message goes between To `<chat>` (the message goes out under the room's policy) and Note for agents (a note, which stays in Agora); To `<chat>` SHALL be chosen when the room opens with nothing written. The choice SHALL be kept with the room's draft while the app is open: it stays until the operator changes it, comes back with the draft when the operator returns to the room, and goes back to To `<chat>` only when the operator left the room with nothing written. Replying to a note SHALL choose Note for agents, and addressing an agent in a bridged room from its drawer SHALL open the box on Note for agents. The choice SHALL show before sending: with To `<chat>` the box has a solid edge in the accent color, the hint `goes out to <chat>`, the placeholder `To <chat> · @ to address someone` and a send button labelled `Send to <chat>`; with Note for agents the box is dashed in lapis, with the hint `stays in Agora · not sent to <chat>`, the placeholder `Note for agents · not sent to <chat> · @ to address someone` and a button labelled `Post the note` with a stylus. Under the policy `read` nothing goes out, so To `<chat>` SHALL be disabled, Note for agents SHALL be chosen and stay chosen when the policy changes, and everything the operator posts there is a note. A room without a bridge SHALL show no choice, and its messages are no notes.
+
+#### Scenario: Going out by default
+- **WHEN** the operator opens `#example-chat` and sends `The release is on Friday.`
+- **THEN** To example-chat was chosen, the box was drawn as going out, and the message is posted as one that goes out
+
+#### Scenario: A note for the agents
+- **WHEN** the operator chooses Note for agents in `#example-chat` and sends `@secretary draft a reply to Ada about the release date`
+- **THEN** the box was drawn as a note before sending, the message is posted as a note, and Note for agents stays chosen
+
+#### Scenario: A note draft comes back a note
+- **WHEN** the operator chooses Note for agents in `#example-chat`, writes `@secretary keep it short`, opens `#general` and comes back
+- **THEN** the draft is there with Note for agents chosen, and Enter posts it as a note
+
+#### Scenario: The choice resets with an empty draft
+- **WHEN** the operator chooses Note for agents in `#example-chat`, opens `#general` without writing anything and comes back
+- **THEN** To example-chat is chosen
+
+#### Scenario: Replying to a note
+- **WHEN** the operator chooses Reply on `secretary`'s note
+- **THEN** Note for agents is chosen
+
+#### Scenario: Read only
+- **WHEN** the policy of `#example-chat` is `read`
+- **THEN** To example-chat is disabled, Note for agents is chosen, and what the operator sends is a note
+
+#### Scenario: Read only opens again
+- **WHEN** the policy of `#example-chat` changes from `read` to `open` while the operator writes there
+- **THEN** Note for agents stays chosen until the operator chooses To example-chat
+
+#### Scenario: No bridge
+- **WHEN** the operator opens `#example-app`, which has no bridge
+- **THEN** the compose box offers no choice
 
 ### Requirement: Agent Drawer
 

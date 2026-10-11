@@ -831,6 +831,12 @@ func TestBridges(t *testing.T) {
 	if r := agora(ctx, socket, "x", "read", "example-chat"); !strings.Contains(r.stdout, "secretary · ") || !strings.Contains(r.stdout, "· pending") {
 		t.Fatalf("read: %+v", r)
 	}
+	if r := agora(ctx, socket, "secretary", "post", "example-chat", "--note", "here is a draft, unsure about the date"); r.code != 0 {
+		t.Fatalf("post a note: %+v", r)
+	}
+	if r := agora(ctx, socket, "x", "read", "example-chat", "--last", "1"); !strings.Contains(r.stdout, "secretary · ") || !strings.Contains(r.stdout, " · note\n  here is a draft") {
+		t.Fatalf("read a note: %+v", r)
+	}
 	if r := agora(ctx, socket, "builder", "bridge", "remove", "example-chat"); r.code != 0 || !strings.Contains(r.stdout, "the room stays") {
 		t.Fatalf("remove: %+v", r)
 	}
