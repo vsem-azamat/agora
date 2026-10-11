@@ -1,6 +1,7 @@
 package bridges_test
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -176,5 +177,30 @@ func TestAddingABridgeAgainStartsTheDelayAgain(t *testing.T) {
 	c.add(time.Minute)
 	if moved, _ := e.b.SendDue(ctx, "example-chat"); !moved {
 		t.Fatal("the message did not go out once its new delay passed")
+	}
+}
+
+func TestReadingCaps(t *testing.T) {
+	raw := func(s string) map[string]json.RawMessage {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(s), &m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	long := strings.Repeat("x", 100)
+	for _, c := range []struct {
+		in   string
+		want bridges.Caps
+	}{
+		{`{"personas":"prefix","threads":"topic","other":"x"}`, bridges.Caps{Personas: "prefix", Threads: "topic"}},
+		{`{"personas":"` + long + `"}`, bridges.Caps{Personas: strings.Repeat("x", bridges.MaxCap)}},
+		{"{\"personas\":\"a\\u202eb\\nc\"}", bridges.Caps{Personas: "a b c"}},
+		{`{"personas":7,"threads":null}`, bridges.Caps{}},
+		{`{}`, bridges.Caps{}},
+	} {
+		if got := bridges.ReadCaps(raw(c.in)); got != c.want {
+			t.Errorf("%s: got %+v, want %+v", c.in, got, c.want)
+		}
 	}
 }

@@ -98,7 +98,7 @@ var policyHints = map[agorav1.BridgePolicy]string{
 func bridgeListCmd(o *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List bridges with their state, outbound policy, agents and command",
+		Short: "List bridges with their state, outbound policy, agents, what their platform can do and command",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resp, err := o.bridges().ListBridges(cmd.Context(), connect.NewRequest(&agorav1.ListBridgesRequest{}))
@@ -117,7 +117,18 @@ func bridgeListCmd(o *options) *cobra.Command {
 				if len(b.GetAddressees()) > 0 {
 					agents = strings.Join(b.GetAddressees(), ",")
 				}
-				fmt.Fprintf(o.out, "#%-20s %-12s policy %-8s agents %s\n  %s\n", b.GetName(), state, bridgePolicyNames[b.GetPolicy()], agents, b.GetCommand())
+				var pairs []string
+				if c := b.GetCaps().GetPersonas(); c != "" {
+					pairs = append(pairs, "personas="+c)
+				}
+				if c := b.GetCaps().GetThreads(); c != "" {
+					pairs = append(pairs, "threads="+c)
+				}
+				caps := ""
+				if len(pairs) > 0 {
+					caps = "  caps " + strings.Join(pairs, " ")
+				}
+				fmt.Fprintf(o.out, "#%-20s %-12s policy %-8s agents %s%s\n  %s\n", b.GetName(), state, bridgePolicyNames[b.GetPolicy()], agents, caps, b.GetCommand())
 			}
 			return nil
 		},

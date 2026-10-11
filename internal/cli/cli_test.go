@@ -986,3 +986,26 @@ func TestVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestBridgeListShowsWhatThePlatformCanDo(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	command := `echo '{"type":"hello","caps":{"threads":"topic","personas":"prefix"}}'; exec sleep 600`
+	if r := agora(ctx, socket, "builder", "bridge", "add", "example-chat", "--command", command); r.code != 0 {
+		t.Fatalf("add: %+v", r)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		r := agora(ctx, socket, "builder", "bridge", "list")
+		if strings.Contains(r.stdout, "caps personas=prefix threads=topic") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("list: %+v", r)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

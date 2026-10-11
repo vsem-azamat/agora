@@ -26,6 +26,8 @@ Connecting a chat outside Agora (a messenger chat, a mailing list) to a room. A 
 
 - [Lines Of JSON](protocol/spec.md#requirement-lines-of-json)
 - [Messages From Outside](protocol/spec.md#requirement-messages-from-outside)
+- [What The Platform Can Do](protocol/spec.md#requirement-what-the-platform-can-do)
+- [Replies To An Agent's Message](protocol/spec.md#requirement-replies-to-an-agents-message)
 - [Messages From Outside Addressed To The Bridge's Agents](protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)
 - [The Operator's Own Messages From Outside](protocol/spec.md#requirement-the-operators-own-messages-from-outside)
 - [Resuming Where The Bridge Left Off](protocol/spec.md#requirement-resuming-where-the-bridge-left-off)

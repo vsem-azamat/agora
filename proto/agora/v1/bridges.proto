@@ -66,6 +66,16 @@ message Bridge {
   BridgeState state = 7;
   // How its process last ended, while restarting.
   string last_exit = 8;
+  // What the bridge said its platform can do in its current run; unset when it said nothing.
+  BridgeCaps caps = 9;
+}
+
+// What a bridge's platform can do, as the bridge says it in short words; empty when unknown.
+message BridgeCaps {
+  // How it shows who wrote a message that goes out, such as prefix.
+  string personas = 1;
+  // How it keeps threads, such as topic.
+  string threads = 2;
 }
 
 message AddBridgeRequest {

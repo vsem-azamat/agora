@@ -390,6 +390,10 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 	b.add(t, f)
 	f.send(`{"type":"in","id":"5513","author":{"id":"42","name":"Ada"},"text":"can you look?"}`)
 	eventually(t, "the message from outside", func() bool { return len(b.history(t)) == 1 })
+	key := "key"
+	if _, err := b.agents.UpdateProfile(context.Background(), connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "secretary", Icon: &key})); err != nil {
+		t.Fatal(err)
+	}
 	resp, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "looked, all fine", ReplyTo: b.history(t)[0].GetId()}))
 	if err != nil {
 		t.Fatal(err)
@@ -414,7 +418,9 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 			out = m
 		}
 	}
-	if out["author"] != "secretary" || out["text"] != "looked, all fine" || out["reply_to"] != "5513" {
+	author, _ := out["author"].(map[string]any)
+	if author["name"] != "secretary" || author["kind"] != "agent" || author["display"] != "secretary" || author["sigil"] != "key" ||
+		out["text"] != "looked, all fine" || out["reply_to"] != "5513" {
 		t.Fatalf("out line: %v", out)
 	}
 	n := len(b.history(t))
@@ -517,6 +523,13 @@ func TestPoliciesOpenAndRead(t *testing.T) {
 	eventually(t, "two out lines", func() bool { return len(f.outs()) == 2 })
 	if outs := f.outs(); outs[0] != fromApp || outs[1] != open {
 		t.Fatalf("outs %v, want %d %d", outs, fromApp, open)
+	}
+	for _, m := range f.received() {
+		if m["type"] == "out" && int64(m["id"].(float64)) == fromApp {
+			if a, _ := m["author"].(map[string]any); a["name"] != "owner" || a["kind"] != "human" {
+				t.Fatalf("the operator's out line: %v", m)
+			}
+		}
 	}
 	if b.message(t, asOwner).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING {
 		t.Fatal("a socket post as the operator went out")
@@ -955,4 +968,22 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 	if m := b.message(t, note); !m.GetNote() || m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
 		t.Fatalf("the note changed: %v", m)
 	}
+}
+
+func TestABridgeSaysWhatItsPlatformCanDo(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	if caps := b.state(t).GetCaps(); caps != nil {
+		t.Fatalf("caps before hello: %v", caps)
+	}
+	f.send(`{"type":"hello","caps":{"personas":"prefix","threads":"topic","other":"x"}}`)
+	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetPersonas() == "prefix" })
+	if caps := b.state(t).GetCaps(); caps.GetThreads() != "topic" {
+		t.Fatalf("caps: %v", caps)
+	}
+	// a new run says it again, or nothing
+	f.set("exit", "")
+	eventually(t, "restart", func() bool { return f.starts() == 2 })
+	eventually(t, "caps cleared", func() bool { return b.state(t).GetCaps() == nil })
 }

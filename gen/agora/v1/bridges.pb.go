@@ -153,7 +153,9 @@ type Bridge struct {
 	Addressees []string    `protobuf:"bytes,6,rep,name=addressees,proto3" json:"addressees,omitempty"`
 	State      BridgeState `protobuf:"varint,7,opt,name=state,proto3,enum=agora.v1.BridgeState" json:"state,omitempty"`
 	// How its process last ended, while restarting.
-	LastExit      string `protobuf:"bytes,8,opt,name=last_exit,json=lastExit,proto3" json:"last_exit,omitempty"`
+	LastExit string `protobuf:"bytes,8,opt,name=last_exit,json=lastExit,proto3" json:"last_exit,omitempty"`
+	// What the bridge said its platform can do in its current run; unset when it said nothing.
+	Caps          *BridgeCaps `protobuf:"bytes,9,opt,name=caps,proto3" json:"caps,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -244,6 +246,68 @@ func (x *Bridge) GetLastExit() string {
 	return ""
 }
 
+func (x *Bridge) GetCaps() *BridgeCaps {
+	if x != nil {
+		return x.Caps
+	}
+	return nil
+}
+
+// What a bridge's platform can do, as the bridge says it in short words; empty when unknown.
+type BridgeCaps struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// How it shows who wrote a message that goes out, such as prefix.
+	Personas string `protobuf:"bytes,1,opt,name=personas,proto3" json:"personas,omitempty"`
+	// How it keeps threads, such as topic.
+	Threads       string `protobuf:"bytes,2,opt,name=threads,proto3" json:"threads,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BridgeCaps) Reset() {
+	*x = BridgeCaps{}
+	mi := &file_agora_v1_bridges_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BridgeCaps) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BridgeCaps) ProtoMessage() {}
+
+func (x *BridgeCaps) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_bridges_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BridgeCaps.ProtoReflect.Descriptor instead.
+func (*BridgeCaps) Descriptor() ([]byte, []int) {
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *BridgeCaps) GetPersonas() string {
+	if x != nil {
+		return x.Personas
+	}
+	return ""
+}
+
+func (x *BridgeCaps) GetThreads() string {
+	if x != nil {
+		return x.Threads
+	}
+	return ""
+}
+
 type AddBridgeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The acting agent, which becomes the creator.
@@ -263,7 +327,7 @@ type AddBridgeRequest struct {
 
 func (x *AddBridgeRequest) Reset() {
 	*x = AddBridgeRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[1]
+	mi := &file_agora_v1_bridges_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +339,7 @@ func (x *AddBridgeRequest) String() string {
 func (*AddBridgeRequest) ProtoMessage() {}
 
 func (x *AddBridgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[1]
+	mi := &file_agora_v1_bridges_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +352,7 @@ func (x *AddBridgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBridgeRequest.ProtoReflect.Descriptor instead.
 func (*AddBridgeRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{1}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AddBridgeRequest) GetAgent() string {
@@ -338,7 +402,7 @@ type AddBridgeResponse struct {
 
 func (x *AddBridgeResponse) Reset() {
 	*x = AddBridgeResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[2]
+	mi := &file_agora_v1_bridges_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -350,7 +414,7 @@ func (x *AddBridgeResponse) String() string {
 func (*AddBridgeResponse) ProtoMessage() {}
 
 func (x *AddBridgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[2]
+	mi := &file_agora_v1_bridges_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -363,7 +427,7 @@ func (x *AddBridgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBridgeResponse.ProtoReflect.Descriptor instead.
 func (*AddBridgeResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{2}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AddBridgeResponse) GetCreatedRoom() bool {
@@ -391,7 +455,7 @@ type RemoveBridgeRequest struct {
 
 func (x *RemoveBridgeRequest) Reset() {
 	*x = RemoveBridgeRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[3]
+	mi := &file_agora_v1_bridges_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -403,7 +467,7 @@ func (x *RemoveBridgeRequest) String() string {
 func (*RemoveBridgeRequest) ProtoMessage() {}
 
 func (x *RemoveBridgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[3]
+	mi := &file_agora_v1_bridges_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -416,7 +480,7 @@ func (x *RemoveBridgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBridgeRequest.ProtoReflect.Descriptor instead.
 func (*RemoveBridgeRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{3}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RemoveBridgeRequest) GetAgent() string {
@@ -441,7 +505,7 @@ type RemoveBridgeResponse struct {
 
 func (x *RemoveBridgeResponse) Reset() {
 	*x = RemoveBridgeResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[4]
+	mi := &file_agora_v1_bridges_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -453,7 +517,7 @@ func (x *RemoveBridgeResponse) String() string {
 func (*RemoveBridgeResponse) ProtoMessage() {}
 
 func (x *RemoveBridgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[4]
+	mi := &file_agora_v1_bridges_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -466,7 +530,7 @@ func (x *RemoveBridgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBridgeResponse.ProtoReflect.Descriptor instead.
 func (*RemoveBridgeResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{4}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{5}
 }
 
 type ListBridgesRequest struct {
@@ -477,7 +541,7 @@ type ListBridgesRequest struct {
 
 func (x *ListBridgesRequest) Reset() {
 	*x = ListBridgesRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[5]
+	mi := &file_agora_v1_bridges_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -489,7 +553,7 @@ func (x *ListBridgesRequest) String() string {
 func (*ListBridgesRequest) ProtoMessage() {}
 
 func (x *ListBridgesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[5]
+	mi := &file_agora_v1_bridges_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,7 +566,7 @@ func (x *ListBridgesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBridgesRequest.ProtoReflect.Descriptor instead.
 func (*ListBridgesRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{5}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{6}
 }
 
 type ListBridgesResponse struct {
@@ -514,7 +578,7 @@ type ListBridgesResponse struct {
 
 func (x *ListBridgesResponse) Reset() {
 	*x = ListBridgesResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[6]
+	mi := &file_agora_v1_bridges_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +590,7 @@ func (x *ListBridgesResponse) String() string {
 func (*ListBridgesResponse) ProtoMessage() {}
 
 func (x *ListBridgesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[6]
+	mi := &file_agora_v1_bridges_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +603,7 @@ func (x *ListBridgesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBridgesResponse.ProtoReflect.Descriptor instead.
 func (*ListBridgesResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{6}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListBridgesResponse) GetBridges() []*Bridge {
@@ -559,7 +623,7 @@ type SetBridgePolicyRequest struct {
 
 func (x *SetBridgePolicyRequest) Reset() {
 	*x = SetBridgePolicyRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[7]
+	mi := &file_agora_v1_bridges_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +635,7 @@ func (x *SetBridgePolicyRequest) String() string {
 func (*SetBridgePolicyRequest) ProtoMessage() {}
 
 func (x *SetBridgePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[7]
+	mi := &file_agora_v1_bridges_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +648,7 @@ func (x *SetBridgePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBridgePolicyRequest.ProtoReflect.Descriptor instead.
 func (*SetBridgePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{7}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SetBridgePolicyRequest) GetName() string {
@@ -609,7 +673,7 @@ type SetBridgePolicyResponse struct {
 
 func (x *SetBridgePolicyResponse) Reset() {
 	*x = SetBridgePolicyResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[8]
+	mi := &file_agora_v1_bridges_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +685,7 @@ func (x *SetBridgePolicyResponse) String() string {
 func (*SetBridgePolicyResponse) ProtoMessage() {}
 
 func (x *SetBridgePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[8]
+	mi := &file_agora_v1_bridges_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +698,7 @@ func (x *SetBridgePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBridgePolicyResponse.ProtoReflect.Descriptor instead.
 func (*SetBridgePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{8}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{9}
 }
 
 type SendPendingRequest struct {
@@ -646,7 +710,7 @@ type SendPendingRequest struct {
 
 func (x *SendPendingRequest) Reset() {
 	*x = SendPendingRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[9]
+	mi := &file_agora_v1_bridges_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -658,7 +722,7 @@ func (x *SendPendingRequest) String() string {
 func (*SendPendingRequest) ProtoMessage() {}
 
 func (x *SendPendingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[9]
+	mi := &file_agora_v1_bridges_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -671,7 +735,7 @@ func (x *SendPendingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPendingRequest.ProtoReflect.Descriptor instead.
 func (*SendPendingRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{9}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SendPendingRequest) GetMessageId() int64 {
@@ -689,7 +753,7 @@ type SendPendingResponse struct {
 
 func (x *SendPendingResponse) Reset() {
 	*x = SendPendingResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[10]
+	mi := &file_agora_v1_bridges_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -701,7 +765,7 @@ func (x *SendPendingResponse) String() string {
 func (*SendPendingResponse) ProtoMessage() {}
 
 func (x *SendPendingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[10]
+	mi := &file_agora_v1_bridges_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -714,7 +778,7 @@ func (x *SendPendingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendPendingResponse.ProtoReflect.Descriptor instead.
 func (*SendPendingResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{10}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{11}
 }
 
 type DeclinePendingRequest struct {
@@ -726,7 +790,7 @@ type DeclinePendingRequest struct {
 
 func (x *DeclinePendingRequest) Reset() {
 	*x = DeclinePendingRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[11]
+	mi := &file_agora_v1_bridges_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +802,7 @@ func (x *DeclinePendingRequest) String() string {
 func (*DeclinePendingRequest) ProtoMessage() {}
 
 func (x *DeclinePendingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[11]
+	mi := &file_agora_v1_bridges_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +815,7 @@ func (x *DeclinePendingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeclinePendingRequest.ProtoReflect.Descriptor instead.
 func (*DeclinePendingRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{11}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DeclinePendingRequest) GetMessageId() int64 {
@@ -769,7 +833,7 @@ type DeclinePendingResponse struct {
 
 func (x *DeclinePendingResponse) Reset() {
 	*x = DeclinePendingResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[12]
+	mi := &file_agora_v1_bridges_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -781,7 +845,7 @@ func (x *DeclinePendingResponse) String() string {
 func (*DeclinePendingResponse) ProtoMessage() {}
 
 func (x *DeclinePendingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[12]
+	mi := &file_agora_v1_bridges_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -794,7 +858,7 @@ func (x *DeclinePendingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeclinePendingResponse.ProtoReflect.Descriptor instead.
 func (*DeclinePendingResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{12}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{13}
 }
 
 type SendNoteOutRequest struct {
@@ -806,7 +870,7 @@ type SendNoteOutRequest struct {
 
 func (x *SendNoteOutRequest) Reset() {
 	*x = SendNoteOutRequest{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[13]
+	mi := &file_agora_v1_bridges_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -818,7 +882,7 @@ func (x *SendNoteOutRequest) String() string {
 func (*SendNoteOutRequest) ProtoMessage() {}
 
 func (x *SendNoteOutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[13]
+	mi := &file_agora_v1_bridges_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -831,7 +895,7 @@ func (x *SendNoteOutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendNoteOutRequest.ProtoReflect.Descriptor instead.
 func (*SendNoteOutRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{13}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SendNoteOutRequest) GetMessageId() int64 {
@@ -851,7 +915,7 @@ type SendNoteOutResponse struct {
 
 func (x *SendNoteOutResponse) Reset() {
 	*x = SendNoteOutResponse{}
-	mi := &file_agora_v1_bridges_proto_msgTypes[14]
+	mi := &file_agora_v1_bridges_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -863,7 +927,7 @@ func (x *SendNoteOutResponse) String() string {
 func (*SendNoteOutResponse) ProtoMessage() {}
 
 func (x *SendNoteOutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_bridges_proto_msgTypes[14]
+	mi := &file_agora_v1_bridges_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -876,7 +940,7 @@ func (x *SendNoteOutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendNoteOutResponse.ProtoReflect.Descriptor instead.
 func (*SendNoteOutResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{14}
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SendNoteOutResponse) GetId() int64 {
@@ -890,7 +954,7 @@ var File_agora_v1_bridges_proto protoreflect.FileDescriptor
 
 const file_agora_v1_bridges_proto_rawDesc = "" +
 	"\n" +
-	"\x16agora/v1/bridges.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xaa\x02\n" +
+	"\x16agora/v1/bridges.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd4\x02\n" +
 	"\x06Bridge\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12.\n" +
@@ -903,7 +967,12 @@ const file_agora_v1_bridges_proto_rawDesc = "" +
 	"addressees\x18\x06 \x03(\tR\n" +
 	"addressees\x12+\n" +
 	"\x05state\x18\a \x01(\x0e2\x15.agora.v1.BridgeStateR\x05state\x12\x1b\n" +
-	"\tlast_exit\x18\b \x01(\tR\blastExit\"\x90\x01\n" +
+	"\tlast_exit\x18\b \x01(\tR\blastExit\x12(\n" +
+	"\x04caps\x18\t \x01(\v2\x14.agora.v1.BridgeCapsR\x04caps\"B\n" +
+	"\n" +
+	"BridgeCaps\x12\x1a\n" +
+	"\bpersonas\x18\x01 \x01(\tR\bpersonas\x12\x18\n" +
+	"\athreads\x18\x02 \x01(\tR\athreads\"\x90\x01\n" +
 	"\x10AddBridgeRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
@@ -972,53 +1041,55 @@ func file_agora_v1_bridges_proto_rawDescGZIP() []byte {
 }
 
 var file_agora_v1_bridges_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agora_v1_bridges_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_agora_v1_bridges_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_agora_v1_bridges_proto_goTypes = []any{
 	(BridgePolicy)(0),               // 0: agora.v1.BridgePolicy
 	(BridgeState)(0),                // 1: agora.v1.BridgeState
 	(*Bridge)(nil),                  // 2: agora.v1.Bridge
-	(*AddBridgeRequest)(nil),        // 3: agora.v1.AddBridgeRequest
-	(*AddBridgeResponse)(nil),       // 4: agora.v1.AddBridgeResponse
-	(*RemoveBridgeRequest)(nil),     // 5: agora.v1.RemoveBridgeRequest
-	(*RemoveBridgeResponse)(nil),    // 6: agora.v1.RemoveBridgeResponse
-	(*ListBridgesRequest)(nil),      // 7: agora.v1.ListBridgesRequest
-	(*ListBridgesResponse)(nil),     // 8: agora.v1.ListBridgesResponse
-	(*SetBridgePolicyRequest)(nil),  // 9: agora.v1.SetBridgePolicyRequest
-	(*SetBridgePolicyResponse)(nil), // 10: agora.v1.SetBridgePolicyResponse
-	(*SendPendingRequest)(nil),      // 11: agora.v1.SendPendingRequest
-	(*SendPendingResponse)(nil),     // 12: agora.v1.SendPendingResponse
-	(*DeclinePendingRequest)(nil),   // 13: agora.v1.DeclinePendingRequest
-	(*DeclinePendingResponse)(nil),  // 14: agora.v1.DeclinePendingResponse
-	(*SendNoteOutRequest)(nil),      // 15: agora.v1.SendNoteOutRequest
-	(*SendNoteOutResponse)(nil),     // 16: agora.v1.SendNoteOutResponse
-	(*timestamppb.Timestamp)(nil),   // 17: google.protobuf.Timestamp
+	(*BridgeCaps)(nil),              // 3: agora.v1.BridgeCaps
+	(*AddBridgeRequest)(nil),        // 4: agora.v1.AddBridgeRequest
+	(*AddBridgeResponse)(nil),       // 5: agora.v1.AddBridgeResponse
+	(*RemoveBridgeRequest)(nil),     // 6: agora.v1.RemoveBridgeRequest
+	(*RemoveBridgeResponse)(nil),    // 7: agora.v1.RemoveBridgeResponse
+	(*ListBridgesRequest)(nil),      // 8: agora.v1.ListBridgesRequest
+	(*ListBridgesResponse)(nil),     // 9: agora.v1.ListBridgesResponse
+	(*SetBridgePolicyRequest)(nil),  // 10: agora.v1.SetBridgePolicyRequest
+	(*SetBridgePolicyResponse)(nil), // 11: agora.v1.SetBridgePolicyResponse
+	(*SendPendingRequest)(nil),      // 12: agora.v1.SendPendingRequest
+	(*SendPendingResponse)(nil),     // 13: agora.v1.SendPendingResponse
+	(*DeclinePendingRequest)(nil),   // 14: agora.v1.DeclinePendingRequest
+	(*DeclinePendingResponse)(nil),  // 15: agora.v1.DeclinePendingResponse
+	(*SendNoteOutRequest)(nil),      // 16: agora.v1.SendNoteOutRequest
+	(*SendNoteOutResponse)(nil),     // 17: agora.v1.SendNoteOutResponse
+	(*timestamppb.Timestamp)(nil),   // 18: google.protobuf.Timestamp
 }
 var file_agora_v1_bridges_proto_depIdxs = []int32{
 	0,  // 0: agora.v1.Bridge.policy:type_name -> agora.v1.BridgePolicy
-	17, // 1: agora.v1.Bridge.created_at:type_name -> google.protobuf.Timestamp
+	18, // 1: agora.v1.Bridge.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 2: agora.v1.Bridge.state:type_name -> agora.v1.BridgeState
-	0,  // 3: agora.v1.AddBridgeResponse.policy:type_name -> agora.v1.BridgePolicy
-	2,  // 4: agora.v1.ListBridgesResponse.bridges:type_name -> agora.v1.Bridge
-	0,  // 5: agora.v1.SetBridgePolicyRequest.policy:type_name -> agora.v1.BridgePolicy
-	3,  // 6: agora.v1.BridgeService.AddBridge:input_type -> agora.v1.AddBridgeRequest
-	5,  // 7: agora.v1.BridgeService.RemoveBridge:input_type -> agora.v1.RemoveBridgeRequest
-	7,  // 8: agora.v1.BridgeService.ListBridges:input_type -> agora.v1.ListBridgesRequest
-	9,  // 9: agora.v1.BridgeService.SetBridgePolicy:input_type -> agora.v1.SetBridgePolicyRequest
-	11, // 10: agora.v1.BridgeService.SendPending:input_type -> agora.v1.SendPendingRequest
-	13, // 11: agora.v1.BridgeService.DeclinePending:input_type -> agora.v1.DeclinePendingRequest
-	15, // 12: agora.v1.BridgeService.SendNoteOut:input_type -> agora.v1.SendNoteOutRequest
-	4,  // 13: agora.v1.BridgeService.AddBridge:output_type -> agora.v1.AddBridgeResponse
-	6,  // 14: agora.v1.BridgeService.RemoveBridge:output_type -> agora.v1.RemoveBridgeResponse
-	8,  // 15: agora.v1.BridgeService.ListBridges:output_type -> agora.v1.ListBridgesResponse
-	10, // 16: agora.v1.BridgeService.SetBridgePolicy:output_type -> agora.v1.SetBridgePolicyResponse
-	12, // 17: agora.v1.BridgeService.SendPending:output_type -> agora.v1.SendPendingResponse
-	14, // 18: agora.v1.BridgeService.DeclinePending:output_type -> agora.v1.DeclinePendingResponse
-	16, // 19: agora.v1.BridgeService.SendNoteOut:output_type -> agora.v1.SendNoteOutResponse
-	13, // [13:20] is the sub-list for method output_type
-	6,  // [6:13] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	3,  // 3: agora.v1.Bridge.caps:type_name -> agora.v1.BridgeCaps
+	0,  // 4: agora.v1.AddBridgeResponse.policy:type_name -> agora.v1.BridgePolicy
+	2,  // 5: agora.v1.ListBridgesResponse.bridges:type_name -> agora.v1.Bridge
+	0,  // 6: agora.v1.SetBridgePolicyRequest.policy:type_name -> agora.v1.BridgePolicy
+	4,  // 7: agora.v1.BridgeService.AddBridge:input_type -> agora.v1.AddBridgeRequest
+	6,  // 8: agora.v1.BridgeService.RemoveBridge:input_type -> agora.v1.RemoveBridgeRequest
+	8,  // 9: agora.v1.BridgeService.ListBridges:input_type -> agora.v1.ListBridgesRequest
+	10, // 10: agora.v1.BridgeService.SetBridgePolicy:input_type -> agora.v1.SetBridgePolicyRequest
+	12, // 11: agora.v1.BridgeService.SendPending:input_type -> agora.v1.SendPendingRequest
+	14, // 12: agora.v1.BridgeService.DeclinePending:input_type -> agora.v1.DeclinePendingRequest
+	16, // 13: agora.v1.BridgeService.SendNoteOut:input_type -> agora.v1.SendNoteOutRequest
+	5,  // 14: agora.v1.BridgeService.AddBridge:output_type -> agora.v1.AddBridgeResponse
+	7,  // 15: agora.v1.BridgeService.RemoveBridge:output_type -> agora.v1.RemoveBridgeResponse
+	9,  // 16: agora.v1.BridgeService.ListBridges:output_type -> agora.v1.ListBridgesResponse
+	11, // 17: agora.v1.BridgeService.SetBridgePolicy:output_type -> agora.v1.SetBridgePolicyResponse
+	13, // 18: agora.v1.BridgeService.SendPending:output_type -> agora.v1.SendPendingResponse
+	15, // 19: agora.v1.BridgeService.DeclinePending:output_type -> agora.v1.DeclinePendingResponse
+	17, // 20: agora.v1.BridgeService.SendNoteOut:output_type -> agora.v1.SendNoteOutResponse
+	14, // [14:21] is the sub-list for method output_type
+	7,  // [7:14] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_bridges_proto_init() }
@@ -1032,7 +1103,7 @@ func file_agora_v1_bridges_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_bridges_proto_rawDesc), len(file_agora_v1_bridges_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
