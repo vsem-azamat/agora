@@ -33,12 +33,17 @@ func TestStderrLinesAreLimited(t *testing.T) {
 func TestStderrLinesAreLoggedAsInfo(t *testing.T) {
 	var out bytes.Buffer
 	h := &Hub{log: slog.New(slog.NewTextHandler(&out, nil))}
-	h.logStderr("example-chat", strings.NewReader("tg-bridge INFO hello\n"+strings.Repeat("x", maxLogLine+1)+"\n"))
+	h.logStderr("example-chat", strings.NewReader("example-bridge INFO hello\n"+strings.Repeat("x", maxLogLine+1)+"\n"))
 	got := out.String()
-	if !strings.Contains(got, `level=INFO msg="bridge stderr" bridge=example-chat line="tg-bridge INFO hello"`) {
+	if !strings.Contains(got, `level=INFO msg="bridge stderr" bridge=example-chat line="example-bridge INFO hello"`) {
 		t.Fatalf("a stderr line is not logged as info:\n%s", got)
 	}
 	if !strings.Contains(got, `level=WARN msg="bridge stderr line too long; skipped"`) {
 		t.Fatalf("a line too long is not a warning:\n%s", got)
+	}
+	out.Reset()
+	h.logStderr("example-chat", strings.NewReader(strings.Repeat("line\n", stderrLines+1)))
+	if !strings.Contains(out.String(), `level=WARN msg="bridge stderr: lines left out" bridge=example-chat lines=1`) {
+		t.Fatalf("the lines left out are not a warning:\n%s", out.String())
 	}
 }
