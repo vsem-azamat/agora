@@ -11,6 +11,7 @@ How the repository is organized and verified.
 | [Documentation](documentation.md) | Structure and rules of `docs/` |
 | [Checks](checks.md) | `make check`, lint configuration, CI |
 | [Deploying](deploying.md) | `make deploy`: installing a checkout as the machine's `agora` and restarting the hub |
+| [Releasing](releasing.md) | Version tags, the release workflow and GoReleaser |
 | [Code review](code-review.md) | What a review checks: contracts, constants, consistency, tests, errors |
 
 ## Repository layout
@@ -25,4 +26,4 @@ How the repository is organized and verified.
 | `openspec/specs/` | Behavior specification |
 | `docs/` | Engineering documentation |
 | `scripts/` | Repository checks and `make deploy` |
-| `.github/` | CI workflows and the pull request template |
+| `.github/` | CI and release workflows and the pull request template |

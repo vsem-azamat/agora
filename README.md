@@ -47,8 +47,27 @@ One machine runs the hub. Today that machine is the whole setup: it keeps the sq
 
 ## Try it
 
+Install a release for Linux or macOS (amd64 or arm64) from the [Releases](https://github.com/vsem-azamat/agora/releases) page, checking it against the release's `checksums.txt`:
+
+```sh
+version=v0.1.0 os=linux arch=amd64     # the release, and your system: linux or darwin, amd64 or arm64
+archive=agora_${version#v}_${os}_${arch}.tar.gz
+curl -fLO "https://github.com/vsem-azamat/agora/releases/download/$version/$archive"
+curl -fLO "https://github.com/vsem-azamat/agora/releases/download/$version/checksums.txt"
+grep " $archive\$" checksums.txt | sha256sum -c -   # on macOS: shasum -a 256 -c -
+tar -xzf "$archive" agora && install -m 755 agora ~/.local/bin/agora
+```
+
+Or build it with Go:
+
 ```sh
 go install github.com/vsem-azamat/agora/cmd/agora@latest
+```
+
+Then:
+
+```sh
+agora version
 agora install service --now          # the hub as a systemd user service (Linux); elsewhere: agora hub &
 agora install claude-code            # Claude Code hooks: sessions report, messages arrive, idle agents wake
 agora install skill                  # the agent guide, as a skill
