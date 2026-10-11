@@ -37,6 +37,8 @@ const (
 	RoomServiceCreateRoomProcedure = "/agora.v1.RoomService/CreateRoom"
 	// RoomServiceListRoomsProcedure is the fully-qualified name of the RoomService's ListRooms RPC.
 	RoomServiceListRoomsProcedure = "/agora.v1.RoomService/ListRooms"
+	// RoomServiceArchiveRoomProcedure is the fully-qualified name of the RoomService's ArchiveRoom RPC.
+	RoomServiceArchiveRoomProcedure = "/agora.v1.RoomService/ArchiveRoom"
 	// RoomServiceSubscribeProcedure is the fully-qualified name of the RoomService's Subscribe RPC.
 	RoomServiceSubscribeProcedure = "/agora.v1.RoomService/Subscribe"
 	// RoomServiceListSubscriptionsProcedure is the fully-qualified name of the RoomService's
@@ -60,8 +62,14 @@ const (
 type RoomServiceClient interface {
 	// CreateRoom creates a room with a purpose; its creator follows it.
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
-	// ListRooms returns every room with its activity, in name order.
+	// ListRooms returns the rooms that are not archived, or with all every room, with their
+	// activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
+	// ArchiveRoom archives a room or brings an archived one back; the board says so in #general.
+	// An archived room keeps its messages, subscriptions and reading positions, takes no new
+	// messages or followers, and counts as unread for no one. #general and a bridged room cannot
+	// be archived.
+	ArchiveRoom(context.Context, *connect.Request[v1.ArchiveRoomRequest]) (*connect.Response[v1.ArchiveRoomResponse], error)
 	// Subscribe follows or stops following rooms, or changes the mode a followed room is followed
 	// with; #general always stays followed but may take any mode. At least one room is required;
 	// ListSubscriptions reads the followed rooms with their modes.
@@ -102,6 +110,12 @@ func NewRoomServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+RoomServiceListRoomsProcedure,
 			connect.WithSchema(roomServiceMethods.ByName("ListRooms")),
+			connect.WithClientOptions(opts...),
+		),
+		archiveRoom: connect.NewClient[v1.ArchiveRoomRequest, v1.ArchiveRoomResponse](
+			httpClient,
+			baseURL+RoomServiceArchiveRoomProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("ArchiveRoom")),
 			connect.WithClientOptions(opts...),
 		),
 		subscribe: connect.NewClient[v1.SubscribeRequest, v1.SubscribeResponse](
@@ -153,6 +167,7 @@ func NewRoomServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type roomServiceClient struct {
 	createRoom        *connect.Client[v1.CreateRoomRequest, v1.CreateRoomResponse]
 	listRooms         *connect.Client[v1.ListRoomsRequest, v1.ListRoomsResponse]
+	archiveRoom       *connect.Client[v1.ArchiveRoomRequest, v1.ArchiveRoomResponse]
 	subscribe         *connect.Client[v1.SubscribeRequest, v1.SubscribeResponse]
 	listSubscriptions *connect.Client[v1.ListSubscriptionsRequest, v1.ListSubscriptionsResponse]
 	post              *connect.Client[v1.PostRequest, v1.PostResponse]
@@ -170,6 +185,11 @@ func (c *roomServiceClient) CreateRoom(ctx context.Context, req *connect.Request
 // ListRooms calls agora.v1.RoomService.ListRooms.
 func (c *roomServiceClient) ListRooms(ctx context.Context, req *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error) {
 	return c.listRooms.CallUnary(ctx, req)
+}
+
+// ArchiveRoom calls agora.v1.RoomService.ArchiveRoom.
+func (c *roomServiceClient) ArchiveRoom(ctx context.Context, req *connect.Request[v1.ArchiveRoomRequest]) (*connect.Response[v1.ArchiveRoomResponse], error) {
+	return c.archiveRoom.CallUnary(ctx, req)
 }
 
 // Subscribe calls agora.v1.RoomService.Subscribe.
@@ -211,8 +231,14 @@ func (c *roomServiceClient) MarkRoomRead(ctx context.Context, req *connect.Reque
 type RoomServiceHandler interface {
 	// CreateRoom creates a room with a purpose; its creator follows it.
 	CreateRoom(context.Context, *connect.Request[v1.CreateRoomRequest]) (*connect.Response[v1.CreateRoomResponse], error)
-	// ListRooms returns every room with its activity, in name order.
+	// ListRooms returns the rooms that are not archived, or with all every room, with their
+	// activity, in name order.
 	ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error)
+	// ArchiveRoom archives a room or brings an archived one back; the board says so in #general.
+	// An archived room keeps its messages, subscriptions and reading positions, takes no new
+	// messages or followers, and counts as unread for no one. #general and a bridged room cannot
+	// be archived.
+	ArchiveRoom(context.Context, *connect.Request[v1.ArchiveRoomRequest]) (*connect.Response[v1.ArchiveRoomResponse], error)
 	// Subscribe follows or stops following rooms, or changes the mode a followed room is followed
 	// with; #general always stays followed but may take any mode. At least one room is required;
 	// ListSubscriptions reads the followed rooms with their modes.
@@ -249,6 +275,12 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 		RoomServiceListRoomsProcedure,
 		svc.ListRooms,
 		connect.WithSchema(roomServiceMethods.ByName("ListRooms")),
+		connect.WithHandlerOptions(opts...),
+	)
+	roomServiceArchiveRoomHandler := connect.NewUnaryHandler(
+		RoomServiceArchiveRoomProcedure,
+		svc.ArchiveRoom,
+		connect.WithSchema(roomServiceMethods.ByName("ArchiveRoom")),
 		connect.WithHandlerOptions(opts...),
 	)
 	roomServiceSubscribeHandler := connect.NewUnaryHandler(
@@ -299,6 +331,8 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 			roomServiceCreateRoomHandler.ServeHTTP(w, r)
 		case RoomServiceListRoomsProcedure:
 			roomServiceListRoomsHandler.ServeHTTP(w, r)
+		case RoomServiceArchiveRoomProcedure:
+			roomServiceArchiveRoomHandler.ServeHTTP(w, r)
 		case RoomServiceSubscribeProcedure:
 			roomServiceSubscribeHandler.ServeHTTP(w, r)
 		case RoomServiceListSubscriptionsProcedure:
@@ -328,6 +362,10 @@ func (UnimplementedRoomServiceHandler) CreateRoom(context.Context, *connect.Requ
 
 func (UnimplementedRoomServiceHandler) ListRooms(context.Context, *connect.Request[v1.ListRoomsRequest]) (*connect.Response[v1.ListRoomsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.ListRooms is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) ArchiveRoom(context.Context, *connect.Request[v1.ArchiveRoomRequest]) (*connect.Response[v1.ArchiveRoomResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.ArchiveRoom is not implemented"))
 }
 
 func (UnimplementedRoomServiceHandler) Subscribe(context.Context, *connect.Request[v1.SubscribeRequest]) (*connect.Response[v1.SubscribeResponse], error) {

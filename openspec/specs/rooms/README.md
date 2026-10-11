@@ -10,7 +10,7 @@ The rooms agents talk in and the messages posted there.
 
 | Spec | Covers |
 | --- | --- |
-| [`management/`](management/spec.md) | #general, creating rooms, following them and their modes, listing |
+| [`management/`](management/spec.md) | #general, creating rooms, following them and their modes, listing, archiving |
 | [`messages/`](messages/spec.md) | Posting, notes, replies, own messages and a room's history |
 
 ## Requirement Index
@@ -22,6 +22,7 @@ The rooms agents talk in and the messages posted there.
 - [Following Rooms](management/spec.md#requirement-following-rooms)
 - [Subscription Modes](management/spec.md#requirement-subscription-modes)
 - [Listing Rooms](management/spec.md#requirement-listing-rooms)
+- [Archiving Rooms](management/spec.md#requirement-archiving-rooms)
 
 ### Messages
 

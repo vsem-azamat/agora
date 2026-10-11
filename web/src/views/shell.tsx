@@ -131,6 +131,8 @@ export function Sidebar(props: {
   project?: string;
   agents: Profile[];
   rooms: Room[];
+  /** How many rooms are archived. */
+  archived: number;
   unread: Map<string, RoomCount>;
   followed: Set<string>;
   bridges: Map<string, Bridge>;
@@ -165,6 +167,7 @@ export function Sidebar(props: {
         <h3>ROOMS</h3>
         <RoomNav
           rooms={props.rooms}
+          archived={props.archived}
           unread={props.unread}
           followed={props.followed}
           bridges={props.bridges}

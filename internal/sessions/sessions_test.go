@@ -299,6 +299,13 @@ func TestJoiningExpected(t *testing.T) {
 	if !strings.Contains(r.Context, "Rooms: #example-app (your project's room), #general.") || strings.Contains(r.Context, "room-create") {
 		t.Fatalf("invitation with the project's room: %q", r.Context)
 	}
+	// an archived room is not offered
+	if err := e.r.Create(ctx, "old-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "old-app", true); err != nil {
+		t.Fatal(err)
+	}
 	// the project's room is named in lowercase; a project that is no room name has none
 	for i, c := range []struct{ repo, want, not string }{
 		{"Example-App", "#example-app (your project's room)", "room-create"},

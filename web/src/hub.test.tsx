@@ -531,9 +531,107 @@ describe('useRoom', () => {
   });
 });
 
+describe('archived rooms', () => {
+  function archivedHub(calls: [string, unknown][]) {
+    const hub = fakeHub([]);
+    const reply = (json: unknown, status = 200) =>
+      new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const proc = String(input).replace(/^.*\/agora\.v1\./, '');
+      const raw = typeof init?.body === 'string' ? init.body : new TextDecoder().decode(init?.body as Uint8Array);
+      switch (proc) {
+        case 'RoomService/ListRooms':
+          calls.push([proc, JSON.parse(raw)]);
+          return reply({
+            rooms: [
+              { name: 'example-app', messages: 1 },
+              { name: 'general', messages: 2 },
+              { name: 'old-app', messages: 12, pending: 1, archivedBy: 'builder', archivedAt: '2026-10-09T10:00:00Z' },
+            ],
+          });
+        case 'RoomService/ArchiveRoom':
+          calls.push([proc, JSON.parse(raw)]);
+          return reply({ code: 'failed_precondition', message: '#old-app is not archived' }, 400);
+      }
+      return hub(input, init);
+    });
+  }
+
+  async function open(calls: [string, unknown][]) {
+    vi.stubGlobal('fetch', archivedHub(calls));
+    history.replaceState(null, '', '/#token=good-token');
+    const r = render(<App />);
+    await waitFor(() => expect(r.container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    return r;
+  }
+
+  it('leaves archived rooms out of the sidebar and opens them on the Rooms view', async () => {
+    const calls: [string, unknown][] = [];
+    const { container } = await open(calls);
+    expect(calls[0]).toEqual(['RoomService/ListRooms', { all: true }]);
+    expect(container.querySelector('.side a[href="#/rooms/old-app"]')).toBeNull();
+    // what waits in an archived room is no count of the Rooms tab
+    expect(container.querySelector('.tabs em')?.textContent).toBe('2'); // the 2 unread in general
+    const row = container.querySelector('.side a.archivedrow') as HTMLAnchorElement;
+    expect(row.textContent).toBe('1 archived→');
+    fireEvent.click(row);
+    location.hash = row.getAttribute('href') ?? '';
+    const tab = await screen.findByRole('link', { name: 'Archived · 1' });
+    expect(tab.getAttribute('aria-current')).toBe('page');
+    fireEvent.click(screen.getByRole('button', { name: 'Unarchive #old-app' }));
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toBe('The room was not unarchived: #old-app is not archived');
+    expect(calls).toContainEqual(['RoomService/ArchiveRoom', { room: 'old-app' }]);
+    // the notice stays with the view where it was asked
+    location.hash = '#/rooms/general';
+    await waitFor(() => expect(container.querySelector('.room')).not.toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('tells a refusal that comes after the operator left only where it was asked', async () => {
+    let answer: (r: Response) => void = () => {};
+    const hub = archivedHub([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).endsWith('RoomService/ArchiveRoom')
+          ? new Promise<Response>((r) => {
+              answer = r;
+            })
+          : hub(input, init),
+      ),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    location.hash = '#/archive';
+    fireEvent.click(await screen.findByRole('button', { name: 'Unarchive #old-app' }));
+    location.hash = '#/rooms/general';
+    await waitFor(() => expect(container.querySelector('.room')).not.toBeNull());
+    answer(
+      new Response(JSON.stringify({ code: 'failed_precondition', message: '#old-app is not archived' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('finds an archived room in the palette, marked archived', async () => {
+    await open([]);
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Jump to' }), { target: { value: 'old' } });
+    const found = screen.getByRole('option', { name: /#old-app/ });
+    expect(found.textContent).toContain('archived room');
+  });
+});
+
 describe('App', () => {
   it('routes by the fragment', () => {
     expect(parseRoute('#/')).toEqual({ view: 'board' });
+    expect(parseRoute('#/rooms')).toEqual({ view: 'rooms' });
+    expect(parseRoute('#/archive')).toEqual({ view: 'rooms', archived: true });
     expect(parseRoute('#/rooms/example-app')).toEqual({ view: 'room', room: 'example-app' });
     expect(parseRoute('#/turns')).toEqual({ view: 'turns' });
     expect(parseRoute('#/settings')).toEqual({ view: 'settings' });

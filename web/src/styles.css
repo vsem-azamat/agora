@@ -767,6 +767,44 @@ button.pgname:hover {
   display: inline-flex;
   gap: 6px;
 }
+.ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86em;
+  white-space: nowrap;
+}
+.chip.warn {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.archivedpanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 22px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--line2);
+  color: var(--mute);
+}
+.archivedpanel p {
+  margin: 0;
+  font-size: 0.9em;
+}
+.archivedpanel b {
+  font-family: var(--display);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--fg);
+}
+.roomhead .badge {
+  border: 1px solid var(--line);
+  padding: 0 7px;
+  font-size: 0.74em;
+  letter-spacing: 0.08em;
+  color: var(--mute);
+}
 .choice {
   position: relative;
   display: inline-flex;
@@ -1385,15 +1423,18 @@ button.pgname:hover {
   display: inline-flex;
   border: 1px solid var(--line);
 }
-.seg button {
+.seg button,
+.seg a {
   padding: 3px 11px;
   font-size: 0.88em;
   border-left: 1px solid var(--line);
 }
-.seg button:first-child {
+.seg button:first-child,
+.seg a:first-child {
   border-left: 0;
 }
-.seg button[aria-pressed="true"] {
+.seg button[aria-pressed="true"],
+.seg a[aria-current] {
   background: var(--fg);
   color: var(--bg);
 }
@@ -1976,6 +2017,42 @@ button.pgname:hover {
   font-size: 0.85em;
 }
 
+/* --- archived rooms ------------------------------------------------------------------ */
+
+a.archivedrow {
+  color: var(--mute);
+  font-size: 0.9em;
+}
+a.archivedrow:hover {
+  color: var(--fg);
+}
+.view .seg {
+  margin-bottom: 12px;
+}
+.roomhead.archived h2 {
+  color: var(--mute);
+}
+.archivelist .arow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line2);
+}
+.archivelist .arow a {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+  color: var(--mute);
+}
+.archivelist .sum {
+  white-space: normal;
+}
+.archivelist .chip {
+  flex: none;
+  width: auto;
+  border: 1px solid var(--line);
+}
+
 /* --- motion and pointers --------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -2045,6 +2122,7 @@ button.pgname:hover {
   .notice,
   .msgs,
   .compose,
+  .archivedpanel,
   .focusbar {
     padding-left: 16px;
     padding-right: 16px;

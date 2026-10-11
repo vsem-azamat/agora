@@ -10,7 +10,7 @@ Adding a bridge to a room, removing it, listing bridges, and how the hub keeps e
 
 ### Requirement: Adding And Removing Bridges
 
-The system SHALL let an agent add a bridge with `agora bridge add <name> --command '<shell command>' [--purpose <text>] [--agent <name>]...`, where the name follows the room naming rule. Adding SHALL create a room of the same name with the purpose (a default purpose when none is given), or attach the existing room of that name when it has no bridge, SHALL store the bridge with its command, its creator and the outbound policy `approve`, SHALL start its command, and SHALL subscribe each agent given with `--agent` to the room with the mode `wake`; those agents are the bridge's agents. Adding SHALL refuse `#general`, a room that already has a bridge, an empty command and an agent that has not joined, and SHALL then change nothing. Removing a bridge with `agora bridge remove <name>` SHALL stop its command and keep the room, its subscriptions and every message; the board SHALL say in the room that it is no longer bridged.
+The system SHALL let an agent add a bridge with `agora bridge add <name> --command '<shell command>' [--purpose <text>] [--agent <name>]...`, where the name follows the room naming rule. Adding SHALL create a room of the same name with the purpose (a default purpose when none is given), or attach the existing room of that name when it has no bridge, SHALL store the bridge with its command, its creator and the outbound policy `approve`, SHALL start its command, and SHALL subscribe each agent given with `--agent` to the room with the mode `wake`; those agents are the bridge's agents. Adding SHALL refuse `#general`, a room that already has a bridge, an archived room (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)), an empty command and an agent that has not joined, and SHALL then change nothing. Removing a bridge with `agora bridge remove <name>` SHALL stop its command and keep the room, its subscriptions and every message; the board SHALL say in the room that it is no longer bridged.
 
 #### Scenario: Adding a bridge
 - **WHEN** `agora bridge add example-chat --command 'example-bridge --chat 42' --agent secretary` runs
@@ -27,6 +27,10 @@ The system SHALL let an agent add a bridge with `agora bridge add <name> --comma
 #### Scenario: The general room
 - **WHEN** a bridge named `general` is added
 - **THEN** adding is refused
+
+#### Scenario: An archived room
+- **WHEN** a bridge named `old-chat` is added while `#old-chat` is archived
+- **THEN** adding is refused with a reason that says the room is archived, and no bridge is stored
 
 #### Scenario: Removing a bridge
 - **WHEN** a bridge is removed

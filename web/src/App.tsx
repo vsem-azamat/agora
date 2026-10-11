@@ -34,9 +34,10 @@ import { AccountMenu, Bar, Palette, type PaletteItem, Sidebar, Tabs, type View }
 import { SignIn } from './views/signin';
 import { Turns } from './views/turns';
 
-// --- routes: #/ board, #/rooms, #/rooms/<name>, #/turns, #/charter, #/settings -------------
+// --- routes: #/ board, #/rooms, #/archive, #/rooms/<name>, #/turns, #/charter, #/settings ---
 
-type Route = { view: View; room?: string };
+/** Where the app is; the Rooms view is on its archived rooms at #/archive, a name no room can clash with. */
+type Route = { view: View; room?: string; archived?: true };
 
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#\/?/, '');
@@ -44,6 +45,8 @@ export function parseRoute(hash: string): Route {
   switch (first) {
     case 'rooms':
       return second ? { view: 'room', room: decodeURIComponent(second) } : { view: 'rooms' };
+    case 'archive':
+      return { view: 'rooms', archived: true };
     case 'turns':
     case 'charter':
     case 'settings':
@@ -108,6 +111,7 @@ const views: [string, string, IconName, string][] = [
 function paletteItems(
   agents: Profile[],
   rooms: Room[],
+  archived: Room[],
   bridged: ReadonlySet<string>,
   openAgent: (name: string) => void,
 ): PaletteItem[] {
@@ -124,6 +128,13 @@ function paletteItems(
       label: `#${r.name}`,
       sub: bridged.has(r.name) ? 'bridged room' : 'room',
       mark: <Icon name={bridged.has(r.name) ? 'bridge' : 'room'} />,
+      go: () => openRoom(r.name),
+    })),
+    ...archived.map((r) => ({
+      key: `room ${r.name}`,
+      label: `#${r.name}`,
+      sub: 'archived room',
+      mark: <Icon name="archive" />,
       go: () => openRoom(r.name),
     })),
     ...views.map(([label, href, icon, key]) => ({
@@ -192,10 +203,18 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [arrival, setArrival] = useState<Arrival>();
   // each notice has its own number, so the same text told again shows for its full time
-  const [notice, setNotice] = useState<{ text: string; n: number }>();
+  const [notice, setNotice] = useState<{ text: string; n: number; where: string }>();
   const closeNotice = useCallback(() => setNotice(undefined), []);
   const memory = useRef(new Map<string, Saved>()).current;
   const roomName = route.view === 'room' ? route.room : undefined;
+  // a notice belongs to the view where the operator asked: it is shown only there
+  const where = `${route.view} ${roomName ?? ''} ${route.archived ?? ''}`;
+  const asked = useRef(where);
+  asked.current = where;
+  const shown = notice?.where === where ? notice : undefined;
+  // and is dropped on leaving it, so it does not come back later
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleared whenever the view changes
+  useEffect(() => setNotice(undefined), [where]);
   // a room left with nothing written opens again on To <chat>; a draft keeps its choice
   useEffect(() => {
     if (!roomName) return;
@@ -222,24 +241,40 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const rooms = data?.rooms;
   const bridges = data?.bridges;
   const bridged = useMemo(() => new Set(bridges?.keys()), [bridges]);
-  const items = useMemo(() => paletteItems(listed ?? [], rooms ?? [], bridged, setDrawer), [listed, rooms, bridged]);
-  /** A call the operator made failed: a refused token signs out, anything else is told. */
+  const archivedRooms = data?.archived;
+  const items = useMemo(
+    () => paletteItems(listed ?? [], rooms ?? [], archivedRooms ?? [], bridged, setDrawer),
+    [listed, rooms, archivedRooms, bridged],
+  );
+  /**
+   * A call the operator made failed: a refused token signs out, anything else is told in the view
+   * where the call was made, so it is called when the call is made, not when its answer comes.
+   */
   const refused = useCallback(
-    (what: string) => (err: unknown) => {
-      if (unauthenticated(err)) fail(err);
-      else setNotice((was) => ({ text: `${what}: ${ConnectError.from(err).rawMessage}`, n: (was?.n ?? 0) + 1 }));
+    (what: string) => {
+      const at = asked.current;
+      return (err: unknown) => {
+        if (unauthenticated(err)) fail(err);
+        else
+          setNotice((was) => ({
+            text: `${what}: ${ConnectError.from(err).rawMessage}`,
+            n: (was?.n ?? 0) + 1,
+            where: at,
+          }));
+      };
     },
     [fail],
   );
   // the watch reports the change, which reloads the room with the message's new state
   const decide = useCallback<Decide>(
     async (m, send) => {
+      const tell = refused(send ? 'Not sent' : 'Not declined');
       try {
         if (send) await api.bridges.sendPending({ messageId: m.id });
         else await api.bridges.declinePending({ messageId: m.id });
         return true;
       } catch (err) {
-        refused(send ? 'Not sent' : 'Not declined')(err);
+        tell(err);
         return false;
       }
     },
@@ -284,6 +319,11 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     if (mode === 'wake' && notify !== 'none') void askToNotify();
     api.rooms.subscribe({ rooms: [roomName], follow: on, mode: mode && subscriptionMode(mode) }).catch(fail);
   };
+  const archive = (room: string, archived: boolean) => {
+    api.rooms
+      .archiveRoom({ room, archived })
+      .catch(refused(archived ? 'The room was not archived' : 'The room was not unarchived'));
+  };
   const setPolicy = (policy: Policy) => {
     if (!roomName) return;
     api.bridges
@@ -311,7 +351,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
         <RoomView
           key={roomName}
           name={roomName ?? ''}
-          room={data.rooms.find((r) => r.name === roomName)}
+          room={[...data.rooms, ...data.archived].find((r) => r.name === roomName)}
           bridge={data.bridges.get(roomName ?? '')}
           messages={messages}
           error={roomError}
@@ -331,7 +371,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           onSeen={markSeen}
           onDecide={decide}
           onPolicy={setPolicy}
-          notice={notice}
+          onArchive={(archived) => roomName && archive(roomName, archived)}
+          notice={shown}
           onCloseNotice={closeNotice}
           memory={memory}
           arrival={arrival}
@@ -340,7 +381,20 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       );
       break;
     case 'rooms':
-      main = <Rooms rooms={data.rooms} unread={data.unread} followed={data.followed} bridges={data.bridges} />;
+      main = (
+        <Rooms
+          tab={route.archived ? 'archived' : 'active'}
+          rooms={data.rooms}
+          archived={data.archived}
+          onUnarchive={(room) => archive(room, false)}
+          unread={data.unread}
+          followed={data.followed}
+          bridges={data.bridges}
+          now={now}
+          notice={shown}
+          onCloseNotice={closeNotice}
+        />
+      );
       break;
     case 'turns':
       main = <Turns resources={data.resources} now={now} />;
@@ -382,6 +436,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
               project={route.view === 'board' ? project : undefined}
               agents={listed}
               rooms={data.rooms}
+              archived={data.archived.length}
               unread={data.unread}
               followed={data.followed}
               bridges={data.bridges}

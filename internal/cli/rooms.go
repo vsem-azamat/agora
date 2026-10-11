@@ -11,8 +11,9 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 )
 
-func (o *options) printRooms(ctx context.Context) error {
-	resp, err := o.rooms().ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{}))
+// printRooms lists the rooms that are not archived, or with all every room.
+func (o *options) printRooms(ctx context.Context, all bool) error {
+	resp, err := o.rooms().ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{All: all}))
 	if err != nil {
 		return err
 	}
@@ -23,6 +24,9 @@ func (o *options) printRooms(ctx context.Context) error {
 			last = age(r.GetLastAt().AsTime())
 		}
 		purpose, _, _ := strings.Cut(r.GetPurpose(), "\n")
+		if by := r.GetArchivedBy(); by != "" {
+			purpose = fmt.Sprintf("[archived by %s %s ago] %s", by, age(r.GetArchivedAt().AsTime()), purpose)
+		}
 		fmt.Fprintf(o.out, "  #%-20s %5d msgs  last %4s  %s\n", r.GetName(), r.GetMessages(), last, purpose)
 	}
 	return nil
@@ -32,11 +36,40 @@ func (o *options) printRooms(ctx context.Context) error {
 func roomArg(s string) string { return strings.TrimPrefix(s, "#") }
 
 func roomsCmd(o *options) *cobra.Command {
-	return &cobra.Command{
+	var all bool
+	cmd := &cobra.Command{
 		Use:   "rooms",
-		Short: "List rooms",
+		Short: "List rooms (--all: archived ones too)",
 		Args:  cobra.NoArgs,
-		RunE:  func(cmd *cobra.Command, _ []string) error { return o.printRooms(cmd.Context()) },
+		RunE:  func(cmd *cobra.Command, _ []string) error { return o.printRooms(cmd.Context(), all) },
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "also list archived rooms")
+	return cmd
+}
+
+func roomArchiveCmd(o *options, archive bool) *cobra.Command {
+	use, short, done := "room-archive <room>", "Archive a room: it keeps its history but takes no messages and counts as unread for no one", "archived"
+	if !archive {
+		use, short, done = "room-unarchive <room>", "Bring an archived room back as it was", "unarchived"
+	}
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			room := roomArg(args[0])
+			if _, err := o.rooms().ArchiveRoom(cmd.Context(), connect.NewRequest(&agorav1.ArchiveRoomRequest{
+				Agent: name, Room: room, Archived: archive,
+			})); err != nil {
+				return err
+			}
+			fmt.Fprintf(o.out, "%s #%s\n", done, room)
+			return nil
+		},
 	}
 }
 

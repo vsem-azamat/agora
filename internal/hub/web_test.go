@@ -690,3 +690,25 @@ func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
 		}
 	}
 }
+
+func TestTheAppArchivesAsTheOperator(t *testing.T) {
+	w := startWeb(t, "owner")
+	token := w.token(t, false)
+	if _, err := w.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.rooms.CreateRoom(context.Background(), connect.NewRequest(&agorav1.CreateRoomRequest{Name: "old-app", Purpose: "the app", Agent: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	rooms := agorav1connect.NewRoomServiceClient(w.client(token), w.base)
+	if _, err := rooms.ArchiveRoom(context.Background(), connect.NewRequest(&agorav1.ArchiveRoomRequest{Agent: "builder", Room: "old-app", Archived: true})); err != nil {
+		t.Fatal(err)
+	}
+	list, err := rooms.ListRooms(context.Background(), connect.NewRequest(&agorav1.ListRoomsRequest{All: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs := list.Msg.GetRooms(); len(rs) != 2 || rs[1].GetArchivedBy() != "owner" {
+		t.Fatalf("archived from the app: %v", rs)
+	}
+}

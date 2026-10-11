@@ -23,7 +23,10 @@ type HubData = {
   version: string;
   commit: string;
   agents: Profile[];
+  /** The rooms that are not archived. */
   rooms: Room[];
+  /** The archived rooms. */
+  archived: Room[];
   /** Per room: the operator's unread and addressed counts, and the messages waiting for the operator to send. */
   unread: Map<string, RoomCount>;
   /** The bridges by the name of their room. */
@@ -70,7 +73,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
     const [who, agents, rooms, unread, followed, resources, proposals, charter, bridges] = await Promise.all([
       api.web.whoami({}),
       api.agents.listAgents({}),
-      api.rooms.listRooms({}),
+      api.rooms.listRooms({ all: true }),
       api.rooms.unreadByRoom({}),
       api.rooms.listSubscriptions({}),
       api.resources.listResources({}),
@@ -78,6 +81,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.governance.getCharter({}),
       api.bridges.listBridges({}),
     ]);
+    const active = rooms.rooms.filter((r) => !r.archivedBy);
     setData({
       operator: who.name,
       board: who.board,
@@ -85,8 +89,10 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       version: who.version,
       commit: who.commit,
       agents: agents.agents,
-      rooms: rooms.rooms,
-      unread: roomCounts(unread.rooms, rooms.rooms),
+      rooms: active,
+      archived: rooms.rooms.filter((r) => r.archivedBy),
+      // nothing of an archived room counts: its unread are none, and what waits there cannot go out
+      unread: roomCounts(unread.rooms, active),
       bridges: new Map(bridges.bridges.map((b) => [b.name, b])),
       followed: new Set(followed.rooms),
       modes: new Map(followed.subscriptions.map((s) => [s.room, modeOf(s.mode)])),

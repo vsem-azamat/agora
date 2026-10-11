@@ -46,7 +46,7 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 	var list []rooms.Room
 	if s.rooms != nil {
 		var err error
-		if list, err = s.rooms.List(ctx); err != nil {
+		if list, err = s.rooms.List(ctx, false); err != nil {
 			list = nil
 		}
 	}

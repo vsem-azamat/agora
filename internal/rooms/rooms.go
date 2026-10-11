@@ -51,6 +51,15 @@ var (
 	ErrBoardOnly = errors.New("only the board itself posts as agora")
 	// ErrReadOnly refuses an agent's post in a bridged room whose outbound policy is read.
 	ErrReadOnly = errors.New("read-only bridge")
+	// ErrArchived refuses what an archived room does not take: messages, followers, a bridge,
+	// archiving it again.
+	ErrArchived = errors.New("archived room")
+	// ErrNotArchived refuses unarchiving a room that is not archived.
+	ErrNotArchived = errors.New("room not archived")
+	// ErrBridged refuses archiving a room that has a bridge.
+	ErrBridged = errors.New("bridged room")
+	// ErrUndelivered refuses archiving a room whose messages still wait for the operator.
+	ErrUndelivered = errors.New("messages wait for the operator")
 )
 
 // A mention: @name not preceded by a letter, digit or address character, in any script. The
@@ -67,6 +76,10 @@ type Room struct {
 	Messages  int
 	LastAt    time.Time // zero when the room has no messages
 	Pending   int       // messages waiting for the operator to send or decline them
+	// ArchivedBy is the agent that archived the room, "" when it is not archived, and
+	// ArchivedAt when (zero when it is not archived).
+	ArchivedBy string
+	ArchivedAt time.Time
 }
 
 // Message is a posted message.
@@ -211,11 +224,14 @@ func (r *Rooms) CreateTx(ctx context.Context, tx *sql.Tx, name, purpose, creator
 	if err := agents.ExistsTx(ctx, tx, creator); err != nil {
 		return err
 	}
-	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM rooms WHERE name = ?`, name).Scan(&n); err != nil {
+	var archived sql.NullInt64
+	switch err := tx.QueryRowContext(ctx, `SELECT archived_at FROM rooms WHERE name = ?`, name).Scan(&archived); {
+	case errors.Is(err, sql.ErrNoRows):
+	case err != nil:
 		return err
-	}
-	if n > 0 {
+	case archived.Valid:
+		return store.Refuse(ErrExists, "#%s already exists, archived; bring it back with `agora room-unarchive %s`", name, name)
+	default:
 		return fmt.Errorf("%w: #%s already exists", ErrExists, name)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO rooms (name, purpose, created_by, created_at) VALUES (?, ?, ?, ?)`,
@@ -231,16 +247,18 @@ func SubscribeTx(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode)
 	return subscribe(ctx, tx, agent, room, mode)
 }
 
-// listQuery lists the rooms with their counts. The pending count names 'pending' literally, so
-// the partial index messages_pending covers it; a bound parameter would keep the planner from it.
+// listQuery lists the rooms with their counts, archived ones too when :all. The pending count
+// names 'pending' literally, so the partial index messages_pending covers it; a bound parameter
+// would keep the planner from it.
 const listQuery = `SELECT r.name, r.purpose, r.created_by, r.created_at,
 	(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0),
-	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'pending')
-	FROM rooms AS r ORDER BY r.name`
+	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'pending'),
+	COALESCE(r.archived_by, ''), COALESCE(r.archived_at, 0)
+	FROM rooms AS r WHERE :all OR r.archived_at IS NULL ORDER BY r.name`
 
-// List returns every room in name order.
-func (r *Rooms) List(ctx context.Context) ([]Room, error) {
-	rows, err := r.db.QueryContext(ctx, listQuery)
+// List returns the rooms that are not archived, or with all every room, in name order.
+func (r *Rooms) List(ctx context.Context, all bool) ([]Room, error) {
+	rows, err := r.db.QueryContext(ctx, listQuery, sql.Named("all", all))
 	if err != nil {
 		return nil, err
 	}
@@ -248,17 +266,85 @@ func (r *Rooms) List(ctx context.Context) ([]Room, error) {
 	var out []Room
 	for rows.Next() {
 		var x Room
-		var created, last int64
-		if err := rows.Scan(&x.Name, &x.Purpose, &x.CreatedBy, &created, &x.Messages, &last, &x.Pending); err != nil {
+		var created, last, archived int64
+		if err := rows.Scan(&x.Name, &x.Purpose, &x.CreatedBy, &created, &x.Messages, &last, &x.Pending, &x.ArchivedBy, &archived); err != nil {
 			return nil, err
 		}
 		x.CreatedAt = time.UnixMilli(created)
+		if x.ArchivedBy != "" {
+			x.ArchivedAt = time.UnixMilli(archived)
+		}
 		if last > 0 {
 			x.LastAt = time.UnixMilli(last)
 		}
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+
+// Archive archives room for agent (archive) or brings it back, and the board says so in
+// #general. #general, a bridged room, a room whose messages wait for the operator (pending, left
+// from a removed bridge), archiving an archived room and unarchiving one that is not archived are
+// refused.
+func (r *Rooms) Archive(ctx context.Context, agent, room string, archive bool) error {
+	room = strings.TrimPrefix(room, "#")
+	return store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+			return err
+		}
+		if err := requireRoom(ctx, tx, room); err != nil {
+			return err
+		}
+		archived, err := isArchived(ctx, tx, room)
+		if err != nil {
+			return err
+		}
+		verb := "unarchived"
+		switch {
+		case !archive && !archived:
+			return store.Refuse(ErrNotArchived, "#%s is not archived", room)
+		case !archive:
+			_, err = tx.ExecContext(ctx, `UPDATE rooms SET archived_at = NULL, archived_by = NULL WHERE name = ?`, room)
+		case room == General:
+			return store.Refuse(store.ErrInvalid, "#%s is everyone's room and cannot be archived", General)
+		case archived:
+			return store.Refuse(ErrArchived, "#%s is already archived", room)
+		default:
+			var n int
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bridges WHERE name = ?`, room).Scan(&n); err != nil {
+				return err
+			}
+			if n > 0 {
+				return store.Refuse(ErrBridged, "#%s has a bridge; remove it first with `agora bridge remove %s`", room, room)
+			}
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE room = ? AND delivery = 'pending'`, room).Scan(&n); err != nil {
+				return err
+			}
+			switch {
+			case n == 1:
+				return store.Refuse(ErrUndelivered, "a message of #%s still waits for the operator; decline it first", room)
+			case n > 1:
+				return store.Refuse(ErrUndelivered, "%d messages of #%s still wait for the operator; decline them first", n, room)
+			}
+			verb = "archived"
+			_, err = tx.ExecContext(ctx, `UPDATE rooms SET archived_at = ?, archived_by = ? WHERE name = ?`, r.now().UnixMilli(), agent, room)
+		}
+		if err != nil {
+			return err
+		}
+		_, err = r.PostTx(ctx, tx, Board, General, fmt.Sprintf("#%s %s by %s", room, verb, agent), 0)
+		return err
+	})
+}
+
+// RequireUnarchivedTx refuses room, which exists, when it is archived, inside the caller's
+// transaction.
+func RequireUnarchivedTx(ctx context.Context, tx *sql.Tx, room string) error {
+	archived, err := isArchived(ctx, tx, room)
+	if err != nil || !archived {
+		return err
+	}
+	return store.Refuse(ErrArchived, "#%s is archived; bring it back first with `agora room-unarchive %s`", room, room)
 }
 
 // Subscribe makes agent follow (add) or stop following rooms, at least one; #general stays
@@ -285,6 +371,11 @@ func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add
 			room = strings.TrimPrefix(room, "#")
 			if err := requireRoom(ctx, tx, room); err != nil {
 				return err
+			}
+			if add {
+				if err := RequireUnarchivedTx(ctx, tx, room); err != nil {
+					return err
+				}
 			}
 			var err error
 			switch {
@@ -395,6 +486,9 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, author, room, body strin
 	if err := requireRoom(ctx, tx, room); err != nil {
 		return 0, err
 	}
+	if err := RequireUnarchivedTx(ctx, tx, room); err != nil {
+		return 0, err
+	}
 	if replyTo != 0 {
 		var n int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE id = ?`, replyTo).Scan(&n); err != nil {
@@ -500,6 +594,9 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 	if in.ExtID == "" || body == "" || utf8.RuneCountInString(body) > MaxBody {
 		return 0, fmt.Errorf("%w: a message from outside needs an id and 1 to %d characters", store.ErrInvalid, MaxBody)
 	}
+	if err := RequireUnarchivedTx(ctx, tx, in.Room); err != nil {
+		return 0, err
+	}
 	if id, err := extMessageTx(ctx, tx, in.Room, in.ExtID); id != 0 || err != nil {
 		return 0, err
 	}
@@ -578,6 +675,9 @@ func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, 
 // unread like any message, but it wakes no one.
 func (r *Rooms) NoticeTx(ctx context.Context, tx *sql.Tx, room, body string) error {
 	if err := requireRoom(ctx, tx, room); err != nil {
+		return err
+	}
+	if err := RequireUnarchivedTx(ctx, tx, room); err != nil {
 		return err
 	}
 	_, err := insert(ctx, tx, Message{Room: room, Author: Board, Body: strings.TrimSpace(body), At: r.now(), Quiet: true}, "", nil)
@@ -665,7 +765,7 @@ func (r *Rooms) Take(ctx context.Context, agent string, filter Filter, limit int
 	return out, total, err
 }
 
-// unreadQuery finds unread messages through the indexes: messages in rooms followed with ModeAll
+// unreadQuery finds unread messages, never in an archived room, through the indexes: messages in rooms followed with ModeAll
 // or ModeWake after the reading position (messages_room), @all messages in rooms followed with
 // ModeMentions after the position (messages_to_all, so their chatter is never walked), and
 // messages mentioning the agent by name (mentions_agent). It takes the agent as :a and General
@@ -701,6 +801,7 @@ SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
+	AND NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL)
 GROUP BY m.id
 ORDER BY m.id`
 
@@ -915,19 +1016,30 @@ func moveForward(ctx context.Context, tx *sql.Tx, agent, room string, through in
 	return markRead(ctx, tx, agent, []Message{{ID: through, Room: room}})
 }
 
+// isArchived reports whether room, which exists, is archived.
+func isArchived(ctx context.Context, tx *sql.Tx, room string) (bool, error) {
+	var archived bool
+	err := tx.QueryRowContext(ctx, `SELECT archived_at IS NOT NULL FROM rooms WHERE name = ?`, room).Scan(&archived)
+	return archived, err
+}
+
+// followed returns the rooms agent follows, #general first, without archived rooms.
 func followed(ctx context.Context, tx *sql.Tx, agent string) ([]string, error) {
-	rooms, err := store.Strings(ctx, tx, `SELECT room FROM subscriptions WHERE agent = ? AND room != ? ORDER BY room`, agent, General)
+	rooms, err := store.Strings(ctx, tx, `SELECT s.room FROM subscriptions AS s JOIN rooms AS r ON r.name = s.room
+		WHERE s.agent = ? AND s.room != ? AND r.archived_at IS NULL ORDER BY s.room`, agent, General)
 	if err != nil {
 		return nil, err
 	}
 	return append([]string{General}, rooms...), nil
 }
 
-// subscriptions returns the rooms agent follows with their modes, #general first.
+// subscriptions returns the rooms agent follows with their modes, #general first, without
+// archived rooms.
 func subscriptions(ctx context.Context, tx *sql.Tx, agent string) ([]Subscription, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT room, mode FROM (
 		SELECT :general AS room, COALESCE((SELECT mode FROM subscriptions WHERE agent = :a AND room = :general), 'all') AS mode
-		UNION ALL SELECT room, mode FROM subscriptions WHERE agent = :a AND room != :general
+		UNION ALL SELECT s.room, s.mode FROM subscriptions AS s JOIN rooms AS r ON r.name = s.room
+		WHERE s.agent = :a AND s.room != :general AND r.archived_at IS NULL
 	) ORDER BY room != :general, room`,
 		sql.Named("a", agent), sql.Named("general", General))
 	if err != nil {
