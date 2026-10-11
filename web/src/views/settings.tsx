@@ -59,7 +59,7 @@ export function Settings(props: {
   onNotify: (n: Notify) => void;
   onSignOut: () => void;
   /** The version and commit of the hub that serves the app. */
-  hub?: { version: string; commit: string };
+  hub: { version: string; commit: string };
 }) {
   const pg = usePg();
   return (
@@ -109,11 +109,9 @@ export function Settings(props: {
             Sign out
           </button>
         </Row>
-        {props.hub?.version && (
-          <p className="ver">
-            Hub {props.hub.version} · {props.hub.commit}
-          </p>
-        )}
+        <p className="ver">
+          Hub {props.hub.version} · {props.hub.commit}
+        </p>
       </div>
     </section>
   );

@@ -2,14 +2,11 @@
 package version
 
 import (
-	"regexp"
 	"runtime/debug"
 	"strings"
-)
 
-// pseudoRE matches a pseudo-version, which the Go toolchain gives a build from a checkout that is
-// not at a tag: v0.0.0-20261011154256-1547871db02d.
-var pseudoRE = regexp.MustCompile(`-(\d+\.)?\d{14}-[0-9a-f]{12}$`)
+	"golang.org/x/mod/module"
+)
 
 // Version is the release version, given at build time with
 // -ldflags "-X github.com/vsem-azamat/agora/internal/version.Version=v1.2.3".
@@ -35,10 +32,7 @@ func (i Info) String() string { return i.Version + " (" + i.Commit + ")" }
 
 // Get returns the running binary's version and commit.
 func Get() Info {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		bi = nil
-	}
+	bi, _ := debug.ReadBuildInfo() // nil when the binary has none
 	return from(Version, bi)
 }
 
@@ -51,9 +45,12 @@ func from(given string, bi *debug.BuildInfo) Info {
 		}
 		return i
 	}
-	// a checkout at a tag gets the tag, perhaps with +dirty, which the commit says already
-	if v := strings.TrimSuffix(bi.Main.Version, "+dirty"); i.Version == "" && v != "" && v != "(devel)" && !pseudoRE.MatchString(v) {
-		i.Version = v
+	// a checkout at a tag gets the tag, perhaps with +dirty, which the commit says already; a
+	// checkout between tags, and go install of a commit, get a pseudo-version, which names the commit
+	recorded := strings.TrimSuffix(bi.Main.Version, "+dirty")
+	pseudo := module.IsPseudoVersion(recorded)
+	if i.Version == "" && recorded != "" && recorded != "(devel)" && !pseudo {
+		i.Version = recorded
 	}
 	if i.Version == "" {
 		i.Version = Dev
@@ -67,6 +64,11 @@ func from(given string, bi *debug.BuildInfo) Info {
 			}
 		case "vcs.modified":
 			dirty = s.Value == "true"
+		}
+	}
+	if i.Commit == Unknown && pseudo {
+		if rev, err := module.PseudoVersionRev(recorded); err == nil {
+			i.Commit = rev[:min(len(rev), commitLen)]
 		}
 	}
 	if dirty && i.Commit != Unknown {

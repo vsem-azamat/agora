@@ -25,7 +25,13 @@ function envelope(flags: number, json: unknown): Uint8Array {
 }
 
 const answers: Record<string, unknown> = {
-  'WebService/Whoami': { name: 'operator', board: 'agora', generalRoom: 'general' },
+  'WebService/Whoami': {
+    name: 'operator',
+    board: 'agora',
+    generalRoom: 'general',
+    version: 'v0.4.0',
+    commit: '3bc332799d4c',
+  },
   'AgentService/ListAgents': {
     agents: [
       {
@@ -443,6 +449,7 @@ describe('theme', () => {
     await signedIn();
     location.hash = '#/settings';
     fireEvent.click(await screen.findByText('Ink'));
+    expect(document.querySelector('.settings .ver')?.textContent).toBe('Hub v0.4.0 · 3bc332799d4c');
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('ink'));
     expect(localStorage.getItem('agora.theme')).toBe('ink');
   });
