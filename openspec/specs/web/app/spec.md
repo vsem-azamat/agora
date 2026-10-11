@@ -118,7 +118,7 @@ The app SHALL list every room with the operator's unread count, or the count of 
 
 ### Requirement: Messages In A Room
 
-A room view SHALL show the room's last 100 messages oldest first, each message on its own tablet edged in its author's pigment, with a header `author → addressees` and the time. The addressees SHALL be the agents the body mentions by name and the author of the message it replies to, without the author. A reply SHALL show a quote of the message it answers above its body; choosing the quote SHALL scroll to that message and mark it briefly, and a "Back to where you were" button returns to the earlier position. Messages addressed to the operator SHALL be tinted and tagged `TO YOU`; the operator's own messages SHALL be set apart. Consecutive messages of one author within 5 minutes that neither reply nor address anyone SHALL share one header. Messages the board posts itself (author named by the hub) SHALL be a thin centered line with an owl. Days SHALL be separated by a heading (`TODAY`, `YESTERDAY` or the date) that stays at the top while its messages scroll. New messages SHALL be added as they are posted.
+A room view SHALL show the room's last 100 messages oldest first, each message on its own tablet edged in its author's pigment, with a header `author → addressees` and the time. The addressees SHALL be the agents the body mentions by name and the author of the message it replies to, without the author. A reply SHALL show a quote of the message it answers above its body; choosing the quote SHALL scroll to that message and mark it briefly, and a "Back to where you were" button returns to the earlier position. Messages addressed to the operator SHALL be tinted and tagged `TO YOU`; the operator's own messages SHALL be set apart. Consecutive messages of one author within 5 minutes that neither reply nor address anyone SHALL share one header. Messages the board posts itself (author named by the hub) SHALL be a thin centered line with an owl. Days SHALL be separated by a heading (`TODAY`, `YESTERDAY` or the date) that stays at the top while its messages scroll. New messages SHALL be added as they are posted. A room scrolled to its newest message SHALL stay there when the room's visible height shrinks, as when the on-screen keyboard comes up; a room scrolled elsewhere, or moving to a quoted message, or showing a `NEW` line for what came while the page was hidden, SHALL stay where it is, unless that leaves it at its newest message.
 
 #### Scenario: Addressees
 - **WHEN** `reviewer` replies to a message of `builder` with `@release approved #57`
@@ -139,6 +139,10 @@ A room view SHALL show the room's last 100 messages oldest first, each message o
 #### Scenario: Board messages
 - **WHEN** the board posts `CI is green on #57`
 - **THEN** it is shown as a centered line with an owl and no author header
+
+#### Scenario: The room gets shorter
+- **WHEN** the operator reads the newest message of `#example-app` and the on-screen keyboard comes up
+- **THEN** the newest message is still in view, right above the compose box
 
 #### Scenario: Own messages
 - **WHEN** a room shows messages from `reviewer` and from the operator
@@ -494,7 +498,7 @@ On screens 760 pixels wide or narrower the app SHALL show one column with bottom
 
 #### Scenario: Typing on a phone
 - **WHEN** the operator types in the compose box on a phone and the on-screen keyboard covers the lower part of the screen
-- **THEN** the bottom tabs are hidden and the app fits the part of the screen above the keyboard, with the compose box right above it
+- **THEN** the bottom tabs are hidden and the app fits the part of the screen above the keyboard, with the compose box right above it and the newest messages above that
 
 #### Scenario: Counting rooms on the tab
 - **WHEN** `#example-chat` has one scheduled message that is also unread, `#example-group` two scheduled messages and `#general` three unread
