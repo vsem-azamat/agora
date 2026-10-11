@@ -343,8 +343,8 @@ func (d *drainReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// logStderr logs the lines of a bridge's standard error, at most stderrLines a minute, and how
-// many it left out.
+// logStderr logs the lines of a bridge's standard error as info, at most stderrLines a minute,
+// and as warnings how many it left out and the lines too long to log.
 func (h *Hub) logStderr(name string, r io.Reader) {
 	limit := logLimit{max: stderrLines, window: time.Minute}
 	report := func(dropped int) {
@@ -356,7 +356,7 @@ func (h *Hub) logStderr(name string, r io.Reader) {
 		ok, dropped := limit.allow(time.Now())
 		report(dropped)
 		if ok {
-			h.log.Warn("bridge stderr", "bridge", name, "line", string(line))
+			h.log.Info("bridge stderr", "bridge", name, "line", string(line))
 		}
 	}, func() {
 		h.log.Warn("bridge stderr line too long; skipped", "bridge", name, "max", maxLogLine)
