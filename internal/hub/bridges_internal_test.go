@@ -1,6 +1,9 @@
 package hub
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -24,5 +27,18 @@ func TestStderrLinesAreLimited(t *testing.T) {
 	ok, dropped := l.allow(start.Add(time.Minute))
 	if !ok || dropped != 7 {
 		t.Fatalf("next window: %v, %d left out", ok, dropped)
+	}
+}
+
+func TestStderrLinesAreLoggedAsInfo(t *testing.T) {
+	var out bytes.Buffer
+	h := &Hub{log: slog.New(slog.NewTextHandler(&out, nil))}
+	h.logStderr("example-chat", strings.NewReader("tg-bridge INFO hello\n"+strings.Repeat("x", maxLogLine+1)+"\n"))
+	got := out.String()
+	if !strings.Contains(got, `level=INFO msg="bridge stderr" bridge=example-chat line="tg-bridge INFO hello"`) {
+		t.Fatalf("a stderr line is not logged as info:\n%s", got)
+	}
+	if !strings.Contains(got, `level=WARN msg="bridge stderr line too long; skipped"`) {
+		t.Fatalf("a line too long is not a warning:\n%s", got)
 	}
 }
