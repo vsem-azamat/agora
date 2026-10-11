@@ -1,11 +1,12 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App, parseRoute } from './App';
+import { App, page, parseRoute } from './App';
 import type { Api } from './api';
-import { useRoom } from './useHub';
+import { forgetLoadedBuild, useRoom } from './useHub';
 
 afterEach(() => {
   cleanup();
+  forgetLoadedBuild();
   vi.unstubAllGlobals();
   localStorage.clear();
   history.replaceState(null, '', '/');
@@ -114,6 +115,97 @@ describe('App with a hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
+  });
+});
+
+describe('an upgraded hub', () => {
+  // a hub whose watch reports a new revision on demand, and whose commit can change in between
+  function upgradingHub() {
+    const hub = fakeHub([]);
+    const state = { commit: '3bc332799d4c', push: (_: number) => {} };
+    let revision = 1;
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.endsWith('WebService/Whoami'))
+        return Response.json({ ...(answers['WebService/Whoami'] as object), commit: state.commit });
+      if (url.endsWith('WebService/Watch')) {
+        const stream = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(envelope(0, { revision: String(revision) }));
+            state.push = (r) => c.enqueue(envelope(0, { revision: String(r) }));
+          },
+        });
+        return new Response(stream, { status: 200, headers: { 'Content-Type': 'application/connect+json' } });
+      }
+      return hub(input, init);
+    });
+    const comeBack = async (commit: string) => {
+      state.commit = commit;
+      revision++;
+      await act(async () => state.push(revision));
+    };
+    return { fetch, comeBack };
+  }
+
+  async function opened() {
+    const reload = vi.spyOn(page, 'reload').mockImplementation(() => {});
+    const h = upgradingHub();
+    vi.stubGlobal('fetch', h.fetch);
+    history.replaceState(null, '', '/#token=good-token');
+    const r = render(<App />);
+    await waitFor(() => expect(r.container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    return { ...h, reload };
+  }
+
+  it('loads the app again when the hub comes back on another commit', async () => {
+    const { comeBack, reload } = await opened();
+    await comeBack('a964c856ff7e');
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  });
+
+  it('does not load the app again when the hub restarts on the same commit', async () => {
+    const { comeBack, reload } = await opened();
+    await comeBack('3bc332799d4c');
+    await act(async () => new Promise((r) => setTimeout(r, 50)));
+    expect(reload).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Reload/ })).toBeNull();
+  });
+
+  it('waits for a draft left in another room', async () => {
+    const { comeBack, reload } = await opened();
+    location.hash = '#/rooms/general';
+    fireEvent.change(await screen.findByLabelText('Message #general'), { target: { value: 'almost done' } });
+    location.hash = '#/rooms/example-app';
+    await screen.findByLabelText('Message #example-app');
+    await comeBack('a964c856ff7e');
+    await screen.findByRole('button', { name: 'Updated · Reload' });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the build of the page when the operator signs in again', async () => {
+    const { comeBack, reload } = await opened();
+    location.hash = '#/rooms/general';
+    fireEvent.change(await screen.findByLabelText('Message #general'), { target: { value: 'almost done' } });
+    await comeBack('a964c856ff7e');
+    await screen.findByRole('button', { name: 'Updated · Reload' });
+    // a new link in the same tab signs in again, with the upgraded hub already running
+    location.hash = '#token=other-token';
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  });
+
+  it('keeps a draft, reloads when the operator asks, and by itself once the draft is erased', async () => {
+    const { comeBack, reload } = await opened();
+    location.hash = '#/rooms/general';
+    const box = await screen.findByLabelText('Message #general');
+    fireEvent.change(box, { target: { value: 'almost done' } });
+    await comeBack('a964c856ff7e');
+    const button = await screen.findByRole('button', { name: 'Updated · Reload' });
+    expect(reload).not.toHaveBeenCalled();
+    expect((box as HTMLTextAreaElement).value).toBe('almost done');
+    fireEvent.click(button);
+    expect(reload).toHaveBeenCalledOnce();
+    fireEvent.change(box, { target: { value: '' } });
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
   });
 });
 

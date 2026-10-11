@@ -23,7 +23,14 @@ function statusText(s: Status, active: number | undefined): string {
   return `live · ${active} on the board`;
 }
 
-export function Bar(props: { status: Status; active?: number; onSearch?: () => void; account: ReactNode }) {
+export function Bar(props: {
+  status: Status;
+  active?: number;
+  onSearch?: () => void;
+  /** Set when the hub was upgraded and the app waits for a draft before it reloads. */
+  onReload?: () => void;
+  account: ReactNode;
+}) {
   return (
     <header className="bar">
       <div className="l">
@@ -42,7 +49,13 @@ export function Bar(props: { status: Status; active?: number; onSearch?: () => v
         <span />
       )}
       <div className="r">
-        <span className={`live ${props.status}`}>{statusText(props.status, props.active)}</span>
+        {props.onReload ? (
+          <button type="button" className="live updated" onClick={props.onReload} aria-label="Updated · Reload">
+            <span className="upd">Updated · </span>Reload
+          </button>
+        ) : (
+          <span className={`live ${props.status}`}>{statusText(props.status, props.active)}</span>
+        )}
         {props.account}
       </div>
     </header>

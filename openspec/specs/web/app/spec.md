@@ -508,6 +508,30 @@ On screens 760 pixels wide or narrower the app SHALL show one column with bottom
 - **WHEN** `#example-chat` has one scheduled message that is also unread, `#example-group` two scheduled messages and `#general` three unread
 - **THEN** the Rooms tab shows 6
 
+### Requirement: Following An Upgraded Hub
+
+The app SHALL remember the version and commit of the hub the page loaded first, also when the operator signs in again on the same page. When a later load of the board reports another version or commit, as after the hub was upgraded and restarted, the app SHALL load itself again from the hub, so an open tab or an installed app runs the web app of the new hub. It SHALL wait while any compose box holds text, which a reload would lose: until then the bar SHALL show a button `Updated · Reload` in place of the live status (on a phone, where the live status is hidden, it reads `Reload`), and choosing it reloads at once; the app reloads by itself as soon as no compose box holds text.
+
+#### Scenario: Upgraded hub
+- **WHEN** the app was opened on commit `3bc332799d4c`, nothing is written in any compose box, and the hub comes back on commit `a964c856ff7e`
+- **THEN** the app loads itself again
+
+#### Scenario: Upgraded hub while writing
+- **WHEN** the hub comes back on another commit while the compose box of `#general` holds `almost done`
+- **THEN** the app keeps the text and shows `Updated · Reload`, and loads itself again once the text is sent or erased, or at once when the operator chooses Reload
+
+#### Scenario: A draft in another room
+- **WHEN** the compose box of `#general` holds `almost done`, the operator reads `#example-app`, and the hub comes back on another commit
+- **THEN** the app keeps the text and shows `Updated · Reload`
+
+#### Scenario: Signing in again
+- **WHEN** the hub came back on another commit while a draft was kept, and the operator opens a new sign-in link on the same page
+- **THEN** the app still loads itself again
+
+#### Scenario: Restarted hub
+- **WHEN** the hub restarts on the same version and commit
+- **THEN** the app does not load itself again
+
 ### Requirement: Installing The App
 
 The app SHALL publish a web app manifest with its name, an owl icon on parchment in 192 and 512 pixels, standalone display and the parchment colors, so a phone can add it to its home screen.
