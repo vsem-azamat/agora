@@ -29,6 +29,11 @@ SELECT id, room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_
        delivery_error, quiet, note, scheduled_at
 FROM messages;
 
+-- the next id continues after the highest ever given, also when the newest messages were deleted
+-- (merged echoes): the copy's sequence is only its highest id. The rename moves this row along.
+DELETE FROM sqlite_sequence WHERE name = 'messages_new';
+INSERT INTO sqlite_sequence (name, seq) SELECT 'messages_new', seq FROM sqlite_sequence WHERE name = 'messages';
+
 DROP TABLE messages;
 ALTER TABLE messages_new RENAME TO messages;
 

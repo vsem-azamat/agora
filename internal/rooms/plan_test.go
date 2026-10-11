@@ -58,9 +58,9 @@ func TestUnreadQueryReachesMessagesThroughIndexes(t *testing.T) {
 	}
 }
 
-// TestPendingCountUsesItsIndex keeps listing rooms from reading every message of a room to count
-// the pending ones: the count must come from the partial index messages_scheduled alone.
-func TestPendingCountUsesItsIndex(t *testing.T) {
+// TestScheduledCountUsesItsIndex keeps listing rooms from reading every message of a room to count
+// the scheduled ones: the count must come from the partial index messages_scheduled alone.
+func TestScheduledCountUsesItsIndex(t *testing.T) {
 	ctx := context.Background()
 	db, err := store.Open(ctx, ":memory:")
 	if err != nil {
@@ -85,6 +85,6 @@ func TestPendingCountUsesItsIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(strings.Join(plan, "\n"), "SEARCH messages USING COVERING INDEX messages_scheduled (room=?)") {
-		t.Fatalf("the pending count does not search messages_scheduled:\n%s", strings.Join(plan, "\n"))
+		t.Fatalf("the scheduled count does not search messages_scheduled:\n%s", strings.Join(plan, "\n"))
 	}
 }

@@ -431,7 +431,7 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 	}
 }
 
-func TestDeclinedMessagesNeverGoOut(t *testing.T) {
+func TestCancelledMessagesNeverGoOut(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -440,7 +440,7 @@ func TestDeclinedMessagesNeverGoOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id})); connect.CodeOf(err) != connect.CodeNotFound {
-		t.Fatalf("sending a declined message: %v", err)
+		t.Fatalf("sending a cancelled message: %v", err)
 	}
 	time.Sleep(300 * time.Millisecond)
 	if len(f.outs()) != 0 {
@@ -453,13 +453,13 @@ func TestDeclinedMessagesNeverGoOut(t *testing.T) {
 	}
 }
 
-func TestRoomsCountPendingMessages(t *testing.T) {
+func TestRoomsCountScheduledMessages(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
 	first := b.post(t, "secretary", "first draft")
 	b.post(t, "secretary", "second draft")
-	pending := func() int32 {
+	scheduled := func() int32 {
 		resp, err := b.webRooms.ListRooms(context.Background(), connect.NewRequest(&agorav1.ListRoomsRequest{}))
 		if err != nil {
 			t.Fatal(err)
@@ -469,20 +469,20 @@ func TestRoomsCountPendingMessages(t *testing.T) {
 				return r.GetScheduled()
 			}
 			if r.GetScheduled() != 0 {
-				t.Fatalf("#%s counts %d pending", r.GetName(), r.GetScheduled())
+				t.Fatalf("#%s counts %d scheduled", r.GetName(), r.GetScheduled())
 			}
 		}
 		t.Fatal("no #example-chat")
 		return 0
 	}
-	if n := pending(); n != 2 {
-		t.Fatalf("pending: %d, want 2", n)
+	if n := scheduled(); n != 2 {
+		t.Fatalf("scheduled: %d, want 2", n)
 	}
 	if _, err := b.webBridges.CancelScheduled(context.Background(), connect.NewRequest(&agorav1.CancelScheduledRequest{MessageId: first})); err != nil {
 		t.Fatal(err)
 	}
-	if n := pending(); n != 1 {
-		t.Fatalf("pending after declining one: %d, want 1", n)
+	if n := scheduled(); n != 1 {
+		t.Fatalf("scheduled after cancelling one: %d, want 1", n)
 	}
 }
 
@@ -757,12 +757,12 @@ func TestAMessageSentAfterANewerOneGoesOut(t *testing.T) {
 	}
 	send(older)
 	eventually(t, "the older message", func() bool { return len(f.outs()) == 2 })
-	first := b.post(t, "secretary", "first pending")
-	second := b.post(t, "secretary", "second pending")
+	first := b.post(t, "secretary", "first scheduled")
+	second := b.post(t, "secretary", "second scheduled")
 	send(second)
-	eventually(t, "the second pending message", func() bool { return len(f.outs()) == 3 })
+	eventually(t, "the second scheduled message", func() bool { return len(f.outs()) == 3 })
 	send(first)
-	eventually(t, "the first pending message", func() bool { return len(f.outs()) == 4 })
+	eventually(t, "the first scheduled message", func() bool { return len(f.outs()) == 4 })
 	time.Sleep(200 * time.Millisecond)
 	want := []int64{newer.Msg.GetId(), older, second, first}
 	if got := f.outs(); fmt.Sprint(got) != fmt.Sprint(want) {

@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	// ProtocolVersion is the highest bridge protocol version the hub speaks, sent in hello.
+	// ProtocolVersion is the bridge protocol version the hub speaks, sent in hello.
 	ProtocolVersion = 2
 	// bridgeMinDelay and bridgeMaxDelay bound the delay before a bridge command starts again.
 	bridgeMinDelay = time.Second

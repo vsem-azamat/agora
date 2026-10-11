@@ -368,6 +368,9 @@ func TestNoLegacyMigrationRenamesDeliveryStates(t *testing.T) {
 		`INSERT INTO messages (id, room, author, body, reply_to, at) VALUES (8, 'example-chat', 'builder', '@builder see above', 7, 4)`,
 		`INSERT INTO mentions (message_id, agent) VALUES (8, 'builder')`,
 		`INSERT INTO read_marks (agent, message_id) VALUES ('builder', 7)`,
+		// a newest message that was deleted, as a merged echo is: its id is never given again
+		`INSERT INTO messages (id, room, author, body, at) VALUES (9, 'example-chat', 'builder', 'echo', 5)`,
+		`DELETE FROM messages WHERE id = 9`,
 	} {
 		if _, err := db.ExecContext(ctx, q); err != nil {
 			t.Fatal(err)
@@ -398,8 +401,12 @@ func TestNoLegacyMigrationRenamesDeliveryStates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id, _ := res.LastInsertId(); id <= 8 {
-		t.Errorf("a new message got id %d, not after 8", id)
+	if id, _ := res.LastInsertId(); id != 10 {
+		t.Errorf("a new message got id %d, not 10 after the deleted 9", id)
+	}
+	var keys int
+	if err := db.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&keys); err != nil || keys != 1 {
+		t.Errorf("foreign keys %d after the migration, err %v", keys, err)
 	}
 	if n, err := Strings(ctx, db, `SELECT name FROM sqlite_master WHERE name = 'messages_scheduled'`); err != nil || len(n) != 1 {
 		t.Errorf("index %v err %v", n, err)
@@ -407,5 +414,39 @@ func TestNoLegacyMigrationRenamesDeliveryStates(t *testing.T) {
 	var violations int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_foreign_key_check`).Scan(&violations); err != nil || violations != 0 {
 		t.Errorf("foreign key violations %d err %v", violations, err)
+	}
+}
+
+func TestAMigrationWithForeignKeysOffMustLeaveThemValid(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, q := range []string{
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('example-app', 'work', 'builder', 1)`,
+		`INSERT INTO messages (room, author, body, at) VALUES ('example-app', 'builder', 'hi', 1)`,
+		`INSERT INTO mentions (message_id, agent) VALUES (1, 'builder')`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var version int
+	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	err = apply(ctx, db, "9999_broken.sql", foreignKeysOff+"DELETE FROM messages;", version+1)
+	if err == nil || !strings.Contains(err.Error(), "mentions") || !strings.Contains(err.Error(), "unchanged") {
+		t.Fatalf("a migration that breaks a foreign key: %v", err)
+	}
+	var after, messages, keys int
+	if err := db.QueryRowContext(ctx, `SELECT (SELECT user_version FROM pragma_user_version), (SELECT COUNT(*) FROM messages), (SELECT foreign_keys FROM pragma_foreign_keys)`).Scan(&after, &messages, &keys); err != nil {
+		t.Fatal(err)
+	}
+	if after != version || messages != 1 || keys != 1 {
+		t.Fatalf("after the refused migration: version %d (was %d), messages %d, foreign keys %d", after, version, messages, keys)
 	}
 }

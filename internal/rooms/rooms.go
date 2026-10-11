@@ -250,7 +250,7 @@ func SubscribeTx(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode)
 	return subscribe(ctx, tx, agent, room, mode)
 }
 
-// listQuery lists the rooms with their counts, archived ones too when :all. The pending count
+// listQuery lists the rooms with their counts, archived ones too when :all. The scheduled count
 // names 'scheduled' literally, so the partial index messages_scheduled covers it; a bound parameter
 // would keep the planner from it.
 const listQuery = `SELECT r.name, r.purpose, r.created_by, r.created_at,
@@ -286,8 +286,8 @@ func (r *Rooms) List(ctx context.Context, all bool) ([]Room, error) {
 }
 
 // Archive archives room for agent (archive) or brings it back, and the board says so in
-// #general. #general, a bridged room, a room whose messages are still scheduled (pending, left
-// from a removed bridge), archiving an archived room and unarchiving one that is not archived are
+// #general. #general, a bridged room, a room whose messages are still scheduled (left from a
+// removed bridge), archiving an archived room and unarchiving one that is not archived are
 // refused.
 func (r *Rooms) Archive(ctx context.Context, agent, room string, archive bool) error {
 	room = strings.TrimPrefix(room, "#")

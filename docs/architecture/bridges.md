@@ -14,7 +14,7 @@ A bridge program knows one outside service and one chat; the hub knows nothing a
 
 ## Tables
 
-Migration `0012_bridges.sql`:
+The bridge's tables and the columns of `messages` for bridged rooms:
 
 | Table or column | Holds |
 | --- | --- |
@@ -24,7 +24,7 @@ Migration `0012_bridges.sql`:
 | `messages.ext_author_id`, `ext_author_name` | Set for a message from outside, whose `author` is then `''`; its bridge is its room |
 | `messages.delivery`, `delivery_error`, `scheduled_at` | `scheduled`, `sending`, `sent`, `cancelled` or `failed` (with the reason) for a message that goes out; `NULL` for one that stays here. `scheduled_at` is when a message was scheduled: its posting time, or when its room was bridged again |
 | `messages.quiet` | 1 for the board's notices that a bridge stopped or works again: the unread query leaves them out of `wake_room`, so they are unread but wake no one |
-| `messages.note` | 1 for a note (migration `0014_notes.sql`): a message of a bridged room that stays in Agora; a `CHECK` keeps notes without a delivery state |
+| `messages.note` | 1 for a note: a message of a bridged room that stays in Agora; a `CHECK` keeps notes without a delivery state |
 
 `bridges.created_by` and `bridge_agents.agent` are in the rename statements. The external author and the delivery state are columns of the message, not part of its body, so a message stays a body plus metadata; the API carries them as `Message.external_author`, `delivery_state` and `delivery_error`. An external author's empty `author` never equals an agent's name, so unread lists, renames and "own message" checks need no special case; `rooms.Message.From` names it `name@bridge` for display.
 

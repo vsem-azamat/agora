@@ -7,7 +7,7 @@ BUF     := $(GO_TOOL) buf
 LINT    := go tool -modfile=tools/lint/go.mod golangci-lint
 PNPM    := pnpm --dir web
 
-# What `make breaking` compares proto/ against; CI points it at the pull request base.
+# What `make breaking` compares proto/ against.
 BREAKING_AGAINST ?= .git\#branch=main
 
 # Installed web dependencies; reinstalled when package.json or the lockfile changes.

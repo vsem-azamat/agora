@@ -114,14 +114,14 @@ func apply(ctx context.Context, db *sql.DB, name, body string, version int) (err
 		return fmt.Errorf("apply %s: %w", name, err)
 	}
 	if keysOff {
-		var violations int
-		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM pragma_foreign_key_check").Scan(&violations); err != nil {
+		tables, err := Strings(ctx, tx, `SELECT DISTINCT "table" || ' -> ' || parent FROM pragma_foreign_key_check ORDER BY 1`)
+		if err != nil {
 			_ = tx.Rollback() // report the error that failed the check
 			return fmt.Errorf("apply %s: check foreign keys: %w", name, err)
 		}
-		if violations > 0 {
+		if len(tables) > 0 {
 			_ = tx.Rollback() // report the violations
-			return fmt.Errorf("apply %s: %d foreign key violations", name, violations)
+			return fmt.Errorf("apply %s: it leaves rows pointing at missing rows (%s); the database is unchanged", name, strings.Join(tables, ", "))
 		}
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
