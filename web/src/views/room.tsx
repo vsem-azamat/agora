@@ -289,30 +289,34 @@ export function RoomView(props: {
     <div className="roomwrap">
       <section className="room" aria-label={`#${name}`}>
         <div className="roomhead">
-          <h2>
-            <RoomIcon bridge={props.bridge} />#{name}
-          </h2>
-          <p className="purpose" title={props.room?.purpose}>
-            {props.room?.purpose}
-          </p>
-          <div className="strip">
-            {people.map((p) => (
-              <AgentLink key={p.name} name={p.name} className="member">
-                <Avatar name={p.name} live={p.live} size="sm" />
-              </AgentLink>
-            ))}
+          <div className="rtitle">
+            <h2>
+              <RoomIcon bridge={props.bridge} />#{name}
+            </h2>
+            <p className="purpose" title={props.room?.purpose}>
+              {props.room?.purpose}
+            </p>
           </div>
-          <span className="sum">
-            {props.room?.messages ?? 0} msgs · {people.length} in room
-          </span>
-          {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
-          <FollowControls
-            room={name}
-            always={name === props.general}
-            followed={props.followed}
-            mode={props.mode ?? 'all'}
-            onFollow={props.onFollow}
-          />
+          <div className="rtools">
+            <div className="strip">
+              {people.map((p) => (
+                <AgentLink key={p.name} name={p.name} className="member">
+                  <Avatar name={p.name} live={p.live} size="sm" />
+                </AgentLink>
+              ))}
+            </div>
+            <span className="sum">
+              {props.room?.messages ?? 0} msgs · {people.length} in room
+            </span>
+            {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
+            <FollowControls
+              room={name}
+              always={name === props.general}
+              followed={props.followed}
+              mode={props.mode ?? 'all'}
+              onFollow={props.onFollow}
+            />
+          </div>
         </div>
         {props.notice && props.onCloseNotice && (
           <Notice key={props.notice.n} text={props.notice.text} onClose={props.onCloseNotice} />
