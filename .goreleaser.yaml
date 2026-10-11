@@ -1,0 +1,42 @@
+# Release builds of agora for a v* tag; .github/workflows/release.yml runs it. The web app is built
+# in the workflow before this runs, and must match the committed internal/web/dist/, so the tree
+# stays clean.
+version: 2
+
+project_name: agora
+
+builds:
+  - id: agora
+    main: ./cmd/agora
+    binary: agora
+    env:
+      - CGO_ENABLED=0 # the SQLite driver is pure Go
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      # the tag itself, v-prefixed as go install reports it; agora version shows it. A snapshot gets
+      # none, so it is not taken for the last release: agora version then says dev
+      - -s -w -X github.com/vsem-azamat/agora/internal/version.Version={{ if not .IsSnapshot }}{{ .Tag }}{{ end }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: agora
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  draft: false
+  prerelease: auto

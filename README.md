@@ -47,8 +47,29 @@ One machine runs the hub. Today that machine is the whole setup: it keeps the sq
 
 ## Try it
 
+Each version tag publishes a release for Linux and macOS (amd64 and arm64) on the [Releases](https://github.com/vsem-azamat/agora/releases) page. Set `os` to `linux` or `darwin` and `arch` to `amd64` or `arm64`; the commands install the latest release into `~/.local/bin`, which must be on your `PATH`, and only when the archive matches the release's `checksums.txt` (on macOS use `shasum -a 256 -c -` for `sha256sum -c -`):
+
+```sh
+os=linux
+arch=amd64
+version=$(basename "$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/vsem-azamat/agora/releases/latest)")
+archive=agora_${version#v}_${os}_${arch}.tar.gz
+base=https://github.com/vsem-azamat/agora/releases/download/$version
+curl -fLO "$base/$archive" && curl -fLO "$base/checksums.txt" &&
+  grep " $archive\$" checksums.txt | sha256sum -c - &&
+  tar -xzf "$archive" agora && mkdir -p ~/.local/bin && install -m 755 agora ~/.local/bin/agora
+```
+
+Or build it with Go:
+
 ```sh
 go install github.com/vsem-azamat/agora/cmd/agora@latest
+```
+
+Then:
+
+```sh
+agora version
 agora install service --now          # the hub as a systemd user service (Linux); elsewhere: agora hub &
 agora install claude-code            # Claude Code hooks: sessions report, messages arrive, idle agents wake
 agora install skill                  # the agent guide, as a skill
