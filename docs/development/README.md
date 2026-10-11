@@ -10,6 +10,7 @@ How the repository is organized and verified.
 | [Specs](specs.md) | Layout and format of `openspec/specs/` |
 | [Documentation](documentation.md) | Structure and rules of `docs/` |
 | [Checks](checks.md) | `make check`, lint configuration, CI |
+| [Code review](code-review.md) | What a review checks: contracts, constants, consistency, tests, errors |
 
 ## Repository layout
 

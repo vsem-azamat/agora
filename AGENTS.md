@@ -45,10 +45,25 @@ Within one branch and one pull request:
 - Never patch generated code by hand; regenerate it.
 - Fix lint findings instead of silencing them. A `//nolint:<linter>` comment gives its reason on the same line.
 
+## Code Review
+
+When the work is done and `make check` passes, get an independent review before opening the pull request: a reviewer with no stake in the change (a fresh session or subagent) reads the diff together with the touched specs and docs.
+
+- **Rounds.** At most three review rounds; a fourth only if the third still has a *Fix* finding. Then stop reviewing. A *Fix* finding still open is listed in the PR description as a blocker, and the PR does not merge until it is fixed.
+- **Triage every finding.**
+  - *Fix* defects: wrong behavior, security or data-loss risk, a broken contract, code, specs, tests and docs disagreeing, or a breach of this file or [Code review](docs/development/code-review.md).
+  - *Defer* to an issue what is real but outside the change.
+  - *Drop* taste and speculation: renames or restructuring without a defect, and "what if" without a concrete input that fails.
+  - A breach of a rule in this file or [Code review](docs/development/code-review.md), or a finding with a concrete failing input, is never *Drop*. When unsure, it is *Fix*.
+  - The PR description lists deferred and dropped findings with a one-line reason each.
+- **Re-review** checks the fixes and what they introduced. It does not reopen a dropped finding without new evidence. Non-trivial changes pushed after the PR opens get a re-review round.
+
+The reviewer checks the change against [Code review](docs/development/code-review.md); the author writes to the same rules.
+
 ## Git And Pull Requests
 
 - Branch from `main`; one topic per branch; conventional commit messages (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`).
-- Every change lands through a pull request with green CI. The PR description says what changed, why, and how it was verified.
+- Every change lands through a pull request with green CI and a review as described in Code Review. The PR description says what changed, why, and how it was verified.
 - Releases are tags on `main` and are created by the maintainer only.
 - Do not add AI attribution lines or trailers to commits or PRs.
 
