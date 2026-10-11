@@ -19,11 +19,11 @@ service BridgeService {
   rpc ListBridges(ListBridgesRequest) returns (ListBridgesResponse);
   // SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
   rpc SetBridgePolicy(SetBridgePolicyRequest) returns (SetBridgePolicyResponse);
-  // SendPending lets a scheduled message go out at once. Only the web listener serves it.
-  rpc SendPending(SendPendingRequest) returns (SendPendingResponse);
-  // DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+  // SendScheduled lets a scheduled message go out at once. Only the web listener serves it.
+  rpc SendScheduled(SendScheduledRequest) returns (SendScheduledResponse);
+  // CancelScheduled cancels a scheduled message, so it never goes out, and tells its author. Only
   // the web listener serves it.
-  rpc DeclinePending(DeclinePendingRequest) returns (DeclinePendingResponse);
+  rpc CancelScheduled(CancelScheduledRequest) returns (CancelScheduledResponse);
   // SendNoteOut sends a note out: a new message of the note's author with its text goes out at
   // once, and the note stays. Only the web listener serves it.
   rpc SendNoteOut(SendNoteOutRequest) returns (SendNoteOutResponse);
@@ -32,8 +32,8 @@ service BridgeService {
 // What goes out of a bridged room.
 enum BridgePolicy {
   BRIDGE_POLICY_UNSPECIFIED = 0;
-  // No bridge has it: delay took its place.
-  BRIDGE_POLICY_APPROVE = 1 [deprecated = true];
+  reserved 1;
+  reserved "BRIDGE_POLICY_APPROVE";
   // Every message goes out at once.
   BRIDGE_POLICY_OPEN = 2;
   // Nothing goes out; agents may not post.
@@ -120,17 +120,17 @@ message SetBridgePolicyRequest {
 
 message SetBridgePolicyResponse {}
 
-message SendPendingRequest {
+message SendScheduledRequest {
   int64 message_id = 1;
 }
 
-message SendPendingResponse {}
+message SendScheduledResponse {}
 
-message DeclinePendingRequest {
+message CancelScheduledRequest {
   int64 message_id = 1;
 }
 
-message DeclinePendingResponse {}
+message CancelScheduledResponse {}
 
 message SendNoteOutRequest {
   int64 message_id = 1;

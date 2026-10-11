@@ -75,7 +75,7 @@ type Room struct {
 	CreatedAt time.Time
 	Messages  int
 	LastAt    time.Time // zero when the room has no messages
-	Pending   int       // messages scheduled to go out
+	Scheduled int       // messages scheduled to go out
 	// ArchivedBy is the agent that archived the room, "" when it is not archived, and
 	// ArchivedAt when (zero when it is not archived).
 	ArchivedBy string
@@ -129,11 +129,11 @@ type Delivery string
 
 // Delivery states.
 const (
-	Pending  Delivery = "pending"  // scheduled: goes out once the delay passed, unless the operator cancels it
-	Sending  Delivery = "sending"  // the bridge has to send it
-	Sent     Delivery = "sent"     // the bridge sent it
-	Declined Delivery = "declined" // the operator cancelled it
-	Failed   Delivery = "failed"   // the bridge could not send it
+	Scheduled Delivery = "scheduled" // goes out once the delay passed, unless the operator cancels it
+	Sending   Delivery = "sending"   // the bridge has to send it
+	Sent      Delivery = "sent"      // the bridge sent it
+	Cancelled Delivery = "cancelled" // the operator cancelled it
+	Failed    Delivery = "failed"    // the bridge could not send it
 )
 
 // Mode is how an agent follows a room.
@@ -251,11 +251,11 @@ func SubscribeTx(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode)
 }
 
 // listQuery lists the rooms with their counts, archived ones too when :all. The pending count
-// names 'pending' literally, so the partial index messages_pending covers it; a bound parameter
+// names 'scheduled' literally, so the partial index messages_scheduled covers it; a bound parameter
 // would keep the planner from it.
 const listQuery = `SELECT r.name, r.purpose, r.created_by, r.created_at,
 	(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0),
-	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'pending'),
+	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'scheduled'),
 	COALESCE(r.archived_by, ''), COALESCE(r.archived_at, 0)
 	FROM rooms AS r WHERE :all OR r.archived_at IS NULL ORDER BY r.name`
 
@@ -270,7 +270,7 @@ func (r *Rooms) List(ctx context.Context, all bool) ([]Room, error) {
 	for rows.Next() {
 		var x Room
 		var created, last, archived int64
-		if err := rows.Scan(&x.Name, &x.Purpose, &x.CreatedBy, &created, &x.Messages, &last, &x.Pending, &x.ArchivedBy, &archived); err != nil {
+		if err := rows.Scan(&x.Name, &x.Purpose, &x.CreatedBy, &created, &x.Messages, &last, &x.Scheduled, &x.ArchivedBy, &archived); err != nil {
 			return nil, err
 		}
 		x.CreatedAt = time.UnixMilli(created)
@@ -320,7 +320,7 @@ func (r *Rooms) Archive(ctx context.Context, agent, room string, archive bool) e
 			if n > 0 {
 				return store.Refuse(ErrBridged, "#%s has a bridge; remove it first with `agora bridge remove %s`", room, room)
 			}
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE room = ? AND delivery = 'pending'`, room).Scan(&n); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM messages WHERE room = ? AND delivery = 'scheduled'`, room).Scan(&n); err != nil {
 				return err
 			}
 			switch {
@@ -536,7 +536,7 @@ func outbound(ctx context.Context, tx *sql.Tx, room string, how sending) (Delive
 	case policy == "open" || how == sendAsOperator:
 		return Sending, false, nil
 	}
-	return Pending, false, nil
+	return Scheduled, false, nil
 }
 
 // insert stores m with the identifier outside extID ("" for none) and its mentions; addressees
@@ -557,7 +557,7 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 	}
 	names, all := Mentions(m.Body)
 	var scheduled any
-	if m.Delivery == Pending {
+	if m.Delivery == Scheduled {
 		scheduled = m.At.UnixMilli()
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note, scheduled_at)
@@ -1098,10 +1098,6 @@ func deliveryLabel(d Delivery, reason string) string {
 	switch d {
 	case "":
 		return ""
-	case Pending:
-		return " · scheduled"
-	case Declined:
-		return " · cancelled"
 	case Failed:
 		return " · not sent: " + reason
 	}

@@ -236,8 +236,8 @@ describe('counts', () => {
 describe('roomsTabCount', () => {
   it('counts per room the unread or the waiting messages, whichever is more', () => {
     const counts = new Map([
-      ['example-chat', { unread: 1, addressed: 0, pending: 1 }], // one waiting message, also unread
-      ['example-group', { unread: 0, addressed: 0, pending: 2 }],
+      ['example-chat', { unread: 1, addressed: 0, scheduled: 1 }], // one waiting message, also unread
+      ['example-group', { unread: 0, addressed: 0, scheduled: 2 }],
       ['general', { unread: 3, addressed: 1 }],
     ]);
     expect(roomsTabCount(counts)).toBe(6);

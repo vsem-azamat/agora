@@ -75,7 +75,7 @@ func TestScheduledMessagesGoOutOnceTheDelayPassed(t *testing.T) {
 	first := e.post(t, "secretary", "example-chat", "looked, all fine")
 	c.add(20 * time.Second)
 	second := e.post(t, "secretary", "example-chat", "and the export too")
-	if m := e.history(t)[0]; m.Delivery != rooms.Pending || !m.ScheduledAt.Equal(c.now().Add(-20*time.Second)) {
+	if m := e.history(t)[0]; m.Delivery != rooms.Scheduled || !m.ScheduledAt.Equal(c.now().Add(-20*time.Second)) {
 		t.Fatalf("scheduled message: %+v", m)
 	}
 	if moved, err := e.b.SendDue(ctx, "example-chat"); moved || err != nil {
@@ -85,13 +85,13 @@ func TestScheduledMessagesGoOutOnceTheDelayPassed(t *testing.T) {
 	if moved, err := e.b.SendDue(ctx, "example-chat"); !moved || err != nil {
 		t.Fatalf("after the delay of the first: %v %v", moved, err)
 	}
-	if deliveryOf(t, e, "example-chat", first) != rooms.Sending || deliveryOf(t, e, "example-chat", second) != rooms.Pending {
+	if deliveryOf(t, e, "example-chat", first) != rooms.Sending || deliveryOf(t, e, "example-chat", second) != rooms.Scheduled {
 		t.Fatalf("history %+v", e.history(t))
 	}
 	// under read nothing goes out, also once the delay passed; it goes when the policy opens again
 	setPolicy(t, e, bridges.Read)
 	c.add(time.Hour)
-	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", second) != rooms.Pending {
+	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", second) != rooms.Scheduled {
 		t.Fatal("a scheduled message went out under read")
 	}
 	setPolicy(t, e, bridges.Open)
@@ -107,7 +107,7 @@ func TestScheduledShowsToAgents(t *testing.T) {
 	e, _ := newDelayEnv(t)
 	e.post(t, "secretary", "example-chat", "looked, all fine")
 	cancel := e.post(t, "secretary", "example-chat", "something rude")
-	if err := e.b.DeclinePending(ctx, cancel, "owner"); err != nil {
+	if err := e.b.CancelScheduled(ctx, cancel, "owner"); err != nil {
 		t.Fatal(err)
 	}
 	h := e.history(t)
@@ -117,7 +117,7 @@ func TestScheduledShowsToAgents(t *testing.T) {
 	if h[2].Body != "@secretary your message "+itoa(cancel)+" was not sent: owner cancelled it." {
 		t.Fatalf("board %+v", h[2])
 	}
-	if err := e.b.SendPending(ctx, cancel); !errors.Is(err, bridges.ErrNotFound) || err.Error() != "message "+itoa(cancel)+" is not scheduled" {
+	if err := e.b.SendScheduled(ctx, cancel); !errors.Is(err, bridges.ErrNotFound) || err.Error() != "message "+itoa(cancel)+" is not scheduled" {
 		t.Fatalf("sending a cancelled message: %v", err)
 	}
 }
@@ -171,7 +171,7 @@ func TestAddingABridgeAgainStartsTheDelayAgain(t *testing.T) {
 	if _, err := e.b.Add(ctx, "builder", "example-chat", "example-bridge --chat 42", "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", id) != rooms.Pending {
+	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", id) != rooms.Scheduled {
 		t.Fatal("a message left scheduled went out as soon as the room was bridged again")
 	}
 	c.add(time.Minute)

@@ -511,7 +511,7 @@ describe('room list', () => {
 describe('bridged rooms', () => {
   const rooms = [
     create(RoomSchema, { name: 'example-app', purpose: 'Checkout and payments' }),
-    create(RoomSchema, { name: 'example-chat', purpose: 'A chat outside', pending: 2 }),
+    create(RoomSchema, { name: 'example-chat', purpose: 'A chat outside', scheduled: 2 }),
   ];
   const chat = (b = bridge('example-chat', 'running')) => new Map([['example-chat', b]]);
   const link = (c: HTMLElement, name: string) => c.querySelector(`a[href="#/rooms/${name}"]`) as HTMLElement;
@@ -547,11 +547,11 @@ describe('bridged rooms', () => {
   });
 
   it('shows how many messages wait for the operator next to the unread count', () => {
-    const unread = new Map([['example-chat', { unread: 3, addressed: 0, pending: 2 }]]);
+    const unread = new Map([['example-chat', { unread: 3, addressed: 0, scheduled: 2 }]]);
     const { container } = render(<RoomNav rooms={rooms} unread={unread} followed={new Set()} bridges={chat()} />);
     const a = link(container, 'example-chat');
-    expect(a.querySelector('em.pending')?.textContent).toBe('2 scheduled to go out');
-    expect(a.querySelector('em:not(.pending)')?.textContent).toBe('3');
+    expect(a.querySelector('em.scheduled')?.textContent).toBe('2 scheduled to go out');
+    expect(a.querySelector('em:not(.scheduled)')?.textContent).toBe('3');
     expect(link(container, 'example-app').querySelector('em')).toBeNull();
   });
 
@@ -705,7 +705,7 @@ describe('messages going out', () => {
   it('counts down a scheduled message, with Send now and Cancel', () => {
     vi.useFakeTimers({ now: NOW });
     const due = timestampFromDate(new Date(NOW.getTime() + 42_000));
-    const { container } = chatRoom([goingOut(1, 'secretary', 'looked, all fine', 5, 'pending', '', due)]);
+    const { container } = chatRoom([goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled', '', due)]);
     const t = tablet(container, 1);
     expect(t.classList).toContain('waiting');
     const decide = within(t).getByRole('group', { name: 'Send the message of secretary to example-chat?' });
@@ -722,11 +722,11 @@ describe('messages going out', () => {
   it('sends a scheduled message at once, then shows a check', async () => {
     let done = (_: boolean) => {};
     const onDecide = vi.fn(() => new Promise<boolean>((r) => (done = r)));
-    const pending = goingOut(1, 'secretary', 'looked, all fine', 5, 'pending');
-    const { container, props, rerender } = chatRoom([pending], { onDecide });
+    const scheduled = goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled');
+    const { container, props, rerender } = chatRoom([scheduled], { onDecide });
     const send = within(tablet(container, 1)).getByRole('button', { name: 'Send now' }) as HTMLButtonElement;
     fireEvent.click(send);
-    expect(onDecide).toHaveBeenCalledWith(pending, true);
+    expect(onDecide).toHaveBeenCalledWith(scheduled, true);
     expect(send.disabled).toBe(true);
     await act(async () => done(true));
     // taken: both stay off until the message stops waiting, so a second click cannot be refused
@@ -745,20 +745,20 @@ describe('messages going out', () => {
 
   it('turns the buttons on again when the hub refused the decision', async () => {
     const onDecide = vi.fn(async () => false);
-    const { container } = chatRoom([goingOut(1, 'secretary', 'draft', 5, 'pending')], { onDecide });
+    const { container } = chatRoom([goingOut(1, 'secretary', 'draft', 5, 'scheduled')], { onDecide });
     const send = within(tablet(container, 1)).getByRole('button', { name: 'Send now' }) as HTMLButtonElement;
     fireEvent.click(send);
     await waitFor(() => expect(send.disabled).toBe(false));
   });
 
   it('cancels a scheduled message, then shows it muted as not sent', () => {
-    const pending = goingOut(1, 'secretary', 'something rude', 5, 'pending');
-    const { container, props, rerender } = chatRoom([pending]);
+    const scheduled = goingOut(1, 'secretary', 'something rude', 5, 'scheduled');
+    const { container, props, rerender } = chatRoom([scheduled]);
     fireEvent.click(within(tablet(container, 1)).getByRole('button', { name: 'Cancel' }));
-    expect(props.onDecide).toHaveBeenCalledWith(pending, false);
-    rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'something rude', 5, 'declined')]} />);
+    expect(props.onDecide).toHaveBeenCalledWith(scheduled, false);
+    rerender(<RoomView {...props} messages={[goingOut(1, 'secretary', 'something rude', 5, 'cancelled')]} />);
     const t = tablet(container, 1);
-    expect(t.classList).toContain('declined');
+    expect(t.classList).toContain('cancelled');
     expect(t.querySelector('.dl')?.textContent).toBe('not sent');
     expect(t.querySelector('.decide')).toBeNull();
   });
@@ -773,24 +773,24 @@ describe('messages going out', () => {
   });
 
   it('holds a scheduled message while read only, with Cancel but not Send now', () => {
-    const pending = goingOut(1, 'secretary', 'looked, all fine', 5, 'pending');
-    const { container, props } = chatRoom([pending], { bridge: bridge('example-chat', 'running', 'read') });
+    const scheduled = goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled');
+    const { container, props } = chatRoom([scheduled], { bridge: bridge('example-chat', 'running', 'read') });
     const t = tablet(container, 1);
     expect(t.querySelector('.why')?.textContent).toBe('held while read only');
     expect((within(t).getByRole('button', { name: 'Send now' }) as HTMLButtonElement).disabled).toBe(true);
     expect(t.querySelector('.hint')?.textContent).toBe('read only — switch Outbound to send');
     fireEvent.click(within(t).getByRole('button', { name: 'Cancel' }));
-    expect(props.onDecide).toHaveBeenCalledWith(pending, false);
+    expect(props.onDecide).toHaveBeenCalledWith(scheduled, false);
   });
 
   it('holds a scheduled message of a room without a bridge any more', () => {
-    const pending = goingOut(1, 'secretary', 'looked, all fine', 5, 'pending');
-    const { container, props } = chatRoom([pending], { bridge: undefined });
+    const scheduled = goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled');
+    const { container, props } = chatRoom([scheduled], { bridge: undefined });
     const t = tablet(container, 1);
     expect(t.querySelector('.why')?.textContent).toBe('held: no bridge');
     expect((within(t).getByRole('button', { name: 'Send now' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(t).getByRole('button', { name: 'Cancel' }));
-    expect(props.onDecide).toHaveBeenCalledWith(pending, false);
+    expect(props.onDecide).toHaveBeenCalledWith(scheduled, false);
   });
 
   it('says why the bridge could not send a message', () => {
@@ -808,7 +808,7 @@ describe('messages going out', () => {
     const tape = container.querySelector('.msgs') as HTMLElement;
     tape.scrollTop = 0;
     fireEvent.scroll(tape);
-    rerender(<RoomView {...props} messages={[...ms, goingOut(7, 'secretary', 'draft', 1, 'pending')]} />);
+    rerender(<RoomView {...props} messages={[...ms, goingOut(7, 'secretary', 'draft', 1, 'scheduled')]} />);
     await waitFor(() => expect(container.querySelector('.pill.latest')?.textContent).toBe('1 new · 1 for you'));
   });
 });
@@ -929,7 +929,7 @@ describe('notes', () => {
 
   it('draws a note apart, without a delivery state or Send', () => {
     const odd = note(2, 'secretary', 'here is a draft, unsure about the date', 4);
-    odd.deliveryState = goingOut(0, '', '', 0, 'pending').deliveryState; // never stored, never shown
+    odd.deliveryState = goingOut(0, '', '', 0, 'scheduled').deliveryState; // never stored, never shown
     const { container } = chatRoom([goingOut(1, 'secretary', 'looked, all fine', 5, 'sent'), odd]);
     const t = tablet(container, 2);
     expect(t.classList).toContain('note');

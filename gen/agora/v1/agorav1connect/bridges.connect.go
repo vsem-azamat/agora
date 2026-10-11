@@ -44,12 +44,12 @@ const (
 	// BridgeServiceSetBridgePolicyProcedure is the fully-qualified name of the BridgeService's
 	// SetBridgePolicy RPC.
 	BridgeServiceSetBridgePolicyProcedure = "/agora.v1.BridgeService/SetBridgePolicy"
-	// BridgeServiceSendPendingProcedure is the fully-qualified name of the BridgeService's SendPending
-	// RPC.
-	BridgeServiceSendPendingProcedure = "/agora.v1.BridgeService/SendPending"
-	// BridgeServiceDeclinePendingProcedure is the fully-qualified name of the BridgeService's
-	// DeclinePending RPC.
-	BridgeServiceDeclinePendingProcedure = "/agora.v1.BridgeService/DeclinePending"
+	// BridgeServiceSendScheduledProcedure is the fully-qualified name of the BridgeService's
+	// SendScheduled RPC.
+	BridgeServiceSendScheduledProcedure = "/agora.v1.BridgeService/SendScheduled"
+	// BridgeServiceCancelScheduledProcedure is the fully-qualified name of the BridgeService's
+	// CancelScheduled RPC.
+	BridgeServiceCancelScheduledProcedure = "/agora.v1.BridgeService/CancelScheduled"
 	// BridgeServiceSendNoteOutProcedure is the fully-qualified name of the BridgeService's SendNoteOut
 	// RPC.
 	BridgeServiceSendNoteOutProcedure = "/agora.v1.BridgeService/SendNoteOut"
@@ -67,11 +67,11 @@ type BridgeServiceClient interface {
 	ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error)
 	// SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
 	SetBridgePolicy(context.Context, *connect.Request[v1.SetBridgePolicyRequest]) (*connect.Response[v1.SetBridgePolicyResponse], error)
-	// SendPending lets a scheduled message go out at once. Only the web listener serves it.
-	SendPending(context.Context, *connect.Request[v1.SendPendingRequest]) (*connect.Response[v1.SendPendingResponse], error)
-	// DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+	// SendScheduled lets a scheduled message go out at once. Only the web listener serves it.
+	SendScheduled(context.Context, *connect.Request[v1.SendScheduledRequest]) (*connect.Response[v1.SendScheduledResponse], error)
+	// CancelScheduled cancels a scheduled message, so it never goes out, and tells its author. Only
 	// the web listener serves it.
-	DeclinePending(context.Context, *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error)
+	CancelScheduled(context.Context, *connect.Request[v1.CancelScheduledRequest]) (*connect.Response[v1.CancelScheduledResponse], error)
 	// SendNoteOut sends a note out: a new message of the note's author with its text goes out at
 	// once, and the note stays. Only the web listener serves it.
 	SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error)
@@ -112,16 +112,16 @@ func NewBridgeServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(bridgeServiceMethods.ByName("SetBridgePolicy")),
 			connect.WithClientOptions(opts...),
 		),
-		sendPending: connect.NewClient[v1.SendPendingRequest, v1.SendPendingResponse](
+		sendScheduled: connect.NewClient[v1.SendScheduledRequest, v1.SendScheduledResponse](
 			httpClient,
-			baseURL+BridgeServiceSendPendingProcedure,
-			connect.WithSchema(bridgeServiceMethods.ByName("SendPending")),
+			baseURL+BridgeServiceSendScheduledProcedure,
+			connect.WithSchema(bridgeServiceMethods.ByName("SendScheduled")),
 			connect.WithClientOptions(opts...),
 		),
-		declinePending: connect.NewClient[v1.DeclinePendingRequest, v1.DeclinePendingResponse](
+		cancelScheduled: connect.NewClient[v1.CancelScheduledRequest, v1.CancelScheduledResponse](
 			httpClient,
-			baseURL+BridgeServiceDeclinePendingProcedure,
-			connect.WithSchema(bridgeServiceMethods.ByName("DeclinePending")),
+			baseURL+BridgeServiceCancelScheduledProcedure,
+			connect.WithSchema(bridgeServiceMethods.ByName("CancelScheduled")),
 			connect.WithClientOptions(opts...),
 		),
 		sendNoteOut: connect.NewClient[v1.SendNoteOutRequest, v1.SendNoteOutResponse](
@@ -139,8 +139,8 @@ type bridgeServiceClient struct {
 	removeBridge    *connect.Client[v1.RemoveBridgeRequest, v1.RemoveBridgeResponse]
 	listBridges     *connect.Client[v1.ListBridgesRequest, v1.ListBridgesResponse]
 	setBridgePolicy *connect.Client[v1.SetBridgePolicyRequest, v1.SetBridgePolicyResponse]
-	sendPending     *connect.Client[v1.SendPendingRequest, v1.SendPendingResponse]
-	declinePending  *connect.Client[v1.DeclinePendingRequest, v1.DeclinePendingResponse]
+	sendScheduled   *connect.Client[v1.SendScheduledRequest, v1.SendScheduledResponse]
+	cancelScheduled *connect.Client[v1.CancelScheduledRequest, v1.CancelScheduledResponse]
 	sendNoteOut     *connect.Client[v1.SendNoteOutRequest, v1.SendNoteOutResponse]
 }
 
@@ -164,14 +164,14 @@ func (c *bridgeServiceClient) SetBridgePolicy(ctx context.Context, req *connect.
 	return c.setBridgePolicy.CallUnary(ctx, req)
 }
 
-// SendPending calls agora.v1.BridgeService.SendPending.
-func (c *bridgeServiceClient) SendPending(ctx context.Context, req *connect.Request[v1.SendPendingRequest]) (*connect.Response[v1.SendPendingResponse], error) {
-	return c.sendPending.CallUnary(ctx, req)
+// SendScheduled calls agora.v1.BridgeService.SendScheduled.
+func (c *bridgeServiceClient) SendScheduled(ctx context.Context, req *connect.Request[v1.SendScheduledRequest]) (*connect.Response[v1.SendScheduledResponse], error) {
+	return c.sendScheduled.CallUnary(ctx, req)
 }
 
-// DeclinePending calls agora.v1.BridgeService.DeclinePending.
-func (c *bridgeServiceClient) DeclinePending(ctx context.Context, req *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error) {
-	return c.declinePending.CallUnary(ctx, req)
+// CancelScheduled calls agora.v1.BridgeService.CancelScheduled.
+func (c *bridgeServiceClient) CancelScheduled(ctx context.Context, req *connect.Request[v1.CancelScheduledRequest]) (*connect.Response[v1.CancelScheduledResponse], error) {
+	return c.cancelScheduled.CallUnary(ctx, req)
 }
 
 // SendNoteOut calls agora.v1.BridgeService.SendNoteOut.
@@ -191,11 +191,11 @@ type BridgeServiceHandler interface {
 	ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error)
 	// SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
 	SetBridgePolicy(context.Context, *connect.Request[v1.SetBridgePolicyRequest]) (*connect.Response[v1.SetBridgePolicyResponse], error)
-	// SendPending lets a scheduled message go out at once. Only the web listener serves it.
-	SendPending(context.Context, *connect.Request[v1.SendPendingRequest]) (*connect.Response[v1.SendPendingResponse], error)
-	// DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+	// SendScheduled lets a scheduled message go out at once. Only the web listener serves it.
+	SendScheduled(context.Context, *connect.Request[v1.SendScheduledRequest]) (*connect.Response[v1.SendScheduledResponse], error)
+	// CancelScheduled cancels a scheduled message, so it never goes out, and tells its author. Only
 	// the web listener serves it.
-	DeclinePending(context.Context, *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error)
+	CancelScheduled(context.Context, *connect.Request[v1.CancelScheduledRequest]) (*connect.Response[v1.CancelScheduledResponse], error)
 	// SendNoteOut sends a note out: a new message of the note's author with its text goes out at
 	// once, and the note stays. Only the web listener serves it.
 	SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error)
@@ -232,16 +232,16 @@ func NewBridgeServiceHandler(svc BridgeServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(bridgeServiceMethods.ByName("SetBridgePolicy")),
 		connect.WithHandlerOptions(opts...),
 	)
-	bridgeServiceSendPendingHandler := connect.NewUnaryHandler(
-		BridgeServiceSendPendingProcedure,
-		svc.SendPending,
-		connect.WithSchema(bridgeServiceMethods.ByName("SendPending")),
+	bridgeServiceSendScheduledHandler := connect.NewUnaryHandler(
+		BridgeServiceSendScheduledProcedure,
+		svc.SendScheduled,
+		connect.WithSchema(bridgeServiceMethods.ByName("SendScheduled")),
 		connect.WithHandlerOptions(opts...),
 	)
-	bridgeServiceDeclinePendingHandler := connect.NewUnaryHandler(
-		BridgeServiceDeclinePendingProcedure,
-		svc.DeclinePending,
-		connect.WithSchema(bridgeServiceMethods.ByName("DeclinePending")),
+	bridgeServiceCancelScheduledHandler := connect.NewUnaryHandler(
+		BridgeServiceCancelScheduledProcedure,
+		svc.CancelScheduled,
+		connect.WithSchema(bridgeServiceMethods.ByName("CancelScheduled")),
 		connect.WithHandlerOptions(opts...),
 	)
 	bridgeServiceSendNoteOutHandler := connect.NewUnaryHandler(
@@ -260,10 +260,10 @@ func NewBridgeServiceHandler(svc BridgeServiceHandler, opts ...connect.HandlerOp
 			bridgeServiceListBridgesHandler.ServeHTTP(w, r)
 		case BridgeServiceSetBridgePolicyProcedure:
 			bridgeServiceSetBridgePolicyHandler.ServeHTTP(w, r)
-		case BridgeServiceSendPendingProcedure:
-			bridgeServiceSendPendingHandler.ServeHTTP(w, r)
-		case BridgeServiceDeclinePendingProcedure:
-			bridgeServiceDeclinePendingHandler.ServeHTTP(w, r)
+		case BridgeServiceSendScheduledProcedure:
+			bridgeServiceSendScheduledHandler.ServeHTTP(w, r)
+		case BridgeServiceCancelScheduledProcedure:
+			bridgeServiceCancelScheduledHandler.ServeHTTP(w, r)
 		case BridgeServiceSendNoteOutProcedure:
 			bridgeServiceSendNoteOutHandler.ServeHTTP(w, r)
 		default:
@@ -291,12 +291,12 @@ func (UnimplementedBridgeServiceHandler) SetBridgePolicy(context.Context, *conne
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.SetBridgePolicy is not implemented"))
 }
 
-func (UnimplementedBridgeServiceHandler) SendPending(context.Context, *connect.Request[v1.SendPendingRequest]) (*connect.Response[v1.SendPendingResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.SendPending is not implemented"))
+func (UnimplementedBridgeServiceHandler) SendScheduled(context.Context, *connect.Request[v1.SendScheduledRequest]) (*connect.Response[v1.SendScheduledResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.SendScheduled is not implemented"))
 }
 
-func (UnimplementedBridgeServiceHandler) DeclinePending(context.Context, *connect.Request[v1.DeclinePendingRequest]) (*connect.Response[v1.DeclinePendingResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.DeclinePending is not implemented"))
+func (UnimplementedBridgeServiceHandler) CancelScheduled(context.Context, *connect.Request[v1.CancelScheduledRequest]) (*connect.Response[v1.CancelScheduledResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.CancelScheduled is not implemented"))
 }
 
 func (UnimplementedBridgeServiceHandler) SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error) {

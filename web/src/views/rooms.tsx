@@ -36,10 +36,10 @@ function Badge({ count }: { count: RoomCount | undefined }) {
 
 /** How many messages of the room wait for the operator to send them. */
 function Waiting({ count }: { count: RoomCount | undefined }) {
-  const n = count?.pending ?? 0;
+  const n = count?.scheduled ?? 0;
   if (n === 0) return null;
   return (
-    <em className="pending" title={`${n} scheduled to go out`}>
+    <em className="scheduled" title={`${n} scheduled to go out`}>
       <Icon name="send" />
       {n}
       <span className="sr"> scheduled to go out</span>

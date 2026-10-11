@@ -30,13 +30,13 @@ const (
 	DeliveryState_DELIVERY_STATE_UNSPECIFIED DeliveryState = 0
 	// It is scheduled: it goes out once the hub's delay passed (due_at), unless the operator cancels
 	// it or sends it at once.
-	DeliveryState_DELIVERY_STATE_PENDING DeliveryState = 1
+	DeliveryState_DELIVERY_STATE_SCHEDULED DeliveryState = 1
 	// It is handed to the bridge, which has not answered yet.
 	DeliveryState_DELIVERY_STATE_SENDING DeliveryState = 2
 	// The bridge sent it.
 	DeliveryState_DELIVERY_STATE_SENT DeliveryState = 3
 	// The operator cancelled it; it never goes out.
-	DeliveryState_DELIVERY_STATE_DECLINED DeliveryState = 4
+	DeliveryState_DELIVERY_STATE_CANCELLED DeliveryState = 4
 	// The bridge could not send it; delivery_error says why.
 	DeliveryState_DELIVERY_STATE_FAILED DeliveryState = 5
 )
@@ -45,18 +45,18 @@ const (
 var (
 	DeliveryState_name = map[int32]string{
 		0: "DELIVERY_STATE_UNSPECIFIED",
-		1: "DELIVERY_STATE_PENDING",
+		1: "DELIVERY_STATE_SCHEDULED",
 		2: "DELIVERY_STATE_SENDING",
 		3: "DELIVERY_STATE_SENT",
-		4: "DELIVERY_STATE_DECLINED",
+		4: "DELIVERY_STATE_CANCELLED",
 		5: "DELIVERY_STATE_FAILED",
 	}
 	DeliveryState_value = map[string]int32{
 		"DELIVERY_STATE_UNSPECIFIED": 0,
-		"DELIVERY_STATE_PENDING":     1,
+		"DELIVERY_STATE_SCHEDULED":   1,
 		"DELIVERY_STATE_SENDING":     2,
 		"DELIVERY_STATE_SENT":        3,
-		"DELIVERY_STATE_DECLINED":    4,
+		"DELIVERY_STATE_CANCELLED":   4,
 		"DELIVERY_STATE_FAILED":      5,
 	}
 )
@@ -155,7 +155,7 @@ type Room struct {
 	// Unset when the room has no messages.
 	LastAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
 	// Messages of the room that are scheduled to go out through its bridge.
-	Pending int32 `protobuf:"varint,7,opt,name=pending,proto3" json:"pending,omitempty"`
+	Scheduled int32 `protobuf:"varint,7,opt,name=scheduled,proto3" json:"scheduled,omitempty"`
 	// The agent that archived the room; empty when it is not archived.
 	ArchivedBy string `protobuf:"bytes,8,opt,name=archived_by,json=archivedBy,proto3" json:"archived_by,omitempty"`
 	// When the room was archived; unset when it is not archived.
@@ -236,9 +236,9 @@ func (x *Room) GetLastAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *Room) GetPending() int32 {
+func (x *Room) GetScheduled() int32 {
 	if x != nil {
-		return x.Pending
+		return x.Scheduled
 	}
 	return 0
 }
@@ -1625,7 +1625,7 @@ var File_agora_v1_rooms_proto protoreflect.FileDescriptor
 
 const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\n" +
-	"\x14agora/v1/rooms.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd7\x02\n" +
+	"\x14agora/v1/rooms.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdb\x02\n" +
 	"\x04Room\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\apurpose\x18\x02 \x01(\tR\apurpose\x12\x1d\n" +
@@ -1634,8 +1634,8 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1a\n" +
 	"\bmessages\x18\x05 \x01(\x05R\bmessages\x123\n" +
-	"\alast_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x18\n" +
-	"\apending\x18\a \x01(\x05R\apending\x12\x1f\n" +
+	"\alast_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x1c\n" +
+	"\tscheduled\x18\a \x01(\x05R\tscheduled\x12\x1f\n" +
 	"\varchived_by\x18\b \x01(\tR\n" +
 	"archivedBy\x12;\n" +
 	"\varchived_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
@@ -1724,13 +1724,13 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x1d\n" +
 	"\n" +
 	"through_id\x18\x03 \x01(\x03R\tthroughId\"\x16\n" +
-	"\x14MarkRoomReadResponse*\xb8\x01\n" +
+	"\x14MarkRoomReadResponse*\xbb\x01\n" +
 	"\rDeliveryState\x12\x1e\n" +
-	"\x1aDELIVERY_STATE_UNSPECIFIED\x10\x00\x12\x1a\n" +
-	"\x16DELIVERY_STATE_PENDING\x10\x01\x12\x1a\n" +
+	"\x1aDELIVERY_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18DELIVERY_STATE_SCHEDULED\x10\x01\x12\x1a\n" +
 	"\x16DELIVERY_STATE_SENDING\x10\x02\x12\x17\n" +
-	"\x13DELIVERY_STATE_SENT\x10\x03\x12\x1b\n" +
-	"\x17DELIVERY_STATE_DECLINED\x10\x04\x12\x19\n" +
+	"\x13DELIVERY_STATE_SENT\x10\x03\x12\x1c\n" +
+	"\x18DELIVERY_STATE_CANCELLED\x10\x04\x12\x19\n" +
 	"\x15DELIVERY_STATE_FAILED\x10\x05*\x8c\x01\n" +
 	"\x10SubscriptionMode\x12!\n" +
 	"\x1dSUBSCRIPTION_MODE_UNSPECIFIED\x10\x00\x12\x19\n" +

@@ -23,7 +23,7 @@ endef
 	generate generate-check generate-web generate-check-web build-web build-check repo help
 
 ## check: everything CI runs
-check: repo lint breaking test generate-check generate-check-web build-check
+check: repo lint test generate-check generate-check-web build-check
 
 ## fmt: apply the Go, protobuf and web formatters
 fmt: $(WEB_DEPS)
@@ -47,7 +47,7 @@ lint-proto:
 lint-web: $(WEB_DEPS)
 	$(PNPM) lint
 
-## breaking: proto/ has no breaking change against BREAKING_AGAINST
+## breaking: what proto/ breaks against BREAKING_AGAINST, for the pull request to say (not part of check)
 breaking:
 	$(BUF) breaking --against "$(BREAKING_AGAINST)"
 

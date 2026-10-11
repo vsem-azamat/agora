@@ -283,8 +283,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     async (m, send) => {
       const tell = refused(send ? 'Not sent' : 'Not cancelled');
       try {
-        if (send) await api.bridges.sendPending({ messageId: m.id });
-        else await api.bridges.declinePending({ messageId: m.id });
+        if (send) await api.bridges.sendScheduled({ messageId: m.id });
+        else await api.bridges.cancelScheduled({ messageId: m.id });
         return true;
       } catch (err) {
         tell(err);

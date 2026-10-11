@@ -27,7 +27,7 @@ func (s *roomService) ListRooms(ctx context.Context, req *connect.Request[agorav
 	}
 	out := &agorav1.ListRoomsResponse{}
 	for _, r := range list {
-		pb := &agorav1.Room{Name: r.Name, Purpose: r.Purpose, CreatedBy: r.CreatedBy, CreatedAt: timestamppb.New(r.CreatedAt), Messages: int32(r.Messages), Pending: int32(r.Pending)}
+		pb := &agorav1.Room{Name: r.Name, Purpose: r.Purpose, CreatedBy: r.CreatedBy, CreatedAt: timestamppb.New(r.CreatedAt), Messages: int32(r.Messages), Scheduled: int32(r.Scheduled)}
 		if !r.LastAt.IsZero() {
 			pb.LastAt = timestamppb.New(r.LastAt)
 		}

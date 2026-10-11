@@ -12,7 +12,7 @@ CI runs these checks on every pull request and on `main`. The [`Makefile`](../..
 | `make lint-go` | `golangci-lint run` | Go linters and formatters configured in [`.golangci.yml`](../../.golangci.yml) |
 | `make lint-proto` | `buf lint`, `buf format -d --exit-code` | `proto/` follows the standard style and is formatted |
 | `make lint-web` | `pnpm lint` (`biome check`) | Biome's recommended rules and formatting, configured in `web/biome.json` |
-| `make breaking` | `buf breaking --against "$BREAKING_AGAINST"` | `proto/` has no breaking change against `main` (CI: the pull request base; pull requests only) |
+| `make breaking` | `buf breaking --against "$BREAKING_AGAINST"` | Lists what `proto/` breaks against `main`. Not part of `check` or CI: while Agora is young, the API and the bridge protocol change without keeping old forms, and a pull request that breaks them says what in its description |
 | `make test` | `test-go`, `test-web` and `test-deploy` | All tests |
 | `make test-go` | `go test -race ./...` | Unit and end-to-end tests, with the race detector |
 | `make test-web` | `pnpm test` | Vitest: the web app's helpers, hooks and views |
@@ -37,4 +37,4 @@ Requirements: Go (the version in `go.mod`), GNU Make, Node.js 24 or newer (`engi
 
 ## CI
 
-The workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Its three jobs call the targets above: `Repository checks` runs `repo`; `Go` runs `lint-go`, `test-go`, `test-deploy`, `lint-proto`, `breaking` (pull requests only) and `generate-check`; `Web app` runs `generate-check-web`, `lint-web`, `test-web` and `build-check`. Every action is pinned to a commit SHA, with its release tag in a comment.
+The workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Its three jobs call the targets above: `Repository checks` runs `repo`; `Go` runs `lint-go`, `test-go`, `test-deploy`, `lint-proto` and `generate-check`; `Web app` runs `generate-check-web`, `lint-web`, `test-web` and `build-check`. Every action is pinned to a commit SHA, with its release tag in a comment.

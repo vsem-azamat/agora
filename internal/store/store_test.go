@@ -349,3 +349,63 @@ func TestDelayMigrationKeepsBridgesAndSchedulesWaitingMessages(t *testing.T) {
 		t.Errorf("bridge agents left %d err %v", n, err)
 	}
 }
+
+func TestNoLegacyMigrationRenamesDeliveryStates(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0017_no_legacy.sql")
+	for _, q := range []string{
+		`PRAGMA foreign_keys = ON`,
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('example-chat', 'chat', 'builder', 1)`,
+		`INSERT INTO messages (id, room, author, body, at, delivery, scheduled_at) VALUES
+			(5, 'example-chat', 'builder', 'waits', 1, 'pending', 1), (6, 'example-chat', 'builder', 'no', 2, 'declined', NULL),
+			(7, 'example-chat', 'builder', 'went', 3, 'sent', NULL)`,
+		`INSERT INTO messages (id, room, author, body, reply_to, at) VALUES (8, 'example-chat', 'builder', '@builder see above', 7, 4)`,
+		`INSERT INTO mentions (message_id, agent) VALUES (8, 'builder')`,
+		`INSERT INTO read_marks (agent, message_id) VALUES ('builder', 7)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err := Strings(ctx, db, `SELECT id || ':' || COALESCE(delivery, '') || ':' || COALESCE(reply_to, '') FROM messages ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"5:scheduled:", "6:cancelled:", "7:sent:", "8::7"}; !slices.Equal(got, want) {
+		t.Errorf("messages %q, want %q", got, want)
+	}
+	var mentions, marks int
+	if err := db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM mentions WHERE message_id = 8), (SELECT COUNT(*) FROM read_marks WHERE message_id = 7)`).Scan(&mentions, &marks); err != nil || mentions != 1 || marks != 1 {
+		t.Errorf("mentions %d read marks %d err %v", mentions, marks, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO messages (room, author, body, at, delivery) VALUES ('example-chat', 'builder', 'x', 5, 'pending')`); err == nil {
+		t.Error("the state pending was stored")
+	}
+	res, err := db.ExecContext(ctx, `INSERT INTO messages (room, author, body, at) VALUES ('example-chat', 'builder', 'new', 5)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, _ := res.LastInsertId(); id <= 8 {
+		t.Errorf("a new message got id %d, not after 8", id)
+	}
+	if n, err := Strings(ctx, db, `SELECT name FROM sqlite_master WHERE name = 'messages_scheduled'`); err != nil || len(n) != 1 {
+		t.Errorf("index %v err %v", n, err)
+	}
+	var violations int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_foreign_key_check`).Scan(&violations); err != nil || violations != 0 {
+		t.Errorf("foreign key violations %d err %v", violations, err)
+	}
+}

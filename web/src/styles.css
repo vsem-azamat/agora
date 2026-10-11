@@ -1591,7 +1591,7 @@ button.pgname:hover {
 
 /* --- bridged rooms: their mark, people outside and what goes out ------------------------ */
 
-.nav em.pending {
+.nav em.scheduled {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -1645,7 +1645,7 @@ button.pgname:hover {
   background: var(--tome);
   border-color: var(--warn);
 }
-.msg.declined .tx {
+.msg.cancelled .tx {
   color: var(--mute);
 }
 .outsider {

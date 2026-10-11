@@ -31,7 +31,7 @@ describe('alerts', () => {
   });
   it('tells a message waiting for the operator to send it, unless Nothing', () => {
     const was = new Map([['example-chat', { unread: 0, addressed: 0 }]]);
-    const now = new Map([['example-chat', { unread: 0, addressed: 0, pending: 1 }]]);
+    const now = new Map([['example-chat', { unread: 0, addressed: 0, scheduled: 1 }]]);
     expect(alerts(was, now, 'mentions')).toEqual([{ room: 'example-chat', body: '1 scheduled to go out' }]);
     expect(alerts(was, now, 'all')).toEqual([{ room: 'example-chat', body: '1 scheduled to go out' }]);
     expect(alerts(was, now, 'none')).toEqual([]);
@@ -39,13 +39,13 @@ describe('alerts', () => {
   });
   it('tells a waiting message that is also new and mentions the operator once', () => {
     const was = new Map([['example-chat', { unread: 0, addressed: 0 }]]);
-    const now = new Map([['example-chat', { unread: 1, addressed: 1, pending: 1 }]]);
+    const now = new Map([['example-chat', { unread: 1, addressed: 1, scheduled: 1 }]]);
     expect(alerts(was, now, 'mentions')).toEqual([{ room: 'example-chat', body: '1 scheduled to go out' }]);
     expect(alerts(was, now, 'all')).toEqual([{ room: 'example-chat', body: '1 scheduled to go out' }]);
   });
   it('tells the other new messages apart from a waiting one', () => {
     const was = new Map([['example-chat', { unread: 0, addressed: 0 }]]);
-    const now = new Map([['example-chat', { unread: 2, addressed: 2, pending: 1 }]]);
+    const now = new Map([['example-chat', { unread: 2, addressed: 2, scheduled: 1 }]]);
     expect(alerts(was, now, 'all')).toEqual([
       { room: 'example-chat', body: '1 new · 1 for you · 1 scheduled to go out' },
     ]);

@@ -47,8 +47,8 @@ var webProcedures = map[string]bool{
 	agorav1connect.WebServiceWatchProcedure:                true,
 	agorav1connect.BridgeServiceListBridgesProcedure:       true,
 	agorav1connect.BridgeServiceSetBridgePolicyProcedure:   true,
-	agorav1connect.BridgeServiceSendPendingProcedure:       true,
-	agorav1connect.BridgeServiceDeclinePendingProcedure:    true,
+	agorav1connect.BridgeServiceSendScheduledProcedure:     true,
+	agorav1connect.BridgeServiceCancelScheduledProcedure:   true,
 	agorav1connect.BridgeServiceSendNoteOutProcedure:       true,
 }
 

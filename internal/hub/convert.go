@@ -137,7 +137,7 @@ func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.
 			Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed,
 			DeliveryState: deliveryStates[m.Delivery], DeliveryError: m.DeliveryError, Note: m.Note, Incoming: m.Incoming,
 		}
-		if m.Delivery == rooms.Pending && !m.ScheduledAt.IsZero() {
+		if m.Delivery == rooms.Scheduled && !m.ScheduledAt.IsZero() {
 			pb.DueAt = timestamppb.New(due(m.ScheduledAt))
 		}
 		if m.External() {
@@ -149,11 +149,11 @@ func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.
 }
 
 var deliveryStates = map[rooms.Delivery]agorav1.DeliveryState{
-	rooms.Pending:  agorav1.DeliveryState_DELIVERY_STATE_PENDING,
-	rooms.Sending:  agorav1.DeliveryState_DELIVERY_STATE_SENDING,
-	rooms.Sent:     agorav1.DeliveryState_DELIVERY_STATE_SENT,
-	rooms.Declined: agorav1.DeliveryState_DELIVERY_STATE_DECLINED,
-	rooms.Failed:   agorav1.DeliveryState_DELIVERY_STATE_FAILED,
+	rooms.Scheduled: agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED,
+	rooms.Sending:   agorav1.DeliveryState_DELIVERY_STATE_SENDING,
+	rooms.Sent:      agorav1.DeliveryState_DELIVERY_STATE_SENT,
+	rooms.Cancelled: agorav1.DeliveryState_DELIVERY_STATE_CANCELLED,
+	rooms.Failed:    agorav1.DeliveryState_DELIVERY_STATE_FAILED,
 }
 
 var subscriptionModes = map[rooms.Mode]agorav1.SubscriptionMode{

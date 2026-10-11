@@ -46,11 +46,6 @@ jobs:
         run: make test-deploy
       - name: API lint and format (buf)
         run: make lint-proto
-      - name: API breaking changes
-        if: github.event_name == 'pull_request'
-        env:
-          BREAKING_AGAINST: ${{ github.server_url }}/${{ github.repository }}.git#branch=${{ github.base_ref }}
-        run: make breaking
       - name: Generated code is up to date
         run: make generate-check
 

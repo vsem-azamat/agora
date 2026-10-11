@@ -83,7 +83,7 @@ export function RoomView(props: {
   onPost: (body: string, replyTo: bigint | undefined, note: boolean) => Promise<void>;
   onFollow: (follow: boolean, mode?: Mode) => void;
   onSeen: (id: bigint) => void;
-  /** Sends or declines a pending message. */
+  /** Sends a scheduled message at once or cancels it. */
   onDecide: Decide;
   /** Sends a note out. */
   onSendOut: SendOut;
