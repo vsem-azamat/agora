@@ -45,6 +45,7 @@ type Profile struct {
 	About        string
 	Icon         string       // a sigil from Icons, or ""
 	Pigment      string       // a colour from Pigments, or ""
+	Avatar       string       // the hash of its avatar, or ""
 	Formerly     []FormerName // newest first
 	JoinedAt     time.Time
 	UpdatedAt    time.Time
@@ -170,6 +171,20 @@ func unknown(name string) error {
 	return fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)
 }
 
+// SetAvatarTx makes hash, an avatar's, the avatar of name ("" for none) and returns the one it
+// had. The profile's update time stays: an avatar does not make an agent active.
+func SetAvatarTx(ctx context.Context, tx *sql.Tx, name, hash string) (string, error) {
+	if err := ExistsTx(ctx, tx, name); err != nil {
+		return "", err
+	}
+	var old sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT avatar FROM agents WHERE name = ?`, name).Scan(&old); err != nil {
+		return "", err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE agents SET avatar = NULLIF(?, '') WHERE name = ?`, hash, name)
+	return old.String, err
+}
+
 // MarkLeftTx marks name as left inside the caller's transaction.
 func MarkLeftTx(ctx context.Context, tx *sql.Tx, name string, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `UPDATE agents SET status = ?, updated_at = ? WHERE name = ?`, Left, now.UnixMilli(), name)
@@ -225,7 +240,7 @@ const sessionEnded, sessionBusy = "ended", "busy"
 
 // profileQuery selects full profiles; it takes sessionEnded, sessionBusy and Offline as its
 // first arguments.
-const profileQuery = `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.icon, a.pigment, a.joined_at, a.updated_at,
+const profileQuery = `SELECT a.name, a.kind, a.project, a.task, a.status, a.cwd, a.branch, a.prs, a.about, a.icon, a.pigment, COALESCE(a.avatar, ''), a.joined_at, a.updated_at,
 	COALESCE((SELECT s.state FROM sessions AS s WHERE s.agent = a.name AND s.state != ?
 		ORDER BY CASE s.state WHEN ? THEN 0 ELSE 1 END LIMIT 1), ?),
 	COALESCE((SELECT group_concat(p.number, ' ') FROM pull_requests AS p WHERE p.agent = a.name AND p.found = 1), ''),
@@ -323,7 +338,7 @@ func scan(r scanner) (Profile, error) {
 	var p Profile
 	var prs, found, ci, former string
 	var joined, updated int64
-	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &p.Icon, &p.Pigment, &joined, &updated,
+	err := r.Scan(&p.Name, &p.Kind, &p.Project, &p.Task, &p.Status, &p.CWD, &p.Branch, &prs, &p.About, &p.Icon, &p.Pigment, &p.Avatar, &joined, &updated,
 		&p.SessionState, &found, &ci, &former)
 	p.CI = parseCI(ci)
 	p.Formerly = parseFormerly(former)
@@ -337,7 +352,7 @@ func scan(r scanner) (Profile, error) {
 }
 
 func load(ctx context.Context, tx *sql.Tx, name string) (Profile, error) {
-	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, icon, pigment, joined_at, updated_at, ?, '',
+	p, err := scan(tx.QueryRowContext(ctx, `SELECT name, kind, project, task, status, cwd, branch, prs, about, icon, pigment, COALESCE(avatar, ''), joined_at, updated_at, ?, '',
 		`+ciColumn+`, ''
 		FROM agents AS a WHERE name = ?`, Offline, name))
 	if errors.Is(err, sql.ErrNoRows) {

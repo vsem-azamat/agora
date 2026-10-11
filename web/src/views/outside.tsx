@@ -1,6 +1,8 @@
-// Someone outside Agora who wrote through a bridge: a neutral mark with the first letter of the
-// name, and the name with its bridge, which opens a small card instead of an agent's drawer.
+// Someone outside Agora who wrote through a bridge: the avatar the bridge sent, else a neutral mark
+// with the first letter of the name; and the name with its bridge, which opens a small card instead
+// of an agent's drawer.
 import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { useAvatar } from '../avatars';
 import { initial } from '../bridges';
 import type { ExternalAuthor } from '../gen/agora/v1/rooms_pb';
 
@@ -8,9 +10,10 @@ import type { ExternalAuthor } from '../gen/agora/v1/rooms_pb';
 export const OUTSIDE: CSSProperties = { '--pg': 'var(--mute)' } as CSSProperties;
 
 export function OutsiderAvatar({ who, size }: { who: ExternalAuthor; size?: 'sm' }) {
+  const pic = useAvatar(who.avatar || undefined, 'small');
   return (
     <span className={size ? `av ext ${size}` : 'av ext'} aria-hidden="true">
-      <span className="l">{initial(who.name || who.id)}</span>
+      {pic ? <img className="pic" src={pic} alt="" /> : <span className="l">{initial(who.name || who.id)}</span>}
     </span>
   );
 }

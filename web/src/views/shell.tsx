@@ -1,6 +1,7 @@
 // The shell around the views: the bar with search, status and account menu; the sidebar; the
 // phone's tabs; and the palette that jumps to an agent, a room or a view.
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { AVATAR_TYPES } from '../avatars';
 import { projects, type RoomCount } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Bridge } from '../gen/agora/v1/bridges_pb';
@@ -67,8 +68,20 @@ export function AccountMenu(props: {
   theme: Theme;
   onTheme: (t: Theme) => void;
   onSignOut: () => void;
+  /** Whether the operator has an avatar, which it may then remove. */
+  hasAvatar: boolean;
+  /** Makes the file the operator's avatar; resolves to the reason when the hub refuses it. */
+  onAvatar: (file: File) => Promise<string | undefined>;
+  onClearAvatar: () => Promise<string | undefined>;
 }) {
   const [open, setOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState<string>();
+  const changeAvatar = async (change: () => Promise<string | undefined>) => {
+    setAvatarError(undefined);
+    const why = await change();
+    setAvatarError(why);
+    if (!why) setOpen(false);
+  };
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   // a disclosure popover: a press outside or Escape closes it
@@ -120,6 +133,30 @@ export function AccountMenu(props: {
             <Icon name="settings" />
             Settings
           </button>
+          <label className="file">
+            <Icon name="stylus" />
+            Set avatar…
+            <input
+              type="file"
+              accept={AVATAR_TYPES}
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                e.currentTarget.value = '';
+                if (file) changeAvatar(() => props.onAvatar(file));
+              }}
+            />
+          </label>
+          {props.hasAvatar && (
+            <button type="button" onClick={() => changeAvatar(props.onClearAvatar)}>
+              <Icon name="close" />
+              Remove avatar
+            </button>
+          )}
+          {avatarError && (
+            <p className="err" role="alert">
+              {avatarError}
+            </p>
+          )}
           <ThemeDots
             current={props.theme}
             onChoose={(t) => {

@@ -12,6 +12,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/avatars"
 	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/pullrequests"
@@ -36,6 +37,10 @@ func toConnect(err error) error {
 	case errors.Is(err, rooms.ErrReadOnly), errors.Is(err, rooms.ErrArchived), errors.Is(err, rooms.ErrNotArchived), errors.Is(err, rooms.ErrBridged), errors.Is(err, rooms.ErrUndelivered):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, bridges.ErrNotFound):
+		return connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, bridges.ErrAvatarsFull):
+		return connect.NewError(connect.CodeResourceExhausted, err)
+	case errors.Is(err, avatars.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, bridges.ErrExists):
 		return connect.NewError(connect.CodeAlreadyExists, err)
@@ -108,7 +113,7 @@ var ciStates = map[string]agorav1.CiState{
 func profilePB(p agents.Profile) *agorav1.Profile {
 	out := &agorav1.Profile{
 		Name: p.Name, Kind: p.Kind, Project: p.Project, Task: p.Task, Status: p.Status, Cwd: p.CWD, Branch: p.Branch,
-		About: p.About, Icon: p.Icon, Pigment: p.Pigment, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
+		About: p.About, Icon: p.Icon, Pigment: p.Pigment, Avatar: p.Avatar, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
 		Session: profileSessions[p.SessionState], Active: p.Active,
 	}
 	for _, n := range p.PRs {
@@ -141,7 +146,7 @@ func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.
 			pb.DueAt = timestamppb.New(due(m.ScheduledAt))
 		}
 		if m.External() {
-			pb.ExternalAuthor = &agorav1.ExternalAuthor{Bridge: m.Room, Id: m.ExtAuthorID, Name: m.ExtAuthorName}
+			pb.ExternalAuthor = &agorav1.ExternalAuthor{Bridge: m.Room, Id: m.ExtAuthorID, Name: m.ExtAuthorName, Avatar: m.ExtAuthorAvatar}
 		}
 		out = append(out, pb)
 	}

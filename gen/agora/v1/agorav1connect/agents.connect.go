@@ -44,6 +44,11 @@ const (
 	AgentServiceWhoProcedure = "/agora.v1.AgentService/Who"
 	// AgentServiceRenameProcedure is the fully-qualified name of the AgentService's Rename RPC.
 	AgentServiceRenameProcedure = "/agora.v1.AgentService/Rename"
+	// AgentServiceSetAvatarProcedure is the fully-qualified name of the AgentService's SetAvatar RPC.
+	AgentServiceSetAvatarProcedure = "/agora.v1.AgentService/SetAvatar"
+	// AgentServiceClearAvatarProcedure is the fully-qualified name of the AgentService's ClearAvatar
+	// RPC.
+	AgentServiceClearAvatarProcedure = "/agora.v1.AgentService/ClearAvatar"
 )
 
 // AgentServiceClient is a client for the agora.v1.AgentService service.
@@ -60,6 +65,11 @@ type AgentServiceClient interface {
 	// Rename gives the agent a new name. Everything that is the agent's moves with it, and its
 	// old name becomes a former name, reserved for it.
 	Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error)
+	// SetAvatar makes an image the agent's avatar: PNG, JPEG or WebP up to 256 KiB and 1024 pixels
+	// a side, drawn again, or SVG up to 32 KiB, checked against an allowlist.
+	SetAvatar(context.Context, *connect.Request[v1.SetAvatarRequest]) (*connect.Response[v1.SetAvatarResponse], error)
+	// ClearAvatar leaves the agent without an avatar, drawn with its sigil.
+	ClearAvatar(context.Context, *connect.Request[v1.ClearAvatarRequest]) (*connect.Response[v1.ClearAvatarResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the agora.v1.AgentService service. By default, it
@@ -103,6 +113,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("Rename")),
 			connect.WithClientOptions(opts...),
 		),
+		setAvatar: connect.NewClient[v1.SetAvatarRequest, v1.SetAvatarResponse](
+			httpClient,
+			baseURL+AgentServiceSetAvatarProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetAvatar")),
+			connect.WithClientOptions(opts...),
+		),
+		clearAvatar: connect.NewClient[v1.ClearAvatarRequest, v1.ClearAvatarResponse](
+			httpClient,
+			baseURL+AgentServiceClearAvatarProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ClearAvatar")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -113,6 +135,8 @@ type agentServiceClient struct {
 	listAgents    *connect.Client[v1.ListAgentsRequest, v1.ListAgentsResponse]
 	who           *connect.Client[v1.WhoRequest, v1.WhoResponse]
 	rename        *connect.Client[v1.RenameRequest, v1.RenameResponse]
+	setAvatar     *connect.Client[v1.SetAvatarRequest, v1.SetAvatarResponse]
+	clearAvatar   *connect.Client[v1.ClearAvatarRequest, v1.ClearAvatarResponse]
 }
 
 // UpdateProfile calls agora.v1.AgentService.UpdateProfile.
@@ -140,6 +164,16 @@ func (c *agentServiceClient) Rename(ctx context.Context, req *connect.Request[v1
 	return c.rename.CallUnary(ctx, req)
 }
 
+// SetAvatar calls agora.v1.AgentService.SetAvatar.
+func (c *agentServiceClient) SetAvatar(ctx context.Context, req *connect.Request[v1.SetAvatarRequest]) (*connect.Response[v1.SetAvatarResponse], error) {
+	return c.setAvatar.CallUnary(ctx, req)
+}
+
+// ClearAvatar calls agora.v1.AgentService.ClearAvatar.
+func (c *agentServiceClient) ClearAvatar(ctx context.Context, req *connect.Request[v1.ClearAvatarRequest]) (*connect.Response[v1.ClearAvatarResponse], error) {
+	return c.clearAvatar.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the agora.v1.AgentService service.
 type AgentServiceHandler interface {
 	// UpdateProfile changes the fields that are set.
@@ -154,6 +188,11 @@ type AgentServiceHandler interface {
 	// Rename gives the agent a new name. Everything that is the agent's moves with it, and its
 	// old name becomes a former name, reserved for it.
 	Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error)
+	// SetAvatar makes an image the agent's avatar: PNG, JPEG or WebP up to 256 KiB and 1024 pixels
+	// a side, drawn again, or SVG up to 32 KiB, checked against an allowlist.
+	SetAvatar(context.Context, *connect.Request[v1.SetAvatarRequest]) (*connect.Response[v1.SetAvatarResponse], error)
+	// ClearAvatar leaves the agent without an avatar, drawn with its sigil.
+	ClearAvatar(context.Context, *connect.Request[v1.ClearAvatarRequest]) (*connect.Response[v1.ClearAvatarResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -193,6 +232,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("Rename")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetAvatarHandler := connect.NewUnaryHandler(
+		AgentServiceSetAvatarProcedure,
+		svc.SetAvatar,
+		connect.WithSchema(agentServiceMethods.ByName("SetAvatar")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceClearAvatarHandler := connect.NewUnaryHandler(
+		AgentServiceClearAvatarProcedure,
+		svc.ClearAvatar,
+		connect.WithSchema(agentServiceMethods.ByName("ClearAvatar")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceUpdateProfileProcedure:
@@ -205,6 +256,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceWhoHandler.ServeHTTP(w, r)
 		case AgentServiceRenameProcedure:
 			agentServiceRenameHandler.ServeHTTP(w, r)
+		case AgentServiceSetAvatarProcedure:
+			agentServiceSetAvatarHandler.ServeHTTP(w, r)
+		case AgentServiceClearAvatarProcedure:
+			agentServiceClearAvatarHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -232,4 +287,12 @@ func (UnimplementedAgentServiceHandler) Who(context.Context, *connect.Request[v1
 
 func (UnimplementedAgentServiceHandler) Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.AgentService.Rename is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetAvatar(context.Context, *connect.Request[v1.SetAvatarRequest]) (*connect.Response[v1.SetAvatarResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.AgentService.SetAvatar is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ClearAvatar(context.Context, *connect.Request[v1.ClearAvatarRequest]) (*connect.Response[v1.ClearAvatarResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.AgentService.ClearAvatar is not implemented"))
 }

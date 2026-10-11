@@ -105,7 +105,10 @@ type Profile struct {
 	// The agent's pigment, one of a fixed list (terracotta, ochre, olive, ...); empty when unset.
 	Pigment string `protobuf:"bytes,19,opt,name=pigment,proto3" json:"pigment,omitempty"`
 	// Names the agent gave up by renaming itself, newest first.
-	Formerly      []*FormerName `protobuf:"bytes,20,rep,name=formerly,proto3" json:"formerly,omitempty"`
+	Formerly []*FormerName `protobuf:"bytes,20,rep,name=formerly,proto3" json:"formerly,omitempty"`
+	// The SHA-256 of the agent's avatar, which the web listener serves at /avatars/<hash>; empty
+	// when it has none.
+	Avatar        string `protobuf:"bytes,21,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -264,6 +267,13 @@ func (x *Profile) GetFormerly() []*FormerName {
 		return x.Formerly
 	}
 	return nil
+}
+
+func (x *Profile) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
 }
 
 // FormerName is a name an agent gave up, and when.
@@ -872,11 +882,207 @@ func (x *RenameResponse) GetProfile() *Profile {
 	return nil
 }
 
+type SetAvatarRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The acting agent, whose avatar changes.
+	Agent string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// The image file.
+	Image []byte `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
+	// The image's media type; empty to read it from the content only.
+	Mime          string `protobuf:"bytes,3,opt,name=mime,proto3" json:"mime,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAvatarRequest) Reset() {
+	*x = SetAvatarRequest{}
+	mi := &file_agora_v1_agents_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAvatarRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAvatarRequest) ProtoMessage() {}
+
+func (x *SetAvatarRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_agents_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAvatarRequest.ProtoReflect.Descriptor instead.
+func (*SetAvatarRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SetAvatarRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *SetAvatarRequest) GetImage() []byte {
+	if x != nil {
+		return x.Image
+	}
+	return nil
+}
+
+func (x *SetAvatarRequest) GetMime() string {
+	if x != nil {
+		return x.Mime
+	}
+	return ""
+}
+
+type SetAvatarResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Profile       *Profile               `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAvatarResponse) Reset() {
+	*x = SetAvatarResponse{}
+	mi := &file_agora_v1_agents_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAvatarResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAvatarResponse) ProtoMessage() {}
+
+func (x *SetAvatarResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_agents_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAvatarResponse.ProtoReflect.Descriptor instead.
+func (*SetAvatarResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SetAvatarResponse) GetProfile() *Profile {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+type ClearAvatarRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The acting agent, whose avatar is cleared.
+	Agent         string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearAvatarRequest) Reset() {
+	*x = ClearAvatarRequest{}
+	mi := &file_agora_v1_agents_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearAvatarRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearAvatarRequest) ProtoMessage() {}
+
+func (x *ClearAvatarRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_agents_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearAvatarRequest.ProtoReflect.Descriptor instead.
+func (*ClearAvatarRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ClearAvatarRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+type ClearAvatarResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Profile       *Profile               `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearAvatarResponse) Reset() {
+	*x = ClearAvatarResponse{}
+	mi := &file_agora_v1_agents_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearAvatarResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearAvatarResponse) ProtoMessage() {}
+
+func (x *ClearAvatarResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_agents_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearAvatarResponse.ProtoReflect.Descriptor instead.
+func (*ClearAvatarResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ClearAvatarResponse) GetProfile() *Profile {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
 var File_agora_v1_agents_proto protoreflect.FileDescriptor
 
 const file_agora_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x17agora/v1/sessions.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xad\x05\n" +
+	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x17agora/v1/sessions.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc5\x05\n" +
 	"\aProfile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -897,7 +1103,8 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\bci_state\x18\x11 \x03(\v2\x1e.agora.v1.Profile.CiStateEntryR\aciState\x12\x12\n" +
 	"\x04icon\x18\x12 \x01(\tR\x04icon\x12\x18\n" +
 	"\apigment\x18\x13 \x01(\tR\apigment\x120\n" +
-	"\bformerly\x18\x14 \x03(\v2\x14.agora.v1.FormerNameR\bformerly\x1aM\n" +
+	"\bformerly\x18\x14 \x03(\v2\x14.agora.v1.FormerNameR\bformerly\x12\x16\n" +
+	"\x06avatar\x18\x15 \x01(\tR\x06avatar\x1aM\n" +
 	"\fCiStateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12'\n" +
 	"\x05value\x18\x02 \x01(\x0e2\x11.agora.v1.CiStateR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\x0f\x10\x10R\rsession_stateR\x02ci\"[\n" +
@@ -950,19 +1157,31 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"=\n" +
 	"\x0eRenameResponse\x12+\n" +
+	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile\"R\n" +
+	"\x10SetAvatarRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x14\n" +
+	"\x05image\x18\x02 \x01(\fR\x05image\x12\x12\n" +
+	"\x04mime\x18\x03 \x01(\tR\x04mime\"@\n" +
+	"\x11SetAvatarResponse\x12+\n" +
+	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile\"*\n" +
+	"\x12ClearAvatarRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\"B\n" +
+	"\x13ClearAvatarResponse\x12+\n" +
 	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile*`\n" +
 	"\aCiState\x12\x18\n" +
 	"\x14CI_STATE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eCI_STATE_GREEN\x10\x01\x12\x10\n" +
 	"\fCI_STATE_RED\x10\x02\x12\x15\n" +
-	"\x11CI_STATE_CONFLICT\x10\x032\xd4\x02\n" +
+	"\x11CI_STATE_CONFLICT\x10\x032\xe6\x03\n" +
 	"\fAgentService\x12P\n" +
 	"\rUpdateProfile\x12\x1e.agora.v1.UpdateProfileRequest\x1a\x1f.agora.v1.UpdateProfileResponse\x128\n" +
 	"\x05Leave\x12\x16.agora.v1.LeaveRequest\x1a\x17.agora.v1.LeaveResponse\x12G\n" +
 	"\n" +
 	"ListAgents\x12\x1b.agora.v1.ListAgentsRequest\x1a\x1c.agora.v1.ListAgentsResponse\x122\n" +
 	"\x03Who\x12\x14.agora.v1.WhoRequest\x1a\x15.agora.v1.WhoResponse\x12;\n" +
-	"\x06Rename\x12\x17.agora.v1.RenameRequest\x1a\x18.agora.v1.RenameResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
+	"\x06Rename\x12\x17.agora.v1.RenameRequest\x1a\x18.agora.v1.RenameResponse\x12D\n" +
+	"\tSetAvatar\x12\x1a.agora.v1.SetAvatarRequest\x1a\x1b.agora.v1.SetAvatarResponse\x12J\n" +
+	"\vClearAvatar\x12\x1c.agora.v1.ClearAvatarRequest\x1a\x1d.agora.v1.ClearAvatarResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
 	file_agora_v1_agents_proto_rawDescOnce sync.Once
@@ -977,7 +1196,7 @@ func file_agora_v1_agents_proto_rawDescGZIP() []byte {
 }
 
 var file_agora_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_agora_v1_agents_proto_goTypes = []any{
 	(CiState)(0),                  // 0: agora.v1.CiState
 	(*Profile)(nil),               // 1: agora.v1.Profile
@@ -992,37 +1211,47 @@ var file_agora_v1_agents_proto_goTypes = []any{
 	(*WhoResponse)(nil),           // 10: agora.v1.WhoResponse
 	(*RenameRequest)(nil),         // 11: agora.v1.RenameRequest
 	(*RenameResponse)(nil),        // 12: agora.v1.RenameResponse
-	nil,                           // 13: agora.v1.Profile.CiStateEntry
-	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
-	(SessionState)(0),             // 15: agora.v1.SessionState
+	(*SetAvatarRequest)(nil),      // 13: agora.v1.SetAvatarRequest
+	(*SetAvatarResponse)(nil),     // 14: agora.v1.SetAvatarResponse
+	(*ClearAvatarRequest)(nil),    // 15: agora.v1.ClearAvatarRequest
+	(*ClearAvatarResponse)(nil),   // 16: agora.v1.ClearAvatarResponse
+	nil,                           // 17: agora.v1.Profile.CiStateEntry
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
+	(SessionState)(0),             // 19: agora.v1.SessionState
 }
 var file_agora_v1_agents_proto_depIdxs = []int32{
-	14, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
-	14, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
-	15, // 2: agora.v1.Profile.session:type_name -> agora.v1.SessionState
-	13, // 3: agora.v1.Profile.ci_state:type_name -> agora.v1.Profile.CiStateEntry
+	18, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
+	18, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
+	19, // 2: agora.v1.Profile.session:type_name -> agora.v1.SessionState
+	17, // 3: agora.v1.Profile.ci_state:type_name -> agora.v1.Profile.CiStateEntry
 	2,  // 4: agora.v1.Profile.formerly:type_name -> agora.v1.FormerName
-	14, // 5: agora.v1.FormerName.renamed_at:type_name -> google.protobuf.Timestamp
+	18, // 5: agora.v1.FormerName.renamed_at:type_name -> google.protobuf.Timestamp
 	1,  // 6: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
 	1,  // 7: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
 	1,  // 8: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
 	1,  // 9: agora.v1.RenameResponse.profile:type_name -> agora.v1.Profile
-	0,  // 10: agora.v1.Profile.CiStateEntry.value:type_name -> agora.v1.CiState
-	3,  // 11: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
-	5,  // 12: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
-	7,  // 13: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
-	9,  // 14: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
-	11, // 15: agora.v1.AgentService.Rename:input_type -> agora.v1.RenameRequest
-	4,  // 16: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
-	6,  // 17: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
-	8,  // 18: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
-	10, // 19: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
-	12, // 20: agora.v1.AgentService.Rename:output_type -> agora.v1.RenameResponse
-	16, // [16:21] is the sub-list for method output_type
-	11, // [11:16] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	1,  // 10: agora.v1.SetAvatarResponse.profile:type_name -> agora.v1.Profile
+	1,  // 11: agora.v1.ClearAvatarResponse.profile:type_name -> agora.v1.Profile
+	0,  // 12: agora.v1.Profile.CiStateEntry.value:type_name -> agora.v1.CiState
+	3,  // 13: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
+	5,  // 14: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
+	7,  // 15: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
+	9,  // 16: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
+	11, // 17: agora.v1.AgentService.Rename:input_type -> agora.v1.RenameRequest
+	13, // 18: agora.v1.AgentService.SetAvatar:input_type -> agora.v1.SetAvatarRequest
+	15, // 19: agora.v1.AgentService.ClearAvatar:input_type -> agora.v1.ClearAvatarRequest
+	4,  // 20: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
+	6,  // 21: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
+	8,  // 22: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
+	10, // 23: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
+	12, // 24: agora.v1.AgentService.Rename:output_type -> agora.v1.RenameResponse
+	14, // 25: agora.v1.AgentService.SetAvatar:output_type -> agora.v1.SetAvatarResponse
+	16, // 26: agora.v1.AgentService.ClearAvatar:output_type -> agora.v1.ClearAvatarResponse
+	20, // [20:27] is the sub-list for method output_type
+	13, // [13:20] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_agents_proto_init() }
@@ -1038,7 +1267,7 @@ func file_agora_v1_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_agents_proto_rawDesc), len(file_agora_v1_agents_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

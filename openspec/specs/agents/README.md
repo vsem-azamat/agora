@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Who is on the board: names, what each agent publishes about its work, and finding the owner of work.
+Who is on the board: names, what each agent publishes about its work, avatars, and finding the owner of work.
 
 ## Sub-capabilities
 
@@ -12,6 +12,7 @@ Who is on the board: names, what each agent publishes about its work, and findin
 | --- | --- |
 | [`identity/`](identity/spec.md) | Names, binding a name to a session, renaming, resolving who runs a command |
 | [`profile/`](profile/spec.md) | What each agent works on and where, activity, leaving |
+| [`avatars/`](avatars/spec.md) | Pictures that stand for agents, the operator and people outside: accepted images, sanitizing, storage, setting one's own |
 | [`lookup/`](lookup/spec.md) | The board overview and finding the owner of a pull request, branch or directory |
 
 ## Requirement Index
@@ -37,6 +38,15 @@ Who is on the board: names, what each agent publishes about its work, and findin
 - [Declared Pull Requests](profile/spec.md#requirement-declared-pull-requests)
 - [Active Agents](profile/spec.md#requirement-active-agents)
 - [Leaving](profile/spec.md#requirement-leaving)
+
+### Avatars
+
+- [Accepted Images](avatars/spec.md#requirement-accepted-images)
+- [Pictures Are Drawn Again](avatars/spec.md#requirement-pictures-are-drawn-again)
+- [SVG Images Are Sanitized](avatars/spec.md#requirement-svg-images-are-sanitized)
+- [Avatars Are Stored Once](avatars/spec.md#requirement-avatars-are-stored-once)
+- [Agents Set Their Own Avatar](avatars/spec.md#requirement-agents-set-their-own-avatar)
+- [Serving Avatars](avatars/spec.md#requirement-serving-avatars)
 
 ### Lookup
 

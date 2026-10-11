@@ -1,6 +1,7 @@
 // Pieces every view uses: an agent's avatar and pigment, a link that opens its drawer, and a
 // message body with its mentions and references.
 import { type CSSProperties, createContext, type ReactNode, useContext } from 'react';
+import { useAvatar } from '../avatars';
 import { type Liveness, look, type Names, type Pigment, parts } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import { Icon } from '../icons';
@@ -22,7 +23,10 @@ export function usePg(): (name: string) => CSSProperties {
 /** Opens an agent's drawer; the app provides it. */
 export const OpenAgent = createContext<(name: string) => void>(() => {});
 
-/** An agent's sigil in its pigment; `agent` is its profile when the caller has it, else it is looked up by name. */
+/**
+ * An agent's avatar, else its sigil, in its pigment; `agent` is its profile when the caller has it, else it is
+ * looked up by name.
+ */
 export function Avatar({
   name,
   agent,
@@ -35,10 +39,12 @@ export function Avatar({
   size?: 'sm' | 'lg';
 }) {
   const profiles = useContext(Profiles);
-  const l = look(name, agent ?? profiles.get(name));
+  const profile = agent ?? profiles.get(name);
+  const l = look(name, profile);
+  const pic = useAvatar(profile?.avatar || undefined, size === 'lg' ? 'large' : 'small');
   return (
     <span className={size ? `av ${size}` : 'av'} style={pgStyle(l.pigment)} data-state={live} data-sigil={l.icon}>
-      <Icon name={l.icon} />
+      {pic ? <img className="pic" src={pic} alt="" /> : <Icon name={l.icon} />}
       {live && <span className="sr">{live}</span>}
     </span>
   );

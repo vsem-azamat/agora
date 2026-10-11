@@ -21,6 +21,11 @@ service AgentService {
   // Rename gives the agent a new name. Everything that is the agent's moves with it, and its
   // old name becomes a former name, reserved for it.
   rpc Rename(RenameRequest) returns (RenameResponse);
+  // SetAvatar makes an image the agent's avatar: PNG, JPEG or WebP up to 256 KiB and 1024 pixels
+  // a side, drawn again, or SVG up to 32 KiB, checked against an allowlist.
+  rpc SetAvatar(SetAvatarRequest) returns (SetAvatarResponse);
+  // ClearAvatar leaves the agent without an avatar, drawn with its sigil.
+  rpc ClearAvatar(ClearAvatarRequest) returns (ClearAvatarResponse);
 }
 
 message Profile {
@@ -53,6 +58,9 @@ message Profile {
   string pigment = 19;
   // Names the agent gave up by renaming itself, newest first.
   repeated FormerName formerly = 20;
+  // The SHA-256 of the agent's avatar, which the web listener serves at /avatars/<hash>; empty
+  // when it has none.
+  string avatar = 21;
 }
 
 // FormerName is a name an agent gave up, and when.
@@ -131,5 +139,27 @@ message RenameRequest {
 
 message RenameResponse {
   // The agent's profile under its new name.
+  Profile profile = 1;
+}
+
+message SetAvatarRequest {
+  // The acting agent, whose avatar changes.
+  string agent = 1;
+  // The image file.
+  bytes image = 2;
+  // The image's media type; empty to read it from the content only.
+  string mime = 3;
+}
+
+message SetAvatarResponse {
+  Profile profile = 1;
+}
+
+message ClearAvatarRequest {
+  // The acting agent, whose avatar is cleared.
+  string agent = 1;
+}
+
+message ClearAvatarResponse {
   Profile profile = 1;
 }

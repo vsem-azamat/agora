@@ -11,7 +11,7 @@ Connecting a chat outside Agora (a messenger chat, a mailing list) to a room. A 
 | Spec | Covers |
 | --- | --- |
 | [`management/`](management/spec.md) | Adding, removing and listing bridges, and how the hub runs their programs |
-| [`protocol/`](protocol/spec.md) | The lines a bridge and the hub exchange, and how messages from outside are stored |
+| [`protocol/`](protocol/spec.md) | The lines a bridge and the hub exchange, how messages from outside are stored, and the avatars of people outside |
 | [`outbound/`](outbound/spec.md) | Messages going out, the outbound policy, the operator's decisions and notes |
 
 ## Requirement Index
@@ -31,6 +31,7 @@ Connecting a chat outside Agora (a messenger chat, a mailing list) to a room. A 
 - [Messages From Outside Addressed To The Bridge's Agents](protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)
 - [The Operator's Own Messages From Outside](protocol/spec.md#requirement-the-operators-own-messages-from-outside)
 - [Resuming Where The Bridge Left Off](protocol/spec.md#requirement-resuming-where-the-bridge-left-off)
+- [Avatars Of People Outside](protocol/spec.md#requirement-avatars-of-people-outside)
 
 ### Outbound
 

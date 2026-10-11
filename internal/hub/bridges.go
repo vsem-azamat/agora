@@ -26,7 +26,7 @@ import (
 
 const (
 	// ProtocolVersion is the bridge protocol version the hub speaks, sent in hello.
-	ProtocolVersion = 2
+	ProtocolVersion = 3
 	// bridgeMinDelay and bridgeMaxDelay bound the delay before a bridge command starts again.
 	bridgeMinDelay = time.Second
 	bridgeMaxDelay = time.Minute
@@ -566,13 +566,9 @@ func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, hande
 
 // bridgeInput is any line a bridge writes; each type uses some of the fields.
 type bridgeInput struct {
-	Type   string          `json:"type"`
-	ID     json.RawMessage `json:"id"`
-	Author struct {
-		ID   json.RawMessage `json:"id"`
-		Name string          `json:"name"`
-		Self bool            `json:"self"`
-	} `json:"author"`
+	Type      string                     `json:"type"`
+	ID        json.RawMessage            `json:"id"`
+	Author    lineAuthor                 `json:"author"`
 	Text      string                     `json:"text"`
 	ReplyTo   json.RawMessage            `json:"reply_to"`
 	At        string                     `json:"at"`
@@ -581,6 +577,9 @@ type bridgeInput struct {
 	ExtID     json.RawMessage            `json:"ext_id"`
 	Error     string                     `json:"error"`
 	Caps      map[string]json.RawMessage `json:"caps"`
+	MIME      string                     `json:"mime"`
+	Data      string                     `json:"data"`
+	Rev       json.RawMessage            `json:"rev"`
 }
 
 // extString reads an identifier given as a JSON string or number; anything else is "".
@@ -626,6 +625,7 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 		if in.ID == "" && (strings.TrimSpace(in.Text) != "" || in.AuthorID != "" || in.AuthorName != "") {
 			h.log.Warn("bridge in line without an id: only its cursor is kept", "bridge", name)
 		}
+		h.bridgeAvatarRev(ctx, name, l)
 		id, err := h.bridges.Receive(ctx, name, in, h.webAs)
 		if err != nil {
 			h.log.Warn("bridge in line; skipped", "bridge", name, "err", err)
@@ -634,6 +634,8 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 		if id != 0 {
 			h.changes.fire()
 		}
+	case "avatar":
+		h.bridgeAvatar(ctx, name, l)
 	case "sent", "failed":
 		id, err := strconv.ParseInt(extString(l.ID), 10, 64)
 		if err != nil {

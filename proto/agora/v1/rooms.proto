@@ -87,6 +87,9 @@ message ExternalAuthor {
   string id = 2;
   // The author's name there.
   string name = 3;
+  // The SHA-256 of the avatar the bridge sent for the author, which the web listener serves at
+  // /avatars/<hash>; empty when there is none.
+  string avatar = 4;
 }
 
 // Where a message of a bridged room stands on its way out.

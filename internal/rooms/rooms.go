@@ -96,6 +96,8 @@ type Message struct {
 	// ExtAuthorID and ExtAuthorName are set for a message from outside, which came through the
 	// bridge of its room.
 	ExtAuthorID, ExtAuthorName string
+	// ExtAuthorAvatar is the hash of the avatar the bridge sent for the author outside, or "".
+	ExtAuthorAvatar string
 	// Delivery is where a message of a bridged room stands on its way out ("" when it stays
 	// here), and DeliveryError why it failed.
 	Delivery      Delivery
@@ -719,10 +721,10 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 		if err := requireRoom(ctx, tx, room); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT id, room, author, body, COALESCE(reply_to, 0), at, 0, 0,
-			COALESCE(ext_author_id, ''), COALESCE(ext_author_name, ''), COALESCE(delivery, ''), COALESCE(delivery_error, ''),
-			note, ext_id IS NOT NULL AND delivery IS NULL, COALESCE(scheduled_at, 0) FROM
-			(SELECT * FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?) ORDER BY id`, room, last)
+		rows, err := tx.QueryContext(ctx, `SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at, 0, 0,
+			COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), `+outsideAvatarColumn+`, COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
+			m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0) FROM
+			(SELECT * FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?) AS m ORDER BY m.id`, room, last)
 		if err != nil {
 			return err
 		}
@@ -811,7 +813,7 @@ WITH followed(room, mode, wake_from) AS (
 SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed,
 	(NOT m.quiet AND EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from)) AS wake_room,
-	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
+	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), ` + outsideAvatarColumn + `, COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
 	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0)
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
@@ -1071,6 +1073,9 @@ func subscriptions(ctx context.Context, tx *sql.Tx, agent string) ([]Subscriptio
 	return out, rows.Err()
 }
 
+// outsideAvatarColumn selects the avatar of the author outside of message m, or "".
+const outsideAvatarColumn = `COALESCE((SELECT oa.avatar FROM outside_avatars AS oa WHERE oa.room = m.room AND oa.author = m.ext_author_id), '')`
+
 func scanMessages(rows *sql.Rows) ([]Message, error) {
 	defer rows.Close()
 	var out []Message
@@ -1079,7 +1084,7 @@ func scanMessages(rows *sql.Rows) ([]Message, error) {
 		var at, scheduled int64
 		var wakeRoom bool
 		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
-			&m.ExtAuthorID, &m.ExtAuthorName, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled); err != nil {
+			&m.ExtAuthorID, &m.ExtAuthorName, &m.ExtAuthorAvatar, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled); err != nil {
 			return nil, err
 		}
 		m.At = time.UnixMilli(at)
