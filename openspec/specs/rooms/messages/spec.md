@@ -10,7 +10,7 @@ Posting messages to rooms, replying to them, notes and reading a room's history.
 
 ### Requirement: Posting Messages
 
-The system SHALL let a joined agent post a message of 1 to 8000 characters to an existing room, SHALL give each message an identifier that increases with posting order, and SHALL record the author and the posting time. In a room with a bridge, posting also follows the room's [outbound policy](../../bridges/outbound/spec.md#requirement-outbound-policy), and messages may come from external authors (see [Bridges](../../bridges/README.md)).
+The system SHALL let a joined agent post a message of 1 to 8000 characters to an existing room that is not archived (see [Archiving Rooms](../management/spec.md#requirement-archiving-rooms)), SHALL give each message an identifier that increases with posting order, and SHALL record the author and the posting time. In a room with a bridge, posting also follows the room's [outbound policy](../../bridges/outbound/spec.md#requirement-outbound-policy), and messages may come from external authors (see [Bridges](../../bridges/README.md)).
 
 #### Scenario: Posting
 - **WHEN** an agent posts `PR #57 is ready for review` to `#example-app`

@@ -12,7 +12,7 @@ import type { Message as Message$1 } from "@bufbuild/protobuf";
  * Describes the file agora/v1/rooms.proto.
  */
 export const file_agora_v1_rooms: GenFile = /*@__PURE__*/
-  fileDesc("ChRhZ29yYS92MS9yb29tcy5wcm90bxIIYWdvcmEudjEiuQEKBFJvb20SDAoEbmFtZRgBIAEoCRIPCgdwdXJwb3NlGAIgASgJEhIKCmNyZWF0ZWRfYnkYAyABKAkSLgoKY3JlYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIbWVzc2FnZXMYBSABKAUSKwoHbGFzdF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDwoHcGVuZGluZxgHIAEoBSKqAgoHTWVzc2FnZRIKCgJpZBgBIAEoAxIMCgRyb29tGAIgASgJEg4KBmF1dGhvchgDIAEoCRIMCgRib2R5GAQgASgJEhAKCHJlcGx5X3RvGAUgASgDEiYKAmF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIRCglhZGRyZXNzZWQYByABKAgSMQoPZXh0ZXJuYWxfYXV0aG9yGAggASgLMhguYWdvcmEudjEuRXh0ZXJuYWxBdXRob3ISLwoOZGVsaXZlcnlfc3RhdGUYCSABKA4yFy5hZ29yYS52MS5EZWxpdmVyeVN0YXRlEhYKDmRlbGl2ZXJ5X2Vycm9yGAogASgJEgwKBG5vdGUYCyABKAgSEAoIaW5jb21pbmcYDCABKAgiOgoORXh0ZXJuYWxBdXRob3ISDgoGYnJpZGdlGAEgASgJEgoKAmlkGAIgASgJEgwKBG5hbWUYAyABKAkiRgoMU3Vic2NyaXB0aW9uEgwKBHJvb20YASABKAkSKAoEbW9kZRgCIAEoDjIaLmFnb3JhLnYxLlN1YnNjcmlwdGlvbk1vZGUiQQoRQ3JlYXRlUm9vbVJlcXVlc3QSDAoEbmFtZRgBIAEoCRIPCgdwdXJwb3NlGAIgASgJEg0KBWFnZW50GAMgASgJIhQKEkNyZWF0ZVJvb21SZXNwb25zZSISChBMaXN0Um9vbXNSZXF1ZXN0IjIKEUxpc3RSb29tc1Jlc3BvbnNlEh0KBXJvb21zGAEgAygLMg4uYWdvcmEudjEuUm9vbSJqChBTdWJzY3JpYmVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEg0KBXJvb21zGAIgAygJEg4KBmZvbGxvdxgDIAEoCBIoCgRtb2RlGAQgASgOMhouYWdvcmEudjEuU3Vic2NyaXB0aW9uTW9kZSJRChFTdWJzY3JpYmVSZXNwb25zZRINCgVyb29tcxgBIAMoCRItCg1zdWJzY3JpcHRpb25zGAIgAygLMhYuYWdvcmEudjEuU3Vic2NyaXB0aW9uIikKGExpc3RTdWJzY3JpcHRpb25zUmVxdWVzdBINCgVhZ2VudBgBIAEoCSJZChlMaXN0U3Vic2NyaXB0aW9uc1Jlc3BvbnNlEg0KBXJvb21zGAEgAygJEi0KDXN1YnNjcmlwdGlvbnMYAiADKAsyFi5hZ29yYS52MS5TdWJzY3JpcHRpb24iWAoLUG9zdFJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEcm9vbRgCIAEoCRIMCgRib2R5GAMgASgJEhAKCHJlcGx5X3RvGAQgASgDEgwKBG5vdGUYBSABKAgiGgoMUG9zdFJlc3BvbnNlEgoKAmlkGAEgASgDIiwKDkhpc3RvcnlSZXF1ZXN0EgwKBHJvb20YASABKAkSDAoEbGFzdBgCIAEoBSI2Cg9IaXN0b3J5UmVzcG9uc2USIwoIbWVzc2FnZXMYASADKAsyES5hZ29yYS52MS5NZXNzYWdlIlIKDVVucmVhZFJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEcGVlaxgCIAEoCBIVCg1tZW50aW9uc19vbmx5GAMgASgIEg0KBWxpbWl0GAQgASgFIkQKDlVucmVhZFJlc3BvbnNlEiMKCG1lc3NhZ2VzGAEgAygLMhEuYWdvcmEudjEuTWVzc2FnZRINCgV0b3RhbBgCIAEoBSIkChNVbnJlYWRCeVJvb21SZXF1ZXN0Eg0KBWFnZW50GAEgASgJIj0KClJvb21VbnJlYWQSDAoEcm9vbRgBIAEoCRIOCgZ1bnJlYWQYAiABKAUSEQoJYWRkcmVzc2VkGAMgASgFIjsKFFVucmVhZEJ5Um9vbVJlc3BvbnNlEiMKBXJvb21zGAEgAygLMhQuYWdvcmEudjEuUm9vbVVucmVhZCJGChNNYXJrUm9vbVJlYWRSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBHJvb20YAiABKAkSEgoKdGhyb3VnaF9pZBgDIAEoAyIWChRNYXJrUm9vbVJlYWRSZXNwb25zZSq4AQoNRGVsaXZlcnlTdGF0ZRIeChpERUxJVkVSWV9TVEFURV9VTlNQRUNJRklFRBAAEhoKFkRFTElWRVJZX1NUQVRFX1BFTkRJTkcQARIaChZERUxJVkVSWV9TVEFURV9TRU5ESU5HEAISFwoTREVMSVZFUllfU1RBVEVfU0VOVBADEhsKF0RFTElWRVJZX1NUQVRFX0RFQ0xJTkVEEAQSGQoVREVMSVZFUllfU1RBVEVfRkFJTEVEEAUqjAEKEFN1YnNjcmlwdGlvbk1vZGUSIQodU1VCU0NSSVBUSU9OX01PREVfVU5TUEVDSUZJRUQQABIZChVTVUJTQ1JJUFRJT05fTU9ERV9BTEwQARIeChpTVUJTQ1JJUFRJT05fTU9ERV9NRU5USU9OUxACEhoKFlNVQlNDUklQVElPTl9NT0RFX1dBS0UQAzKSBQoLUm9vbVNlcnZpY2USRwoKQ3JlYXRlUm9vbRIbLmFnb3JhLnYxLkNyZWF0ZVJvb21SZXF1ZXN0GhwuYWdvcmEudjEuQ3JlYXRlUm9vbVJlc3BvbnNlEkQKCUxpc3RSb29tcxIaLmFnb3JhLnYxLkxpc3RSb29tc1JlcXVlc3QaGy5hZ29yYS52MS5MaXN0Um9vbXNSZXNwb25zZRJECglTdWJzY3JpYmUSGi5hZ29yYS52MS5TdWJzY3JpYmVSZXF1ZXN0GhsuYWdvcmEudjEuU3Vic2NyaWJlUmVzcG9uc2USXAoRTGlzdFN1YnNjcmlwdGlvbnMSIi5hZ29yYS52MS5MaXN0U3Vic2NyaXB0aW9uc1JlcXVlc3QaIy5hZ29yYS52MS5MaXN0U3Vic2NyaXB0aW9uc1Jlc3BvbnNlEjUKBFBvc3QSFS5hZ29yYS52MS5Qb3N0UmVxdWVzdBoWLmFnb3JhLnYxLlBvc3RSZXNwb25zZRI+CgdIaXN0b3J5EhguYWdvcmEudjEuSGlzdG9yeVJlcXVlc3QaGS5hZ29yYS52MS5IaXN0b3J5UmVzcG9uc2USOwoGVW5yZWFkEhcuYWdvcmEudjEuVW5yZWFkUmVxdWVzdBoYLmFnb3JhLnYxLlVucmVhZFJlc3BvbnNlEk0KDFVucmVhZEJ5Um9vbRIdLmFnb3JhLnYxLlVucmVhZEJ5Um9vbVJlcXVlc3QaHi5hZ29yYS52MS5VbnJlYWRCeVJvb21SZXNwb25zZRJNCgxNYXJrUm9vbVJlYWQSHS5hZ29yYS52MS5NYXJrUm9vbVJlYWRSZXF1ZXN0Gh4uYWdvcmEudjEuTWFya1Jvb21SZWFkUmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChRhZ29yYS92MS9yb29tcy5wcm90bxIIYWdvcmEudjEi/wEKBFJvb20SDAoEbmFtZRgBIAEoCRIPCgdwdXJwb3NlGAIgASgJEhIKCmNyZWF0ZWRfYnkYAyABKAkSLgoKY3JlYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIbWVzc2FnZXMYBSABKAUSKwoHbGFzdF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDwoHcGVuZGluZxgHIAEoBRITCgthcmNoaXZlZF9ieRgIIAEoCRIvCgthcmNoaXZlZF9hdBgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiqgIKB01lc3NhZ2USCgoCaWQYASABKAMSDAoEcm9vbRgCIAEoCRIOCgZhdXRob3IYAyABKAkSDAoEYm9keRgEIAEoCRIQCghyZXBseV90bxgFIAEoAxImCgJhdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEQoJYWRkcmVzc2VkGAcgASgIEjEKD2V4dGVybmFsX2F1dGhvchgIIAEoCzIYLmFnb3JhLnYxLkV4dGVybmFsQXV0aG9yEi8KDmRlbGl2ZXJ5X3N0YXRlGAkgASgOMhcuYWdvcmEudjEuRGVsaXZlcnlTdGF0ZRIWCg5kZWxpdmVyeV9lcnJvchgKIAEoCRIMCgRub3RlGAsgASgIEhAKCGluY29taW5nGAwgASgIIjoKDkV4dGVybmFsQXV0aG9yEg4KBmJyaWRnZRgBIAEoCRIKCgJpZBgCIAEoCRIMCgRuYW1lGAMgASgJIkYKDFN1YnNjcmlwdGlvbhIMCgRyb29tGAEgASgJEigKBG1vZGUYAiABKA4yGi5hZ29yYS52MS5TdWJzY3JpcHRpb25Nb2RlIkEKEUNyZWF0ZVJvb21SZXF1ZXN0EgwKBG5hbWUYASABKAkSDwoHcHVycG9zZRgCIAEoCRINCgVhZ2VudBgDIAEoCSIUChJDcmVhdGVSb29tUmVzcG9uc2UiHwoQTGlzdFJvb21zUmVxdWVzdBILCgNhbGwYASABKAgiMgoRTGlzdFJvb21zUmVzcG9uc2USHQoFcm9vbXMYASADKAsyDi5hZ29yYS52MS5Sb29tIkMKEkFyY2hpdmVSb29tUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRyb29tGAIgASgJEhAKCGFyY2hpdmVkGAMgASgIIhUKE0FyY2hpdmVSb29tUmVzcG9uc2UiagoQU3Vic2NyaWJlUmVxdWVzdBINCgVhZ2VudBgBIAEoCRINCgVyb29tcxgCIAMoCRIOCgZmb2xsb3cYAyABKAgSKAoEbW9kZRgEIAEoDjIaLmFnb3JhLnYxLlN1YnNjcmlwdGlvbk1vZGUiUQoRU3Vic2NyaWJlUmVzcG9uc2USDQoFcm9vbXMYASADKAkSLQoNc3Vic2NyaXB0aW9ucxgCIAMoCzIWLmFnb3JhLnYxLlN1YnNjcmlwdGlvbiIpChhMaXN0U3Vic2NyaXB0aW9uc1JlcXVlc3QSDQoFYWdlbnQYASABKAkiWQoZTGlzdFN1YnNjcmlwdGlvbnNSZXNwb25zZRINCgVyb29tcxgBIAMoCRItCg1zdWJzY3JpcHRpb25zGAIgAygLMhYuYWdvcmEudjEuU3Vic2NyaXB0aW9uIlgKC1Bvc3RSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBHJvb20YAiABKAkSDAoEYm9keRgDIAEoCRIQCghyZXBseV90bxgEIAEoAxIMCgRub3RlGAUgASgIIhoKDFBvc3RSZXNwb25zZRIKCgJpZBgBIAEoAyIsCg5IaXN0b3J5UmVxdWVzdBIMCgRyb29tGAEgASgJEgwKBGxhc3QYAiABKAUiNgoPSGlzdG9yeVJlc3BvbnNlEiMKCG1lc3NhZ2VzGAEgAygLMhEuYWdvcmEudjEuTWVzc2FnZSJSCg1VbnJlYWRSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBHBlZWsYAiABKAgSFQoNbWVudGlvbnNfb25seRgDIAEoCBINCgVsaW1pdBgEIAEoBSJECg5VbnJlYWRSZXNwb25zZRIjCghtZXNzYWdlcxgBIAMoCzIRLmFnb3JhLnYxLk1lc3NhZ2USDQoFdG90YWwYAiABKAUiJAoTVW5yZWFkQnlSb29tUmVxdWVzdBINCgVhZ2VudBgBIAEoCSI9CgpSb29tVW5yZWFkEgwKBHJvb20YASABKAkSDgoGdW5yZWFkGAIgASgFEhEKCWFkZHJlc3NlZBgDIAEoBSI7ChRVbnJlYWRCeVJvb21SZXNwb25zZRIjCgVyb29tcxgBIAMoCzIULmFnb3JhLnYxLlJvb21VbnJlYWQiRgoTTWFya1Jvb21SZWFkUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRyb29tGAIgASgJEhIKCnRocm91Z2hfaWQYAyABKAMiFgoUTWFya1Jvb21SZWFkUmVzcG9uc2UquAEKDURlbGl2ZXJ5U3RhdGUSHgoaREVMSVZFUllfU1RBVEVfVU5TUEVDSUZJRUQQABIaChZERUxJVkVSWV9TVEFURV9QRU5ESU5HEAESGgoWREVMSVZFUllfU1RBVEVfU0VORElORxACEhcKE0RFTElWRVJZX1NUQVRFX1NFTlQQAxIbChdERUxJVkVSWV9TVEFURV9ERUNMSU5FRBAEEhkKFURFTElWRVJZX1NUQVRFX0ZBSUxFRBAFKowBChBTdWJzY3JpcHRpb25Nb2RlEiEKHVNVQlNDUklQVElPTl9NT0RFX1VOU1BFQ0lGSUVEEAASGQoVU1VCU0NSSVBUSU9OX01PREVfQUxMEAESHgoaU1VCU0NSSVBUSU9OX01PREVfTUVOVElPTlMQAhIaChZTVUJTQ1JJUFRJT05fTU9ERV9XQUtFEAMy3gUKC1Jvb21TZXJ2aWNlEkcKCkNyZWF0ZVJvb20SGy5hZ29yYS52MS5DcmVhdGVSb29tUmVxdWVzdBocLmFnb3JhLnYxLkNyZWF0ZVJvb21SZXNwb25zZRJECglMaXN0Um9vbXMSGi5hZ29yYS52MS5MaXN0Um9vbXNSZXF1ZXN0GhsuYWdvcmEudjEuTGlzdFJvb21zUmVzcG9uc2USSgoLQXJjaGl2ZVJvb20SHC5hZ29yYS52MS5BcmNoaXZlUm9vbVJlcXVlc3QaHS5hZ29yYS52MS5BcmNoaXZlUm9vbVJlc3BvbnNlEkQKCVN1YnNjcmliZRIaLmFnb3JhLnYxLlN1YnNjcmliZVJlcXVlc3QaGy5hZ29yYS52MS5TdWJzY3JpYmVSZXNwb25zZRJcChFMaXN0U3Vic2NyaXB0aW9ucxIiLmFnb3JhLnYxLkxpc3RTdWJzY3JpcHRpb25zUmVxdWVzdBojLmFnb3JhLnYxLkxpc3RTdWJzY3JpcHRpb25zUmVzcG9uc2USNQoEUG9zdBIVLmFnb3JhLnYxLlBvc3RSZXF1ZXN0GhYuYWdvcmEudjEuUG9zdFJlc3BvbnNlEj4KB0hpc3RvcnkSGC5hZ29yYS52MS5IaXN0b3J5UmVxdWVzdBoZLmFnb3JhLnYxLkhpc3RvcnlSZXNwb25zZRI7CgZVbnJlYWQSFy5hZ29yYS52MS5VbnJlYWRSZXF1ZXN0GhguYWdvcmEudjEuVW5yZWFkUmVzcG9uc2USTQoMVW5yZWFkQnlSb29tEh0uYWdvcmEudjEuVW5yZWFkQnlSb29tUmVxdWVzdBoeLmFnb3JhLnYxLlVucmVhZEJ5Um9vbVJlc3BvbnNlEk0KDE1hcmtSb29tUmVhZBIdLmFnb3JhLnYxLk1hcmtSb29tUmVhZFJlcXVlc3QaHi5hZ29yYS52MS5NYXJrUm9vbVJlYWRSZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Room
@@ -56,6 +56,20 @@ export type Room = Message$1<"agora.v1.Room"> & {
    * @generated from field: int32 pending = 7;
    */
   pending: number;
+
+  /**
+   * The agent that archived the room; empty when it is not archived.
+   *
+   * @generated from field: string archived_by = 8;
+   */
+  archivedBy: string;
+
+  /**
+   * When the room was archived; unset when it is not archived.
+   *
+   * @generated from field: google.protobuf.Timestamp archived_at = 9;
+   */
+  archivedAt?: Timestamp | undefined;
 };
 
 /**
@@ -258,6 +272,12 @@ export const CreateRoomResponseSchema: GenMessage<CreateRoomResponse> = /*@__PUR
  * @generated from message agora.v1.ListRoomsRequest
  */
 export type ListRoomsRequest = Message$1<"agora.v1.ListRoomsRequest"> & {
+  /**
+   * Archived rooms too.
+   *
+   * @generated from field: bool all = 1;
+   */
+  all: boolean;
 };
 
 /**
@@ -283,6 +303,50 @@ export type ListRoomsResponse = Message$1<"agora.v1.ListRoomsResponse"> & {
  */
 export const ListRoomsResponseSchema: GenMessage<ListRoomsResponse> = /*@__PURE__*/
   messageDesc(file_agora_v1_rooms, 7);
+
+/**
+ * @generated from message agora.v1.ArchiveRoomRequest
+ */
+export type ArchiveRoomRequest = Message$1<"agora.v1.ArchiveRoomRequest"> & {
+  /**
+   * The acting agent.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * @generated from field: string room = 2;
+   */
+  room: string;
+
+  /**
+   * True archives the room, false brings it back.
+   *
+   * @generated from field: bool archived = 3;
+   */
+  archived: boolean;
+};
+
+/**
+ * Describes the message agora.v1.ArchiveRoomRequest.
+ * Use `create(ArchiveRoomRequestSchema)` to create a new message.
+ */
+export const ArchiveRoomRequestSchema: GenMessage<ArchiveRoomRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 8);
+
+/**
+ * @generated from message agora.v1.ArchiveRoomResponse
+ */
+export type ArchiveRoomResponse = Message$1<"agora.v1.ArchiveRoomResponse"> & {
+};
+
+/**
+ * Describes the message agora.v1.ArchiveRoomResponse.
+ * Use `create(ArchiveRoomResponseSchema)` to create a new message.
+ */
+export const ArchiveRoomResponseSchema: GenMessage<ArchiveRoomResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 9);
 
 /**
  * @generated from message agora.v1.SubscribeRequest
@@ -320,7 +384,7 @@ export type SubscribeRequest = Message$1<"agora.v1.SubscribeRequest"> & {
  * Use `create(SubscribeRequestSchema)` to create a new message.
  */
 export const SubscribeRequestSchema: GenMessage<SubscribeRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 8);
+  messageDesc(file_agora_v1_rooms, 10);
 
 /**
  * @generated from message agora.v1.SubscribeResponse
@@ -346,7 +410,7 @@ export type SubscribeResponse = Message$1<"agora.v1.SubscribeResponse"> & {
  * Use `create(SubscribeResponseSchema)` to create a new message.
  */
 export const SubscribeResponseSchema: GenMessage<SubscribeResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 9);
+  messageDesc(file_agora_v1_rooms, 11);
 
 /**
  * @generated from message agora.v1.ListSubscriptionsRequest
@@ -363,7 +427,7 @@ export type ListSubscriptionsRequest = Message$1<"agora.v1.ListSubscriptionsRequ
  * Use `create(ListSubscriptionsRequestSchema)` to create a new message.
  */
 export const ListSubscriptionsRequestSchema: GenMessage<ListSubscriptionsRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 10);
+  messageDesc(file_agora_v1_rooms, 12);
 
 /**
  * @generated from message agora.v1.ListSubscriptionsResponse
@@ -389,7 +453,7 @@ export type ListSubscriptionsResponse = Message$1<"agora.v1.ListSubscriptionsRes
  * Use `create(ListSubscriptionsResponseSchema)` to create a new message.
  */
 export const ListSubscriptionsResponseSchema: GenMessage<ListSubscriptionsResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 11);
+  messageDesc(file_agora_v1_rooms, 13);
 
 /**
  * @generated from message agora.v1.PostRequest
@@ -431,7 +495,7 @@ export type PostRequest = Message$1<"agora.v1.PostRequest"> & {
  * Use `create(PostRequestSchema)` to create a new message.
  */
 export const PostRequestSchema: GenMessage<PostRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 12);
+  messageDesc(file_agora_v1_rooms, 14);
 
 /**
  * @generated from message agora.v1.PostResponse
@@ -448,7 +512,7 @@ export type PostResponse = Message$1<"agora.v1.PostResponse"> & {
  * Use `create(PostResponseSchema)` to create a new message.
  */
 export const PostResponseSchema: GenMessage<PostResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 13);
+  messageDesc(file_agora_v1_rooms, 15);
 
 /**
  * @generated from message agora.v1.HistoryRequest
@@ -472,7 +536,7 @@ export type HistoryRequest = Message$1<"agora.v1.HistoryRequest"> & {
  * Use `create(HistoryRequestSchema)` to create a new message.
  */
 export const HistoryRequestSchema: GenMessage<HistoryRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 14);
+  messageDesc(file_agora_v1_rooms, 16);
 
 /**
  * @generated from message agora.v1.HistoryResponse
@@ -489,7 +553,7 @@ export type HistoryResponse = Message$1<"agora.v1.HistoryResponse"> & {
  * Use `create(HistoryResponseSchema)` to create a new message.
  */
 export const HistoryResponseSchema: GenMessage<HistoryResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 15);
+  messageDesc(file_agora_v1_rooms, 17);
 
 /**
  * @generated from message agora.v1.UnreadRequest
@@ -523,7 +587,7 @@ export type UnreadRequest = Message$1<"agora.v1.UnreadRequest"> & {
  * Use `create(UnreadRequestSchema)` to create a new message.
  */
 export const UnreadRequestSchema: GenMessage<UnreadRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 16);
+  messageDesc(file_agora_v1_rooms, 18);
 
 /**
  * @generated from message agora.v1.UnreadResponse
@@ -547,7 +611,7 @@ export type UnreadResponse = Message$1<"agora.v1.UnreadResponse"> & {
  * Use `create(UnreadResponseSchema)` to create a new message.
  */
 export const UnreadResponseSchema: GenMessage<UnreadResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 17);
+  messageDesc(file_agora_v1_rooms, 19);
 
 /**
  * @generated from message agora.v1.UnreadByRoomRequest
@@ -564,7 +628,7 @@ export type UnreadByRoomRequest = Message$1<"agora.v1.UnreadByRoomRequest"> & {
  * Use `create(UnreadByRoomRequestSchema)` to create a new message.
  */
 export const UnreadByRoomRequestSchema: GenMessage<UnreadByRoomRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 18);
+  messageDesc(file_agora_v1_rooms, 20);
 
 /**
  * @generated from message agora.v1.RoomUnread
@@ -595,7 +659,7 @@ export type RoomUnread = Message$1<"agora.v1.RoomUnread"> & {
  * Use `create(RoomUnreadSchema)` to create a new message.
  */
 export const RoomUnreadSchema: GenMessage<RoomUnread> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 19);
+  messageDesc(file_agora_v1_rooms, 21);
 
 /**
  * @generated from message agora.v1.UnreadByRoomResponse
@@ -614,7 +678,7 @@ export type UnreadByRoomResponse = Message$1<"agora.v1.UnreadByRoomResponse"> & 
  * Use `create(UnreadByRoomResponseSchema)` to create a new message.
  */
 export const UnreadByRoomResponseSchema: GenMessage<UnreadByRoomResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 20);
+  messageDesc(file_agora_v1_rooms, 22);
 
 /**
  * @generated from message agora.v1.MarkRoomReadRequest
@@ -643,7 +707,7 @@ export type MarkRoomReadRequest = Message$1<"agora.v1.MarkRoomReadRequest"> & {
  * Use `create(MarkRoomReadRequestSchema)` to create a new message.
  */
 export const MarkRoomReadRequestSchema: GenMessage<MarkRoomReadRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 21);
+  messageDesc(file_agora_v1_rooms, 23);
 
 /**
  * @generated from message agora.v1.MarkRoomReadResponse
@@ -656,7 +720,7 @@ export type MarkRoomReadResponse = Message$1<"agora.v1.MarkRoomReadResponse"> & 
  * Use `create(MarkRoomReadResponseSchema)` to create a new message.
  */
 export const MarkRoomReadResponseSchema: GenMessage<MarkRoomReadResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 22);
+  messageDesc(file_agora_v1_rooms, 24);
 
 /**
  * Where a message of a bridged room stands on its way out.
@@ -771,7 +835,8 @@ export const RoomService: GenService<{
     output: typeof CreateRoomResponseSchema;
   },
   /**
-   * ListRooms returns every room with its activity, in name order.
+   * ListRooms returns the rooms that are not archived, or with all every room, with their
+   * activity, in name order.
    *
    * @generated from rpc agora.v1.RoomService.ListRooms
    */
@@ -779,6 +844,19 @@ export const RoomService: GenService<{
     methodKind: "unary";
     input: typeof ListRoomsRequestSchema;
     output: typeof ListRoomsResponseSchema;
+  },
+  /**
+   * ArchiveRoom archives a room or brings an archived one back; the board says so in #general.
+   * An archived room keeps its messages, subscriptions and reading positions, takes no new
+   * messages or followers, and counts as unread for no one. #general and a bridged room cannot
+   * be archived.
+   *
+   * @generated from rpc agora.v1.RoomService.ArchiveRoom
+   */
+  archiveRoom: {
+    methodKind: "unary";
+    input: typeof ArchiveRoomRequestSchema;
+    output: typeof ArchiveRoomResponseSchema;
   },
   /**
    * Subscribe follows or stops following rooms, or changes the mode a followed room is followed

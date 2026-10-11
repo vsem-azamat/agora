@@ -38,6 +38,7 @@ var webProcedures = map[string]bool{
 	agorav1connect.RoomServiceListSubscriptionsProcedure:   true,
 	agorav1connect.RoomServiceUnreadByRoomProcedure:        true,
 	agorav1connect.RoomServiceMarkRoomReadProcedure:        true,
+	agorav1connect.RoomServiceArchiveRoomProcedure:         true,
 	agorav1connect.ResourceServiceListResourcesProcedure:   true,
 	agorav1connect.GovernanceServiceListProposalsProcedure: true,
 	agorav1connect.GovernanceServiceGetProposalProcedure:   true,

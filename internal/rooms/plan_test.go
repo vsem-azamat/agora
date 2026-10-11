@@ -67,7 +67,7 @@ func TestPendingCountUsesItsIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	rows, err := db.QueryContext(ctx, `EXPLAIN QUERY PLAN `+listQuery)
+	rows, err := db.QueryContext(ctx, `EXPLAIN QUERY PLAN `+listQuery, sql.Named("all", true))
 	if err != nil {
 		t.Fatal(err)
 	}

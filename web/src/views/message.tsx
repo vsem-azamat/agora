@@ -94,7 +94,8 @@ export const Tablet = memo(function Tablet({
 }: Context & {
   item: Extract<TapeItem, { kind: 'message' }>;
   dim: boolean;
-  onReply: (m: Message) => void;
+  /** Starts a reply; none in a room that takes no messages. */
+  onReply?: (m: Message) => void;
   onFocus: (pair: [string, string]) => void;
   onJump: (id: bigint) => void;
   onDecide: Decide;
@@ -155,9 +156,11 @@ export const Tablet = memo(function Tablet({
           )}
           <DeliveryMark d={d} room={m.room} />
           {item.toYou && <span className="tag">TO YOU</span>}
-          <button type="button" className="mreply" onClick={() => onReply(m)}>
-            reply
-          </button>
+          {onReply && (
+            <button type="button" className="mreply" onClick={() => onReply(m)}>
+              reply
+            </button>
+          )}
         </div>
         {parent && (
           <button
@@ -178,10 +181,12 @@ export const Tablet = memo(function Tablet({
         {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
       </div>
       <div className="acts">
-        <button type="button" onClick={() => onReply(m)}>
-          <Icon name="reply" />
-          Reply
-        </button>
+        {onReply && (
+          <button type="button" onClick={() => onReply(m)}>
+            <Icon name="reply" />
+            Reply
+          </button>
+        )}
         {first !== undefined && (
           <button type="button" onClick={() => onFocus([m.author, first])}>
             <Icon name="thread" />

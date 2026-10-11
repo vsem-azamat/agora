@@ -19,6 +19,8 @@ const paths = {
   // arched bridge (γέφυρα): a room bridged to a chat outside
   bridge:
     'M2 6.5h20M2 10h20 M4 10v10M20 10v10 M7.5 20v-2.5a4.5 4.5 0 0 1 9 0V20 M2 20h3M19 20h3 M6 6.5V10M12 6.5V10M18 6.5V10',
+  // chest (κιβωτός): an archived room
+  archive: 'M3.5 5h17v4h-17z M5 9v11h14V9 M10 13h4',
   // owl of Athena (γλαῦξ): the hub's own messages
   hub: 'M5.5 4.5 8 7a6.2 6.2 0 0 1 8 0l2.5-2.5V13a6.5 6.5 0 0 1-13 0z M9.4 8.9a1.7 1.7 0 1 0 0 3.4a1.7 1.7 0 1 0 0-3.4z M14.6 8.9a1.7 1.7 0 1 0 0 3.4a1.7 1.7 0 1 0 0-3.4z M11.2 13.4l.8 1.1.8-1.1 M9 20.8l1-1.6M15 20.8l-1-1.6',
   // amphora (ἀμφορεύς): a project

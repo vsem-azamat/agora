@@ -20,8 +20,8 @@ func (s *roomService) CreateRoom(ctx context.Context, req *connect.Request[agora
 	return connect.NewResponse(&agorav1.CreateRoomResponse{}), nil
 }
 
-func (s *roomService) ListRooms(ctx context.Context, _ *connect.Request[agorav1.ListRoomsRequest]) (*connect.Response[agorav1.ListRoomsResponse], error) {
-	list, err := s.h.rooms.List(ctx)
+func (s *roomService) ListRooms(ctx context.Context, req *connect.Request[agorav1.ListRoomsRequest]) (*connect.Response[agorav1.ListRoomsResponse], error) {
+	list, err := s.h.rooms.List(ctx, req.Msg.GetAll())
 	if err != nil {
 		return nil, toConnect(err)
 	}
@@ -31,9 +31,21 @@ func (s *roomService) ListRooms(ctx context.Context, _ *connect.Request[agorav1.
 		if !r.LastAt.IsZero() {
 			pb.LastAt = timestamppb.New(r.LastAt)
 		}
+		if r.ArchivedBy != "" {
+			pb.ArchivedBy, pb.ArchivedAt = r.ArchivedBy, timestamppb.New(r.ArchivedAt)
+		}
 		out.Rooms = append(out.Rooms, pb)
 	}
 	return connect.NewResponse(out), nil
+}
+
+func (s *roomService) ArchiveRoom(ctx context.Context, req *connect.Request[agorav1.ArchiveRoomRequest]) (*connect.Response[agorav1.ArchiveRoomResponse], error) {
+	m := req.Msg
+	if err := s.h.rooms.Archive(ctx, m.GetAgent(), m.GetRoom(), m.GetArchived()); err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.ArchiveRoomResponse{}), nil
 }
 
 func (s *roomService) Subscribe(ctx context.Context, req *connect.Request[agorav1.SubscribeRequest]) (*connect.Response[agorav1.SubscribeResponse], error) {

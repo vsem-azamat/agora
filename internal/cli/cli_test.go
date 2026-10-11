@@ -600,6 +600,24 @@ func TestRoomsAndMessages(t *testing.T) {
 	if r := agora(ctx, socket, "builder", "status"); !strings.Contains(r.stdout, "ROOMS") || !strings.Contains(r.stdout, "#example-app") {
 		t.Fatalf("status: %s", r.stdout)
 	}
+	if r := agora(ctx, socket, "reviewer", "room-archive", "#example-app"); r.code != 0 || !strings.Contains(r.stdout, "archived #example-app") {
+		t.Fatalf("archive: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "rooms"); strings.Contains(r.stdout, "#example-app") {
+		t.Fatalf("rooms list an archived room: %s", r.stdout)
+	}
+	if r := agora(ctx, socket, "builder", "rooms", "--all"); !strings.Contains(r.stdout, "#example-app") || !strings.Contains(r.stdout, "[archived by reviewer") {
+		t.Fatalf("rooms --all: %s", r.stdout)
+	}
+	if r := agora(ctx, socket, "builder", "post", "example-app", "hello"); r.code == 0 || !strings.Contains(r.stderr, "agora room-unarchive example-app") {
+		t.Fatalf("post in an archived room: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "room-archive", "general"); r.code == 0 {
+		t.Fatalf("archiving general: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "room-unarchive", "example-app"); r.code != 0 || !strings.Contains(r.stdout, "unarchived #example-app") {
+		t.Fatalf("unarchive: %+v", r)
+	}
 	var out, errOut bytes.Buffer
 	code := cli.RunWithInput(ctx, []string{"--socket", socket, "--as", "builder", "post", "general", "-"}, strings.NewReader("from stdin\n"), &out, &errOut)
 	if code != 0 {

@@ -1,4 +1,5 @@
 import { create } from '@bufbuild/protobuf';
+import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { type ComponentProps, type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +48,7 @@ function room(
     onSeen: vi.fn(),
     onDecide: vi.fn(async () => true),
     onPolicy: vi.fn(),
+    onArchive: vi.fn(),
     memory: new Map<string, Saved>(),
     onArrived: vi.fn(),
     ...more,
@@ -752,5 +754,99 @@ describe('notes', () => {
     ]);
     expect(tablet(container, 2).classList).not.toContain('cont');
     expect(tablet(container, 3).classList).toContain('cont');
+  });
+});
+
+describe('archived rooms', () => {
+  const archivedAt = timestampFromDate(new Date(NOW.getTime() - 2 * 3600_000));
+  const old = create(RoomSchema, { name: 'old-app', purpose: 'Done', messages: 12, archivedBy: 'builder', archivedAt });
+  const rooms = [create(RoomSchema, { name: 'example-app', purpose: 'Checkout and payments', messages: 3 })];
+
+  it('archives from the header only once confirmed in the page', () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    const { props } = room([message(1, 'builder', 'hi', 5)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Archive room' }));
+    expect(document.activeElement?.textContent).toBe('Cancel');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(props.onArchive).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Archive room' }));
+    const ask = screen.getByRole('group', { name: 'Archive #example-app?' });
+    fireEvent.click(within(ask).getByRole('button', { name: 'Archive' }));
+    expect(props.onArchive).toHaveBeenCalledWith(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('cancels on Escape without leaving a reply', () => {
+    const { props } = room([message(1, 'builder', 'hi', 5)]);
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archive room' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Cancel' }), { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'Archive #example-app?' })).toBeNull();
+    expect(document.querySelector('.replying')).not.toBeNull();
+    expect(props.onArchive).not.toHaveBeenCalled();
+  });
+
+  it('offers no archiving in the general room or a bridged one', () => {
+    room([], { name: 'general', room: create(RoomSchema, { name: 'general' }) });
+    expect(screen.queryByRole('button', { name: 'Archive room' })).toBeNull();
+    cleanup();
+    room([], { name: 'example-chat', bridge: bridge('example-chat', 'running') });
+    expect(screen.queryByRole('button', { name: 'Archive room' })).toBeNull();
+  });
+
+  it('shows an archived room read only, with who archived it and Unarchive', () => {
+    const { props, container } = room([message(1, 'builder', 'hi', 5)], { name: 'old-app', room: old });
+    expect(container.querySelector('.roomhead.archived .badge')?.textContent).toBe('archived');
+    expect(container.querySelector('.archivedpanel p')?.textContent).toBe(
+      'ARCHIVED — by builder on 9 Oct. New messages are not accepted, nobody is woken.',
+    );
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /reply/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Archive room' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^follow/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }));
+    expect(props.onArchive).toHaveBeenCalledWith(false);
+  });
+
+  it('moves the focus to Unarchive once the room it archived is archived', () => {
+    const { props, rerender } = room([message(1, 'builder', 'hi', 5)], {
+      name: 'old-app',
+      room: { ...old, archivedBy: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Archive room' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    rerender(<RoomView {...props} room={old} />);
+    expect(document.activeElement?.textContent).toBe('Unarchive');
+  });
+
+  it('ends the sidebar with a row to the archived rooms', () => {
+    const { container } = render(<RoomNav rooms={rooms} archived={1} unread={new Map()} followed={new Set()} />);
+    const row = container.querySelector('a.archivedrow') as HTMLAnchorElement;
+    expect(row.getAttribute('href')).toBe('#/archive');
+    expect(row.textContent).toBe('1 archived→');
+    cleanup();
+    const none = render(<RoomNav rooms={rooms} archived={0} unread={new Map()} followed={new Set()} />);
+    expect(none.container.querySelector('a.archivedrow')).toBeNull();
+  });
+
+  it('switches the Rooms view between active and archived rooms', () => {
+    const onUnarchive = vi.fn();
+    const props = { rooms, archived: [old], onUnarchive, unread: new Map(), followed: new Set<string>(), now: NOW };
+    const { container } = render(<Rooms {...props} tab="active" />);
+    const tabs = within(screen.getByRole('navigation', { name: 'Rooms' }));
+    expect(tabs.getByRole('link', { name: 'Active · 1' }).getAttribute('aria-current')).toBe('page');
+    expect(tabs.getByRole('link', { name: 'Archived · 1' }).getAttribute('href')).toBe('#/archive');
+    expect(container.querySelector('a[href="#/rooms/example-app"]')).not.toBeNull();
+    expect(container.querySelector('a[href="#/rooms/old-app"]')).toBeNull();
+    cleanup();
+    const view = render(<Rooms {...props} tab="archived" />);
+    expect(screen.getByRole('link', { name: 'Archived · 1' }).getAttribute('aria-current')).toBe('page');
+    expect(view.container.querySelector('a[href="#/rooms/example-app"]')).toBeNull();
+    const row = view.container.querySelector('.arow') as HTMLElement;
+    expect(row.querySelector('a[href="#/rooms/old-app"] .sum')?.textContent).toBe(
+      'archived by builder · 9 Oct · 12 msgs',
+    );
+    fireEvent.click(within(row).getByRole('button', { name: 'Unarchive #old-app' }));
+    expect(onUnarchive).toHaveBeenCalledWith('old-app');
   });
 });

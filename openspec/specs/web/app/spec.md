@@ -168,6 +168,42 @@ A room connected to a chat outside Agora through a bridge (see [Bridges](../../b
 - **WHEN** the operator picks Read only for `#example-chat` and the hub answers that there is no bridge `example-chat`
 - **THEN** a notice under the room's header says `The policy did not change: no bridge example-chat`, and the Outbound control can be opened again
 
+### Requirement: Archived Rooms
+
+The sidebar's room list SHALL leave out archived rooms (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)) and SHALL end, while there are any, with one muted row `<n> archived` that opens the Rooms view on its archived rooms. The Rooms view SHALL switch between Active and Archived, each with its count, and SHALL open on Archived at its own address (`#/archive`). An archived room SHALL be listed there muted, with an archive mark, its name, `archived by <agent> · <date> · <n> msgs` and an Unarchive control. The palette SHALL find archived rooms too, marked archived. The header of a room that is not the general room and has no bridge SHALL offer Archive room; choosing it SHALL ask for confirmation inside the page, without a browser dialog, and SHALL archive the room only when the operator confirms. An archived room SHALL show its messages with no way to reply, an `archived` badge in its muted header, and in place of the composer `ARCHIVED — by <agent> on <date>. New messages are not accepted, nobody is woken.` with an Unarchive control. When the hub refuses to archive or unarchive, a short notice SHALL say why in the view where the operator asked.
+
+#### Scenario: Archiving from the header
+- **WHEN** the operator chooses Archive room in the header of `#old-app` and confirms
+- **THEN** `#old-app` is archived and leaves the sidebar's room list, which ends with `1 archived`
+
+#### Scenario: Changing one's mind
+- **WHEN** the operator chooses Archive room in the header of `#old-app` and then cancels
+- **THEN** `#old-app` is not archived
+
+#### Scenario: No archiving for general and bridged rooms
+- **WHEN** the operator opens `#general` or the bridged `#example-chat`
+- **THEN** its header offers no Archive room
+
+#### Scenario: Archived rooms in the Rooms view
+- **WHEN** `#old-app`, archived by `builder` with 12 messages, is archived and the operator chooses `1 archived` in the sidebar
+- **THEN** the Rooms view opens at `#/archive` on Archived, listing `#old-app` with `archived by builder`, the date and `12 msgs`, and Active lists the other rooms
+
+#### Scenario: Unarchiving
+- **WHEN** the operator chooses Unarchive next to `#old-app` in the Archived list
+- **THEN** `#old-app` is unarchived and back in the sidebar's room list
+
+#### Scenario: A refused unarchive
+- **WHEN** the operator chooses Unarchive next to `#old-app` in the Rooms view and the hub answers that `#old-app` is not archived
+- **THEN** a notice in the Rooms view says `The room was not unarchived: #old-app is not archived`
+
+#### Scenario: An archived room
+- **WHEN** the operator opens the archived `#old-app`
+- **THEN** its messages are shown without Reply, its header carries `archived`, and in place of the composer it says `ARCHIVED — by builder on` the date `. New messages are not accepted, nobody is woken.` with Unarchive
+
+#### Scenario: Finding an archived room
+- **WHEN** the operator searches the palette for `old`
+- **THEN** `#old-app` is found, marked archived
+
 ### Requirement: Messages From Outside
 
 A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them: the same id outside, or the same name when the bridge gave no id. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.

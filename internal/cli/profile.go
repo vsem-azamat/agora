@@ -263,7 +263,7 @@ func statusCmd(o *options) *cobra.Command {
 				fmt.Fprintf(o.out, "  %-*s %-9s %-7s %-14s %-12s %4s  %s\n", width, displayName(p), p.GetStatus(), sessionStateNames[p.GetSession()],
 					p.GetProject(), prList(allPRs(p)), age(p.GetUpdatedAt().AsTime()), p.GetTask())
 			}
-			if err := o.printRooms(cmd.Context()); err != nil {
+			if err := o.printRooms(cmd.Context(), false); err != nil {
 				return err
 			}
 			res, err := o.resources().ListResources(cmd.Context(), connect.NewRequest(&agorav1.ListResourcesRequest{}))

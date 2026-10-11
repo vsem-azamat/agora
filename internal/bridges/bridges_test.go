@@ -85,7 +85,7 @@ func TestAddingABridge(t *testing.T) {
 		!slices.Equal(list[0].Addressees, []string{"secretary"}) || list[0].Command != "example-bridge --chat 42" {
 		t.Fatalf("bridges: %+v", list)
 	}
-	rs, err := e.r.List(ctx)
+	rs, err := e.r.List(ctx, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestAttachingAnExistingRoom(t *testing.T) {
 	if len(msgs) != 1 || msgs[0].ID != before {
 		t.Fatalf("history after attaching: %+v", msgs)
 	}
-	rs, _ := e.r.List(ctx)
+	rs, _ := e.r.List(ctx, false)
 	if !slices.ContainsFunc(rs, func(r rooms.Room) bool { return r.Name == "example-team" && r.Purpose == "the team chat" }) {
 		t.Fatalf("purpose changed: %+v", rs)
 	}
@@ -151,9 +151,60 @@ func TestAddingIsRefused(t *testing.T) {
 	if len(list) != 1 || list[0].Command != "example-bridge --chat 42" {
 		t.Fatalf("bridges after refusals: %+v", list)
 	}
-	rs, _ := e.r.List(ctx)
+	rs, _ := e.r.List(ctx, true)
 	if slices.ContainsFunc(rs, func(r rooms.Room) bool { return r.Name == "example-new" }) {
 		t.Fatal("a refused bridge left its room")
+	}
+}
+
+func TestArchivingAndBridges(t *testing.T) {
+	e := newEnv(t)
+	if err := e.r.Archive(ctx, "builder", "example-chat", true); !errors.Is(err, rooms.ErrBridged) || !strings.Contains(err.Error(), "agora bridge remove example-chat") {
+		t.Fatalf("archiving a bridged room: %v", err)
+	}
+	if err := e.r.Create(ctx, "old-chat", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "old-chat", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.b.Add(ctx, "builder", "old-chat", "example-bridge", "", []string{"secretary"}); !errors.Is(err, rooms.ErrArchived) || !strings.Contains(err.Error(), "archived") {
+		t.Fatalf("bridging an archived room: %v", err)
+	}
+	if list, _ := e.b.List(ctx); len(list) != 1 {
+		t.Fatalf("bridges %+v", list)
+	}
+	// once its bridge is removed, a room can be archived, after what still waits to go out
+	waiting, err := e.r.Post(ctx, "secretary", "example-chat", "a draft for the chat", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "example-chat", true); !errors.Is(err, rooms.ErrUndelivered) || !strings.Contains(err.Error(), "decline it first") {
+		t.Fatalf("archiving with a message waiting: %v", err)
+	}
+	if err := e.b.DeclinePending(ctx, waiting, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "example-chat", true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A message the operator posted while the bridge was down stays sending once the bridge is
+// removed; nothing can settle it, and it does not hold archiving back.
+func TestArchivingWithAMessageLeftSending(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "example-chat", true); err != nil {
+		t.Fatal(err)
 	}
 }
 

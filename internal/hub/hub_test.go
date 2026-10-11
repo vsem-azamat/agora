@@ -782,3 +782,67 @@ func TestReleaseOfAHolderNeedsTheActingAgent(t *testing.T) {
 		t.Fatalf("own release: %v %v", res, err)
 	}
 }
+
+func TestArchivingARoomOverTheAPI(t *testing.T) {
+	r := start(t)
+	ctx := context.Background()
+	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.rooms.CreateRoom(ctx, connect.NewRequest(&agorav1.CreateRoomRequest{Name: "old-app", Purpose: "the app", Agent: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	bridges := agorav1connect.NewBridgeServiceClient(r.httpClient, "http://agora")
+	if _, err := bridges.AddBridge(ctx, connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: "true"})); err != nil {
+		t.Fatal(err)
+	}
+	archive := func(room string, archived bool) error {
+		_, err := r.rooms.ArchiveRoom(ctx, connect.NewRequest(&agorav1.ArchiveRoomRequest{Agent: "builder", Room: room, Archived: archived}))
+		return err
+	}
+	if err := archive("old-app", true); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := r.rooms.ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{}))
+	if len(list.Msg.GetRooms()) != 2 {
+		t.Fatalf("rooms %v", list.Msg.GetRooms())
+	}
+	all, _ := r.rooms.ListRooms(ctx, connect.NewRequest(&agorav1.ListRoomsRequest{All: true}))
+	if rs := all.Msg.GetRooms(); len(rs) != 3 || rs[2].GetArchivedBy() != "builder" || rs[2].GetArchivedAt() == nil || rs[0].GetArchivedAt() != nil {
+		t.Fatalf("all rooms %v", rs)
+	}
+	_, err := r.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "old-app", Body: "hello"}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("post in an archived room: %v", err)
+	}
+	for _, c := range []struct {
+		room     string
+		archived bool
+		want     connect.Code
+	}{
+		{"old-app", true, connect.CodeFailedPrecondition},
+		{"general", true, connect.CodeInvalidArgument},
+		{"nowhere", true, connect.CodeNotFound},
+		{"example-chat", true, connect.CodeFailedPrecondition}, // bridged
+	} {
+		if err := archive(c.room, c.archived); connect.CodeOf(err) != c.want {
+			t.Errorf("archive %s %v: %v, want %v", c.room, c.archived, err, c.want)
+		}
+	}
+	if err := archive("old-app", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive("old-app", false); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("unarchiving twice: %v", err)
+	}
+	// a message that waits for the operator holds archiving back once the bridge is gone
+	if _, err := r.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-chat", Body: "a draft"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bridges.RemoveBridge(ctx, connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "builder", Name: "example-chat"})); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive("example-chat", true); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Fatalf("archiving with a message waiting: %v", err)
+	}
+}

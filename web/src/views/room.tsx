@@ -1,7 +1,15 @@
 // A room: its messages on the tape, who talks with whom, and the compose box. The tape follows
 // new messages only while the operator is at the bottom; see tape.ts for the decisions.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { knownNames, type Liveness, liveness as livenessOf, livenessOrder, type Mode, type RoomCount } from '../board';
+import {
+  knownNames,
+  type Liveness,
+  liveness as livenessOf,
+  livenessOrder,
+  type Mode,
+  type RoomCount,
+  toDate,
+} from '../board';
 import { authorKey, POLICY_LABELS, type Policy, policyOf, runningOf, runningText } from '../bridges';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Bridge } from '../gen/agora/v1/bridges_pb';
@@ -28,7 +36,7 @@ import { Composer } from './composer';
 import { FollowControls } from './follow';
 import { BoardLine, type Decide, Tablet } from './message';
 import { OutsiderAvatar, OutsiderName } from './outside';
-import { RoomIcon } from './rooms';
+import { RoomIcon, shortDate } from './rooms';
 import { Notice } from './shell';
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
@@ -79,6 +87,8 @@ export function RoomView(props: {
   onDecide: Decide;
   /** Changes what goes out through the room's bridge. */
   onPolicy: (p: Policy) => void;
+  /** Archives the room, or brings it back. */
+  onArchive: (archived: boolean) => void;
   /** A refused call to tell under the header, numbered so a repeat shows for its full time. */
   notice?: { text: string; n: number };
   onCloseNotice?: () => void;
@@ -267,6 +277,15 @@ export function RoomView(props: {
     else scrollTape(el, el.scrollHeight);
   };
   const readOnly = props.bridge !== undefined && policyOf(props.bridge.policy) === 'read';
+  const archived = props.room?.archivedBy ? props.room : undefined;
+  // once the room the operator archived here is archived, the focus goes to Unarchive
+  const archiving = useRef(false);
+  const unarchive = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!archived || !archiving.current) return;
+    archiving.current = false;
+    unarchive.current?.focus();
+  }, [archived]);
   // nothing goes out of a read-only room, so everything the operator writes there is a note, and
   // stays one when Outbound opens again; the flag goes with every post, the hub ignores it outside
   // a bridged room
@@ -288,11 +307,12 @@ export function RoomView(props: {
   return (
     <div className="roomwrap">
       <section className="room" aria-label={`#${name}`}>
-        <div className="roomhead">
+        <div className={archived ? 'roomhead archived' : 'roomhead'}>
           <div className="rtitle">
             <h2>
-              <RoomIcon bridge={props.bridge} />#{name}
+              {archived ? <Icon name="archive" /> : <RoomIcon bridge={props.bridge} />}#{name}
             </h2>
+            {archived && <span className="badge">archived</span>}
             <p className="purpose" title={props.room?.purpose}>
               {props.room?.purpose}
             </p>
@@ -309,13 +329,24 @@ export function RoomView(props: {
               {props.room?.messages ?? 0} msgs · {people.length} in room
             </span>
             {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
-            <FollowControls
-              room={name}
-              always={name === props.general}
-              followed={props.followed}
-              mode={props.mode ?? 'all'}
-              onFollow={props.onFollow}
-            />
+            {!archived && (
+              <FollowControls
+                room={name}
+                always={name === props.general}
+                followed={props.followed}
+                mode={props.mode ?? 'all'}
+                onFollow={props.onFollow}
+              />
+            )}
+            {!archived && props.room && name !== props.general && !props.bridge && (
+              <ArchiveControl
+                room={name}
+                onArchive={() => {
+                  archiving.current = true;
+                  props.onArchive(true);
+                }}
+              />
+            )}
           </div>
         </div>
         {props.notice && props.onCloseNotice && (
@@ -357,7 +388,7 @@ export function RoomView(props: {
                       key={it.key}
                       item={it}
                       dim={dimmed(it.message)}
-                      onReply={startReply}
+                      onReply={archived ? undefined : startReply}
                       onFocus={setFocus}
                       onJump={jump}
                       onDecide={decide}
@@ -391,19 +422,31 @@ export function RoomView(props: {
             )}
           </div>
         </div>
-        <Composer
-          room={name}
-          operator={reader.operator}
-          agents={props.agents}
-          inRoom={inRoom}
-          draft={props.draft}
-          onDraft={props.onDraft}
-          reply={reply}
-          onCancelReply={() => setReply(undefined)}
-          onPost={post}
-          inputRef={box}
-          outbound={props.bridge && { chat: props.bridge.name, note, readOnly, onNote: props.onNote }}
-        />
+        {archived ? (
+          <div className="archivedpanel">
+            <p>
+              <b>ARCHIVED</b> — by {archived.archivedBy} on {shortDate(toDate(archived.archivedAt), props.now)}. New
+              messages are not accepted, nobody is woken.
+            </p>
+            <button type="button" className="btn" ref={unarchive} onClick={() => props.onArchive(false)}>
+              Unarchive
+            </button>
+          </div>
+        ) : (
+          <Composer
+            room={name}
+            operator={reader.operator}
+            agents={props.agents}
+            inRoom={inRoom}
+            draft={props.draft}
+            onDraft={props.onDraft}
+            reply={reply}
+            onCancelReply={() => setReply(undefined)}
+            onPost={post}
+            inputRef={box}
+            outbound={props.bridge && { chat: props.bridge.name, note, readOnly, onNote: props.onNote }}
+          />
+        )}
       </section>
       <aside className="rail" aria-label="Who is here">
         <div>
@@ -468,6 +511,55 @@ function roomPeople(messages: Message[], reader: Reader, live: Map<string, Liven
     name,
     live: name === reader.operator ? undefined : (live.get(name) ?? 'offline'),
   }));
+}
+
+/** Archive room, asked again in the page before the room is archived. */
+function ArchiveControl(props: { room: string; onArchive: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const cancel = useRef<HTMLButtonElement>(null);
+  const again = useRef<HTMLButtonElement>(null);
+  const was = useRef(false);
+  // the focus goes to Cancel when asked, and back to Archive room when the question closes
+  useEffect(() => {
+    if (asking) cancel.current?.focus();
+    else if (was.current) again.current?.focus();
+    was.current = asking;
+  }, [asking]);
+  if (!asking) {
+    return (
+      <button type="button" className="chip" ref={again} onClick={() => setAsking(true)}>
+        Archive room
+      </button>
+    );
+  }
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset would bring a form's border and legend into the header
+    <div
+      className="ask"
+      role="group"
+      aria-label={`Archive #${props.room}?`}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation(); // the room's own Escape would also end a reply
+        setAsking(false);
+      }}
+    >
+      <span>Archive #{props.room}?</span>
+      <button
+        type="button"
+        className="chip warn"
+        onClick={() => {
+          setAsking(false);
+          props.onArchive();
+        }}
+      >
+        Archive
+      </button>
+      <button type="button" className="chip" ref={cancel} onClick={() => setAsking(false)}>
+        Cancel
+      </button>
+    </div>
+  );
 }
 
 /** A bridged room's state and its outbound policy, which only the operator changes. */

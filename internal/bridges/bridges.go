@@ -121,6 +121,8 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 				return err
 			}
 			created = true
+		} else if err := rooms.RequireUnarchivedTx(ctx, tx, name); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO bridges (name, command, created_by, created_at) VALUES (?, ?, ?, ?)`,
 			name, command, agent, b.now().UnixMilli()); err != nil {

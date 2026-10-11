@@ -98,7 +98,7 @@ func TestMentionParsing(t *testing.T) {
 func TestGeneralExistsAndStaysFollowed(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder")
-	list, _ := e.r.List(ctx)
+	list, _ := e.r.List(ctx, false)
 	if len(list) != 1 || list[0].Name != "general" {
 		t.Fatalf("rooms %+v", list)
 	}
@@ -126,7 +126,7 @@ func TestCreatingRooms(t *testing.T) {
 	if err := e.r.Create(ctx, "Bad_Name", "x", "builder"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("bad name: %v", err)
 	}
-	list, _ := e.r.List(ctx)
+	list, _ := e.r.List(ctx, false)
 	if len(list) != 2 {
 		t.Fatalf("rooms %+v", list)
 	}
@@ -680,5 +680,173 @@ func TestBacklogDoesNotWakeAfterChangingToWake(t *testing.T) {
 	e.subscribe(t, "builder", "example-app", rooms.ModeWake)
 	if _, total, _ := e.r.Unread(ctx, "builder", rooms.Waking, 0); total != 1 {
 		t.Fatalf("%d waking after subscribing again with wake", total)
+	}
+}
+
+// --- archiving ---------------------------------------------------------------------
+
+func TestArchivingARoom(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	if err := e.r.Create(ctx, "old-app", "work", "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	e.subscribe(t, "builder", "old-app", rooms.ModeWake)
+	first := e.post(t, "reviewer", "old-app", "one")
+	second := e.post(t, "reviewer", "old-app", "two")
+	if err := e.r.Archive(ctx, "builder", "old-app", true); err != nil {
+		t.Fatal(err)
+	}
+
+	list, _ := e.r.List(ctx, false)
+	if len(list) != 1 || list[0].Name != "general" {
+		t.Fatalf("rooms %+v", list)
+	}
+	all, _ := e.r.List(ctx, true)
+	if len(all) != 2 || all[1].Name != "old-app" || all[1].ArchivedBy != "builder" || all[1].ArchivedAt.IsZero() || all[0].ArchivedBy != "" {
+		t.Fatalf("all rooms %+v", all)
+	}
+	hist, _ := e.r.History(ctx, "general", 1)
+	if len(hist) != 1 || hist[0].Author != rooms.Board || hist[0].Body != "#old-app archived by builder" {
+		t.Fatalf("announcement %+v", hist)
+	}
+	if got, _ := e.r.History(ctx, "old-app", 0); !slices.Equal(ids(got), []int64{first, second}) {
+		t.Fatalf("history of an archived room %+v", got)
+	}
+
+	// nothing unread there, nothing wakes, and the room is not listed as followed
+	if got := e.unread(t, "builder"); len(got) != 1 || got[0].Room != "general" {
+		t.Fatalf("unread while archived %+v", got)
+	}
+	if n, _ := e.r.UnreadCount(ctx, "builder", rooms.Waking); n != 0 {
+		t.Fatalf("waking while archived %d", n)
+	}
+	if got, _ := e.r.UnreadByRoom(ctx, "builder"); len(got) != 1 || got[0].Room != "general" {
+		t.Fatalf("unread by room %+v", got)
+	}
+	if got, _ := e.r.Subscriptions(ctx, "builder"); !slices.Equal(got, []rooms.Subscription{{Room: "general", Mode: rooms.ModeAll}}) {
+		t.Fatalf("followed while archived %v", got)
+	}
+
+	// posts and new followers are refused, with how to unarchive
+	for _, post := range []func() error{
+		func() error { _, err := e.r.Post(ctx, "reviewer", "old-app", "three", 0); return err },
+		func() error { _, err := e.r.PostNote(ctx, "reviewer", "old-app", "three", 0); return err },
+		func() error { _, err := e.r.PostFromOperator(ctx, "reviewer", "old-app", "three", 0); return err },
+	} {
+		if err := post(); !errors.Is(err, rooms.ErrArchived) || !strings.Contains(err.Error(), "agora room-unarchive old-app") {
+			t.Fatalf("post in an archived room: %v", err)
+		}
+	}
+	if _, err := e.r.Subscribe(ctx, "reviewer", []string{"old-app"}, true, rooms.ModeWake); !errors.Is(err, rooms.ErrArchived) {
+		t.Fatalf("mode change in an archived room: %v", err)
+	}
+	e.join(t, "newcomer")
+	if _, err := e.r.Subscribe(ctx, "newcomer", []string{"old-app"}, true, ""); !errors.Is(err, rooms.ErrArchived) {
+		t.Fatalf("a new follower of an archived room: %v", err)
+	}
+
+	// unarchiving brings everything back as it was
+	if err := e.r.Archive(ctx, "reviewer", "old-app", false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.r.Subscriptions(ctx, "builder"); !slices.Equal(got, []rooms.Subscription{{Room: "general", Mode: rooms.ModeAll}, {Room: "old-app", Mode: rooms.ModeWake}}) {
+		t.Fatalf("followed after unarchiving %v", got)
+	}
+	got, _, _ := e.r.Unread(ctx, "builder", rooms.Everything, 0)
+	var inRoom []int64
+	for _, m := range got {
+		if m.Room == "old-app" {
+			inRoom = append(inRoom, m.ID)
+		}
+	}
+	if !slices.Equal(inRoom, []int64{first, second}) {
+		t.Fatalf("unread after unarchiving %+v", got)
+	}
+	if n, _ := e.r.UnreadCount(ctx, "builder", rooms.Waking); n != 2 {
+		t.Fatalf("waking after unarchiving %d", n)
+	}
+	if hist, _ := e.r.History(ctx, "general", 1); hist[0].Body != "#old-app unarchived by reviewer" {
+		t.Fatalf("announcement %+v", hist)
+	}
+	if list, _ := e.r.List(ctx, false); len(list) != 2 || list[1].ArchivedBy != "" || !list[1].ArchivedAt.IsZero() {
+		t.Fatalf("rooms after unarchiving %+v", list)
+	}
+	e.post(t, "reviewer", "old-app", "back")
+}
+
+func TestUnfollowingAnArchivedRoom(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder")
+	if err := e.r.Create(ctx, "old-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "old-app", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"old-app"}, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "old-app", false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.r.Subscriptions(ctx, "builder"); len(got) != 1 {
+		t.Fatalf("followed %v", got)
+	}
+}
+
+func TestArchivingIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder")
+	if err := e.r.Create(ctx, "old-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	announced := func() int {
+		h, _ := e.r.History(ctx, "general", 100)
+		return len(h)
+	}
+	before := announced()
+	if err := e.r.Archive(ctx, "builder", "general", true); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("archiving general: %v", err)
+	}
+	if err := e.r.Archive(ctx, "builder", "nowhere", true); !errors.Is(err, rooms.ErrNotFound) {
+		t.Fatalf("archiving an unknown room: %v", err)
+	}
+	if err := e.r.Archive(ctx, "builder", "old-app", false); !errors.Is(err, rooms.ErrNotArchived) {
+		t.Fatalf("unarchiving a room that is not archived: %v", err)
+	}
+	if err := e.r.Archive(ctx, "nobody", "old-app", true); !errors.Is(err, agents.ErrUnknown) {
+		t.Fatalf("archiving as an unknown agent: %v", err)
+	}
+	if err := e.r.Archive(ctx, "builder", "#old-app", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "old-app", true); !errors.Is(err, rooms.ErrArchived) {
+		t.Fatalf("archiving twice: %v", err)
+	}
+	if got := announced(); got != before+1 {
+		t.Fatalf("announcements %d, want %d", got, before+1)
+	}
+	if err := e.r.Create(ctx, "old-app", "again", "builder"); !errors.Is(err, rooms.ErrExists) || !strings.Contains(err.Error(), "archived") {
+		t.Fatalf("creating an archived room's name: %v", err)
+	}
+}
+
+func TestNoticesSkipArchivedRooms(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder")
+	for _, r := range []string{"aa-old", "bb-app"} {
+		if err := e.r.Create(ctx, r, "work", "builder"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.r.Archive(ctx, "builder", "aa-old", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.s.Rename(ctx, "builder", "builder-2"); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := e.r.History(ctx, "bb-app", 1); len(h) != 1 || h[0].Body != "builder is now called builder-2" {
+		t.Fatalf("notice %+v", h)
 	}
 }

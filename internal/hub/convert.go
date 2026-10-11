@@ -32,7 +32,7 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, queue.ErrNotYourTurn):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
-	case errors.Is(err, rooms.ErrReadOnly):
+	case errors.Is(err, rooms.ErrReadOnly), errors.Is(err, rooms.ErrArchived), errors.Is(err, rooms.ErrNotArchived), errors.Is(err, rooms.ErrBridged), errors.Is(err, rooms.ErrUndelivered):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, bridges.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, err)

@@ -36,6 +36,7 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 - [Room List](app/spec.md#requirement-room-list)
 - [Messages In A Room](app/spec.md#requirement-messages-in-a-room)
 - [Bridged Rooms](app/spec.md#requirement-bridged-rooms)
+- [Archived Rooms](app/spec.md#requirement-archived-rooms)
 - [Messages From Outside](app/spec.md#requirement-messages-from-outside)
 - [Messages Going Out](app/spec.md#requirement-messages-going-out)
 - [Notes In A Room](app/spec.md#requirement-notes-in-a-room)

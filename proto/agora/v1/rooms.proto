@@ -10,8 +10,14 @@ option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
 service RoomService {
   // CreateRoom creates a room with a purpose; its creator follows it.
   rpc CreateRoom(CreateRoomRequest) returns (CreateRoomResponse);
-  // ListRooms returns every room with its activity, in name order.
+  // ListRooms returns the rooms that are not archived, or with all every room, with their
+  // activity, in name order.
   rpc ListRooms(ListRoomsRequest) returns (ListRoomsResponse);
+  // ArchiveRoom archives a room or brings an archived one back; the board says so in #general.
+  // An archived room keeps its messages, subscriptions and reading positions, takes no new
+  // messages or followers, and counts as unread for no one. #general and a bridged room cannot
+  // be archived.
+  rpc ArchiveRoom(ArchiveRoomRequest) returns (ArchiveRoomResponse);
   // Subscribe follows or stops following rooms, or changes the mode a followed room is followed
   // with; #general always stays followed but may take any mode. At least one room is required;
   // ListSubscriptions reads the followed rooms with their modes.
@@ -41,6 +47,10 @@ message Room {
   google.protobuf.Timestamp last_at = 6;
   // Messages of the room's bridge that wait for the operator to send or decline them.
   int32 pending = 7;
+  // The agent that archived the room; empty when it is not archived.
+  string archived_by = 8;
+  // When the room was archived; unset when it is not archived.
+  google.protobuf.Timestamp archived_at = 9;
 }
 
 message Message {
@@ -120,11 +130,24 @@ message CreateRoomRequest {
 
 message CreateRoomResponse {}
 
-message ListRoomsRequest {}
+message ListRoomsRequest {
+  // Archived rooms too.
+  bool all = 1;
+}
 
 message ListRoomsResponse {
   repeated Room rooms = 1;
 }
+
+message ArchiveRoomRequest {
+  // The acting agent.
+  string agent = 1;
+  string room = 2;
+  // True archives the room, false brings it back.
+  bool archived = 3;
+}
+
+message ArchiveRoomResponse {}
 
 message SubscribeRequest {
   string agent = 1;
