@@ -42,13 +42,13 @@ export const POLICY_LABELS: Record<Policy, string> = {
 };
 
 /** Where a message stands on its way out; undefined for one that stays here. */
-export type Delivery = 'pending' | 'sending' | 'sent' | 'declined' | 'failed';
+export type Delivery = 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed';
 
 const DELIVERIES: Partial<Record<DeliveryState, Delivery>> = {
-  [DeliveryState.PENDING]: 'pending',
+  [DeliveryState.SCHEDULED]: 'scheduled',
   [DeliveryState.SENDING]: 'sending',
   [DeliveryState.SENT]: 'sent',
-  [DeliveryState.DECLINED]: 'declined',
+  [DeliveryState.CANCELLED]: 'cancelled',
   [DeliveryState.FAILED]: 'failed',
 };
 

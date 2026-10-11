@@ -157,7 +157,7 @@ describe('bridged rooms', () => {
         case 'RoomService/ListRooms':
           return reply({
             rooms: [
-              { name: 'example-chat', messages: 2, pending: 1 },
+              { name: 'example-chat', messages: 2, scheduled: 1 },
               { name: 'general', messages: 2 },
             ],
           });
@@ -176,14 +176,14 @@ describe('bridged rooms', () => {
                 author: 'builder',
                 body: 'looked, all fine',
                 replyTo: '6',
-                deliveryState: 'DELIVERY_STATE_PENDING',
+                deliveryState: 'DELIVERY_STATE_SCHEDULED',
               },
             ],
           });
         case 'RoomService/Post':
           calls.push([proc, JSON.parse(raw)]);
           return reply({ id: '8' });
-        case 'BridgeService/SendPending':
+        case 'BridgeService/SendScheduled':
           calls.push([proc, JSON.parse(raw)]);
           // the fake has the message scheduled only under delay; another policy stands for a
           // decision taken meanwhile
@@ -220,10 +220,10 @@ describe('bridged rooms', () => {
     const { container } = await openChat('BRIDGE_POLICY_DELAY', calls);
     const link = container.querySelector('.side a[href="#/rooms/example-chat"]') as HTMLElement;
     expect(link.querySelector('svg.br title')?.textContent).toBe('bridge running');
-    expect(link.querySelector('em.pending')?.textContent).toBe('1 scheduled to go out');
+    expect(link.querySelector('em.scheduled')?.textContent).toBe('1 scheduled to go out');
     expect(container.querySelector('[data-mid="6"] .mh')?.textContent).toContain('Ada · example-chat');
     fireEvent.click(within(waiting(container)).getByRole('button', { name: 'Send now' }));
-    await waitFor(() => expect(calls).toEqual([['BridgeService/SendPending', { messageId: '7' }]]));
+    await waitFor(() => expect(calls).toEqual([['BridgeService/SendScheduled', { messageId: '7' }]]));
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -574,7 +574,13 @@ describe('archived rooms', () => {
             rooms: [
               { name: 'example-app', messages: 1 },
               { name: 'general', messages: 2 },
-              { name: 'old-app', messages: 12, pending: 1, archivedBy: 'builder', archivedAt: '2026-10-09T10:00:00Z' },
+              {
+                name: 'old-app',
+                messages: 12,
+                scheduled: 1,
+                archivedBy: 'builder',
+                archivedAt: '2026-10-09T10:00:00Z',
+              },
             ],
           });
         case 'RoomService/ArchiveRoom':

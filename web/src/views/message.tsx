@@ -71,7 +71,7 @@ function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
           <span className="sr">sent</span>
         </span>
       );
-    case 'declined':
+    case 'cancelled':
     case 'failed':
       return <span className={`dl ${d}`}>not sent</span>;
     default:
@@ -175,7 +175,7 @@ export const Tablet = memo(function Tablet({
     item.waiting && 'waiting',
     item.own && 'own',
     ext && 'outside',
-    d === 'declined' && 'declined',
+    d === 'cancelled' && 'cancelled',
     m.note && 'note',
     dim && 'dim',
   ].filter(Boolean);
@@ -237,7 +237,7 @@ export const Tablet = memo(function Tablet({
         <div className="tx">
           <MessageBody body={m.body} {...ctx} />
         </div>
-        {d === 'pending' && <Decision m={m} onDecide={onDecide} held={held} />}
+        {d === 'scheduled' && <Decision m={m} onDecide={onDecide} held={held} />}
         {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
       </div>
       <div className="acts">

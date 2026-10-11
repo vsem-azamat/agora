@@ -400,15 +400,15 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 	}
 	id := resp.Msg.GetId()
 	time.Sleep(300 * time.Millisecond)
-	if m := b.message(t, id); m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING || len(f.outs()) != 0 {
+	if m := b.message(t, id); m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED || len(f.outs()) != 0 {
 		t.Fatalf("before the operator sends: %v, outs %v", m, f.outs())
 	}
 	// the socket cannot send it, whatever name it acts as
-	_, err = b.bridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id}))
+	_, err = b.bridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id}))
 	if connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("send over the socket: %v", err)
 	}
-	if _, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id})); err != nil {
+	if _, err := b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id})); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "sent", func() bool { return b.message(t, id).GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_SENT })
@@ -431,58 +431,58 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 	}
 }
 
-func TestDeclinedMessagesNeverGoOut(t *testing.T) {
+func TestCancelledMessagesNeverGoOut(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
 	id := b.post(t, "secretary", "something rude")
-	if _, err := b.webBridges.DeclinePending(context.Background(), connect.NewRequest(&agorav1.DeclinePendingRequest{MessageId: id})); err != nil {
+	if _, err := b.webBridges.CancelScheduled(context.Background(), connect.NewRequest(&agorav1.CancelScheduledRequest{MessageId: id})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id})); connect.CodeOf(err) != connect.CodeNotFound {
-		t.Fatalf("sending a declined message: %v", err)
+	if _, err := b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("sending a cancelled message: %v", err)
 	}
 	time.Sleep(300 * time.Millisecond)
 	if len(f.outs()) != 0 {
 		t.Fatalf("outs: %v", f.outs())
 	}
 	h := b.history(t)
-	if h[0].GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_DECLINED || h[1].GetAuthor() != "agora" ||
+	if h[0].GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_CANCELLED || h[1].GetAuthor() != "agora" ||
 		h[1].GetBody() != fmt.Sprintf("@secretary your message %d was not sent: owner cancelled it.", id) || h[1].GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
 		t.Fatalf("history: %v", h)
 	}
 }
 
-func TestRoomsCountPendingMessages(t *testing.T) {
+func TestRoomsCountScheduledMessages(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
 	first := b.post(t, "secretary", "first draft")
 	b.post(t, "secretary", "second draft")
-	pending := func() int32 {
+	scheduled := func() int32 {
 		resp, err := b.webRooms.ListRooms(context.Background(), connect.NewRequest(&agorav1.ListRoomsRequest{}))
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, r := range resp.Msg.GetRooms() {
 			if r.GetName() == "example-chat" {
-				return r.GetPending()
+				return r.GetScheduled()
 			}
-			if r.GetPending() != 0 {
-				t.Fatalf("#%s counts %d pending", r.GetName(), r.GetPending())
+			if r.GetScheduled() != 0 {
+				t.Fatalf("#%s counts %d scheduled", r.GetName(), r.GetScheduled())
 			}
 		}
 		t.Fatal("no #example-chat")
 		return 0
 	}
-	if n := pending(); n != 2 {
-		t.Fatalf("pending: %d, want 2", n)
+	if n := scheduled(); n != 2 {
+		t.Fatalf("scheduled: %d, want 2", n)
 	}
-	if _, err := b.webBridges.DeclinePending(context.Background(), connect.NewRequest(&agorav1.DeclinePendingRequest{MessageId: first})); err != nil {
+	if _, err := b.webBridges.CancelScheduled(context.Background(), connect.NewRequest(&agorav1.CancelScheduledRequest{MessageId: first})); err != nil {
 		t.Fatal(err)
 	}
-	if n := pending(); n != 1 {
-		t.Fatalf("pending after declining one: %d, want 1", n)
+	if n := scheduled(); n != 1 {
+		t.Fatalf("scheduled after cancelling one: %d, want 1", n)
 	}
 }
 
@@ -492,15 +492,15 @@ func TestSendingWhileReadOnlySaysWhy(t *testing.T) {
 	b.add(t, f)
 	id := b.post(t, "secretary", "a draft")
 	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_READ)
-	_, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id}))
+	_, err := b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id}))
 	var cerr *connect.Error
 	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeFailedPrecondition || cerr.Message() != "#example-chat is read-only; nothing goes out" {
 		t.Fatalf("sending under read: %v", err)
 	}
-	if b.message(t, id).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING {
+	if b.message(t, id).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED {
 		t.Fatal("the message no longer waits")
 	}
-	_, err = b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id + 100}))
+	_, err = b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id + 100}))
 	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeNotFound || cerr.Message() != fmt.Sprintf("message %d is not scheduled", id+100) {
 		t.Fatalf("sending a message that does not wait: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestPoliciesOpenAndRead(t *testing.T) {
 			}
 		}
 	}
-	if b.message(t, asOwner).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING {
+	if b.message(t, asOwner).GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED {
 		t.Fatal("a socket post as the operator went out")
 	}
 	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_READ)
@@ -584,7 +584,7 @@ func TestNotesNeverReachTheBridge(t *testing.T) {
 		if m := b.message(t, id); !m.GetNote() || m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
 			t.Fatalf("note %d: %v", id, m)
 		}
-		_, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id}))
+		_, err := b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id}))
 		if connect.CodeOf(err) != connect.CodeNotFound {
 			t.Fatalf("sending note %d: %v", id, err)
 		}
@@ -722,8 +722,8 @@ func TestRemovingABridge(t *testing.T) {
 func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	for _, p := range []string{
-		agorav1connect.BridgeServiceSetBridgePolicyProcedure, agorav1connect.BridgeServiceSendPendingProcedure, agorav1connect.BridgeServiceDeclinePendingProcedure,
-		"//agora.v1.BridgeService/SendPending", "/agora.v1.BridgeService/./SendPending", "/agora.v1.BridgeService/x/../SendPending",
+		agorav1connect.BridgeServiceSetBridgePolicyProcedure, agorav1connect.BridgeServiceSendScheduledProcedure, agorav1connect.BridgeServiceCancelScheduledProcedure,
+		"//agora.v1.BridgeService/SendScheduled", "/agora.v1.BridgeService/./SendScheduled", "/agora.v1.BridgeService/x/../SendScheduled",
 	} {
 		req, _ := http.NewRequest(http.MethodPost, "http://agora"+p, strings.NewReader(`{"messageId":"1"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -751,18 +751,18 @@ func TestAMessageSentAfterANewerOneGoesOut(t *testing.T) {
 	}
 	eventually(t, "the operator's message", func() bool { return len(f.outs()) == 1 })
 	send := func(id int64) {
-		if _, err := b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id})); err != nil {
+		if _, err := b.webBridges.SendScheduled(context.Background(), connect.NewRequest(&agorav1.SendScheduledRequest{MessageId: id})); err != nil {
 			t.Fatal(err)
 		}
 	}
 	send(older)
 	eventually(t, "the older message", func() bool { return len(f.outs()) == 2 })
-	first := b.post(t, "secretary", "first pending")
-	second := b.post(t, "secretary", "second pending")
+	first := b.post(t, "secretary", "first scheduled")
+	second := b.post(t, "secretary", "second scheduled")
 	send(second)
-	eventually(t, "the second pending message", func() bool { return len(f.outs()) == 3 })
+	eventually(t, "the second scheduled message", func() bool { return len(f.outs()) == 3 })
 	send(first)
-	eventually(t, "the first pending message", func() bool { return len(f.outs()) == 4 })
+	eventually(t, "the first scheduled message", func() bool { return len(f.outs()) == 4 })
 	time.Sleep(200 * time.Millisecond)
 	want := []int64{newer.Msg.GetId(), older, second, first}
 	if got := f.outs(); fmt.Sprint(got) != fmt.Sprint(want) {
@@ -933,7 +933,7 @@ func TestScheduledMessagesGoOutAfterTheDelay(t *testing.T) {
 	b.add(t, f)
 	id := b.post(t, "secretary", "looked, all fine")
 	m := b.message(t, id)
-	if m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING || !m.GetDueAt().AsTime().Equal(m.GetAt().AsTime().Add(time.Minute)) {
+	if m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED || !m.GetDueAt().AsTime().Equal(m.GetAt().AsTime().Add(time.Minute)) {
 		t.Fatalf("scheduled: %v", m)
 	}
 	time.Sleep(1200 * time.Millisecond) // a sweep passes without the delay passing

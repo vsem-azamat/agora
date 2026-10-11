@@ -161,7 +161,7 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 		}
 		// messages left scheduled by a bridge removed before they went out start their delay
 		// again, so none goes out the moment the room is bridged again
-		if _, err := tx.ExecContext(ctx, `UPDATE messages SET scheduled_at = ? WHERE room = ? AND delivery = 'pending'`,
+		if _, err := tx.ExecContext(ctx, `UPDATE messages SET scheduled_at = ? WHERE room = ? AND delivery = 'scheduled'`,
 			b.now().UnixMilli(), name); err != nil {
 			return err
 		}
@@ -476,7 +476,7 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 // the policy is read, and reports whether any did.
 func (b *Bridges) SendDue(ctx context.Context, name string) (bool, error) {
 	res, err := b.db.ExecContext(ctx, `UPDATE messages SET delivery = 'sending'
-		WHERE room = :room AND delivery = 'pending' AND scheduled_at <= :due
+		WHERE room = :room AND delivery = 'scheduled' AND scheduled_at <= :due
 			AND EXISTS (SELECT 1 FROM bridges WHERE name = :room AND policy != 'read')`,
 		sql.Named("room", name), sql.Named("due", b.now().Add(-b.delay()).UnixMilli()))
 	if err != nil {
@@ -486,13 +486,13 @@ func (b *Bridges) SendDue(ctx context.Context, name string) (bool, error) {
 	return n > 0, err
 }
 
-// SendPending lets the scheduled message id go out at once: its room must have a bridge whose
+// SendScheduled lets the scheduled message id go out at once: its room must have a bridge whose
 // policy is not read.
-func (b *Bridges) SendPending(ctx context.Context, id int64) error {
+func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var room, policy string
 		err := tx.QueryRowContext(ctx, `SELECT m.room, COALESCE(b.policy, '') FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room
-			WHERE m.id = ? AND m.delivery = 'pending'`, id).Scan(&room, &policy)
+			WHERE m.id = ? AND m.delivery = 'scheduled'`, id).Scan(&room, &policy)
 		if errors.Is(err, sql.ErrNoRows) {
 			return store.Refuse(ErrNotFound, "message %d is not scheduled", id)
 		}
@@ -502,7 +502,7 @@ func (b *Bridges) SendPending(ctx context.Context, id int64) error {
 		if err := mayGoOut(room, Policy(policy)); err != nil {
 			return err
 		}
-		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Pending, rooms.Sending, "")
+		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Scheduled, rooms.Sending, "")
 		return err
 	})
 }
@@ -544,11 +544,11 @@ func (b *Bridges) SendNoteOut(ctx context.Context, id int64) (int64, error) {
 	return out, err
 }
 
-// DeclinePending cancels the scheduled message id, so it never goes out, and the board tells its
+// CancelScheduled cancels the scheduled message id, so it never goes out, and the board tells its
 // author in the room.
-func (b *Bridges) DeclinePending(ctx context.Context, id int64, operator string) error {
+func (b *Bridges) CancelScheduled(ctx context.Context, id int64, operator string) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		room, author, ok, err := rooms.SettleTx(ctx, tx, id, "", rooms.Pending, rooms.Declined, "")
+		room, author, ok, err := rooms.SettleTx(ctx, tx, id, "", rooms.Scheduled, rooms.Cancelled, "")
 		if err != nil {
 			return err
 		}

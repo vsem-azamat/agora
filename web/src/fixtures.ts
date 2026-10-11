@@ -119,10 +119,10 @@ export function bridge(name: string, state: string, policy = 'delay', lastExit =
 }
 
 const deliveries: Record<string, DeliveryState> = {
-  pending: DeliveryState.PENDING,
+  scheduled: DeliveryState.SCHEDULED,
   sending: DeliveryState.SENDING,
   sent: DeliveryState.SENT,
-  declined: DeliveryState.DECLINED,
+  cancelled: DeliveryState.CANCELLED,
   failed: DeliveryState.FAILED,
 };
 

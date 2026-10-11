@@ -46,7 +46,7 @@ message Room {
   // Unset when the room has no messages.
   google.protobuf.Timestamp last_at = 6;
   // Messages of the room that are scheduled to go out through its bridge.
-  int32 pending = 7;
+  int32 scheduled = 7;
   // The agent that archived the room; empty when it is not archived.
   string archived_by = 8;
   // When the room was archived; unset when it is not archived.
@@ -95,13 +95,13 @@ enum DeliveryState {
   DELIVERY_STATE_UNSPECIFIED = 0;
   // It is scheduled: it goes out once the hub's delay passed (due_at), unless the operator cancels
   // it or sends it at once.
-  DELIVERY_STATE_PENDING = 1;
+  DELIVERY_STATE_SCHEDULED = 1;
   // It is handed to the bridge, which has not answered yet.
   DELIVERY_STATE_SENDING = 2;
   // The bridge sent it.
   DELIVERY_STATE_SENT = 3;
   // The operator cancelled it; it never goes out.
-  DELIVERY_STATE_DECLINED = 4;
+  DELIVERY_STATE_CANCELLED = 4;
   // The bridge could not send it; delivery_error says why.
   DELIVERY_STATE_FAILED = 5;
 }

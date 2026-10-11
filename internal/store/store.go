@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )
@@ -79,21 +80,53 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-			_ = tx.Rollback() // report the error that failed the migration
-			return fmt.Errorf("apply %s: %w", names[i], err)
-		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
-			_ = tx.Rollback() // report the error that failed the migration
-			return err
-		}
-		if err := tx.Commit(); err != nil {
+		if err := apply(ctx, db, names[i], string(body), i+1); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// foreignKeysOff marks a migration that rebuilds a table other tables point at: it runs with
+// foreign keys off, as SQLite prescribes for that, and they are checked before it commits.
+const foreignKeysOff = "-- foreign keys: off\n"
+
+// apply runs migration name and records version, in one transaction.
+func apply(ctx context.Context, db *sql.DB, name, body string, version int) (err error) {
+	keysOff := strings.HasPrefix(body, foreignKeysOff)
+	if keysOff {
+		// outside a transaction: inside one SQLite ignores it; the pool has one connection
+		if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return err
+		}
+		defer func() {
+			if _, on := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); on != nil && err == nil {
+				err = fmt.Errorf("after %s: turn foreign keys on: %w", name, on)
+			}
+		}()
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, body); err != nil {
+		_ = tx.Rollback() // report the error that failed the migration
+		return fmt.Errorf("apply %s: %w", name, err)
+	}
+	if keysOff {
+		tables, err := Strings(ctx, tx, `SELECT DISTINCT "table" || ' -> ' || parent FROM pragma_foreign_key_check ORDER BY 1`)
+		if err != nil {
+			_ = tx.Rollback() // report the error that failed the check
+			return fmt.Errorf("apply %s: check foreign keys: %w", name, err)
+		}
+		if len(tables) > 0 {
+			_ = tx.Rollback() // report the violations
+			return fmt.Errorf("apply %s: it leaves rows pointing at missing rows (%s); the database is unchanged", name, strings.Join(tables, ", "))
+		}
+	}
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+		_ = tx.Rollback() // report the error that failed the migration
+		return err
+	}
+	return tx.Commit()
 }

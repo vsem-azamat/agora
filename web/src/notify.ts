@@ -23,7 +23,7 @@ export function alerts(
     const was = before.get(room) ?? { unread: 0, addressed: 0 };
     const fresh = c.unread - was.unread;
     const forYou = c.addressed - was.addressed;
-    const waiting = Math.max(0, (c.pending ?? 0) - (was.pending ?? 0));
+    const waiting = Math.max(0, (c.scheduled ?? 0) - (was.scheduled ?? 0));
     // a waiting message may also be new and mention the operator: it is told once, as waiting,
     // and the other counts only when they are more than the waiting ones
     const parts: string[] = [];

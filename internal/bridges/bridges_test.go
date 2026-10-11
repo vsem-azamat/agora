@@ -185,7 +185,7 @@ func TestArchivingAndBridges(t *testing.T) {
 	if err := e.r.Archive(ctx, "builder", "example-chat", true); !errors.Is(err, rooms.ErrUndelivered) || !strings.Contains(err.Error(), "cancel it first") {
 		t.Fatalf("archiving with a message waiting: %v", err)
 	}
-	if err := e.b.DeclinePending(ctx, waiting, "owner"); err != nil {
+	if err := e.b.CancelScheduled(ctx, waiting, "owner"); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.r.Archive(ctx, "builder", "example-chat", true); err != nil {
@@ -328,7 +328,7 @@ func setPolicy(t *testing.T, e env, p bridges.Policy) {
 
 func TestOutboundPolicy(t *testing.T) {
 	e := newEnv(t)
-	pending := e.post(t, "secretary", "example-chat", "looked, all fine")
+	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
 	fromOperator, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "thanks", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -346,7 +346,7 @@ func TestOutboundPolicy(t *testing.T) {
 	if err := e.b.SetPolicy(ctx, "example-chat", "loud"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("unknown policy: %v", err)
 	}
-	want := map[int64]rooms.Delivery{pending: rooms.Pending, fromOperator: rooms.Sending, open: rooms.Sending, stays: ""}
+	want := map[int64]rooms.Delivery{scheduled: rooms.Scheduled, fromOperator: rooms.Sending, open: rooms.Sending, stays: ""}
 	for _, m := range e.history(t) {
 		if d, ok := want[m.ID]; ok && m.Delivery != d {
 			t.Errorf("message %d %q: %q, want %q", m.ID, m.Body, m.Delivery, d)
@@ -428,38 +428,38 @@ func TestGoingOutAndAnswers(t *testing.T) {
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
-func TestTheOperatorSendsOrDeclines(t *testing.T) {
+func TestTheOperatorSendsOrCancels(t *testing.T) {
 	e := newEnv(t)
 	send := e.post(t, "secretary", "example-chat", "looked, all fine")
-	decline := e.post(t, "secretary", "example-chat", "something rude")
+	cancel := e.post(t, "secretary", "example-chat", "something rude")
 	if outs, _ := outgoing(t, e); len(outs) != 0 {
-		t.Fatalf("pending messages go out: %+v", outs)
+		t.Fatalf("scheduled messages go out: %+v", outs)
 	}
-	if err := e.b.SendPending(ctx, send); err != nil {
+	if err := e.b.SendScheduled(ctx, send); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.b.DeclinePending(ctx, decline, "owner"); err != nil {
+	if err := e.b.CancelScheduled(ctx, cancel, "owner"); err != nil {
 		t.Fatal(err)
 	}
 	if outs, _ := outgoing(t, e); len(outs) != 1 || outs[0].ID != send {
 		t.Fatalf("outgoing: %+v", outs)
 	}
-	if err := e.b.SendPending(ctx, decline); !errors.Is(err, bridges.ErrNotFound) {
-		t.Fatalf("sending a declined message: %v", err)
+	if err := e.b.SendScheduled(ctx, cancel); !errors.Is(err, bridges.ErrNotFound) {
+		t.Fatalf("sending a cancelled message: %v", err)
 	}
-	if err := e.b.DeclinePending(ctx, send, "owner"); !errors.Is(err, bridges.ErrNotFound) {
-		t.Fatalf("declining a sending message: %v", err)
+	if err := e.b.CancelScheduled(ctx, send, "owner"); !errors.Is(err, bridges.ErrNotFound) {
+		t.Fatalf("cancelling a sending message: %v", err)
 	}
 	msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Addressed, 0)
-	if len(msgs) != 1 || msgs[0].Body != "@secretary your message "+itoa(decline)+" was not sent: owner cancelled it." {
+	if len(msgs) != 1 || msgs[0].Body != "@secretary your message "+itoa(cancel)+" was not sent: owner cancelled it." {
 		t.Fatalf("secretary is told: %+v", msgs)
 	}
-	if deliveryOf(t, e, "example-chat", decline) != rooms.Declined {
-		t.Fatal("not declined")
+	if deliveryOf(t, e, "example-chat", cancel) != rooms.Cancelled {
+		t.Fatal("not cancelled")
 	}
 	later := e.post(t, "secretary", "example-chat", "later")
 	setPolicy(t, e, bridges.Read)
-	if err := e.b.SendPending(ctx, later); !errors.Is(err, rooms.ErrReadOnly) {
+	if err := e.b.SendScheduled(ctx, later); !errors.Is(err, rooms.ErrReadOnly) {
 		t.Fatalf("sending under read: %v", err)
 	}
 }
@@ -482,16 +482,16 @@ func TestRenameMovesTheBridgesAgents(t *testing.T) {
 
 func TestEveryUnansweredMessageIsOutgoing(t *testing.T) {
 	e := newEnv(t)
-	pending := e.post(t, "secretary", "example-chat", "older, waits")
+	scheduled := e.post(t, "secretary", "example-chat", "older, waits")
 	fromOperator, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "newer, goes out", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.b.SendPending(ctx, pending); err != nil {
+	if err := e.b.SendScheduled(ctx, scheduled); err != nil {
 		t.Fatal(err)
 	}
 	outs, err := outgoing(t, e)
-	if err != nil || len(outs) != 2 || outs[0].ID != pending || outs[1].ID != fromOperator {
+	if err != nil || len(outs) != 2 || outs[0].ID != scheduled || outs[1].ID != fromOperator {
 		t.Fatalf("outgoing: %+v %v", outs, err)
 	}
 }
@@ -710,12 +710,12 @@ func TestNotesNeverGoOut(t *testing.T) {
 			t.Errorf("note %d: note %v, delivery %q", m.ID, m.Note, m.Delivery)
 		}
 	}
-	// a note has nothing to send or decline
-	if err := e.b.SendPending(ctx, notes[0]); !errors.Is(err, bridges.ErrNotFound) {
+	// a note has nothing to send at once or cancel
+	if err := e.b.SendScheduled(ctx, notes[0]); !errors.Is(err, bridges.ErrNotFound) {
 		t.Fatalf("sending a note: %v", err)
 	}
-	if err := e.b.DeclinePending(ctx, notes[1], "owner"); !errors.Is(err, bridges.ErrNotFound) {
-		t.Fatalf("declining a note: %v", err)
+	if err := e.b.CancelScheduled(ctx, notes[1], "owner"); !errors.Is(err, bridges.ErrNotFound) {
+		t.Fatalf("cancelling a note: %v", err)
 	}
 	// still a note once the bridge is gone
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {

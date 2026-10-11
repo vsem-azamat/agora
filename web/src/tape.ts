@@ -112,7 +112,7 @@ export function tape(
       cont,
       toYou: m.author !== reader.operator && mto.includes(reader.operator),
       own: m.author === reader.operator,
-      waiting: !m.note && deliveryOf(m) === 'pending',
+      waiting: !m.note && deliveryOf(m) === 'scheduled',
     });
     prev = m;
   }
@@ -215,7 +215,7 @@ export function unseen(
   const fresh = messages.filter((m) => m.id > seen && m.author !== operator);
   return {
     n: fresh.length,
-    forYou: fresh.filter((m) => to.get(m.id)?.includes(operator) || deliveryOf(m) === 'pending').length,
+    forYou: fresh.filter((m) => to.get(m.id)?.includes(operator) || deliveryOf(m) === 'scheduled').length,
     first: fresh[0]?.id,
   };
 }

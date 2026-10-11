@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	// ProtocolVersion is the highest bridge protocol version the hub speaks, sent in hello.
+	// ProtocolVersion is the bridge protocol version the hub speaks, sent in hello.
 	ProtocolVersion = 2
 	// bridgeMinDelay and bridgeMaxDelay bound the delay before a bridge command starts again.
 	bridgeMinDelay = time.Second
@@ -49,8 +49,8 @@ const (
 // operatorProcedures are served only by the web listener; the socket refuses them as not found.
 var operatorProcedures = map[string]bool{
 	agorav1connect.BridgeServiceSetBridgePolicyProcedure: true,
-	agorav1connect.BridgeServiceSendPendingProcedure:     true,
-	agorav1connect.BridgeServiceDeclinePendingProcedure:  true,
+	agorav1connect.BridgeServiceSendScheduledProcedure:   true,
+	agorav1connect.BridgeServiceCancelScheduledProcedure: true,
 	agorav1connect.BridgeServiceSendNoteOutProcedure:     true,
 }
 
@@ -730,20 +730,20 @@ func (s *bridgeService) SetBridgePolicy(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(&agorav1.SetBridgePolicyResponse{}), nil
 }
 
-func (s *bridgeService) SendPending(ctx context.Context, req *connect.Request[agorav1.SendPendingRequest]) (*connect.Response[agorav1.SendPendingResponse], error) {
-	if err := s.h.bridges.SendPending(ctx, req.Msg.GetMessageId()); err != nil {
+func (s *bridgeService) SendScheduled(ctx context.Context, req *connect.Request[agorav1.SendScheduledRequest]) (*connect.Response[agorav1.SendScheduledResponse], error) {
+	if err := s.h.bridges.SendScheduled(ctx, req.Msg.GetMessageId()); err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.SendPendingResponse{}), nil
+	return connect.NewResponse(&agorav1.SendScheduledResponse{}), nil
 }
 
-func (s *bridgeService) DeclinePending(ctx context.Context, req *connect.Request[agorav1.DeclinePendingRequest]) (*connect.Response[agorav1.DeclinePendingResponse], error) {
-	if err := s.h.bridges.DeclinePending(ctx, req.Msg.GetMessageId(), s.h.webAs); err != nil {
+func (s *bridgeService) CancelScheduled(ctx context.Context, req *connect.Request[agorav1.CancelScheduledRequest]) (*connect.Response[agorav1.CancelScheduledResponse], error) {
+	if err := s.h.bridges.CancelScheduled(ctx, req.Msg.GetMessageId(), s.h.webAs); err != nil {
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.DeclinePendingResponse{}), nil
+	return connect.NewResponse(&agorav1.CancelScheduledResponse{}), nil
 }
 
 func (s *bridgeService) SendNoteOut(ctx context.Context, req *connect.Request[agorav1.SendNoteOutRequest]) (*connect.Response[agorav1.SendNoteOutResponse], error) {

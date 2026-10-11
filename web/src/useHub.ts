@@ -42,14 +42,15 @@ type HubData = {
 
 const RETRY_MS = 2000;
 
-/** The counts per room: unread and addressed from the hub's unread counts, pending from the rooms. */
+/** The counts per room: unread and addressed from the hub's unread counts, scheduled from the rooms. */
 export function roomCounts(
   unread: { room: string; unread: number; addressed: number }[],
-  rooms: Pick<Room, 'name' | 'pending'>[],
+  rooms: Pick<Room, 'name' | 'scheduled'>[],
 ): Map<string, RoomCount> {
   const out = new Map<string, RoomCount>(unread.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }]));
   for (const r of rooms) {
-    if (r.pending > 0) out.set(r.name, { ...(out.get(r.name) ?? { unread: 0, addressed: 0 }), pending: r.pending });
+    if (r.scheduled > 0)
+      out.set(r.name, { ...(out.get(r.name) ?? { unread: 0, addressed: 0 }), scheduled: r.scheduled });
   }
   return out;
 }

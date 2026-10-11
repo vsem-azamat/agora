@@ -27,10 +27,6 @@ type BridgePolicy int32
 
 const (
 	BridgePolicy_BRIDGE_POLICY_UNSPECIFIED BridgePolicy = 0
-	// No bridge has it: delay took its place.
-	//
-	// Deprecated: Marked as deprecated in agora/v1/bridges.proto.
-	BridgePolicy_BRIDGE_POLICY_APPROVE BridgePolicy = 1
 	// Every message goes out at once.
 	BridgePolicy_BRIDGE_POLICY_OPEN BridgePolicy = 2
 	// Nothing goes out; agents may not post.
@@ -44,14 +40,12 @@ const (
 var (
 	BridgePolicy_name = map[int32]string{
 		0: "BRIDGE_POLICY_UNSPECIFIED",
-		1: "BRIDGE_POLICY_APPROVE",
 		2: "BRIDGE_POLICY_OPEN",
 		3: "BRIDGE_POLICY_READ",
 		4: "BRIDGE_POLICY_DELAY",
 	}
 	BridgePolicy_value = map[string]int32{
 		"BRIDGE_POLICY_UNSPECIFIED": 0,
-		"BRIDGE_POLICY_APPROVE":     1,
 		"BRIDGE_POLICY_OPEN":        2,
 		"BRIDGE_POLICY_READ":        3,
 		"BRIDGE_POLICY_DELAY":       4,
@@ -701,27 +695,27 @@ func (*SetBridgePolicyResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{9}
 }
 
-type SendPendingRequest struct {
+type SendScheduledRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SendPendingRequest) Reset() {
-	*x = SendPendingRequest{}
+func (x *SendScheduledRequest) Reset() {
+	*x = SendScheduledRequest{}
 	mi := &file_agora_v1_bridges_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SendPendingRequest) String() string {
+func (x *SendScheduledRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SendPendingRequest) ProtoMessage() {}
+func (*SendScheduledRequest) ProtoMessage() {}
 
-func (x *SendPendingRequest) ProtoReflect() protoreflect.Message {
+func (x *SendScheduledRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_agora_v1_bridges_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -733,38 +727,38 @@ func (x *SendPendingRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SendPendingRequest.ProtoReflect.Descriptor instead.
-func (*SendPendingRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use SendScheduledRequest.ProtoReflect.Descriptor instead.
+func (*SendScheduledRequest) Descriptor() ([]byte, []int) {
 	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *SendPendingRequest) GetMessageId() int64 {
+func (x *SendScheduledRequest) GetMessageId() int64 {
 	if x != nil {
 		return x.MessageId
 	}
 	return 0
 }
 
-type SendPendingResponse struct {
+type SendScheduledResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SendPendingResponse) Reset() {
-	*x = SendPendingResponse{}
+func (x *SendScheduledResponse) Reset() {
+	*x = SendScheduledResponse{}
 	mi := &file_agora_v1_bridges_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SendPendingResponse) String() string {
+func (x *SendScheduledResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SendPendingResponse) ProtoMessage() {}
+func (*SendScheduledResponse) ProtoMessage() {}
 
-func (x *SendPendingResponse) ProtoReflect() protoreflect.Message {
+func (x *SendScheduledResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_agora_v1_bridges_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -776,32 +770,32 @@ func (x *SendPendingResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SendPendingResponse.ProtoReflect.Descriptor instead.
-func (*SendPendingResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use SendScheduledResponse.ProtoReflect.Descriptor instead.
+func (*SendScheduledResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{11}
 }
 
-type DeclinePendingRequest struct {
+type CancelScheduledRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeclinePendingRequest) Reset() {
-	*x = DeclinePendingRequest{}
+func (x *CancelScheduledRequest) Reset() {
+	*x = CancelScheduledRequest{}
 	mi := &file_agora_v1_bridges_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeclinePendingRequest) String() string {
+func (x *CancelScheduledRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeclinePendingRequest) ProtoMessage() {}
+func (*CancelScheduledRequest) ProtoMessage() {}
 
-func (x *DeclinePendingRequest) ProtoReflect() protoreflect.Message {
+func (x *CancelScheduledRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_agora_v1_bridges_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -813,38 +807,38 @@ func (x *DeclinePendingRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeclinePendingRequest.ProtoReflect.Descriptor instead.
-func (*DeclinePendingRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CancelScheduledRequest.ProtoReflect.Descriptor instead.
+func (*CancelScheduledRequest) Descriptor() ([]byte, []int) {
 	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *DeclinePendingRequest) GetMessageId() int64 {
+func (x *CancelScheduledRequest) GetMessageId() int64 {
 	if x != nil {
 		return x.MessageId
 	}
 	return 0
 }
 
-type DeclinePendingResponse struct {
+type CancelScheduledResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeclinePendingResponse) Reset() {
-	*x = DeclinePendingResponse{}
+func (x *CancelScheduledResponse) Reset() {
+	*x = CancelScheduledResponse{}
 	mi := &file_agora_v1_bridges_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeclinePendingResponse) String() string {
+func (x *CancelScheduledResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeclinePendingResponse) ProtoMessage() {}
+func (*CancelScheduledResponse) ProtoMessage() {}
 
-func (x *DeclinePendingResponse) ProtoReflect() protoreflect.Message {
+func (x *CancelScheduledResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_agora_v1_bridges_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -856,8 +850,8 @@ func (x *DeclinePendingResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeclinePendingResponse.ProtoReflect.Descriptor instead.
-func (*DeclinePendingResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CancelScheduledResponse.ProtoReflect.Descriptor instead.
+func (*CancelScheduledResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{13}
 }
 
@@ -994,38 +988,37 @@ const file_agora_v1_bridges_proto_rawDesc = "" +
 	"\x16SetBridgePolicyRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12.\n" +
 	"\x06policy\x18\x02 \x01(\x0e2\x16.agora.v1.BridgePolicyR\x06policy\"\x19\n" +
-	"\x17SetBridgePolicyResponse\"3\n" +
-	"\x12SendPendingRequest\x12\x1d\n" +
+	"\x17SetBridgePolicyResponse\"5\n" +
+	"\x14SendScheduledRequest\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x01 \x01(\x03R\tmessageId\"\x15\n" +
-	"\x13SendPendingResponse\"6\n" +
-	"\x15DeclinePendingRequest\x12\x1d\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId\"\x17\n" +
+	"\x15SendScheduledResponse\"7\n" +
+	"\x16CancelScheduledRequest\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x01 \x01(\x03R\tmessageId\"\x18\n" +
-	"\x16DeclinePendingResponse\"3\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId\"\x19\n" +
+	"\x17CancelScheduledResponse\"3\n" +
 	"\x12SendNoteOutRequest\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\x03R\tmessageId\"%\n" +
 	"\x13SendNoteOutResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id*\x95\x01\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id*\x93\x01\n" +
 	"\fBridgePolicy\x12\x1d\n" +
-	"\x19BRIDGE_POLICY_UNSPECIFIED\x10\x00\x12\x1d\n" +
-	"\x15BRIDGE_POLICY_APPROVE\x10\x01\x1a\x02\b\x01\x12\x16\n" +
+	"\x19BRIDGE_POLICY_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12BRIDGE_POLICY_OPEN\x10\x02\x12\x16\n" +
 	"\x12BRIDGE_POLICY_READ\x10\x03\x12\x17\n" +
-	"\x13BRIDGE_POLICY_DELAY\x10\x04*|\n" +
+	"\x13BRIDGE_POLICY_DELAY\x10\x04\"\x04\b\x01\x10\x01*\x15BRIDGE_POLICY_APPROVE*|\n" +
 	"\vBridgeState\x12\x1c\n" +
 	"\x18BRIDGE_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14BRIDGE_STATE_RUNNING\x10\x01\x12\x1b\n" +
 	"\x17BRIDGE_STATE_RESTARTING\x10\x02\x12\x18\n" +
-	"\x14BRIDGE_STATE_STOPPED\x10\x032\xb5\x04\n" +
+	"\x14BRIDGE_STATE_STOPPED\x10\x032\xbe\x04\n" +
 	"\rBridgeService\x12D\n" +
 	"\tAddBridge\x12\x1a.agora.v1.AddBridgeRequest\x1a\x1b.agora.v1.AddBridgeResponse\x12M\n" +
 	"\fRemoveBridge\x12\x1d.agora.v1.RemoveBridgeRequest\x1a\x1e.agora.v1.RemoveBridgeResponse\x12J\n" +
 	"\vListBridges\x12\x1c.agora.v1.ListBridgesRequest\x1a\x1d.agora.v1.ListBridgesResponse\x12V\n" +
-	"\x0fSetBridgePolicy\x12 .agora.v1.SetBridgePolicyRequest\x1a!.agora.v1.SetBridgePolicyResponse\x12J\n" +
-	"\vSendPending\x12\x1c.agora.v1.SendPendingRequest\x1a\x1d.agora.v1.SendPendingResponse\x12S\n" +
-	"\x0eDeclinePending\x12\x1f.agora.v1.DeclinePendingRequest\x1a .agora.v1.DeclinePendingResponse\x12J\n" +
+	"\x0fSetBridgePolicy\x12 .agora.v1.SetBridgePolicyRequest\x1a!.agora.v1.SetBridgePolicyResponse\x12P\n" +
+	"\rSendScheduled\x12\x1e.agora.v1.SendScheduledRequest\x1a\x1f.agora.v1.SendScheduledResponse\x12V\n" +
+	"\x0fCancelScheduled\x12 .agora.v1.CancelScheduledRequest\x1a!.agora.v1.CancelScheduledResponse\x12J\n" +
 	"\vSendNoteOut\x12\x1c.agora.v1.SendNoteOutRequest\x1a\x1d.agora.v1.SendNoteOutResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
@@ -1055,10 +1048,10 @@ var file_agora_v1_bridges_proto_goTypes = []any{
 	(*ListBridgesResponse)(nil),     // 9: agora.v1.ListBridgesResponse
 	(*SetBridgePolicyRequest)(nil),  // 10: agora.v1.SetBridgePolicyRequest
 	(*SetBridgePolicyResponse)(nil), // 11: agora.v1.SetBridgePolicyResponse
-	(*SendPendingRequest)(nil),      // 12: agora.v1.SendPendingRequest
-	(*SendPendingResponse)(nil),     // 13: agora.v1.SendPendingResponse
-	(*DeclinePendingRequest)(nil),   // 14: agora.v1.DeclinePendingRequest
-	(*DeclinePendingResponse)(nil),  // 15: agora.v1.DeclinePendingResponse
+	(*SendScheduledRequest)(nil),    // 12: agora.v1.SendScheduledRequest
+	(*SendScheduledResponse)(nil),   // 13: agora.v1.SendScheduledResponse
+	(*CancelScheduledRequest)(nil),  // 14: agora.v1.CancelScheduledRequest
+	(*CancelScheduledResponse)(nil), // 15: agora.v1.CancelScheduledResponse
 	(*SendNoteOutRequest)(nil),      // 16: agora.v1.SendNoteOutRequest
 	(*SendNoteOutResponse)(nil),     // 17: agora.v1.SendNoteOutResponse
 	(*timestamppb.Timestamp)(nil),   // 18: google.protobuf.Timestamp
@@ -1075,15 +1068,15 @@ var file_agora_v1_bridges_proto_depIdxs = []int32{
 	6,  // 8: agora.v1.BridgeService.RemoveBridge:input_type -> agora.v1.RemoveBridgeRequest
 	8,  // 9: agora.v1.BridgeService.ListBridges:input_type -> agora.v1.ListBridgesRequest
 	10, // 10: agora.v1.BridgeService.SetBridgePolicy:input_type -> agora.v1.SetBridgePolicyRequest
-	12, // 11: agora.v1.BridgeService.SendPending:input_type -> agora.v1.SendPendingRequest
-	14, // 12: agora.v1.BridgeService.DeclinePending:input_type -> agora.v1.DeclinePendingRequest
+	12, // 11: agora.v1.BridgeService.SendScheduled:input_type -> agora.v1.SendScheduledRequest
+	14, // 12: agora.v1.BridgeService.CancelScheduled:input_type -> agora.v1.CancelScheduledRequest
 	16, // 13: agora.v1.BridgeService.SendNoteOut:input_type -> agora.v1.SendNoteOutRequest
 	5,  // 14: agora.v1.BridgeService.AddBridge:output_type -> agora.v1.AddBridgeResponse
 	7,  // 15: agora.v1.BridgeService.RemoveBridge:output_type -> agora.v1.RemoveBridgeResponse
 	9,  // 16: agora.v1.BridgeService.ListBridges:output_type -> agora.v1.ListBridgesResponse
 	11, // 17: agora.v1.BridgeService.SetBridgePolicy:output_type -> agora.v1.SetBridgePolicyResponse
-	13, // 18: agora.v1.BridgeService.SendPending:output_type -> agora.v1.SendPendingResponse
-	15, // 19: agora.v1.BridgeService.DeclinePending:output_type -> agora.v1.DeclinePendingResponse
+	13, // 18: agora.v1.BridgeService.SendScheduled:output_type -> agora.v1.SendScheduledResponse
+	15, // 19: agora.v1.BridgeService.CancelScheduled:output_type -> agora.v1.CancelScheduledResponse
 	17, // 20: agora.v1.BridgeService.SendNoteOut:output_type -> agora.v1.SendNoteOutResponse
 	14, // [14:21] is the sub-list for method output_type
 	7,  // [7:14] is the sub-list for method input_type
