@@ -23,8 +23,8 @@ go run github.com/goreleaser/goreleaser/v2@v2.18.2 check
 go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --snapshot --clean   # into dist/, which git ignores
 ```
 
-A snapshot gets no version at build time, so its `agora version` says `dev`, never the last release.
+A snapshot gets no version at build time, so its `agora version` says `dev`, or the tag when the commit has one; it never claims a release it was not built from.
 
 The README installs the latest release, which it resolves through the `releases/latest` redirect, so it needs no change for a new version.
 
-When a release fails midway, GoReleaser leaves a draft release. Delete the draft with its assets on the Releases page, fix the cause, and run the workflow again for the tag (Actions → the run → Re-run all jobs).
+When a release fails midway, GoReleaser leaves a draft release; delete it on the Releases page. When the cause was outside the repository (an outage, a token), run the workflow again for the tag (Actions → the run → Re-run all jobs). When it is in the tagged commit, a re-run fails the same way: fix it on `main` and push a new version tag.
