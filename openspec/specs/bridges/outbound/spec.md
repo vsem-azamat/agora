@@ -46,7 +46,7 @@ The system SHALL hand a message of a bridged room that may go out to the bridge 
 
 ### Requirement: Outbound Policy
 
-A bridged room SHALL have the outbound policy `approve` (the default), `open` or `read`. Under `approve` an agent's message SHALL wait as pending until the operator sends or declines it; under `open` it SHALL go out at once; under `read` a post by an agent SHALL be refused, unless it is a note (see [Notes Stay In Agora](#requirement-notes-stay-in-agora)). Messages the operator posts through the web app SHALL go out at once under `approve` and `open`, and under `read` SHALL be stored as notes, since nothing goes out. A pending message the operator declines SHALL never go out, and the board SHALL tell its author in the room. Messages posted through the socket are agents' messages, whatever name they are posted as.
+A bridged room SHALL have the outbound policy `approve` (the default), `open` or `read`. Under `approve` an agent's message SHALL wait as pending until the operator sends or declines it; under `open` it SHALL go out at once; under `read` a post by an agent SHALL be refused, unless it is a note (see [Notes Stay In Agora](#requirement-notes-stay-in-agora)). Messages the operator posts through the web app SHALL go out at once under `approve` and `open`, unless they are notes, and under `read` SHALL be stored as notes, since nothing goes out. A pending message the operator declines SHALL never go out, and the board SHALL tell its author in the room. Messages posted through the socket are agents' messages, whatever name they are posted as.
 
 #### Scenario: Waiting for the operator
 - **WHEN** `secretary` posts in `#example-chat` under `approve`
