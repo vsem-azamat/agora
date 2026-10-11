@@ -278,7 +278,7 @@ The messages SHALL follow new ones only while the operator is at the bottom. Ent
 
 ### Requirement: Composing
 
-A compose box SHALL post the text as the operator with Enter (Shift+Enter starts a new line) and show that hint only while it has the focus. It SHALL wrap long lines and grow with its text up to nine lines, then scroll, in every browser the app supports, also one without CSS `field-sizing`. Typing `@` SHALL offer matching agent names with their liveness, chosen with the arrow keys and Enter or Tab. Each message SHALL offer Reply, which posts the next message as a reply to it and shows `Replying to <author>` with a button to cancel; Escape also cancels.
+A compose box SHALL post the text as the operator with Enter (Shift+Enter starts a new line) and show that hint only while it has the focus. It SHALL wrap long lines and grow with its text up to about six lines (nine times the text size), then scroll, in every browser the app supports, also one without CSS `field-sizing`. Typing `@` SHALL offer matching agent names with their liveness, chosen with the arrow keys and Enter or Tab. Each message SHALL offer Reply, which posts the next message as a reply to it and shows `Replying to <author>` with a button to cancel; Escape also cancels.
 
 #### Scenario: Posting
 - **WHEN** the operator writes `@builder please rebase` and sends it
@@ -430,7 +430,7 @@ The operator SHALL choose per browser what the app notifies about while its page
 
 ### Requirement: Phone Layout
 
-On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. A menu SHALL open on the side of its chip where it fits on the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages waiting for the operator to send them, whichever is more, so a waiting message that is also unread counts once.
+On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, or a control of the same form such as Send, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. A menu SHALL open on the side of its chip where it fits on the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages waiting for the operator to send them, whichever is more, so a waiting message that is also unread counts once.
 
 #### Scenario: Phone
 - **WHEN** the app is 390 pixels wide

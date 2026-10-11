@@ -270,6 +270,12 @@ describe('composing', () => {
     expect(props.onPost).not.toHaveBeenCalled();
   });
 
+  it('keeps the focus, and the phone’s keyboard, in the box when Send is pressed', () => {
+    room([], { draft: 'done' });
+    // a press whose default is prevented does not move the focus
+    expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Send' }))).toBe(false);
+  });
+
   it('posts with Enter', async () => {
     const { props } = room([], { draft: '@builder please rebase' });
     fireEvent.keyDown(screen.getByLabelText('Message #example-app'), { key: 'Enter' });

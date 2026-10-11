@@ -234,6 +234,7 @@ export function Composer(props: {
         <button
           type="submit"
           className="send"
+          onMouseDown={(e) => e.preventDefault()} // the focus, and a phone's keyboard, stay in the box
           disabled={sending || !props.draft.trim()}
           aria-label={!out ? 'Send' : note ? 'Post the note' : `Send to ${out.chat}`}
         >

@@ -49,6 +49,27 @@ describe('the part of the screen the app may use', () => {
     stop();
   });
 
+  it('scrolls back to the top when the visible part moves', () => {
+    const vv = fakeViewport(480);
+    const top = vi.fn();
+    const stop = watchViewport(document, vv, top);
+    top.mockClear();
+    vv.listeners.get('scroll')?.();
+    expect(top).toHaveBeenCalledOnce();
+    stop();
+  });
+
+  it('keeps typing while the focus moves to the send button of the same form', () => {
+    const stop = watchViewport(document, undefined, vi.fn());
+    document.body.innerHTML = '<form><textarea></textarea><button>Send</button></form><button id="away">x</button>';
+    document.querySelector('textarea')?.focus();
+    (document.querySelector('form button') as HTMLElement).focus();
+    expect(root.hasAttribute('data-typing')).toBe(true);
+    (document.getElementById('away') as HTMLElement).focus();
+    expect(root.hasAttribute('data-typing')).toBe(false);
+    stop();
+  });
+
   it('marks the page while a text field has the focus', () => {
     const stop = watchViewport(document, undefined, vi.fn());
     document.body.innerHTML = '<textarea></textarea><input type="radio"><button>x</button>';

@@ -2013,6 +2013,11 @@ button.pgname:hover {
   .room {
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
   }
+  /* text under 16px makes Safari zoom in on the field it focuses, and the zoom stays */
+  textarea,
+  input {
+    font-size: max(16px, 1em);
+  }
   /* while typing the keyboard takes the bottom of the screen: the tabs give way to the text */
   :root[data-typing] .tabs {
     display: none;
