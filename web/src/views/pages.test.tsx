@@ -281,4 +281,10 @@ describe('Phone layout', () => {
     expect(phone).toMatch(/\.side,/);
     expect(phone).toMatch(/\.tabs \{[^}]*display: grid;/);
   });
+
+  it('keeps the compose box to the width of the screen while replying to a long message', () => {
+    const css = readFileSync('src/styles.css', 'utf8'); // vitest runs in web/
+    // a grid column grows to its widest row unless its minimum is zero, and the quote of a reply does not wrap
+    expect(css).toMatch(/\.compose \{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+  });
 });

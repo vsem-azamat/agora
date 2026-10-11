@@ -1104,6 +1104,7 @@ button.pgname:hover {
 .compose {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   padding: 10px 22px 14px;
   border-top: 1px solid var(--line);
