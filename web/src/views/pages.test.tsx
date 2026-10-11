@@ -282,6 +282,12 @@ describe('Phone layout', () => {
     expect(phone).toMatch(/\.tabs \{[^}]*display: grid;/);
   });
 
+  it('hides the live status but keeps Updated · Reload', () => {
+    const css = readFileSync('src/styles.css', 'utf8'); // vitest runs in web/
+    const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
+    expect(phone).toMatch(/\.live:not\(\.updated\),/);
+  });
+
   it('keeps the compose box to the width of the screen while replying to a long message', () => {
     const css = readFileSync('src/styles.css', 'utf8'); // vitest runs in web/
     // a grid column grows to its widest row unless its minimum is zero, and the quote of a reply does not wrap

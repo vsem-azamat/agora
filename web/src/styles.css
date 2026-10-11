@@ -350,6 +350,13 @@ kbd {
 .live.offline::before {
   background: var(--bad);
 }
+.live.updated {
+  color: var(--accent);
+  cursor: pointer;
+}
+.live.updated::before {
+  background: var(--accent);
+}
 .iconbtn {
   display: inline-grid;
   place-items: center;
@@ -2107,7 +2114,7 @@ a.archivedrow:hover {
   .side,
   .motto,
   .find kbd,
-  .live,
+  .live:not(.updated),
   .acctname,
   .acctbtn .chev {
     display: none;

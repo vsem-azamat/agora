@@ -61,6 +61,9 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
   const loading = useRef<Promise<void> | undefined>(undefined);
   const again = useRef(false);
   const revision = useRef(0n);
+  // the hub's build the app was loaded with; another one means the hub was upgraded
+  const first = useRef<string | undefined>(undefined);
+  const [upgraded, setUpgraded] = useState(false);
 
   const fail = useCallback(
     (err: unknown) => {
@@ -82,6 +85,9 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.governance.getCharter({}),
       api.bridges.listBridges({}),
     ]);
+    const build = `${who.version} ${who.commit}`;
+    first.current ??= build;
+    if (build !== first.current) setUpgraded(true);
     const active = rooms.rooms.filter((r) => !r.archivedBy);
     setData({
       operator: who.name,
@@ -146,7 +152,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
     return () => abort.abort();
   }, [api, load, fail]);
 
-  return { data, status, fail };
+  return { data, status, fail, upgraded };
 }
 
 function visible(): boolean {

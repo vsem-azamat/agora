@@ -186,10 +186,13 @@ export function App() {
   return <Signed key={token} token={token} onSignOut={signOut} />;
 }
 
+/** The page itself, so tests can see a reload. */
+export const page = { reload: () => location.reload() };
+
 function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boolean) => void }) {
   const api = useMemo(() => makeApi(token), [token]);
   const rejected = useCallback(() => onSignOut(true), [onSignOut]);
-  const { data, status, fail } = useHub(api, rejected);
+  const { data, status, fail, upgraded } = useHub(api, rejected);
   const route = useRoute();
   const now = useNow();
   // only an explicit choice is stored; main.tsx applies the stored ones when the page loads
@@ -201,6 +204,11 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [palette, setPalette] = useState(false);
   // what the operator was writing in each room, and whether it is a note, kept while the app is open
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  // an upgraded hub serves a newer app: load it, once no draft would be lost
+  const writing = Object.values(drafts).some((d) => d.text.trim() !== '');
+  useEffect(() => {
+    if (upgraded && !writing) page.reload();
+  }, [upgraded, writing]);
   const [arrival, setArrival] = useState<Arrival>();
   // each notice has its own number, so the same text told again shows for its full time
   const [notice, setNotice] = useState<{ text: string; n: number; where: string }>();
@@ -303,7 +311,15 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     </button>
   );
   const active = listed?.filter((a) => liveness(a) !== 'offline').length;
-  const bar = <Bar status={status} active={active} onSearch={data && (() => setPalette(true))} account={account} />;
+  const bar = (
+    <Bar
+      status={status}
+      active={active}
+      onSearch={data && (() => setPalette(true))}
+      onReload={upgraded ? page.reload : undefined}
+      account={account}
+    />
+  );
 
   if (!data || !listed) {
     return (
