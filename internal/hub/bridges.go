@@ -26,7 +26,7 @@ import (
 
 const (
 	// ProtocolVersion is the highest bridge protocol version the hub speaks, sent in hello.
-	ProtocolVersion = 1
+	ProtocolVersion = 2
 	// bridgeMinDelay and bridgeMaxDelay bound the delay before a bridge command starts again.
 	bridgeMinDelay = time.Second
 	bridgeMaxDelay = time.Minute
@@ -63,7 +63,8 @@ type bridgeRun struct {
 	mu       sync.Mutex
 	state    agorav1.BridgeState
 	lastExit string
-	down     bool // the board said it stopped and has not said it works again
+	down     bool         // the board said it stopped and has not said it works again
+	caps     bridges.Caps // what the bridge said its platform can do, in this run
 }
 
 func (r *bridgeRun) set(state agorav1.BridgeState, lastExit string) {
@@ -155,6 +156,38 @@ func (h *Hub) bridgeState(name string) (agorav1.BridgeState, string) {
 	return r.state, r.lastExit
 }
 
+// bridgeCaps returns what the bridge name said its platform can do in its current run, nil for
+// nothing.
+func (h *Hub) bridgeCaps(name string) *agorav1.BridgeCaps {
+	br := &h.bridgeRuns
+	br.mu.Lock()
+	r := br.runs[name]
+	br.mu.Unlock()
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.caps.IsZero() {
+		return nil
+	}
+	return &agorav1.BridgeCaps{Personas: r.caps.Personas, Threads: r.caps.Threads}
+}
+
+// setBridgeCaps keeps what the bridge name says its platform can do.
+func (h *Hub) setBridgeCaps(name string, caps bridges.Caps) {
+	br := &h.bridgeRuns
+	br.mu.Lock()
+	r := br.runs[name]
+	br.mu.Unlock()
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.caps = caps
+	r.mu.Unlock()
+}
+
 // nextBridgeDelay doubles the delay before the next start of a bridge, up to limit.
 func nextBridgeDelay(d, limit time.Duration) time.Duration { return min(2*d, limit) }
 
@@ -186,6 +219,7 @@ func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 		h.log.Warn("bridge stopped; starting it again", "bridge", r.name, "exit", exit, "delay", delay)
 		r.set(agorav1.BridgeState_BRIDGE_STATE_RESTARTING, exit)
 		r.mu.Lock()
+		r.caps = bridges.Caps{} // a stopped bridge can do nothing
 		first := !r.down
 		r.down = true
 		r.mu.Unlock()
@@ -429,12 +463,26 @@ type helloLine struct {
 
 // outLine hands a message to a bridge to send.
 type outLine struct {
-	Type    string `json:"type"`
-	ID      int64  `json:"id"`
-	Author  string `json:"author"`
-	Text    string `json:"text"`
-	ReplyTo string `json:"reply_to,omitempty"`
+	Type    string    `json:"type"`
+	ID      int64     `json:"id"`
+	Author  outAuthor `json:"author"`
+	Text    string    `json:"text"`
+	ReplyTo string    `json:"reply_to,omitempty"`
 }
+
+// outAuthor is who wrote a message going out.
+type outAuthor struct {
+	Name    string `json:"name"`
+	Kind    string `json:"kind"` // authorHuman for the operator, else authorAgent
+	Display string `json:"display"`
+	Sigil   string `json:"sigil"`
+}
+
+// The kinds of an outAuthor.
+const (
+	authorAgent = "agent"
+	authorHuman = "human"
+)
 
 // feedBridge writes hello and then every message the bridge has to send, each once, as it
 // becomes sendable (in posting order among those found together), until the command exits or
@@ -503,7 +551,12 @@ func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, hande
 		return err
 	}
 	for _, o := range outs {
-		if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: o.Author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
+		kind := authorAgent
+		if o.Author == h.webAs {
+			kind = authorHuman
+		}
+		author := outAuthor{Name: o.Author, Kind: kind, Display: o.Author, Sigil: o.Sigil}
+		if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
 			return &outWriteError{err}
 		}
 		handed[o.ID] = true
@@ -520,13 +573,14 @@ type bridgeInput struct {
 		Name string          `json:"name"`
 		Self bool            `json:"self"`
 	} `json:"author"`
-	Text      string          `json:"text"`
-	ReplyTo   json.RawMessage `json:"reply_to"`
-	At        string          `json:"at"`
-	Cursor    json.RawMessage `json:"cursor"`
-	Addressed bool            `json:"addressed"`
-	ExtID     json.RawMessage `json:"ext_id"`
-	Error     string          `json:"error"`
+	Text      string                     `json:"text"`
+	ReplyTo   json.RawMessage            `json:"reply_to"`
+	At        string                     `json:"at"`
+	Cursor    json.RawMessage            `json:"cursor"`
+	Addressed bool                       `json:"addressed"`
+	ExtID     json.RawMessage            `json:"ext_id"`
+	Error     string                     `json:"error"`
+	Caps      map[string]json.RawMessage `json:"caps"`
 }
 
 // extString reads an identifier given as a JSON string or number; anything else is "".
@@ -552,6 +606,11 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 	}
 	ctx = context.WithoutCancel(ctx) // the line is handled even while the hub stops; Serve waits for it
 	switch l.Type {
+	case "hello":
+		caps := bridges.ReadCaps(l.Caps)
+		h.setBridgeCaps(name, caps)
+		h.log.Info("bridge says what it can do", "bridge", name, "caps", caps)
+		h.changes.fire()
 	case "in":
 		in := bridges.In{
 			ID: extString(l.ID), AuthorID: extString(l.Author.ID), AuthorName: l.Author.Name, Self: l.Author.Self,
@@ -651,7 +710,7 @@ func (s *bridgeService) ListBridges(ctx context.Context, _ *connect.Request[agor
 		state, exit := s.h.bridgeState(b.Name)
 		out.Bridges = append(out.Bridges, &agorav1.Bridge{
 			Name: b.Name, Command: b.Command, Policy: bridgePolicies[b.Policy], CreatedBy: b.CreatedBy, CreatedAt: timestamppb.New(b.CreatedAt),
-			Addressees: b.Addressees, State: state, LastExit: exit,
+			Addressees: b.Addressees, State: state, LastExit: exit, Caps: s.h.bridgeCaps(b.Name),
 		})
 	}
 	return connect.NewResponse(out), nil

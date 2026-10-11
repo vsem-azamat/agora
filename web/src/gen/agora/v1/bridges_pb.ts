@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/bridges.proto.
  */
 export const file_agora_v1_bridges: GenFile = /*@__PURE__*/
-  fileDesc("ChZhZ29yYS92MS9icmlkZ2VzLnByb3RvEghhZ29yYS52MSLgAQoGQnJpZGdlEgwKBG5hbWUYASABKAkSDwoHY29tbWFuZBgCIAEoCRImCgZwb2xpY3kYAyABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kSEgoKY3JlYXRlZF9ieRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgphZGRyZXNzZWVzGAYgAygJEiQKBXN0YXRlGAcgASgOMhUuYWdvcmEudjEuQnJpZGdlU3RhdGUSEQoJbGFzdF9leGl0GAggASgJImUKEEFkZEJyaWRnZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdjb21tYW5kGAMgASgJEg8KB3B1cnBvc2UYBCABKAkSEgoKYWRkcmVzc2VlcxgFIAMoCSJRChFBZGRCcmlkZ2VSZXNwb25zZRIUCgxjcmVhdGVkX3Jvb20YASABKAgSJgoGcG9saWN5GAIgASgOMhYuYWdvcmEudjEuQnJpZGdlUG9saWN5IjIKE1JlbW92ZUJyaWRnZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEbmFtZRgCIAEoCSIWChRSZW1vdmVCcmlkZ2VSZXNwb25zZSIUChJMaXN0QnJpZGdlc1JlcXVlc3QiOAoTTGlzdEJyaWRnZXNSZXNwb25zZRIhCgdicmlkZ2VzGAEgAygLMhAuYWdvcmEudjEuQnJpZGdlIk4KFlNldEJyaWRnZVBvbGljeVJlcXVlc3QSDAoEbmFtZRgBIAEoCRImCgZwb2xpY3kYAiABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kiGQoXU2V0QnJpZGdlUG9saWN5UmVzcG9uc2UiKAoSU2VuZFBlbmRpbmdSZXF1ZXN0EhIKCm1lc3NhZ2VfaWQYASABKAMiFQoTU2VuZFBlbmRpbmdSZXNwb25zZSIrChVEZWNsaW5lUGVuZGluZ1JlcXVlc3QSEgoKbWVzc2FnZV9pZBgBIAEoAyIYChZEZWNsaW5lUGVuZGluZ1Jlc3BvbnNlIigKElNlbmROb3RlT3V0UmVxdWVzdBISCgptZXNzYWdlX2lkGAEgASgDIiEKE1NlbmROb3RlT3V0UmVzcG9uc2USCgoCaWQYASABKAMqlQEKDEJyaWRnZVBvbGljeRIdChlCUklER0VfUE9MSUNZX1VOU1BFQ0lGSUVEEAASHQoVQlJJREdFX1BPTElDWV9BUFBST1ZFEAEaAggBEhYKEkJSSURHRV9QT0xJQ1lfT1BFThACEhYKEkJSSURHRV9QT0xJQ1lfUkVBRBADEhcKE0JSSURHRV9QT0xJQ1lfREVMQVkQBCp8CgtCcmlkZ2VTdGF0ZRIcChhCUklER0VfU1RBVEVfVU5TUEVDSUZJRUQQABIYChRCUklER0VfU1RBVEVfUlVOTklORxABEhsKF0JSSURHRV9TVEFURV9SRVNUQVJUSU5HEAISGAoUQlJJREdFX1NUQVRFX1NUT1BQRUQQAzK1BAoNQnJpZGdlU2VydmljZRJECglBZGRCcmlkZ2USGi5hZ29yYS52MS5BZGRCcmlkZ2VSZXF1ZXN0GhsuYWdvcmEudjEuQWRkQnJpZGdlUmVzcG9uc2USTQoMUmVtb3ZlQnJpZGdlEh0uYWdvcmEudjEuUmVtb3ZlQnJpZGdlUmVxdWVzdBoeLmFnb3JhLnYxLlJlbW92ZUJyaWRnZVJlc3BvbnNlEkoKC0xpc3RCcmlkZ2VzEhwuYWdvcmEudjEuTGlzdEJyaWRnZXNSZXF1ZXN0Gh0uYWdvcmEudjEuTGlzdEJyaWRnZXNSZXNwb25zZRJWCg9TZXRCcmlkZ2VQb2xpY3kSIC5hZ29yYS52MS5TZXRCcmlkZ2VQb2xpY3lSZXF1ZXN0GiEuYWdvcmEudjEuU2V0QnJpZGdlUG9saWN5UmVzcG9uc2USSgoLU2VuZFBlbmRpbmcSHC5hZ29yYS52MS5TZW5kUGVuZGluZ1JlcXVlc3QaHS5hZ29yYS52MS5TZW5kUGVuZGluZ1Jlc3BvbnNlElMKDkRlY2xpbmVQZW5kaW5nEh8uYWdvcmEudjEuRGVjbGluZVBlbmRpbmdSZXF1ZXN0GiAuYWdvcmEudjEuRGVjbGluZVBlbmRpbmdSZXNwb25zZRJKCgtTZW5kTm90ZU91dBIcLmFnb3JhLnYxLlNlbmROb3RlT3V0UmVxdWVzdBodLmFnb3JhLnYxLlNlbmROb3RlT3V0UmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChZhZ29yYS92MS9icmlkZ2VzLnByb3RvEghhZ29yYS52MSKEAgoGQnJpZGdlEgwKBG5hbWUYASABKAkSDwoHY29tbWFuZBgCIAEoCRImCgZwb2xpY3kYAyABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kSEgoKY3JlYXRlZF9ieRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgphZGRyZXNzZWVzGAYgAygJEiQKBXN0YXRlGAcgASgOMhUuYWdvcmEudjEuQnJpZGdlU3RhdGUSEQoJbGFzdF9leGl0GAggASgJEiIKBGNhcHMYCSABKAsyFC5hZ29yYS52MS5CcmlkZ2VDYXBzIi8KCkJyaWRnZUNhcHMSEAoIcGVyc29uYXMYASABKAkSDwoHdGhyZWFkcxgCIAEoCSJlChBBZGRCcmlkZ2VSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkSDwoHY29tbWFuZBgDIAEoCRIPCgdwdXJwb3NlGAQgASgJEhIKCmFkZHJlc3NlZXMYBSADKAkiUQoRQWRkQnJpZGdlUmVzcG9uc2USFAoMY3JlYXRlZF9yb29tGAEgASgIEiYKBnBvbGljeRgCIAEoDjIWLmFnb3JhLnYxLkJyaWRnZVBvbGljeSIyChNSZW1vdmVCcmlkZ2VSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkiFgoUUmVtb3ZlQnJpZGdlUmVzcG9uc2UiFAoSTGlzdEJyaWRnZXNSZXF1ZXN0IjgKE0xpc3RCcmlkZ2VzUmVzcG9uc2USIQoHYnJpZGdlcxgBIAMoCzIQLmFnb3JhLnYxLkJyaWRnZSJOChZTZXRCcmlkZ2VQb2xpY3lSZXF1ZXN0EgwKBG5hbWUYASABKAkSJgoGcG9saWN5GAIgASgOMhYuYWdvcmEudjEuQnJpZGdlUG9saWN5IhkKF1NldEJyaWRnZVBvbGljeVJlc3BvbnNlIigKElNlbmRQZW5kaW5nUmVxdWVzdBISCgptZXNzYWdlX2lkGAEgASgDIhUKE1NlbmRQZW5kaW5nUmVzcG9uc2UiKwoVRGVjbGluZVBlbmRpbmdSZXF1ZXN0EhIKCm1lc3NhZ2VfaWQYASABKAMiGAoWRGVjbGluZVBlbmRpbmdSZXNwb25zZSIoChJTZW5kTm90ZU91dFJlcXVlc3QSEgoKbWVzc2FnZV9pZBgBIAEoAyIhChNTZW5kTm90ZU91dFJlc3BvbnNlEgoKAmlkGAEgASgDKpUBCgxCcmlkZ2VQb2xpY3kSHQoZQlJJREdFX1BPTElDWV9VTlNQRUNJRklFRBAAEh0KFUJSSURHRV9QT0xJQ1lfQVBQUk9WRRABGgIIARIWChJCUklER0VfUE9MSUNZX09QRU4QAhIWChJCUklER0VfUE9MSUNZX1JFQUQQAxIXChNCUklER0VfUE9MSUNZX0RFTEFZEAQqfAoLQnJpZGdlU3RhdGUSHAoYQlJJREdFX1NUQVRFX1VOU1BFQ0lGSUVEEAASGAoUQlJJREdFX1NUQVRFX1JVTk5JTkcQARIbChdCUklER0VfU1RBVEVfUkVTVEFSVElORxACEhgKFEJSSURHRV9TVEFURV9TVE9QUEVEEAMytQQKDUJyaWRnZVNlcnZpY2USRAoJQWRkQnJpZGdlEhouYWdvcmEudjEuQWRkQnJpZGdlUmVxdWVzdBobLmFnb3JhLnYxLkFkZEJyaWRnZVJlc3BvbnNlEk0KDFJlbW92ZUJyaWRnZRIdLmFnb3JhLnYxLlJlbW92ZUJyaWRnZVJlcXVlc3QaHi5hZ29yYS52MS5SZW1vdmVCcmlkZ2VSZXNwb25zZRJKCgtMaXN0QnJpZGdlcxIcLmFnb3JhLnYxLkxpc3RCcmlkZ2VzUmVxdWVzdBodLmFnb3JhLnYxLkxpc3RCcmlkZ2VzUmVzcG9uc2USVgoPU2V0QnJpZGdlUG9saWN5EiAuYWdvcmEudjEuU2V0QnJpZGdlUG9saWN5UmVxdWVzdBohLmFnb3JhLnYxLlNldEJyaWRnZVBvbGljeVJlc3BvbnNlEkoKC1NlbmRQZW5kaW5nEhwuYWdvcmEudjEuU2VuZFBlbmRpbmdSZXF1ZXN0Gh0uYWdvcmEudjEuU2VuZFBlbmRpbmdSZXNwb25zZRJTCg5EZWNsaW5lUGVuZGluZxIfLmFnb3JhLnYxLkRlY2xpbmVQZW5kaW5nUmVxdWVzdBogLmFnb3JhLnYxLkRlY2xpbmVQZW5kaW5nUmVzcG9uc2USSgoLU2VuZE5vdGVPdXQSHC5hZ29yYS52MS5TZW5kTm90ZU91dFJlcXVlc3QaHS5hZ29yYS52MS5TZW5kTm90ZU91dFJlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Bridge
@@ -63,6 +63,13 @@ export type Bridge = Message<"agora.v1.Bridge"> & {
    * @generated from field: string last_exit = 8;
    */
   lastExit: string;
+
+  /**
+   * What the bridge said its platform can do in its current run; unset when it said nothing.
+   *
+   * @generated from field: agora.v1.BridgeCaps caps = 9;
+   */
+  caps?: BridgeCaps | undefined;
 };
 
 /**
@@ -71,6 +78,34 @@ export type Bridge = Message<"agora.v1.Bridge"> & {
  */
 export const BridgeSchema: GenMessage<Bridge> = /*@__PURE__*/
   messageDesc(file_agora_v1_bridges, 0);
+
+/**
+ * What a bridge's platform can do, as the bridge says it in short words; empty when unknown.
+ *
+ * @generated from message agora.v1.BridgeCaps
+ */
+export type BridgeCaps = Message<"agora.v1.BridgeCaps"> & {
+  /**
+   * How it shows who wrote a message that goes out, such as prefix.
+   *
+   * @generated from field: string personas = 1;
+   */
+  personas: string;
+
+  /**
+   * How it keeps threads, such as topic.
+   *
+   * @generated from field: string threads = 2;
+   */
+  threads: string;
+};
+
+/**
+ * Describes the message agora.v1.BridgeCaps.
+ * Use `create(BridgeCapsSchema)` to create a new message.
+ */
+export const BridgeCapsSchema: GenMessage<BridgeCaps> = /*@__PURE__*/
+  messageDesc(file_agora_v1_bridges, 1);
 
 /**
  * @generated from message agora.v1.AddBridgeRequest
@@ -118,7 +153,7 @@ export type AddBridgeRequest = Message<"agora.v1.AddBridgeRequest"> & {
  * Use `create(AddBridgeRequestSchema)` to create a new message.
  */
 export const AddBridgeRequestSchema: GenMessage<AddBridgeRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 1);
+  messageDesc(file_agora_v1_bridges, 2);
 
 /**
  * @generated from message agora.v1.AddBridgeResponse
@@ -144,7 +179,7 @@ export type AddBridgeResponse = Message<"agora.v1.AddBridgeResponse"> & {
  * Use `create(AddBridgeResponseSchema)` to create a new message.
  */
 export const AddBridgeResponseSchema: GenMessage<AddBridgeResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 2);
+  messageDesc(file_agora_v1_bridges, 3);
 
 /**
  * @generated from message agora.v1.RemoveBridgeRequest
@@ -168,7 +203,7 @@ export type RemoveBridgeRequest = Message<"agora.v1.RemoveBridgeRequest"> & {
  * Use `create(RemoveBridgeRequestSchema)` to create a new message.
  */
 export const RemoveBridgeRequestSchema: GenMessage<RemoveBridgeRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 3);
+  messageDesc(file_agora_v1_bridges, 4);
 
 /**
  * @generated from message agora.v1.RemoveBridgeResponse
@@ -181,7 +216,7 @@ export type RemoveBridgeResponse = Message<"agora.v1.RemoveBridgeResponse"> & {
  * Use `create(RemoveBridgeResponseSchema)` to create a new message.
  */
 export const RemoveBridgeResponseSchema: GenMessage<RemoveBridgeResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 4);
+  messageDesc(file_agora_v1_bridges, 5);
 
 /**
  * @generated from message agora.v1.ListBridgesRequest
@@ -194,7 +229,7 @@ export type ListBridgesRequest = Message<"agora.v1.ListBridgesRequest"> & {
  * Use `create(ListBridgesRequestSchema)` to create a new message.
  */
 export const ListBridgesRequestSchema: GenMessage<ListBridgesRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 5);
+  messageDesc(file_agora_v1_bridges, 6);
 
 /**
  * @generated from message agora.v1.ListBridgesResponse
@@ -211,7 +246,7 @@ export type ListBridgesResponse = Message<"agora.v1.ListBridgesResponse"> & {
  * Use `create(ListBridgesResponseSchema)` to create a new message.
  */
 export const ListBridgesResponseSchema: GenMessage<ListBridgesResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 6);
+  messageDesc(file_agora_v1_bridges, 7);
 
 /**
  * @generated from message agora.v1.SetBridgePolicyRequest
@@ -233,7 +268,7 @@ export type SetBridgePolicyRequest = Message<"agora.v1.SetBridgePolicyRequest"> 
  * Use `create(SetBridgePolicyRequestSchema)` to create a new message.
  */
 export const SetBridgePolicyRequestSchema: GenMessage<SetBridgePolicyRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 7);
+  messageDesc(file_agora_v1_bridges, 8);
 
 /**
  * @generated from message agora.v1.SetBridgePolicyResponse
@@ -246,7 +281,7 @@ export type SetBridgePolicyResponse = Message<"agora.v1.SetBridgePolicyResponse"
  * Use `create(SetBridgePolicyResponseSchema)` to create a new message.
  */
 export const SetBridgePolicyResponseSchema: GenMessage<SetBridgePolicyResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 8);
+  messageDesc(file_agora_v1_bridges, 9);
 
 /**
  * @generated from message agora.v1.SendPendingRequest
@@ -263,7 +298,7 @@ export type SendPendingRequest = Message<"agora.v1.SendPendingRequest"> & {
  * Use `create(SendPendingRequestSchema)` to create a new message.
  */
 export const SendPendingRequestSchema: GenMessage<SendPendingRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 9);
+  messageDesc(file_agora_v1_bridges, 10);
 
 /**
  * @generated from message agora.v1.SendPendingResponse
@@ -276,7 +311,7 @@ export type SendPendingResponse = Message<"agora.v1.SendPendingResponse"> & {
  * Use `create(SendPendingResponseSchema)` to create a new message.
  */
 export const SendPendingResponseSchema: GenMessage<SendPendingResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 10);
+  messageDesc(file_agora_v1_bridges, 11);
 
 /**
  * @generated from message agora.v1.DeclinePendingRequest
@@ -293,7 +328,7 @@ export type DeclinePendingRequest = Message<"agora.v1.DeclinePendingRequest"> & 
  * Use `create(DeclinePendingRequestSchema)` to create a new message.
  */
 export const DeclinePendingRequestSchema: GenMessage<DeclinePendingRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 11);
+  messageDesc(file_agora_v1_bridges, 12);
 
 /**
  * @generated from message agora.v1.DeclinePendingResponse
@@ -306,7 +341,7 @@ export type DeclinePendingResponse = Message<"agora.v1.DeclinePendingResponse"> 
  * Use `create(DeclinePendingResponseSchema)` to create a new message.
  */
 export const DeclinePendingResponseSchema: GenMessage<DeclinePendingResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 12);
+  messageDesc(file_agora_v1_bridges, 13);
 
 /**
  * @generated from message agora.v1.SendNoteOutRequest
@@ -323,7 +358,7 @@ export type SendNoteOutRequest = Message<"agora.v1.SendNoteOutRequest"> & {
  * Use `create(SendNoteOutRequestSchema)` to create a new message.
  */
 export const SendNoteOutRequestSchema: GenMessage<SendNoteOutRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 13);
+  messageDesc(file_agora_v1_bridges, 14);
 
 /**
  * @generated from message agora.v1.SendNoteOutResponse
@@ -342,7 +377,7 @@ export type SendNoteOutResponse = Message<"agora.v1.SendNoteOutResponse"> & {
  * Use `create(SendNoteOutResponseSchema)` to create a new message.
  */
 export const SendNoteOutResponseSchema: GenMessage<SendNoteOutResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 14);
+  messageDesc(file_agora_v1_bridges, 15);
 
 /**
  * What goes out of a bridged room.

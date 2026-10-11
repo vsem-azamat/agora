@@ -10,11 +10,11 @@ What a bridge and the hub say to each other over the bridge's standard input and
 
 ### Requirement: Lines Of JSON
 
-The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":1,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the highest protocol version the hub speaks, and a bridge SHALL use no feature of a later version. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too, so later versions can add fields (such as attachments next to `text`) without breaking bridges or hubs that do not know them. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
+The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":2,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the highest protocol version the hub speaks, and a bridge SHALL use no feature of a later version. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too, so later versions can add fields (such as attachments next to `text`) without breaking bridges or hubs that do not know them. Version 2 changed one field, `out`'s `author` from a name to an object (see [Messages Going Out](../outbound/spec.md#requirement-messages-going-out)); a bridge that reads it needs version 2. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
 
 #### Scenario: Hello
 - **WHEN** the bridge of `#example-chat` starts for the first time
-- **THEN** its first input line is `{"type":"hello","version":1,"bridge":"example-chat","room":"example-chat","cursor":""}`
+- **THEN** its first input line is `{"type":"hello","version":2,"bridge":"example-chat","room":"example-chat","cursor":""}`
 
 #### Scenario: Unknown lines
 - **WHEN** the bridge writes a line of type `typing`, a line that is not JSON, and an `in` line with an extra field `mood`
@@ -51,6 +51,30 @@ The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…
 #### Scenario: A mention from outside
 - **WHEN** an `in` line says `@builder can you look?`
 - **THEN** the message is addressed to `builder`
+
+### Requirement: What The Platform Can Do
+
+A bridge MAY answer the hub's `hello` with `{"type":"hello","caps":{"personas":…,"threads":…}}`, naming what its platform can do as short words: `personas`, how it shows who wrote a message that goes out (for example `prefix`, a name in front of the text), and `threads`, how it keeps threads (for example `topic`). The system SHALL keep the latest `caps` of a bridge's current run, clear them when the bridge stops, assume none before a bridge sends them or when it never does, ignore other entries and values that are not strings, clean each value like an author's name and cut it to 64 characters, and list them with the bridge (`agora bridge list`).
+
+#### Scenario: A bridge that shows names
+- **WHEN** the bridge of `#example-chat` answers `hello` with `{"type":"hello","caps":{"personas":"prefix"}}`
+- **THEN** `agora bridge list` shows `personas=prefix` for `example-chat`
+
+#### Scenario: A bridge that says nothing
+- **WHEN** a bridge never answers `hello`
+- **THEN** it is listed without capabilities
+
+#### Scenario: A restart
+- **WHEN** a bridge that sent capabilities restarts and does not send them again
+- **THEN** it is listed without capabilities
+
+### Requirement: Replies To An Agent's Message
+
+The system SHALL treat an `in` line whose `reply_to` names a message an agent posted in the room, the operator included, as addressed to that agent, as a mention would: it counts as unread and addressed for the agent and wakes it, whatever mode it follows the room with. A reply to a message from outside or to the board's message addresses no one this way.
+
+#### Scenario: Someone answers an agent
+- **WHEN** `secretary` posted a message that went out to the chat, and `Ada` answers it there
+- **THEN** her message is addressed to `secretary` and wakes it
 
 ### Requirement: Messages From Outside Addressed To The Bridge's Agents
 

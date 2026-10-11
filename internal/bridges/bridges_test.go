@@ -814,3 +814,22 @@ func TestAgentsPostOnlyNotesUnderRead(t *testing.T) {
 		t.Fatal("a note under read has a delivery state")
 	}
 }
+
+func TestARepliesToAnAgentsMessageAddressesIt(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	out := e.post(t, "builder", "example-chat", "the fix ships tonight")
+	if ok, _, err := e.b.Sent(ctx, "example-chat", out, "900"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	ada := e.receive(t, bridges.In{ID: "901", AuthorName: "Ada", Text: "great, thanks", ReplyTo: "900"})
+	msgs, _, err := e.r.Unread(ctx, "builder", rooms.Waking, 0)
+	if err != nil || len(msgs) != 1 || msgs[0].ID != ada || !msgs[0].Addressed {
+		t.Fatalf("builder's waking messages: %+v %v", msgs, err)
+	}
+	// a reply to a message from outside addresses no one this way
+	e.receive(t, bridges.In{ID: "902", AuthorName: "Bob", Text: "me too", ReplyTo: "901"})
+	if msgs, _, _ := e.r.Unread(ctx, "builder", rooms.Addressed, 0); len(msgs) != 1 {
+		t.Fatalf("builder addressed by a reply to Ada: %+v", msgs)
+	}
+}

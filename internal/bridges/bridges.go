@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -43,6 +44,8 @@ const (
 	maxName = 100
 	// maxError bounds the reason a failed message keeps, in characters.
 	maxError = 500
+	// MaxCap bounds each capability a bridge names, in characters.
+	MaxCap = 64
 )
 
 var (
@@ -312,6 +315,19 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 				return err
 			}
 		}
+		// an answer to an agent's message addresses that agent, as a mention would
+		if in.ReplyTo != "" {
+			var author string
+			err := tx.QueryRowContext(ctx, `SELECT m.author FROM messages AS m JOIN agents AS a ON a.name = m.author
+				WHERE m.room = ? AND m.ext_id = ?`, name, in.ReplyTo).Scan(&author)
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+			case err != nil:
+				return err
+			case !slices.Contains(addressees, author):
+				addressees = append(addressees, author)
+			}
+		}
 		msg := rooms.Incoming{
 			Room: name, ExtID: in.ID, AuthorID: authorID, AuthorName: authorName, Body: text, ReplyExtID: in.ReplyTo, At: in.At, Addressees: addressees,
 		}
@@ -340,10 +356,33 @@ func clean(s string, limit int) string {
 	return s
 }
 
+// Caps is what a bridge says its platform can do; "" for what it did not say.
+type Caps struct {
+	Personas string // how it shows who wrote a message that goes out, such as "prefix"
+	Threads  string // how it keeps threads, such as "topic"
+}
+
+// IsZero reports whether the bridge said nothing it can do.
+func (c Caps) IsZero() bool { return c == Caps{} }
+
+// ReadCaps reads the caps of a bridge's hello: the known entries whose value is a JSON string,
+// cleaned like an author's name and cut to MaxCap characters; others are ignored.
+func ReadCaps(raw map[string]json.RawMessage) Caps {
+	read := func(key string) string {
+		var v string
+		if json.Unmarshal(raw[key], &v) != nil {
+			return ""
+		}
+		return clean(v, MaxCap)
+	}
+	return Caps{Personas: read("personas"), Threads: read("threads")}
+}
+
 // Out is a message to hand to a bridge.
 type Out struct {
 	ID      int64
 	Author  string
+	Sigil   string // the author's sigil, "" when it chose none
 	Text    string
 	ReplyTo string // the identifier outside of the message of the same room it replies to, if any
 }
@@ -377,7 +416,8 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 	if err != nil {
 		return nil, err
 	}
-	rows, err := b.db.QueryContext(ctx, `SELECT m.id, m.author, m.body, COALESCE(r.ext_id, '') FROM messages AS m
+	rows, err := b.db.QueryContext(ctx, `SELECT m.id, m.author, COALESCE(a.icon, ''), m.body, COALESCE(r.ext_id, '') FROM messages AS m
+		LEFT JOIN agents AS a ON a.name = m.author
 		LEFT JOIN messages AS r ON r.id = m.reply_to AND r.room = m.room
 		WHERE m.id IN (SELECT value FROM json_each(?)) AND m.room = ? AND m.delivery = 'sending' ORDER BY m.id`, string(list), name)
 	if err != nil {
@@ -387,7 +427,7 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 	var out []Out
 	for rows.Next() {
 		var o Out
-		if err := rows.Scan(&o.ID, &o.Author, &o.Text, &o.ReplyTo); err != nil {
+		if err := rows.Scan(&o.ID, &o.Author, &o.Sigil, &o.Text, &o.ReplyTo); err != nil {
 			return nil, err
 		}
 		out = append(out, o)
