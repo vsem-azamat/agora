@@ -19,6 +19,9 @@ type HubData = {
   board: string;
   /** The room every agent follows. */
   general: string;
+  /** The hub's version and the commit it was built from. */
+  version: string;
+  commit: string;
   agents: Profile[];
   rooms: Room[];
   /** Per room: the operator's unread and addressed counts, and the messages waiting for the operator to send. */
@@ -79,6 +82,8 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       operator: who.name,
       board: who.board,
       general: who.generalRoom,
+      version: who.version,
+      commit: who.commit,
       agents: agents.agents,
       rooms: rooms.rooms,
       unread: roomCounts(unread.rooms, rooms.rooms),

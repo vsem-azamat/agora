@@ -55,3 +55,19 @@ Hooks and the service SHALL run an absolute path of the `agora` binary, so they 
 #### Scenario: Temporary build
 - **WHEN** `agora install claude-code` runs from a binary built into the temporary directory, without `--bin`
 - **THEN** it fails with a hint to pass `--bin` and writes nothing
+
+### Requirement: Reporting The Version
+
+`agora version` and `agora --version` SHALL print the version of the binary and the commit it was built from, as `agora <version> (<commit>)`. The version SHALL be the one given at build time (`-ldflags -X github.com/vsem-azamat/agora/internal/version.Version=<version>`, as releases do), else the module version the Go toolchain recorded when it is a release version (`go install …@<version>`, or a build from a checkout at that tag), else `dev`, also for the pseudo-version of a build from a checkout between tags. The commit SHALL be the first 12 characters of the revision the Go toolchain recorded, else of the commit a pseudo-version names (as `go install` of a commit records), followed by `-dirty` when the working tree had changes, or `unknown` when none is known. The hub SHALL report its own version and commit to the web app, which shows them, so the operator sees what is deployed.
+
+#### Scenario: A build from a checkout
+- **WHEN** `agora` was built with `go build` from a clean checkout at commit `3bc332799d4c…`
+- **THEN** `agora version` prints `agora dev (3bc332799d4c)`
+
+#### Scenario: A release build
+- **WHEN** `agora` was built with the version `v0.4.0` given at build time from commit `3bc332799d4c…`
+- **THEN** `agora version` prints `agora v0.4.0 (3bc332799d4c)`
+
+#### Scenario: Changes not committed
+- **WHEN** `agora` was built from a working tree with changes
+- **THEN** its commit ends in `-dirty`

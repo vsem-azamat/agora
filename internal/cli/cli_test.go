@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -928,5 +929,15 @@ func TestBridges(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "x", "read", "example-chat"); !strings.Contains(r.stdout, "looked, all fine") || !strings.Contains(r.stdout, "no longer bridged") {
 		t.Fatalf("read after removing: %+v", r)
+	}
+}
+
+func TestVersion(t *testing.T) {
+	want := regexp.MustCompile(`^agora \S+ \((unknown|[0-9a-f]{1,12}(-dirty)?)\)\n$`)
+	for _, args := range [][]string{{"version"}, {"--version"}} {
+		var out, errOut bytes.Buffer
+		if code := cli.Run(context.Background(), args, &out, &errOut); code != 0 || !want.MatchString(out.String()) {
+			t.Fatalf("%v: exit %d, %q %q", args, code, out.String(), errOut.String())
+		}
 	}
 }

@@ -12,6 +12,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+
+	"github.com/vsem-azamat/agora/internal/version"
 )
 
 // ExitRefused is the exit code of a lock that someone else holds.
@@ -75,7 +77,9 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 		Short:         "Coordinate AI coding agents on your machines",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Version:       version.Get().String(),
 	}
+	root.SetVersionTemplate("agora {{.Version}}\n")
 	root.PersistentFlags().StringVar(&o.as, "as", os.Getenv("AGORA_NAME"), "agent name to act as (default $AGORA_NAME)")
 	root.PersistentFlags().StringVar(&o.socket, "socket", defaultSocket(), "hub socket (default $AGORA_SOCKET)")
 
@@ -83,8 +87,17 @@ func newRoot(stdout, stderr io.Writer) *cobra.Command {
 		proposeCmd(o), voteCmd(o), closeCmd(o), proposalsCmd(o), charterCmd(o),
 		roomsCmd(o), roomCreateCmd(o), subscribeCmd(o, true), subscribeCmd(o, false), postCmd(o), readCmd(o), unreadCmd(o),
 		whoamiCmd(o), sessionsCmd(o), hookCmd(o), installCmd(o), uninstallCmd(o),
-		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o), webCmd(o), bridgeCmd(o))
+		queueCmd(o), lockCmd(o), unlockCmd(o), locksCmd(o), webCmd(o), bridgeCmd(o), versionCmd(o))
 	return root
+}
+
+func versionCmd(o *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version and the commit this agora was built from",
+		Args:  cobra.NoArgs,
+		Run:   func(*cobra.Command, []string) { fmt.Fprintf(o.out, "agora %s\n", version.Get()) },
+	}
 }
 
 func defaultSocket() string {

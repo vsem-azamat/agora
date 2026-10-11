@@ -13,6 +13,10 @@ bin/agora queue ls
 
 `bin/` is ignored by git. The hub's socket and database locations are described in [Hub](../architecture/hub.md).
 
+## Version
+
+`agora version` (and `agora --version`) prints `agora <version> (<commit>)`; the hub sends the same to the web app, which shows it in Settings. `internal/version` reads them from the build: the version is `version.Version` when set at build time (`go build -ldflags "-X github.com/vsem-azamat/agora/internal/version.Version=v0.4.0"`, as a release build does), else the module version the toolchain recorded (`go install …@v0.4.0`, or a checkout at a tag; `+dirty` dropped) unless it is a pseudo-version, else `dev`; the commit is the first 12 characters of `vcs.revision`, which `go build` records inside a git checkout, else of the revision a pseudo-version names (`go install …@latest` of an untagged module records no `vcs.revision`), with `-dirty` after it when `vcs.modified` is set (untracked files count too), else `unknown`. Pseudo-versions are recognised with `golang.org/x/mod/module`.
+
 ## Tests
 
 Tests need no running hub: queue tests use an in-memory database and a controllable clock, and CLI tests start their own hub on a temporary socket.
