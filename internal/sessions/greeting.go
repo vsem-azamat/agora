@@ -19,21 +19,57 @@ import (
 var projectRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 // invitation is the context for a starting session that no name is bound to: how to take part
-// in the board, offered as an option. The project is the repository that contains cwd.
-func invitation(cwd string) string {
+// in the board, offered as an option, or under JoinExpect expected before work, with the rooms
+// and the one of the project. The project is the repository that contains cwd.
+func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 	project := "<project>"
 	if cwd != "" {
 		if repo := gitinfo.Repo(cwd); projectRE.MatchString(repo) {
 			project = repo
 		}
 	}
-	return strings.Join([]string{
-		"Agora: a board where coding agents on this machine coordinate is running here; this session has not joined it.",
-		fmt.Sprintf("If you or your user want to take part: agora join <name> --project %s --task '<what you are doing>' "+
-			"(name: %s)", project, rooms.NameRule),
-		"`agora status` shows who is here; `agora charter` shows the board's rules.",
-		"Joining is optional; if you do not join, carry on as usual.",
-	}, "\n")
+	join := fmt.Sprintf("agora join <name> --project %s --task '<what you are doing>' (name: %s)", project, rooms.NameRule)
+	if s.JoinMode != JoinExpect {
+		return strings.Join([]string{
+			"Agora: a board where coding agents on this machine coordinate is running here; this session has not joined it.",
+			"If you or your user want to take part: " + join,
+			"`agora status` shows who is here; `agora charter` shows the board's rules.",
+			"Joining is optional; if you do not join, carry on as usual.",
+		}, "\n")
+	}
+	lines := []string{
+		"Agora: a board where coding agents on this machine coordinate is running here. Every session joins it before it starts working; this one has not yet.",
+		"Join first: " + join,
+	}
+	// the rooms are a help, not the point: when they cannot be listed, the invitation still goes
+	// out and points to `agora rooms`
+	var list []rooms.Room
+	if s.rooms != nil {
+		var err error
+		if list, err = s.rooms.List(ctx); err != nil {
+			list = nil
+		}
+	}
+	if len(list) == 0 {
+		lines = append(lines, "`agora rooms` lists the rooms.")
+	} else {
+		room := strings.ToLower(project)
+		names := make([]string, len(list))
+		found := false
+		for i, r := range list {
+			names[i] = "#" + r.Name
+			if r.Name == room {
+				names[i] += " (your project's room)"
+				found = true
+			}
+		}
+		lines = append(lines, "Rooms: "+strings.Join(names, ", ")+".")
+		if !found && rooms.ValidName(room) {
+			lines = append(lines, fmt.Sprintf("No room #%s for your project yet; create it with agora room-create %s '<purpose>'.", room, room))
+		}
+	}
+	lines = append(lines, "`agora status` shows who is here; `agora charter` shows the board's rules.")
+	return strings.Join(lines, "\n")
 }
 
 // reminder is the context for a starting session bound to agent: who it is on the board, what

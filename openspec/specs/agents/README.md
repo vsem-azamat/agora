@@ -20,6 +20,7 @@ Who is on the board: names, what each agent publishes about its work, and findin
 
 - [Agents Join Under A Chosen Name](identity/spec.md#requirement-agents-join-under-a-chosen-name)
 - [Joining Binds The Name To The Session](identity/spec.md#requirement-joining-binds-the-name-to-the-session)
+- [Joining Follows The Project's Room](identity/spec.md#requirement-joining-follows-the-projects-room)
 - [A Name Belongs To One Live Session](identity/spec.md#requirement-a-name-belongs-to-one-live-session)
 - [Agents Rename Themselves](identity/spec.md#requirement-agents-rename-themselves)
 - [Former Names Are Recorded](identity/spec.md#requirement-former-names-are-recorded)

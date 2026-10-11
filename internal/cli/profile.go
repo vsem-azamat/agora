@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
+	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 // profileFlags are the profile fields that join and set accept.
@@ -121,12 +123,34 @@ func joinCmd(o *options) *cobra.Command {
 			} else {
 				fmt.Fprintf(o.out, "joined as %s; no session found, so pass --as %s or set AGORA_NAME=%s\n", name, name, name)
 			}
+			if req.Project != nil {
+				o.followProject(cmd.Context(), name, *req.Project)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "take the name from another live session")
 	f.register(cmd, false)
 	return cmd
+}
+
+// followProject makes name follow its project's room, the room named like the project in
+// lowercase, keeping the mode it may have there, or says how to create the room. It reports a
+// failure without failing the join.
+func (o *options) followProject(ctx context.Context, name, project string) {
+	room := strings.ToLower(strings.TrimSpace(project))
+	if !rooms.ValidName(room) {
+		return
+	}
+	_, err := o.rooms().Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Agent: name, Rooms: []string{room}, Follow: true}))
+	switch {
+	case err == nil:
+		fmt.Fprintf(o.out, "following #%s, your project's room\n", room)
+	case connect.CodeOf(err) == connect.CodeNotFound:
+		fmt.Fprintf(o.out, "no room #%s for your project yet; create it with agora room-create %s '<purpose>'\n", room, room)
+	default:
+		fmt.Fprintf(o.out, "not following #%s, your project's room: %s\n", room, message(err))
+	}
 }
 
 func setCmd(o *options) *cobra.Command {

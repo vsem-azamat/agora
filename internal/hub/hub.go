@@ -131,3 +131,13 @@ func (h *Hub) Handler() http.Handler {
 		mux.ServeHTTP(w, r)
 	})
 }
+
+// SetJoinMode sets how starting sessions that have not joined are invited: offer or expect.
+func (h *Hub) SetJoinMode(m string) error {
+	mode := sessions.JoinMode(m)
+	if err := sessions.ValidJoinMode(mode); err != nil {
+		return err
+	}
+	h.sessions.JoinMode = mode
+	return nil
+}

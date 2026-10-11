@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,6 +248,88 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 }
 
 // --- greeting (Claude Code connector) ------------------------------------------------
+
+// exampleRepo returns a directory inside a git repository named example-app.
+func exampleRepo(t *testing.T) string { return repoNamed(t, "example-app") }
+
+// repoNamed returns a directory inside a git repository named name.
+func repoNamed(t *testing.T, name string) string {
+	t.Helper()
+	repo := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return repo
+}
+
+func TestJoiningExpected(t *testing.T) {
+	e := newEnv(t)
+	e.s.JoinMode = sessions.JoinExpect
+	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: exampleRepo(t)}
+	r, err := e.s.Report(ctx, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Every session joins it before it starts working",
+		"agora join <name> --project example-app --task '<what you are doing>'",
+		"Rooms: #general.",
+		"No room #example-app for your project yet; create it with agora room-create example-app '<purpose>'.",
+	} {
+		if !strings.Contains(r.Context, want) {
+			t.Fatalf("invitation lacks %q: %q", want, r.Context)
+		}
+	}
+	if strings.Contains(r.Context, "optional") {
+		t.Fatalf("joining offered as an option: %q", r.Context)
+	}
+	if _, err := e.s.Join(ctx, "builder", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	r, err = e.s.Report(ctx, sessions.Report{SessionID: "session-2", Kind: "claude-code", Event: sessions.Start, PID: 4243, PIDStart: 112, CWD: exampleRepo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Context, "Rooms: #example-app (your project's room), #general.") || strings.Contains(r.Context, "room-create") {
+		t.Fatalf("invitation with the project's room: %q", r.Context)
+	}
+	// the project's room is named in lowercase; a project that is no room name has none
+	for i, c := range []struct{ repo, want, not string }{
+		{"Example-App", "#example-app (your project's room)", "room-create"},
+		{"my.app", "Rooms: #example-app, #general.", "room-create"},
+	} {
+		r, err := e.s.Report(ctx, sessions.Report{SessionID: fmt.Sprintf("session-%d", i+3), Kind: "claude-code", Event: sessions.Start, PID: 4250 + i, PIDStart: 120, CWD: repoNamed(t, c.repo)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(r.Context, c.want) || strings.Contains(r.Context, c.not) {
+			t.Fatalf("invitation in %s: %q", c.repo, r.Context)
+		}
+	}
+}
+
+func TestJoiningExpectedWhenTheRoomsCannotBeListed(t *testing.T) {
+	e := newEnv(t)
+	e.s.JoinMode = sessions.JoinExpect
+	// listing the rooms counts their messages; without the table it fails, the report does not
+	if _, err := e.db.Exec(`ALTER TABLE messages RENAME TO messages_gone`); err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: exampleRepo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Context, "Every session joins it before it starts working") || !strings.Contains(r.Context, "`agora rooms` lists the rooms.") ||
+		strings.Contains(r.Context, "Rooms:") {
+		t.Fatalf("invitation: %q", r.Context)
+	}
+}
 
 func TestUnboundStartIsInvited(t *testing.T) {
 	e := newEnv(t)

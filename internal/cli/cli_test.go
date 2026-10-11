@@ -470,6 +470,89 @@ func TestLeavingByNameSaysNothingAboutTheSession(t *testing.T) {
 	}
 }
 
+func TestJoiningFollowsTheProjectRoom(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	if r := agora(ctx, socket, "builder", "join", "builder", "--project", "example-app"); r.code != 0 ||
+		!strings.Contains(r.stdout, "no room #example-app for your project yet; create it with agora room-create example-app '<purpose>'") {
+		t.Fatalf("join without a project room: %+v", r)
+	}
+	if r := agora(ctx, socket, "tester", "join", "tester", "--project", "my.app"); r.code != 0 || strings.Contains(r.stdout, "room") {
+		t.Fatalf("join with a project that is no room name: %+v", r)
+	}
+	agora(ctx, socket, "builder", "room-create", "example-app", "work on example-app")
+	r := agora(ctx, socket, "reviewer", "join", "reviewer", "--project", "Example-App")
+	if r.code != 0 || !strings.Contains(r.stdout, "following #example-app, your project's room") {
+		t.Fatalf("join with a project room: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "subscribe", "general"); !strings.Contains(r.stdout, "#general #example-app") {
+		t.Fatalf("reviewer follows: %+v", r)
+	}
+	// a mode chosen before stays
+	agora(ctx, socket, "reviewer", "subscribe", "example-app", "--mode", "wake")
+	agora(ctx, socket, "reviewer", "join", "reviewer", "--project", "example-app")
+	if r := agora(ctx, socket, "reviewer", "subscribe", "general"); !strings.Contains(r.stdout, "#example-app (wake)") {
+		t.Fatalf("mode after joining again: %+v", r)
+	}
+}
+
+// TestJoinExpectedReachesTheGreeting runs the hub command with --join expect and starts a
+// session through the hook: the greeting expects it to join.
+func TestJoinExpectedReachesTheGreeting(t *testing.T) {
+	dir, err := os.MkdirTemp("", "agora-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "hub.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	var log lockedBuffer
+	done := make(chan int, 1)
+	go func() {
+		done <- cli.Run(ctx, []string{"--socket", socket, "hub", "--db", filepath.Join(dir, "agora.db"), "--join", "expect", "--watch-prs=false"}, &log, &log)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(log.String(), "hub listening") {
+		if time.Now().After(deadline) {
+			t.Fatalf("hub did not start: %s", log.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	var out, errOut bytes.Buffer
+	cli.RunWithInput(context.Background(), []string{"--socket", socket, "hook", "claude-code"},
+		strings.NewReader(`{"session_id":"session-expect","hook_event_name":"SessionStart","cwd":"/"}`), &out, &errOut)
+	if !strings.Contains(out.String(), "Every session joins it before it starts working") {
+		t.Fatalf("greeting: %q %q", out.String(), errOut.String())
+	}
+}
+
+func TestJoinSetting(t *testing.T) {
+	for _, c := range []struct {
+		name, env string
+		args      []string
+		want      string
+		code      int
+	}{
+		{"default", "", nil, "join=offer", 0},
+		{"flag", "", []string{"--join", "expect"}, "join=expect", 0},
+		{"environment", "expect", nil, "join=expect", 0},
+		{"unknown", "", []string{"--join", "always"}, `--join: join "always": offer or expect`, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("AGORA_JOIN", c.env)
+			log, code := hubLog(t, c.args...)
+			if code != c.code || !strings.Contains(log, c.want) {
+				t.Fatalf("exit %d, log: %s", code, log)
+			}
+		})
+	}
+}
+
 func TestRoomsAndMessages(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()
