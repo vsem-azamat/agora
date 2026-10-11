@@ -702,13 +702,36 @@ button.pgname:hover {
   min-height: 0;
   min-width: 0;
 }
+/* the room's name and purpose on the left, its numbers and controls on the right; when they do not
+   fit on one line, the controls move down whole and spread across: numbers left, controls right */
 .roomhead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 6px 16px;
   min-height: 46px;
   padding: 8px 22px;
   border-bottom: 1px solid var(--line);
+}
+.rtitle {
+  flex: 1000 1 18em;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rtools {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+}
+.rtools .sum {
+  margin-right: auto;
+  color: var(--mute);
 }
 .roomhead h2 {
   font-family: var(--display);
@@ -1554,9 +1577,25 @@ button.pgname:hover {
   gap: 8px;
 }
 .brstate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--mute);
   font-size: 0.8em;
   white-space: nowrap;
+}
+.brstate::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mute);
+}
+.brstate.running::before {
+  background: var(--ok);
+}
+.brstate.restarting::before {
+  background: var(--bad);
 }
 .brstate.restarting {
   color: var(--bad);
@@ -1968,10 +2007,6 @@ button.pgname:hover {
 @media (max-width: 1180px) {
   .roomwrap {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .roomhead {
-    flex-wrap: wrap;
-    row-gap: 6px;
   }
   .rail {
     display: none;
