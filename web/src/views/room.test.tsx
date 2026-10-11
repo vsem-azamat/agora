@@ -82,6 +82,24 @@ function layout() {
   });
 }
 
+/** A ResizeObserver that remembers what it observes; `resize` calls back for the tape only. */
+function observeResizes() {
+  const observed = new Map<Element, () => void>();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private f: () => void) {}
+      observe(el: Element) {
+        observed.set(el, this.f);
+      }
+      disconnect() {
+        observed.clear();
+      }
+    },
+  );
+  return (tape: Element) => act(() => observed.get(tape)?.());
+}
+
 describe('messages in a room', () => {
   const ms = [
     message(1, 'builder', 'PR #57 is up', 30),
@@ -220,6 +238,104 @@ describe('reading position', () => {
     expect((container.querySelector('.msgs') as HTMLElement).scrollTop).toBe(120);
   });
 
+  it('stays at the newest message when the room gets shorter', () => {
+    layout();
+    const resize = observeResizes();
+    try {
+      const { container } = room(ms);
+      const tape = container.querySelector('.msgs') as HTMLElement;
+      const bottom = () => tape.scrollHeight - tape.scrollTop - tape.clientHeight;
+      tape.scrollTop = tape.scrollHeight - tape.clientHeight; // as a browser leaves it at the bottom
+      fireEvent.scroll(tape);
+      // the keyboard comes up: the tape is shorter, its scroll position is not
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(100);
+      expect(bottom()).toBe(150);
+      resize(tape);
+      expect(bottom()).toBeLessThanOrEqual(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('stays where it was scrolled to when the room gets shorter', () => {
+    layout();
+    const resize = observeResizes();
+    try {
+      const { container } = room(ms);
+      const tape = container.querySelector('.msgs') as HTMLElement;
+      tape.scrollTop = 0;
+      fireEvent.scroll(tape);
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(100);
+      resize(tape);
+      expect(tape.scrollTop).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps following after a jump to a message that is already at the bottom', () => {
+    layout();
+    const ms2 = [...ms, message(9, 'reviewer', 'about the last one', 1, { replyTo: 6n })];
+    const { container, props, rerender } = room(ms2);
+    const tape = container.querySelector('.msgs') as HTMLElement;
+    tape.scrollTop = tape.scrollHeight - tape.clientHeight;
+    fireEvent.scroll(tape);
+    fireEvent.click(tablet(container, 9).querySelector('.quote') as HTMLElement);
+    rerender(<RoomView {...props} messages={[...ms2, message(10, 'builder', 'next', 0)]} />);
+    expect(tape.scrollHeight - tape.scrollTop - tape.clientHeight).toBeLessThanOrEqual(0);
+  });
+
+  it('keeps following after arriving at the newest message', () => {
+    layout();
+    // a browser clamps the scroll position to what can be scrolled
+    const tops = new WeakMap<Element, number>();
+    vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(function (this: Element) {
+      return tops.get(this) ?? 0;
+    });
+    vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(function (this: Element, v: number) {
+      tops.set(this, Math.max(0, Math.min(v, this.scrollHeight - this.clientHeight)));
+    });
+    const { container, props, rerender } = room(ms, { arrival: { room: 'example-app', jump: 6n } });
+    const tape = container.querySelector('.msgs') as HTMLElement;
+    rerender(<RoomView {...props} arrival={undefined} messages={[...ms, message(10, 'builder', 'next', 0)]} />);
+    expect(tape.scrollHeight - tape.scrollTop - tape.clientHeight).toBeLessThanOrEqual(0);
+  });
+
+  it('does not pin when the room gets taller', () => {
+    layout();
+    const resize = observeResizes();
+    try {
+      const { container } = room(ms);
+      const tape = container.querySelector('.msgs') as HTMLElement;
+      tape.scrollTop = tape.scrollHeight - tape.clientHeight - 40; // following, just above the bottom
+      fireEvent.scroll(tape);
+      const at = tape.scrollTop;
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(300);
+      resize(tape);
+      expect(tape.scrollTop).toBe(at);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('lets a jump to a quoted message finish when the room changes size', () => {
+    layout();
+    const resize = observeResizes();
+    try {
+      const { container } = room([...ms, message(9, 'reviewer', 'about the first one', 1, { replyTo: 1n })]);
+      const tape = container.querySelector('.msgs') as HTMLElement;
+      tape.scrollTop = tape.scrollHeight - tape.clientHeight;
+      fireEvent.scroll(tape);
+      fireEvent.click(tablet(container, 9).querySelector('.quote') as HTMLElement);
+      const at = tape.scrollTop;
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(100);
+      resize(tape);
+      expect(tape.scrollTop).toBe(at);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('keeps its place and counts new messages while scrolled up', async () => {
     layout();
     const { container, props, rerender } = room(ms);
@@ -256,6 +372,47 @@ describe('a hidden page', () => {
     await waitFor(() =>
       expect(container.querySelector('.newline')?.nextElementSibling?.getAttribute('data-mid')).toBe('7'),
     );
+  });
+
+  it('keeps following after the return when nothing is below the view', async () => {
+    layout();
+    const one = [message(1, 'builder', 'hello', 9)];
+    const { container, props, rerender } = room(one);
+    const tape = container.querySelector('.msgs') as HTMLElement;
+    const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const two = [...one, message(2, 'builder', 'more', 5)];
+    rerender(<RoomView {...props} messages={two} />);
+    state.mockReturnValue('visible');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    const many = [...two, ...[3, 4, 5, 6, 7, 8].map((i) => message(i, 'builder', `message ${i}`, 4))];
+    rerender(<RoomView {...props} messages={many} />);
+    await waitFor(() => expect(tape.scrollHeight - tape.scrollTop - tape.clientHeight).toBeLessThanOrEqual(0));
+  });
+
+  it('keeps the NEW line in view when the room gets shorter after the return', async () => {
+    layout();
+    const resize = observeResizes();
+    try {
+      const { container, props, rerender } = room(ms);
+      const tape = container.querySelector('.msgs') as HTMLElement;
+      tape.scrollTop = tape.scrollHeight - tape.clientHeight;
+      fireEvent.scroll(tape);
+      const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+      rerender(<RoomView {...props} messages={[...ms, message(7, 'builder', 'one more', 2)]} />);
+      state.mockReturnValue('visible');
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await waitFor(() => expect(container.querySelector('.newline')).not.toBeNull());
+      const at = tape.scrollTop;
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(100);
+      resize(tape);
+      expect(tape.scrollTop).toBe(at);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

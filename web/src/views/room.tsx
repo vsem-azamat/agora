@@ -184,7 +184,11 @@ export function RoomView(props: {
   // Coming back to the page: what came meanwhile gets the NEW line, and what is in view is read.
   const comeBack = () => {
     const first = unseen(messages ?? [], seen.current, to, reader.operator).first;
-    if (first !== undefined) setCameHidden(first);
+    if (first !== undefined) {
+      setCameHidden(first);
+      // the NEW line above what came meanwhile stays in view, unless nothing is below the view
+      if (list.current) follow.current = atBottom(list.current);
+    }
     read();
   };
   const returning = useRef(comeBack);
@@ -198,6 +202,20 @@ export function RoomView(props: {
   }, []);
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  // a tape that showed the newest message keeps showing it when it gets shorter, as when the
+  // on-screen keyboard comes up: the browser keeps its scroll position, not its bottom
+  useEffect(() => {
+    const el = list.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let height = el.clientHeight;
+    const keep = new ResizeObserver(() => {
+      const shorter = el.clientHeight < height;
+      height = el.clientHeight;
+      if (shorter && follow.current) el.scrollTop = el.scrollHeight;
+    });
+    keep.observe(el);
+    return () => keep.disconnect();
+  }, []);
   const onScroll = () => {
     const el = list.current;
     if (!el) return;
@@ -212,6 +230,15 @@ export function RoomView(props: {
   const flash = useCallback((id: bigint) => {
     const li = list.current?.querySelector<HTMLElement>(`[data-mid="${id}"]`);
     if (!li) return;
+    // the tape follows only if it ends at the bottom: a resize must not pull it away from the message
+    const el = list.current;
+    if (el) {
+      const top = Math.min(
+        Math.max(0, li.offsetTop + li.offsetHeight / 2 - el.clientHeight / 2),
+        el.scrollHeight - el.clientHeight,
+      );
+      follow.current = atBottom({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, scrollTop: top });
+    }
     li.scrollIntoView?.({ block: 'center', behavior: scrollBehavior() });
     li.classList.remove('flash');
     void li.offsetWidth; // restarts the animation
