@@ -22,7 +22,7 @@ die() { echo "deploy: $*" >&2; exit 1; }
 
 # the binary the service runs, from its ExecStart: { path=/usr/local/bin/agora ; argv[]=… }
 service_binary() {
-  systemctl --user show -p ExecStart --value "$SERVICE" | sed -n 's/^{ path=\([^ ;]*\) ;.*/\1/p'
+  systemctl --user show -p ExecStart --value "$SERVICE" | sed -n 's/^{ path=\(.*\) ; argv\[\]=.*/\1/p'
 }
 
 step "preflight"
@@ -38,6 +38,7 @@ fi
 [ -L "$BIN" ] && die "$BIN is a symbolic link; set BIN to the file it points to"
 if [ -n "$SERVICE" ]; then
   runs=$(service_binary)
+  [ -n "$runs" ] || die "cannot read the binary from the ExecStart of $SERVICE; set BIN"
   [ "$runs" -ef "$BIN" ] || [ "$runs" = "$BIN" ] || die "$SERVICE runs $runs, not $BIN; set BIN to it"
 fi
 [ -z "$WEB_URL" ] || command -v curl >/dev/null || die "curl is needed to check WEB_URL"
@@ -81,7 +82,8 @@ if [ "$BACKUP" = 1 ]; then
   if [ -f "$DB" ]; then
     db_bak="$DB.bak-$ts"
     # VACUUM INTO reads a consistent copy while the hub writes; the path is an SQL string
-    (umask 077 && sqlite3 "$DB" "VACUUM INTO '${db_bak//\'/\'\'}'")
+    sq="'" # a quote doubled the way bash 3.2, as on macOS, also does
+    (umask 077 && sqlite3 "$DB" "VACUUM INTO '${db_bak//$sq/$sq$sq}'")
     echo "database: $db_bak"
   else
     echo "no database at $DB: not backed up (set DB to the hub's --db)"

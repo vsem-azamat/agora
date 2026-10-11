@@ -34,7 +34,7 @@ When anything fails after the install, the script prints the commands that go ba
 | --- | --- | --- |
 | `BIN` | the path in the service's `ExecStart`, else `agora` on `PATH` | The binary to replace |
 | `SERVICE` | `agora-hub` | The systemd user unit of the hub (see [Setup](../architecture/setup.md)); empty when the hub does not run as one: then it is neither restarted nor checked |
-| `DB` | `$AGORA_DB`, else `$XDG_STATE_HOME/agora/agora.db`, else `~/.local/state/agora/agora.db` | The hub's database (the service's `--db` when it has one), backed up when it exists |
+| `DB` | `$AGORA_DB`, else `$XDG_STATE_HOME/agora/agora.db`, else `~/.local/state/agora/agora.db` | The hub's database, backed up when it exists; set it to the service's `--db` when the service has one |
 | `WEB_URL` | empty | The web app's address, checked for 200; empty: not checked |
 | `CHECK` | `check` | The make target run before building; empty: none |
 | `PULL` | `1` | `0`: deploy the checkout as it is, without pulling |

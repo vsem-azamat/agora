@@ -12,7 +12,8 @@ fail() { echo "deploy-test: $*" >&2; exit 1; }
 git clone -q . "$tmp/repo"
 # the script under test is the working tree's, committed in the clone so its tree is clean
 cp scripts/deploy.sh "$tmp/repo/scripts/deploy.sh"
-git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid commit -qam test --allow-empty
+git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null \
+  commit -qam test --allow-empty --no-verify
 head=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
 state="$tmp/it's state" # a quote and a space in the database's path
 export BIN="$tmp/bin/agora" DB="$state/agora.db" SERVICE= CHECK= PULL=0 WEB_URL= SKILL_DIRS= BACKUP=1
@@ -41,6 +42,9 @@ fi
 sleep 1 # a new backup name
 WEB_URL=http://127.0.0.1:1/ run && fail "a deploy whose web app does not answer succeeded"
 grep -q "to go back to what ran before" "$tmp/out" && grep -q "mv .*agora.bak-" "$tmp/out" || { cat "$tmp/out"; fail "no way back"; }
+if command -v sqlite3 >/dev/null; then
+  grep -q "rm -f .*-wal .*-shm" "$tmp/out" || { cat "$tmp/out"; fail "the way back does not restore the database"; }
+fi
 
 touch "$tmp/repo/stray"
 run && fail "a working tree with an untracked file was deployed"
