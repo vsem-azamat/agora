@@ -65,7 +65,10 @@ func (s *roomService) ListSubscriptions(ctx context.Context, req *connect.Reques
 func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
 	m := req.Msg
 	post := s.h.rooms.Post
-	if fromOperator(ctx) {
+	switch {
+	case m.GetNote():
+		post = s.h.rooms.PostNote
+	case fromOperator(ctx):
 		post = s.h.rooms.PostFromOperator
 	}
 	id, err := post(ctx, m.GetAgent(), m.GetRoom(), m.GetBody(), m.GetReplyTo())

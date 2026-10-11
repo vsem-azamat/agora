@@ -89,6 +89,12 @@ type Message struct {
 	DeliveryError string
 	// Quiet is set for the board's notices about a bridge: they wake no one.
 	Quiet bool
+	// Note is set for a note: a message of a bridged room that stays in Agora and is never
+	// handed to the bridge.
+	Note bool
+	// Incoming is set for a message that came in from the outside chat through the room's
+	// bridge: from someone there, or from the operator writing there.
+	Incoming bool
 }
 
 // External reports whether the message came from outside through a bridge.
@@ -330,23 +336,39 @@ func NoticeRoomTx(ctx context.Context, tx *sql.Tx, agent string) (string, error)
 // approve, goes out under open and is refused under read. Only the board posts as Board,
 // through PostTx.
 func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
-	return r.post(ctx, author, room, body, replyTo, false)
+	return r.post(ctx, author, room, body, replyTo, sendAsAgent)
 }
 
 // PostFromOperator is Post for the operator, through the web app: in a bridged room the message
 // goes out at once, except under the policy read, where it stays here.
 func (r *Rooms) PostFromOperator(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
-	return r.post(ctx, author, room, body, replyTo, true)
+	return r.post(ctx, author, room, body, replyTo, sendAsOperator)
 }
 
-func (r *Rooms) post(ctx context.Context, author, room, body string, replyTo int64, operator bool) (int64, error) {
+// PostNote is Post for a note, from an agent or the operator: in a bridged room the message stays
+// in Agora under every policy, read included, and is marked as a note; in a room without a
+// bridge it is an ordinary message.
+func (r *Rooms) PostNote(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
+	return r.post(ctx, author, room, body, replyTo, keepAsNote)
+}
+
+// sending is how a new message of a bridged room may leave Agora.
+type sending int
+
+const (
+	sendAsAgent    sending = iota // under the outbound policy
+	sendAsOperator                // at once, except under read
+	keepAsNote                    // never: a note
+)
+
+func (r *Rooms) post(ctx context.Context, author, room, body string, replyTo int64, how sending) (int64, error) {
 	if author == Board {
 		return 0, ErrBoardOnly
 	}
 	var id int64
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
-		id, err = r.postTx(ctx, tx, author, room, body, replyTo, operator)
+		id, err = r.postTx(ctx, tx, author, room, body, replyTo, how)
 		return err
 	})
 	return id, err
@@ -356,10 +378,10 @@ func (r *Rooms) post(ctx context.Context, author, room, body string, replyTo int
 // transaction, so other packages can post atomically with their own changes. The board's
 // messages never go out through a bridge.
 func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
-	return r.postTx(ctx, tx, author, room, body, replyTo, false)
+	return r.postTx(ctx, tx, author, room, body, replyTo, sendAsAgent)
 }
 
-func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64, operator bool) (int64, error) {
+func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64, how sending) (int64, error) {
 	room = strings.TrimPrefix(room, "#")
 	body = strings.TrimSpace(body)
 	if body == "" || utf8.RuneCountInString(body) > MaxBody {
@@ -382,34 +404,36 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, author, room, body strin
 			return 0, fmt.Errorf("%w: no message %d to reply to", store.ErrInvalid, replyTo)
 		}
 	}
-	var delivery Delivery
+	m := Message{Room: room, Author: author, Body: body, ReplyTo: replyTo, At: r.now()}
 	if author != Board {
 		var err error
-		if delivery, err = outbound(ctx, tx, room, operator); err != nil {
+		if m.Delivery, m.Note, err = outbound(ctx, tx, room, how); err != nil {
 			return 0, err
 		}
 	}
-	return insert(ctx, tx, Message{Room: room, Author: author, Body: body, ReplyTo: replyTo, At: r.now(), Delivery: delivery}, "", nil)
+	return insert(ctx, tx, m, "", nil)
 }
 
-// outbound returns the delivery state a new message gets in room under its bridge's policy: ""
-// in a room without a bridge.
-func outbound(ctx context.Context, tx *sql.Tx, room string, operator bool) (Delivery, error) {
+// outbound returns the delivery state a new message gets in room under its bridge's policy, ""
+// in a room without a bridge, and whether it is a note, which only a bridged room has.
+func outbound(ctx context.Context, tx *sql.Tx, room string, how sending) (Delivery, bool, error) {
 	var policy string
 	err := tx.QueryRowContext(ctx, `SELECT policy FROM bridges WHERE name = ?`, room).Scan(&policy)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return "", nil
+		return "", false, nil
 	case err != nil:
-		return "", err
-	case policy == "read" && operator:
-		return "", nil
+		return "", false, err
+	case how == keepAsNote:
+		return "", true, nil
+	case policy == "read" && how == sendAsOperator:
+		return "", false, nil
 	case policy == "read":
-		return "", store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out and agents do not post there", room)
-	case policy == "open" || operator:
-		return Sending, nil
+		return "", false, store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out, and agents post only notes there (--note)", room)
+	case policy == "open" || how == sendAsOperator:
+		return Sending, false, nil
 	}
-	return Pending, nil
+	return Pending, false, nil
 }
 
 // insert stores m with the identifier outside extID ("" for none) and its mentions; addressees
@@ -429,9 +453,9 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 		delivery = string(m.Delivery)
 	}
 	names, all := Mentions(m.Body)
-	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet)
+	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet, m.Note)
 	if err != nil {
 		return 0, err
 	}
@@ -583,7 +607,8 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT id, room, author, body, COALESCE(reply_to, 0), at, 0, 0,
-			COALESCE(ext_author_id, ''), COALESCE(ext_author_name, ''), COALESCE(delivery, ''), COALESCE(delivery_error, '') FROM
+			COALESCE(ext_author_id, ''), COALESCE(ext_author_name, ''), COALESCE(delivery, ''), COALESCE(delivery_error, ''),
+			note, ext_id IS NOT NULL AND delivery IS NULL FROM
 			(SELECT * FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?) ORDER BY id`, room, last)
 		if err != nil {
 			return err
@@ -673,7 +698,8 @@ WITH followed(room, mode, wake_from) AS (
 SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed,
 	(NOT m.quiet AND EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from)) AS wake_room,
-	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), COALESCE(m.delivery, ''), COALESCE(m.delivery_error, '')
+	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
+	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
 GROUP BY m.id
@@ -928,7 +954,7 @@ func scanMessages(rows *sql.Rows) ([]Message, error) {
 		var at int64
 		var wakeRoom bool
 		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
-			&m.ExtAuthorID, &m.ExtAuthorName, &m.Delivery, &m.DeliveryError); err != nil {
+			&m.ExtAuthorID, &m.ExtAuthorName, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming); err != nil {
 			return nil, err
 		}
 		m.At = time.UnixMilli(at)
@@ -950,8 +976,9 @@ func deliveryLabel(d Delivery, reason string) string {
 	return " · " + string(d)
 }
 
-// Format renders a message for an agent: room, identifier, author, time, reply reference and
-// delivery state, then the body indented, shortened to limit characters when limit > 0.
+// Format renders a message for an agent: room, identifier, author, time, reply reference, and
+// in a bridged room whether it came from outside, is a note or where it stands on its way out,
+// then the body indented, shortened to limit characters when limit > 0.
 func Format(m Message, limit int) string {
 	body := m.Body
 	if limit > 0 && utf8.RuneCountInString(body) > limit {
@@ -963,6 +990,12 @@ func Format(m Message, limit int) string {
 	}
 	if m.Addressed {
 		head += " · to you"
+	}
+	switch {
+	case m.Incoming:
+		head += " · from outside"
+	case m.Note:
+		head += " · note"
 	}
 	head += deliveryLabel(m.Delivery, m.DeliveryError)
 	return head + "\n  " + strings.ReplaceAll(body, "\n", "\n  ")

@@ -64,7 +64,7 @@ var deliveryLabels = map[agorav1.DeliveryState]string{
 }
 
 // formatMessage renders a message: room, identifier, author (name@bridge for a message from
-// outside), time, reply reference and delivery state, then the body indented. It is the same
+// outside), time, reply reference, whether it came from outside or is a note, and delivery state, then the body indented. It is the same
 // layout as rooms.Format, which the hub uses for the messages it delivers into an agent's
 // context; keep the two alike.
 func formatMessage(m *agorav1.Message) string {
@@ -78,6 +78,12 @@ func formatMessage(m *agorav1.Message) string {
 	}
 	if m.GetAddressed() {
 		head += " · to you"
+	}
+	switch {
+	case m.GetIncoming():
+		head += " · from outside"
+	case m.GetNote():
+		head += " · note"
 	}
 	head += deliveryLabels[m.GetDeliveryState()]
 	if m.GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_FAILED {

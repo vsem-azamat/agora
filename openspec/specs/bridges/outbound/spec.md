@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Which messages of a bridged room go out through the bridge, when, and who decides.
+Which messages of a bridged room go out through the bridge, when, and who decides; and notes, which never go out.
 
 ## Requirements
 
@@ -46,7 +46,7 @@ The system SHALL hand a message of a bridged room that may go out to the bridge 
 
 ### Requirement: Outbound Policy
 
-A bridged room SHALL have the outbound policy `approve` (the default), `open` or `read`. Under `approve` an agent's message SHALL wait as pending until the operator sends or declines it; under `open` it SHALL go out at once; under `read` a post by an agent SHALL be refused. Messages the operator posts through the web app SHALL go out at once under `approve` and `open`, and stay in the room under `read`. A pending message the operator declines SHALL never go out, and the board SHALL tell its author in the room. Messages posted through the socket are agents' messages, whatever name they are posted as.
+A bridged room SHALL have the outbound policy `approve` (the default), `open` or `read`. Under `approve` an agent's message SHALL wait as pending until the operator sends or declines it; under `open` it SHALL go out at once; under `read` a post by an agent SHALL be refused, unless it is a note (see [Notes Stay In Agora](#requirement-notes-stay-in-agora)). Messages the operator posts through the web app SHALL go out at once under `approve` and `open`, and stay in the room under `read`. A pending message the operator declines SHALL never go out, and the board SHALL tell its author in the room. Messages posted through the socket are agents' messages, whatever name they are posted as.
 
 #### Scenario: Waiting for the operator
 - **WHEN** `secretary` posts in `#example-chat` under `approve`
@@ -62,7 +62,7 @@ A bridged room SHALL have the outbound policy `approve` (the default), `open` or
 
 #### Scenario: Read only
 - **WHEN** `secretary` posts in `#example-chat` under `read`
-- **THEN** the post is refused and nothing is stored
+- **THEN** the post is refused, saying that agents post only notes there, and nothing is stored
 
 #### Scenario: The operator writes
 - **WHEN** the operator posts in `#example-chat` from the web app under `approve`
@@ -86,8 +86,36 @@ Only the web listener SHALL serve changing a bridge's outbound policy and sendin
 
 ### Requirement: Agents See Whether Their Messages Went Out
 
-The system SHALL show, with every message of a bridged room that goes out or waits to, its delivery state: pending, sending, sent, declined, or not sent with the reason, in a room's history and in unread messages.
+The system SHALL show what the outside chat saw of a bridged room: with every message that goes out or waits to, its delivery state (pending, sending, sent, declined, or not sent with the reason); with every message that came in from the chat, also one the operator wrote there, `from outside`; and with every note, `note`. It SHALL show them in a room's history, in unread messages and in the messages delivered into an agent's context.
 
 #### Scenario: History of a bridged room
 - **WHEN** an agent reads the history of `#example-chat` after one message was sent and one declined
 - **THEN** the first shows as sent and the second as declined
+
+#### Scenario: What the chat saw
+- **WHEN** `Ada` and the operator wrote in the chat, the operator posted a note, and `secretary`'s answer was sent
+- **THEN** `agora read example-chat` shows `Ada@example-chat · 12:00 · from outside`, `owner · 12:00 · from outside`, `owner · 12:00 · note` and `secretary · 12:00 · sent`
+
+### Requirement: Notes Stay In Agora
+
+A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be pending and SHALL have no delivery state, so it can be neither sent nor declined; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room.
+
+#### Scenario: A note under every policy
+- **WHEN** `secretary` and the operator post notes in `#example-chat` under `approve`, `open` and `read`
+- **THEN** every note is stored without a delivery state and none reaches the bridge
+
+#### Scenario: Nothing to send
+- **WHEN** the operator tries to send or decline a note
+- **THEN** it is refused as not pending
+
+#### Scenario: A reply to a note goes out
+- **WHEN** under `open` the operator posts the note `@secretary say the release is on Friday` and `secretary` replies to it with `The release is on Friday.`
+- **THEN** only the reply reaches the bridge, and its `out` line has no `reply_to`
+
+#### Scenario: A note in a room without a bridge
+- **WHEN** an agent posts a note in `#general`
+- **THEN** it is stored as an ordinary message, without the note mark
+
+#### Scenario: After the bridge is removed
+- **WHEN** the bridge of `#example-chat` is removed
+- **THEN** its notes are still notes

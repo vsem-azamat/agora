@@ -255,10 +255,10 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   }
 
   // the watch reports the change, which reloads the board and the room
-  const post = async (body: string, replyTo?: bigint) => {
+  const post = async (body: string, replyTo: bigint | undefined, note: boolean) => {
     if (!roomName) return;
     try {
-      await api.rooms.post({ room: roomName, body, replyTo: replyTo ?? 0n });
+      await api.rooms.post({ room: roomName, body, replyTo: replyTo ?? 0n, note });
     } catch (err) {
       if (unauthenticated(err)) fail(err);
       throw err;

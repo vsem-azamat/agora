@@ -254,3 +254,36 @@ func TestNewerSchemaIsRefused(t *testing.T) {
 		t.Fatalf("err = %v, want a refusal of the newer schema", err)
 	}
 }
+
+// TestNotesMigrationKeepsMessagesAndNotesNeverGoOut applies the migrations before it to a
+// database with a message that went out, then opens it: the message is no note, and a note
+// cannot have a delivery state.
+func TestNotesMigrationKeepsMessagesAndNotesNeverGoOut(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0014_notes.sql")
+	if _, err := db.ExecContext(ctx, `INSERT INTO messages (room, author, body, at, delivery) VALUES ('general', 'secretary', 'hi', 1, 'sent')`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var note bool
+	if err := db.QueryRowContext(ctx, `SELECT note FROM messages`).Scan(&note); err != nil || note {
+		t.Fatalf("note %v err %v", note, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO messages (room, author, body, at, note) VALUES ('general', 'secretary', 'a note', 2, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO messages (room, author, body, at, note, delivery) VALUES ('general', 'secretary', 'out', 3, 1, 'sending')`); err == nil {
+		t.Fatal("a note with a delivery state was stored")
+	}
+}

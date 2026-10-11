@@ -68,7 +68,8 @@ export function RoomView(props: {
   now: Date;
   draft: string;
   onDraft: (v: string) => void;
-  onPost: (body: string, replyTo?: bigint) => Promise<void>;
+  /** Posts as the operator; a note stays in Agora (only a bridged room has notes). */
+  onPost: (body: string, replyTo: bigint | undefined, note: boolean) => Promise<void>;
   onFollow: (follow: boolean, mode?: Mode) => void;
   onSeen: (id: bigint) => void;
   /** Sends or declines a pending message. */
@@ -86,6 +87,8 @@ export function RoomView(props: {
   const { messages, reader, name } = props;
   const [focus, setFocus] = useState<[string, string]>();
   const [reply, setReply] = useState<Message>();
+  // in a bridged room: the next message is a note for the agents; out to the chat when the room opens
+  const [noteMode, setNoteMode] = useState(false);
   const [backTo, setBackTo] = useState<number>();
   const [pill, setPill] = useState<Pill>({ n: 0, forYou: 0, far: false });
   // the NEW line moves to the first message that came while the page was hidden
@@ -258,13 +261,15 @@ export function RoomView(props: {
     if (first && first.offsetTop > el.scrollTop + el.clientHeight - 40) scrollTape(el, first.offsetTop - 40);
     else scrollTape(el, el.scrollHeight);
   };
+  const readOnly = props.bridge !== undefined && policyOf(props.bridge.policy) === 'read';
+  // nothing goes out of a read-only room, so everything the operator writes there is a note
+  const note = props.bridge !== undefined && (noteMode || readOnly);
   const post = async (body: string) => {
     follow.current = true; // what the operator posts is shown
-    await props.onPost(body, reply?.id);
+    await props.onPost(body, reply?.id, note);
     setReply(undefined);
   };
 
-  const readOnly = props.bridge !== undefined && policyOf(props.bridge.policy) === 'read';
   const dimmed = (m: Message) => focus !== undefined && !between(m, to.get(m.id) ?? [], focus);
   const ctx = { known, operator: reader.operator };
   const inRoom = new Set(people.map((p) => p.name));
@@ -382,6 +387,7 @@ export function RoomView(props: {
           onCancelReply={() => setReply(undefined)}
           onPost={post}
           inputRef={box}
+          outbound={props.bridge && { chat: props.bridge.name, note, readOnly, onNote: setNoteMode }}
         />
       </section>
       <aside className="rail" aria-label="Who is here">

@@ -255,6 +255,12 @@ type Message struct {
 	DeliveryState DeliveryState `protobuf:"varint,9,opt,name=delivery_state,json=deliveryState,proto3,enum=agora.v1.DeliveryState" json:"delivery_state,omitempty"`
 	// Why a message in DELIVERY_STATE_FAILED was not sent.
 	DeliveryError string `protobuf:"bytes,10,opt,name=delivery_error,json=deliveryError,proto3" json:"delivery_error,omitempty"`
+	// A note: a message of a bridged room that stays in Agora; it is never handed to the bridge and
+	// has no delivery state.
+	Note bool `protobuf:"varint,11,opt,name=note,proto3" json:"note,omitempty"`
+	// The message came in from the outside chat through the room's bridge: from someone there
+	// (external_author), or from the operator writing there.
+	Incoming      bool `protobuf:"varint,12,opt,name=incoming,proto3" json:"incoming,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,6 +363,20 @@ func (x *Message) GetDeliveryError() string {
 		return x.DeliveryError
 	}
 	return ""
+}
+
+func (x *Message) GetNote() bool {
+	if x != nil {
+		return x.Note
+	}
+	return false
+}
+
+func (x *Message) GetIncoming() bool {
+	if x != nil {
+		return x.Incoming
+	}
+	return false
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -879,10 +899,13 @@ func (x *ListSubscriptionsResponse) GetSubscriptions() []*Subscription {
 type PostRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The acting agent, which becomes the author.
-	Agent         string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
-	Room          string `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
-	Body          string `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
-	ReplyTo       int64  `protobuf:"varint,4,opt,name=reply_to,json=replyTo,proto3" json:"reply_to,omitempty"`
+	Agent   string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Room    string `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
+	Body    string `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	ReplyTo int64  `protobuf:"varint,4,opt,name=reply_to,json=replyTo,proto3" json:"reply_to,omitempty"`
+	// Post a note: in a bridged room the message stays in Agora under every outbound policy and is
+	// never handed to the bridge; in a room without a bridge it is an ordinary message.
+	Note          bool `protobuf:"varint,5,opt,name=note,proto3" json:"note,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -943,6 +966,13 @@ func (x *PostRequest) GetReplyTo() int64 {
 		return x.ReplyTo
 	}
 	return 0
+}
+
+func (x *PostRequest) GetNote() bool {
+	if x != nil {
+		return x.Note
+	}
+	return false
 }
 
 type PostResponse struct {
@@ -1470,7 +1500,7 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1a\n" +
 	"\bmessages\x18\x05 \x01(\x05R\bmessages\x123\n" +
 	"\alast_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x18\n" +
-	"\apending\x18\a \x01(\x05R\apending\"\xe8\x02\n" +
+	"\apending\x18\a \x01(\x05R\apending\"\x98\x03\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x16\n" +
@@ -1482,7 +1512,9 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x0fexternal_author\x18\b \x01(\v2\x18.agora.v1.ExternalAuthorR\x0eexternalAuthor\x12>\n" +
 	"\x0edelivery_state\x18\t \x01(\x0e2\x17.agora.v1.DeliveryStateR\rdeliveryState\x12%\n" +
 	"\x0edelivery_error\x18\n" +
-	" \x01(\tR\rdeliveryError\"L\n" +
+	" \x01(\tR\rdeliveryError\x12\x12\n" +
+	"\x04note\x18\v \x01(\bR\x04note\x12\x1a\n" +
+	"\bincoming\x18\f \x01(\bR\bincoming\"L\n" +
 	"\x0eExternalAuthor\x12\x16\n" +
 	"\x06bridge\x18\x01 \x01(\tR\x06bridge\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
@@ -1510,12 +1542,13 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\"o\n" +
 	"\x19ListSubscriptionsResponse\x12\x14\n" +
 	"\x05rooms\x18\x01 \x03(\tR\x05rooms\x12<\n" +
-	"\rsubscriptions\x18\x02 \x03(\v2\x16.agora.v1.SubscriptionR\rsubscriptions\"f\n" +
+	"\rsubscriptions\x18\x02 \x03(\v2\x16.agora.v1.SubscriptionR\rsubscriptions\"z\n" +
 	"\vPostRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12\x19\n" +
-	"\breply_to\x18\x04 \x01(\x03R\areplyTo\"\x1e\n" +
+	"\breply_to\x18\x04 \x01(\x03R\areplyTo\x12\x12\n" +
+	"\x04note\x18\x05 \x01(\bR\x04note\"\x1e\n" +
 	"\fPostResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"8\n" +
 	"\x0eHistoryRequest\x12\x12\n" +

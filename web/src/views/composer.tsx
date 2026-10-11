@@ -1,5 +1,6 @@
 // The compose box: Enter posts, Shift+Enter breaks the line, `@` completes names, and a reply
-// shows what it answers.
+// shows what it answers. In a bridged room it also says where the message goes: out to the chat,
+// or into a note for the agents that stays in Agora.
 import {
   type ChangeEvent,
   type FormEvent,
@@ -21,6 +22,44 @@ import { OUTSIDE } from './outside';
 // `@` and the start of a name, right before the caret
 const typing = /(?:^|\s)@([a-z0-9-]*)$/i;
 
+/** Where a message of a bridged room goes: out to the chat, or into a note for the agents. */
+export type Outbound = {
+  /** The chat outside, named as its bridge. */
+  chat: string;
+  /** The next message is a note. */
+  note: boolean;
+  /** Nothing goes out of the room: every message is a note. */
+  readOnly: boolean;
+  onNote: (note: boolean) => void;
+};
+
+/** The choice between going out and a note, two radio buttons drawn as one switch. */
+function Destination({ chat, note, readOnly, onNote }: Outbound) {
+  const name = useId();
+  return (
+    <fieldset className="dest">
+      <legend className="sr">Where the message goes</legend>
+      <label
+        className={['out', !note && 'on', readOnly && 'off'].filter(Boolean).join(' ')}
+        title={readOnly ? 'read only — switch Outbound to send' : `Goes out to ${chat}`}
+      >
+        <input type="radio" name={name} checked={!note} disabled={readOnly} onChange={() => onNote(false)} />
+        <Icon name="bridge" />
+        To {chat}
+      </label>
+      <label className={note ? 'keep on' : 'keep'} title={`Stays in Agora; not sent to ${chat}`}>
+        <input type="radio" name={name} checked={note} onChange={() => onNote(true)} />
+        <Icon name="stylus" />
+        Note for agents
+      </label>
+      <span className="desthint">
+        {note ? `stays in Agora · not sent to ${chat}` : `goes out to ${chat}`}
+        {readOnly && ' · read only'}
+      </span>
+    </fieldset>
+  );
+}
+
 export function Composer(props: {
   room: string;
   operator: string;
@@ -32,6 +71,8 @@ export function Composer(props: {
   onCancelReply: () => void;
   onPost: (body: string) => Promise<void>;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  /** In a bridged room: where the message goes. */
+  outbound?: Outbound;
 }) {
   const [mention, setMention] = useState<string>();
   const [picked, setPicked] = useState(0);
@@ -115,8 +156,16 @@ export function Composer(props: {
     }
   };
 
+  const out = props.outbound;
+  const note = out?.note === true;
+  const placeholder = !out
+    ? `Message #${props.room} · @ to address someone`
+    : note
+      ? `Note for agents · not sent to ${out.chat} · @ to address someone`
+      : `To ${out.chat} · @ to address someone`;
   return (
-    <form className="compose" onSubmit={send}>
+    <form className={['compose', out && (note ? 'note' : 'out')].filter(Boolean).join(' ')} onSubmit={send}>
+      {out && <Destination {...out} />}
       {candidates.length > 0 && (
         <div className="mentionbox" id={listId} role="listbox" aria-label="Agents to address">
           {candidates.map((a, i) => (
@@ -158,7 +207,7 @@ export function Composer(props: {
           onChange={onChange}
           onKeyDown={onKey}
           onBlur={() => setMention(undefined)}
-          placeholder={`Message #${props.room} · @ to address someone`}
+          placeholder={placeholder}
           aria-label={`Message #${props.room}`}
           role="combobox"
           aria-autocomplete="list"
@@ -166,9 +215,14 @@ export function Composer(props: {
           aria-controls={listId}
           aria-activedescendant={candidates.length > 0 ? `${listId}-${picked}` : undefined}
         />
-        <kbd>Enter ↵ · Shift+Enter new line</kbd>
-        <button type="submit" className="send" disabled={sending || !props.draft.trim()} aria-label="Send">
-          <Icon name="send" />
+        <kbd>{note ? 'Enter ↵ posts the note' : 'Enter ↵'} · Shift+Enter new line</kbd>
+        <button
+          type="submit"
+          className="send"
+          disabled={sending || !props.draft.trim()}
+          aria-label={!out ? 'Send' : note ? 'Post the note' : `Send to ${out.chat}`}
+        >
+          <Icon name={note ? 'stylus' : 'send'} />
         </button>
       </div>
       {error && (

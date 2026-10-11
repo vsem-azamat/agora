@@ -2,7 +2,7 @@ import { create } from '@bufbuild/protobuf';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { agent, bridge, goingOut, message, NOW, outside } from '../fixtures';
+import { agent, bridge, goingOut, message, NOW, note, outside } from '../fixtures';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { RoomSchema } from '../gen/agora/v1/rooms_pb';
 import type { Saved } from '../tape';
@@ -271,7 +271,7 @@ describe('composing', () => {
   it('posts with Enter', async () => {
     const { props } = room([], { draft: '@builder please rebase' });
     fireEvent.keyDown(screen.getByLabelText('Message #example-app'), { key: 'Enter' });
-    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('@builder please rebase', undefined));
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('@builder please rebase', undefined, false));
   });
 
   it('replies to a message, and Escape cancels the reply', async () => {
@@ -284,7 +284,7 @@ describe('composing', () => {
     expect(screen.queryByText(/Replying to/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
     fireEvent.keyDown(box, { key: 'Enter' });
-    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('done', 1n));
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('done', 1n, false));
     await waitFor(() => expect(screen.queryByText(/Replying to/)).toBeNull());
   });
 });
@@ -566,5 +566,83 @@ describe('messages going out', () => {
     fireEvent.scroll(tape);
     rerender(<RoomView {...props} messages={[...ms, goingOut(7, 'secretary', 'draft', 1, 'pending')]} />);
     await waitFor(() => expect(container.querySelector('.pill.latest')?.textContent).toBe('1 new · 1 for you'));
+  });
+});
+
+describe('notes', () => {
+  const chatRoom = (messages: Message[], more: Partial<Props> = {}) =>
+    room(messages, { name: 'example-chat', bridge: bridge('example-chat', 'running'), ...more });
+  const form = (c: HTMLElement) => c.querySelector('form.compose') as HTMLElement;
+  const box = () => screen.getByLabelText('Message #example-chat') as HTMLTextAreaElement;
+
+  it('offers no choice in a room without a bridge', () => {
+    const { container } = room([]);
+    expect(screen.queryByRole('group', { name: 'Where the message goes' })).toBeNull();
+    expect(form(container).className).toBe('compose');
+  });
+
+  it('sends to the chat unless the operator chooses a note', async () => {
+    const { container, props } = chatRoom([], { draft: 'The release is on Friday.' });
+    const to = screen.getByRole('radio', { name: 'To example-chat' }) as HTMLInputElement;
+    expect(to.checked).toBe(true);
+    expect(form(container).classList).toContain('out');
+    expect(box().placeholder).toBe('To example-chat · @ to address someone');
+    expect(screen.getByRole('button', { name: 'Send to example-chat' })).toBeTruthy();
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('The release is on Friday.', undefined, false));
+  });
+
+  it('posts a note for the agents, drawn as a note before it is sent', async () => {
+    const { container, props } = chatRoom([], { draft: '@secretary draft a reply to Ada about the release date' });
+    fireEvent.click(screen.getByRole('radio', { name: 'Note for agents' }));
+    expect(form(container).classList).toContain('note');
+    expect(form(container).classList).not.toContain('out');
+    expect(box().placeholder).toBe('Note for agents · not sent to example-chat · @ to address someone');
+    expect(form(container).querySelector('.desthint')?.textContent).toBe('stays in Agora · not sent to example-chat');
+    fireEvent.click(screen.getByRole('button', { name: 'Post the note' }));
+    await waitFor(() =>
+      expect(props.onPost).toHaveBeenCalledWith(
+        '@secretary draft a reply to Ada about the release date',
+        undefined,
+        true,
+      ),
+    );
+    // the choice stays for the next message
+    expect((screen.getByRole('radio', { name: 'Note for agents' }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('writes only notes in a read-only room', async () => {
+    const { container, props } = chatRoom([], {
+      draft: 'for the agents',
+      bridge: bridge('example-chat', 'running', 'read'),
+    });
+    expect((screen.getByRole('radio', { name: 'To example-chat' }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('radio', { name: 'Note for agents' }) as HTMLInputElement).checked).toBe(true);
+    expect(form(container).classList).toContain('note');
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('for the agents', undefined, true));
+  });
+
+  it('draws a note apart, without a delivery state or Send', () => {
+    const odd = note(2, 'secretary', 'here is a draft, unsure about the date', 4);
+    odd.deliveryState = goingOut(0, '', '', 0, 'pending').deliveryState; // never stored, never shown
+    const { container } = chatRoom([goingOut(1, 'secretary', 'looked, all fine', 5, 'sent'), odd]);
+    const t = tablet(container, 2);
+    expect(t.classList).toContain('note');
+    expect(t.querySelector('.nt')?.textContent).toBe('note · stays in Agora');
+    expect(t.querySelector('.nt')?.getAttribute('title')).toBe('Not sent to example-chat');
+    expect(t.querySelector('.dl')).toBeNull();
+    expect(t.querySelector('.decide')).toBeNull();
+    expect(t.classList).not.toContain('waiting');
+  });
+
+  it('never shares a header between a note and a message that is not one', () => {
+    const { container } = chatRoom([
+      message(1, 'operator', 'Thanks, Ada!', 5, { room: 'example-chat' }),
+      note(2, 'operator', 'secretary: keep it short', 4),
+      note(3, 'operator', 'and friendly', 3),
+    ]);
+    expect(tablet(container, 2).classList).not.toContain('cont');
+    expect(tablet(container, 3).classList).toContain('cont');
   });
 });
