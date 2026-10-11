@@ -291,6 +291,47 @@ describe('composing', () => {
   });
 });
 
+describe('a long message', () => {
+  // a browser without CSS field-sizing, such as Safari: the box is sized from its content
+  function withoutFieldSizing(scroll: number) {
+    vi.stubGlobal('CSS', { supports: () => false });
+    const was = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight');
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', { configurable: true, get: () => scroll });
+    return () => {
+      vi.unstubAllGlobals();
+      delete (HTMLTextAreaElement.prototype as { scrollHeight?: number }).scrollHeight;
+      if (was) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', was);
+    };
+  }
+
+  it('grows with its text where the browser cannot size the box', () => {
+    const restore = withoutFieldSizing(120);
+    try {
+      const { props, rerender } = room([]);
+      const box = screen.getByLabelText('Message #example-app') as HTMLTextAreaElement;
+      expect(box.style.height).toBe('');
+      rerender(<RoomView {...props} draft={'a long line that wraps '.repeat(10)} />);
+      expect(box.style.height).toBe('120px');
+      // emptied, the box goes back to one line
+      rerender(<RoomView {...props} draft="" />);
+      expect(box.style.height).toBe('');
+    } finally {
+      restore();
+    }
+  });
+
+  it('leaves the box to the browser where it sizes the box itself', () => {
+    vi.stubGlobal('CSS', { supports: () => true });
+    try {
+      const { props, rerender } = room([]);
+      rerender(<RoomView {...props} draft={'a long line that wraps '.repeat(10)} />);
+      expect((screen.getByLabelText('Message #example-app') as HTMLTextAreaElement).style.height).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('room list', () => {
   it('shows mention counts as @n and marks followed rooms', () => {
     const rooms = [create(RoomSchema, { name: 'example-app' }), create(RoomSchema, { name: 'website' })];
@@ -368,6 +409,23 @@ describe('bridged rooms', () => {
     fireEvent.click(button);
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Send at once' }));
     expect(props.onPolicy).toHaveBeenCalledWith('open');
+  });
+
+  it('opens a menu on the side of its chip where it fits', () => {
+    // on a phone the chip is at the left edge: a menu aligned to the chip's right end would start off the screen
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const left = this.classList.contains('menu') && !this.classList.contains('start') ? -49 : 16;
+      return { left, right: left + 200, top: 0, bottom: 100, width: 200, height: 100, x: left, y: 0 } as DOMRect;
+    });
+    bridgedRoom([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    expect(screen.getByRole('menu', { name: 'Outbound' }).classList).toContain('start');
+  });
+
+  it('keeps a menu at its chip’s right end where it fits', () => {
+    bridgedRoom([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
+    expect(screen.getByRole('menu', { name: 'Outbound' }).classList).not.toContain('start');
   });
 
   it('has no policy control in a room without a bridge', () => {

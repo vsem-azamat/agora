@@ -256,7 +256,8 @@ ol {
 /* --- shell ---------------------------------------------------------------------------- */
 
 .app {
-  height: 100%;
+  /* the part of the screen the on-screen keyboard leaves; see viewport.ts */
+  height: var(--vvh, 100%);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -1503,6 +1504,11 @@ button.pgname:hover {
 }
 .choice .menu {
   min-width: 200px;
+  max-width: calc(100vw - 16px);
+}
+.choice .menu.start {
+  left: 0;
+  right: auto;
 }
 .choice .menu .check {
   width: 0.8em;
@@ -2006,6 +2012,13 @@ button.pgname:hover {
   }
   .room {
     padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+  /* while typing the keyboard takes the bottom of the screen: the tabs give way to the text */
+  :root[data-typing] .tabs {
+    display: none;
+  }
+  :root[data-typing] .room {
+    padding-bottom: 0;
   }
   .cbox kbd {
     display: none;

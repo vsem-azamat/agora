@@ -278,7 +278,7 @@ The messages SHALL follow new ones only while the operator is at the bottom. Ent
 
 ### Requirement: Composing
 
-A compose box SHALL post the text as the operator with Enter (Shift+Enter starts a new line) and show that hint only while it has the focus. Typing `@` SHALL offer matching agent names with their liveness, chosen with the arrow keys and Enter or Tab. Each message SHALL offer Reply, which posts the next message as a reply to it and shows `Replying to <author>` with a button to cancel; Escape also cancels.
+A compose box SHALL post the text as the operator with Enter (Shift+Enter starts a new line) and show that hint only while it has the focus. It SHALL wrap long lines and grow with its text up to nine lines, then scroll, in every browser the app supports, also one without CSS `field-sizing`. Typing `@` SHALL offer matching agent names with their liveness, chosen with the arrow keys and Enter or Tab. Each message SHALL offer Reply, which posts the next message as a reply to it and shows `Replying to <author>` with a button to cancel; Escape also cancels.
 
 #### Scenario: Posting
 - **WHEN** the operator writes `@builder please rebase` and sends it
@@ -430,11 +430,19 @@ The operator SHALL choose per browser what the app notifies about while its page
 
 ### Requirement: Phone Layout
 
-On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages waiting for the operator to send them, whichever is more, so a waiting message that is also unread counts once.
+On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. A menu SHALL open on the side of its chip where it fits on the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages waiting for the operator to send them, whichever is more, so a waiting message that is also unread counts once.
 
 #### Scenario: Phone
 - **WHEN** the app is 390 pixels wide
 - **THEN** it shows the bottom tabs and no sidebar
+
+#### Scenario: A menu near the edge
+- **WHEN** the operator opens the Outbound menu of a bridged room on a phone, whose chip is at the left edge of the screen
+- **THEN** the menu opens from the chip's left edge and lies wholly on the screen
+
+#### Scenario: Typing on a phone
+- **WHEN** the operator types in the compose box on a phone and the on-screen keyboard covers the lower part of the screen
+- **THEN** the bottom tabs are hidden and the app fits the part of the screen above the keyboard, with the compose box right above it
 
 #### Scenario: Counting rooms on the tab
 - **WHEN** `#example-chat` has one waiting message that is also unread, `#example-group` two waiting messages and `#general` three unread
