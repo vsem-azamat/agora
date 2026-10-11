@@ -68,6 +68,9 @@ export function RoomView(props: {
   now: Date;
   draft: string;
   onDraft: (v: string) => void;
+  /** In a bridged room: the next message is a note for the agents; kept with the draft. */
+  note: boolean;
+  onNote: (note: boolean) => void;
   /** Posts as the operator; a note stays in Agora (only a bridged room has notes). */
   onPost: (body: string, replyTo: bigint | undefined, note: boolean) => Promise<void>;
   onFollow: (follow: boolean, mode?: Mode) => void;
@@ -87,8 +90,6 @@ export function RoomView(props: {
   const { messages, reader, name } = props;
   const [focus, setFocus] = useState<[string, string]>();
   const [reply, setReply] = useState<Message>();
-  // in a bridged room: the next message is a note for the agents; out to the chat when the room opens
-  const [noteMode, setNoteMode] = useState(false);
   const [backTo, setBackTo] = useState<number>();
   const [pill, setPill] = useState<Pill>({ n: 0, forYou: 0, far: false });
   // the NEW line moves to the first message that came while the page was hidden
@@ -238,8 +239,12 @@ export function RoomView(props: {
   deciding.current = props.onDecide;
   const decide = useCallback<Decide>((m, send) => deciding.current(m, send), []);
 
+  // a reply to a note is a note too, unless the operator chooses otherwise
+  const noting = useRef(props.onNote);
+  noting.current = props.onNote;
   const startReply = useCallback((m: Message) => {
     setReply(m);
+    if (m.note) noting.current(true);
     box.current?.focus();
   }, []);
   const jump = useCallback(
@@ -262,8 +267,14 @@ export function RoomView(props: {
     else scrollTape(el, el.scrollHeight);
   };
   const readOnly = props.bridge !== undefined && policyOf(props.bridge.policy) === 'read';
-  // nothing goes out of a read-only room, so everything the operator writes there is a note
-  const note = props.bridge !== undefined && (noteMode || readOnly);
+  // nothing goes out of a read-only room, so everything the operator writes there is a note, and
+  // stays one when Outbound opens again; the flag goes with every post, the hub ignores it outside
+  // a bridged room
+  const note = props.note || readOnly;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stored once the room is or becomes read only
+  useEffect(() => {
+    if (readOnly && !props.note) props.onNote(true);
+  }, [readOnly]);
   const post = async (body: string) => {
     follow.current = true; // what the operator posts is shown
     await props.onPost(body, reply?.id, note);
@@ -387,7 +398,7 @@ export function RoomView(props: {
           onCancelReply={() => setReply(undefined)}
           onPost={post}
           inputRef={box}
-          outbound={props.bridge && { chat: props.bridge.name, note, readOnly, onNote: setNoteMode }}
+          outbound={props.bridge && { chat: props.bridge.name, note, readOnly, onNote: props.onNote }}
         />
       </section>
       <aside className="rail" aria-label="Who is here">

@@ -294,7 +294,7 @@ A compose box SHALL post the text as the operator with Enter (Shift+Enter starts
 
 ### Requirement: Composing In A Bridged Room
 
-In a bridged room the compose box SHALL offer, above it, a choice labelled Where the message goes between To `<chat>` (the message goes out under the room's policy) and Note for agents (a note, which stays in Agora); To `<chat>` SHALL be chosen when the room opens, and a choice SHALL stay until the operator changes it or leaves the room. The choice SHALL show before sending: with To `<chat>` the box has a solid edge in the accent color, the hint `goes out to <chat>`, the placeholder `To <chat> · @ to address someone` and a send button labelled `Send to <chat>`; with Note for agents the box is dashed in lapis, with the hint `stays in Agora · not sent to <chat>`, the placeholder `Note for agents · not sent to <chat> · @ to address someone` and a button labelled `Post the note` with a stylus. Under the policy `read` nothing goes out, so To `<chat>` SHALL be disabled and everything the operator posts there is a note. A room without a bridge SHALL show no choice, and its messages are no notes.
+In a bridged room the compose box SHALL offer, above it, a choice labelled Where the message goes between To `<chat>` (the message goes out under the room's policy) and Note for agents (a note, which stays in Agora); To `<chat>` SHALL be chosen when the room opens with nothing written. The choice SHALL be kept with the room's draft while the app is open: it stays until the operator changes it, comes back with the draft when the operator returns to the room, and goes back to To `<chat>` only when the operator left the room with nothing written. Replying to a note SHALL choose Note for agents, and addressing an agent in a bridged room from its drawer SHALL open the box on Note for agents. The choice SHALL show before sending: with To `<chat>` the box has a solid edge in the accent color, the hint `goes out to <chat>`, the placeholder `To <chat> · @ to address someone` and a send button labelled `Send to <chat>`; with Note for agents the box is dashed in lapis, with the hint `stays in Agora · not sent to <chat>`, the placeholder `Note for agents · not sent to <chat> · @ to address someone` and a button labelled `Post the note` with a stylus. Under the policy `read` nothing goes out, so To `<chat>` SHALL be disabled, Note for agents SHALL be chosen and stay chosen when the policy changes, and everything the operator posts there is a note. A room without a bridge SHALL show no choice, and its messages are no notes.
 
 #### Scenario: Going out by default
 - **WHEN** the operator opens `#example-chat` and sends `The release is on Friday.`
@@ -304,9 +304,25 @@ In a bridged room the compose box SHALL offer, above it, a choice labelled Where
 - **WHEN** the operator chooses Note for agents in `#example-chat` and sends `@secretary draft a reply to Ada about the release date`
 - **THEN** the box was drawn as a note before sending, the message is posted as a note, and Note for agents stays chosen
 
+#### Scenario: A note draft comes back a note
+- **WHEN** the operator chooses Note for agents in `#example-chat`, writes `@secretary keep it short`, opens `#general` and comes back
+- **THEN** the draft is there with Note for agents chosen, and Enter posts it as a note
+
+#### Scenario: The choice resets with an empty draft
+- **WHEN** the operator chooses Note for agents in `#example-chat`, opens `#general` without writing anything and comes back
+- **THEN** To example-chat is chosen
+
+#### Scenario: Replying to a note
+- **WHEN** the operator chooses Reply on `secretary`'s note
+- **THEN** Note for agents is chosen
+
 #### Scenario: Read only
 - **WHEN** the policy of `#example-chat` is `read`
 - **THEN** To example-chat is disabled, Note for agents is chosen, and what the operator sends is a note
+
+#### Scenario: Read only opens again
+- **WHEN** the policy of `#example-chat` changes from `read` to `open` while the operator writes there
+- **THEN** Note for agents stays chosen until the operator chooses To example-chat
 
 #### Scenario: No bridge
 - **WHEN** the operator opens `#example-app`, which has no bridge

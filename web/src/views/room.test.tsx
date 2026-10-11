@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ComponentProps, ReactNode } from 'react';
+import { type ComponentProps, type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agent, bridge, goingOut, message, NOW, note, outside } from '../fixtures';
 import type { Message } from '../gen/agora/v1/rooms_pb';
@@ -40,6 +40,8 @@ function room(
     now: NOW,
     draft: '',
     onDraft: vi.fn(),
+    note: false,
+    onNote: vi.fn(),
     onPost: vi.fn(async () => {}),
     onFollow: vi.fn(),
     onSeen: vi.fn(),
@@ -570,8 +572,25 @@ describe('messages going out', () => {
 });
 
 describe('notes', () => {
-  const chatRoom = (messages: Message[], more: Partial<Props> = {}) =>
-    room(messages, { name: 'example-chat', bridge: bridge('example-chat', 'running'), ...more });
+  /** The room with the choice kept the way the app keeps it with the draft. */
+  function Kept(p: Props) {
+    const [note, setNote] = useState(p.note);
+    return (
+      <RoomView
+        {...p}
+        note={note}
+        onNote={(n) => {
+          p.onNote(n);
+          setNote(n);
+        }}
+      />
+    );
+  }
+  const chatRoom = (messages: Message[], more: Partial<Props> = {}) => {
+    const r = room(messages, { name: 'example-chat', bridge: bridge('example-chat', 'running'), ...more });
+    r.rerender(<Kept {...r.props} />);
+    return r;
+  };
   const form = (c: HTMLElement) => c.querySelector('form.compose') as HTMLElement;
   const box = () => screen.getByLabelText('Message #example-chat') as HTMLTextAreaElement;
 
@@ -621,6 +640,31 @@ describe('notes', () => {
     expect(form(container).classList).toContain('note');
     fireEvent.keyDown(box(), { key: 'Enter' });
     await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('for the agents', undefined, true));
+  });
+
+  it('keeps the note when a read-only room opens again', async () => {
+    const { props, rerender } = chatRoom([], {
+      draft: 'for the agents',
+      bridge: bridge('example-chat', 'running', 'read'),
+    });
+    expect(props.onNote).toHaveBeenCalledWith(true);
+    rerender(<Kept {...props} bridge={bridge('example-chat', 'running', 'open')} />);
+    expect((screen.getByRole('radio', { name: 'Note for agents' }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('for the agents', undefined, true));
+  });
+
+  it('chooses a note to reply to a note', () => {
+    const { container } = chatRoom([note(2, 'secretary', 'here is a draft, unsure about the date', 4)]);
+    expect((screen.getByRole('radio', { name: 'To example-chat' }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(tablet(container, 2)).getByRole('button', { name: 'Reply' }));
+    expect((screen.getByRole('radio', { name: 'Note for agents' }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('posts a note as a note while the room’s bridge is not known yet', async () => {
+    const { props } = room([], { name: 'example-chat', draft: 'keep it short', note: true });
+    fireEvent.keyDown(screen.getByLabelText('Message #example-chat'), { key: 'Enter' });
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('keep it short', undefined, true));
   });
 
   it('draws a note apart, without a delivery state or Send', () => {

@@ -303,6 +303,10 @@ func TestOutboundPolicy(t *testing.T) {
 		if m.Body == "read only" {
 			t.Error("a refused post was stored")
 		}
+		// what the operator writes under read stays in Agora, so it is a note
+		if m.ID == stays && !m.Note {
+			t.Errorf("the operator's message under read is not a note: %+v", m)
+		}
 	}
 	// outside a bridged room nothing goes out, and the board's messages never do
 	if id := e.post(t, "secretary", "general", "hello"); deliveryOf(t, e, "general", id) != "" {

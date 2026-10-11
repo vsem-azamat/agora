@@ -340,7 +340,7 @@ func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int
 }
 
 // PostFromOperator is Post for the operator, through the web app: in a bridged room the message
-// goes out at once, except under the policy read, where it stays here.
+// goes out at once, except under the policy read, where it stays here as a note.
 func (r *Rooms) PostFromOperator(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
 	return r.post(ctx, author, room, body, replyTo, sendAsOperator)
 }
@@ -357,7 +357,7 @@ type sending int
 
 const (
 	sendAsAgent    sending = iota // under the outbound policy
-	sendAsOperator                // at once, except under read
+	sendAsOperator                // at once, except under read, where it is a note
 	keepAsNote                    // never: a note
 )
 
@@ -424,10 +424,9 @@ func outbound(ctx context.Context, tx *sql.Tx, room string, how sending) (Delive
 		return "", false, nil
 	case err != nil:
 		return "", false, err
-	case how == keepAsNote:
+	case how == keepAsNote, policy == "read" && how == sendAsOperator:
+		// what the operator writes in a read-only room stays in Agora: a note
 		return "", true, nil
-	case policy == "read" && how == sendAsOperator:
-		return "", false, nil
 	case policy == "read":
 		return "", false, store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out, and agents post only notes there (--note)", room)
 	case policy == "open" || how == sendAsOperator:

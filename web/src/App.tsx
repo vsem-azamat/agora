@@ -86,6 +86,13 @@ function usePaletteKey(toggle: () => void) {
   }, [toggle]);
 }
 
+/** What the operator was writing in a room; in a bridged room, whether it is a note for the agents. */
+type Draft = { text: string; note: boolean };
+
+function redraft(drafts: Record<string, Draft>, room: string, change: Partial<Draft>): Record<string, Draft> {
+  return { ...drafts, [room]: { text: '', note: false, ...drafts[room], ...change } };
+}
+
 const openRoom = (room: string) => {
   location.hash = roomHref(room);
 };
@@ -181,13 +188,20 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [project, setProject] = useState<string>();
   const [drawer, setDrawer] = useState<string>();
   const [palette, setPalette] = useState(false);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // what the operator was writing in each room, and whether it is a note, kept while the app is open
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [arrival, setArrival] = useState<Arrival>();
   // each notice has its own number, so the same text told again shows for its full time
   const [notice, setNotice] = useState<{ text: string; n: number }>();
   const closeNotice = useCallback(() => setNotice(undefined), []);
   const memory = useRef(new Map<string, Saved>()).current;
   const roomName = route.view === 'room' ? route.room : undefined;
+  // a room left with nothing written opens again on To <chat>; a draft keeps its choice
+  useEffect(() => {
+    if (!roomName) return;
+    return () =>
+      setDrafts((d) => (d[roomName]?.note && !d[roomName].text.trim() ? redraft(d, roomName, { note: false }) : d));
+  }, [roomName]);
   const { messages, error: roomError, markSeen } = useRoom(api, roomName, data?.revision, fail);
   const listed = useMemo(() => (data ? boardAgents(data.agents, data.operator) : undefined), [data]);
   const recent = useAgentMessages(api, drawer, data?.rooms ?? [], fail);
@@ -308,8 +322,10 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           mode={data.modes.get(roomName ?? '')}
           unread={data.unread.get(roomName ?? '')}
           now={now}
-          draft={drafts[roomName ?? ''] ?? ''}
-          onDraft={(v) => setDrafts((d) => ({ ...d, [roomName ?? '']: v }))}
+          draft={drafts[roomName ?? '']?.text ?? ''}
+          onDraft={(text) => setDrafts((d) => redraft(d, roomName ?? '', { text }))}
+          note={drafts[roomName ?? '']?.note ?? false}
+          onNote={(note) => setDrafts((d) => redraft(d, roomName ?? '', { note }))}
           onPost={post}
           onFollow={follow}
           onSeen={markSeen}
@@ -386,7 +402,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
               now={now}
               onClose={closeDrawer}
               onAddress={(room) => {
-                setDrafts((d) => ({ ...d, [room]: `@${drawer} ` }));
+                // addressing an agent in a bridged room is a note for it, not a message to the chat
+                setDrafts((d) => ({ ...d, [room]: { text: `@${drawer} `, note: bridged.has(room) } }));
                 arrive({ room, compose: true });
               }}
               onGoto={(room, id) => arrive({ room, jump: id })}

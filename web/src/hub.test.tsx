@@ -174,6 +174,9 @@ describe('bridged rooms', () => {
               },
             ],
           });
+        case 'RoomService/Post':
+          calls.push([proc, JSON.parse(raw)]);
+          return reply({ id: '8' });
         case 'BridgeService/SendPending':
           calls.push([proc, JSON.parse(raw)]);
           // the fake has the message pending only under approve; another policy stands for a
@@ -264,6 +267,59 @@ describe('bridged rooms', () => {
     expect(notice.closest('.room')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Outbound: Ask before sending' }));
     expect(screen.getByRole('menu', { name: 'Outbound' })).toBeTruthy();
+  });
+
+  const chosen = (name: string) => (screen.getByRole('radio', { name }) as HTMLInputElement).checked;
+  const chatBox = () => screen.getByLabelText('Message #example-chat') as HTMLTextAreaElement;
+  async function visitGeneral(c: HTMLElement) {
+    location.hash = '#/rooms/general';
+    await screen.findByLabelText('Message #general');
+    location.hash = '#/rooms/example-chat';
+    await waitFor(() => expect(c.querySelector('[data-mid="7"]')).not.toBeNull());
+  }
+
+  it('brings a note draft back as a note after another room', async () => {
+    const calls: [string, unknown][] = [];
+    const { container } = await openChat('BRIDGE_POLICY_APPROVE', calls);
+    fireEvent.click(screen.getByRole('radio', { name: 'Note for agents' }));
+    fireEvent.change(chatBox(), { target: { value: '@secretary keep it short' } });
+    await visitGeneral(container);
+    expect(chatBox().value).toBe('@secretary keep it short');
+    expect(chosen('Note for agents')).toBe(true);
+    fireEvent.keyDown(chatBox(), { key: 'Enter' });
+    await waitFor(() =>
+      expect(calls).toEqual([
+        ['RoomService/Post', { room: 'example-chat', body: '@secretary keep it short', note: true }],
+      ]),
+    );
+  });
+
+  it('opens on the chat again when left with nothing written', async () => {
+    const { container } = await openChat('BRIDGE_POLICY_APPROVE', []);
+    fireEvent.click(screen.getByRole('radio', { name: 'Note for agents' }));
+    await visitGeneral(container);
+    expect(chosen('To example-chat')).toBe(true);
+  });
+
+  it('addresses an agent in a bridged room with a note', async () => {
+    const hub = bridgedHub('BRIDGE_POLICY_APPROVE', []);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).endsWith('AgentService/ListAgents')
+          ? new Response(JSON.stringify({ agents: [{ name: 'builder', project: 'example-chat', active: true }] }), {
+              headers: { 'Content-Type': 'application/json' },
+            })
+          : hub(input, init),
+      ),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    fireEvent.click(container.querySelector('[data-agent="builder"]') as HTMLElement);
+    fireEvent.click(screen.getByText(/Address in #example-chat/));
+    await waitFor(() => expect(chatBox().value).toBe('@builder '));
+    expect(chosen('Note for agents')).toBe(true);
   });
 
   it('counts a waiting message once on the phone’s Rooms tab', async () => {
