@@ -470,6 +470,53 @@ func TestLeavingByNameSaysNothingAboutTheSession(t *testing.T) {
 	}
 }
 
+func TestJoiningFollowsTheProjectRoom(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	if r := agora(ctx, socket, "builder", "join", "builder", "--project", "example-app"); r.code != 0 ||
+		!strings.Contains(r.stdout, "no room #example-app for your project yet; create it with agora room-create example-app '<purpose>'") {
+		t.Fatalf("join without a project room: %+v", r)
+	}
+	agora(ctx, socket, "builder", "room-create", "example-app", "work on example-app")
+	r := agora(ctx, socket, "reviewer", "join", "reviewer", "--project", "Example-App")
+	if r.code != 0 || !strings.Contains(r.stdout, "following #example-app, your project's room") {
+		t.Fatalf("join with a project room: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "subscribe", "general"); !strings.Contains(r.stdout, "#general #example-app") {
+		t.Fatalf("reviewer follows: %+v", r)
+	}
+	// a mode chosen before stays
+	agora(ctx, socket, "reviewer", "subscribe", "example-app", "--mode", "wake")
+	agora(ctx, socket, "reviewer", "join", "reviewer", "--project", "example-app")
+	if r := agora(ctx, socket, "reviewer", "subscribe", "general"); !strings.Contains(r.stdout, "#example-app (wake)") {
+		t.Fatalf("mode after joining again: %+v", r)
+	}
+}
+
+func TestJoinSetting(t *testing.T) {
+	for _, c := range []struct {
+		name, env string
+		args      []string
+		want      string
+		code      int
+	}{
+		{"default", "", nil, "join=offer", 0},
+		{"flag", "", []string{"--join", "expect"}, "join=expect", 0},
+		{"environment", "expect", nil, "join=expect", 0},
+		{"unknown", "", []string{"--join", "always"}, `--join: join "always": offer or expect`, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("AGORA_JOIN", c.env)
+			log, code := hubLog(t, c.args...)
+			if code != c.code || !strings.Contains(log, c.want) {
+				t.Fatalf("exit %d, log: %s", code, log)
+			}
+		})
+	}
+}
+
 func TestRoomsAndMessages(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()

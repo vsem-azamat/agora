@@ -125,6 +125,27 @@ type Sessions struct {
 	queue *queue.Queue
 	rooms *rooms.Rooms
 	now   func() time.Time
+
+	// JoinMode is how a starting session that no name is bound to is invited: JoinOffer when "".
+	JoinMode JoinMode
+}
+
+// JoinMode is how the board invites a session that has not joined.
+type JoinMode string
+
+// Join modes.
+const (
+	JoinOffer  JoinMode = "offer"  // joining is offered as an option
+	JoinExpect JoinMode = "expect" // every session joins before it starts working
+)
+
+// ValidJoinMode refuses a join mode other than offer or expect.
+func ValidJoinMode(m JoinMode) error {
+	switch m {
+	case JoinOffer, JoinExpect:
+		return nil
+	}
+	return fmt.Errorf("join %q: offer or expect", m)
 }
 
 // New returns Sessions over db; q is used for reminders and for releasing ended sessions'
@@ -185,7 +206,8 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	}
 	if agent == "" {
 		if r.Event == Start {
-			return Reply{Context: invitation(r.CWD)}, nil
+			text, err := s.invitation(ctx, r.CWD)
+			return Reply{Context: text}, err
 		}
 		return Reply{}, nil
 	}

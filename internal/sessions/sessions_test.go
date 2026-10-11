@@ -248,6 +248,55 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 
 // --- greeting (Claude Code connector) ------------------------------------------------
 
+// exampleRepo returns a directory inside a git repository named example-app.
+func exampleRepo(t *testing.T) string {
+	t.Helper()
+	repo := filepath.Join(t.TempDir(), "example-app")
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return repo
+}
+
+func TestJoiningExpected(t *testing.T) {
+	e := newEnv(t)
+	e.s.JoinMode = sessions.JoinExpect
+	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: exampleRepo(t)}
+	r, err := e.s.Report(ctx, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Every session joins it before it starts working",
+		"agora join <name> --project example-app --task '<what you are doing>'",
+		"Rooms: #general.",
+		"No room #example-app for your project yet; create it with agora room-create example-app '<purpose>'.",
+	} {
+		if !strings.Contains(r.Context, want) {
+			t.Fatalf("invitation lacks %q: %q", want, r.Context)
+		}
+	}
+	if strings.Contains(r.Context, "optional") {
+		t.Fatalf("joining offered as an option: %q", r.Context)
+	}
+	if _, err := e.s.Join(ctx, "builder", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	r, err = e.s.Report(ctx, sessions.Report{SessionID: "session-2", Kind: "claude-code", Event: sessions.Start, PID: 4243, PIDStart: 112, CWD: exampleRepo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Context, "Rooms: #example-app (your project's room), #general.") || strings.Contains(r.Context, "room-create") {
+		t.Fatalf("invitation with the project's room: %q", r.Context)
+	}
+}
+
 func TestUnboundStartIsInvited(t *testing.T) {
 	e := newEnv(t)
 	repo := filepath.Join(t.TempDir(), "example-app")

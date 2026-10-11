@@ -10,7 +10,7 @@
 
 ### Requirement: Installing The Hub As A User Service
 
-`agora install service` SHALL write the systemd user unit `agora-hub.service` into `$XDG_CONFIG_HOME/systemd/user`, else `~/.config/systemd/user`. The unit SHALL run `<agora> hub`, adding `--socket` when `--socket` is given or `AGORA_SOCKET` is set, `--db` when `--db` is given or `AGORA_DB` is set, `--wake-command` when `--wake-command` is given or `AGORA_WAKE_COMMAND` is set, `--web` when `--web` is given or `AGORA_WEB` is set, and with it `--web-as` when `--web-as` is given or `AGORA_WEB_AS` is set, each with the value the install command sees; it SHALL restart the hub when it fails and start it with the user's service manager. The unit's first line SHALL be `# Written by agora install service; agora uninstall service removes it.`; an `agora-hub.service` without that line is not Agora's and SHALL never be overwritten or removed.
+`agora install service` SHALL write the systemd user unit `agora-hub.service` into `$XDG_CONFIG_HOME/systemd/user`, else `~/.config/systemd/user`. The unit SHALL run `<agora> hub`, adding `--socket` when `--socket` is given or `AGORA_SOCKET` is set, `--db` when `--db` is given or `AGORA_DB` is set, `--wake-command` when `--wake-command` is given or `AGORA_WAKE_COMMAND` is set, `--web` when `--web` is given or `AGORA_WEB` is set, and with it `--web-as` when `--web-as` is given or `AGORA_WEB_AS` is set, and `--join` when `--join` is given or `AGORA_JOIN` is set, each with the value the install command sees; it SHALL refuse a `--join` other than `offer` or `expect` and then write nothing; it SHALL restart the hub when it fails and start it with the user's service manager. The unit's first line SHALL be `# Written by agora install service; agora uninstall service removes it.`; an `agora-hub.service` without that line is not Agora's and SHALL never be overwritten or removed.
 
 #### Scenario: Plain unit
 - **WHEN** `agora install service` runs without options and without those variables
@@ -27,6 +27,10 @@
 #### Scenario: Web app
 - **WHEN** `agora install service --web 8484 --web-as owner` runs
 - **THEN** the unit runs `<agora> hub --web 8484 --web-as owner`
+
+#### Scenario: Joining expected
+- **WHEN** `agora install service --join expect` runs
+- **THEN** the unit runs `<agora> hub --join expect`
 
 ### Requirement: Arguments Reach The Hub Unchanged
 

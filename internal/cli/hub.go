@@ -22,7 +22,7 @@ import (
 )
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
-	var dbPath, wakeCommand, webFlag, webAs string
+	var dbPath, wakeCommand, webFlag, webAs, join string
 	watchPRs, watchErr := true, error(nil)
 	if env := os.Getenv("AGORA_WATCH_PRS"); env != "" {
 		if watchPRs, watchErr = strconv.ParseBool(env); watchErr != nil {
@@ -56,6 +56,10 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				return err
 			}
 			h := hub.Open(db, nil, log)
+			if err := h.SetJoinMode(join); err != nil {
+				l.Close()
+				return fmt.Errorf("--join: %w", err)
+			}
 			if webAddr != "" {
 				wl, err := net.Listen("tcp", webAddr)
 				if err != nil {
@@ -84,7 +88,7 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 			if webAddr != "" {
 				webAttrs = append(webAttrs, "web_as", webAs)
 			}
-			log.Info("hub listening", append([]any{"socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "", "watch_prs", slices.Sorted(maps.Keys(forges))}, webAttrs...)...)
+			log.Info("hub listening", append([]any{"socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "", "watch_prs", slices.Sorted(maps.Keys(forges)), "join", join}, webAttrs...)...)
 			h.WakeCommand = wakeCommand
 			h.Forges = forges
 			return h.Serve(ctx, l)
@@ -97,6 +101,8 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 		"follow agents' pull requests and report when CI turns green or red; GitHub needs gh; --watch-prs=false turns it off (default $AGORA_WATCH_PRS)")
 	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"),
 		"also serve the web app on host:port, or on 127.0.0.1 with only a port; off when empty (default $AGORA_WEB)")
+	cmd.Flags().StringVar(&join, "join", envOr("AGORA_JOIN", "offer"),
+		"how sessions that have not joined are invited: offer (joining is optional) or expect (every session joins before it works) (default $AGORA_JOIN, else offer)")
 	cmd.Flags().StringVar(&webAs, "web-as", envOr("AGORA_WEB_AS", "operator"), "the name the web app acts under (default $AGORA_WEB_AS, else operator)")
 	return cmd
 }

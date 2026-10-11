@@ -40,6 +40,18 @@ The system SHALL bind a joined name to the session the command runs in, when tha
 - **WHEN** a session bound to `alpha` joins as `beta`
 - **THEN** the session is bound to `beta`, and `alpha` is no longer bound to it
 
+### Requirement: Joining Follows The Project's Room
+
+When an agent joins with `agora join <name> --project <project>`, the system SHALL make it follow the room whose name is the project in lowercase when such a room exists, keeping the mode of a subscription it already has, and SHALL say so in the join output; `#general` stays followed. When there is no such room and the lowercased project follows the room naming rule, the join output SHALL say how to create it with `agora room-create <project> '<purpose>'`. Joining SHALL succeed even when the room cannot be followed, saying why.
+
+#### Scenario: A project with a room
+- **WHEN** `#example-app` exists and an agent runs `agora join builder --project example-app`
+- **THEN** `builder` follows `#general` and `#example-app`, and the output says it follows `#example-app`
+
+#### Scenario: A project without a room
+- **WHEN** no room `#example-app` exists and an agent runs `agora join builder --project example-app`
+- **THEN** `builder` follows only `#general`, and the output says to create the room with `agora room-create example-app '<purpose>'`
+
 ### Requirement: A Name Belongs To One Live Session
 
 The system SHALL refuse a name bound to another session that has not ended, unless the joining agent explicitly forces the claim, and SHALL then unbind the name from the other session.

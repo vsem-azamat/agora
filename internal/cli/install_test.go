@@ -200,6 +200,17 @@ func TestInstallService(t *testing.T) {
 	if !strings.Contains(string(b), "ExecStart="+exe+" hub --web 8484 --web-as owner\n") {
 		t.Fatalf("unit:\n%s", b)
 	}
+	t.Setenv("AGORA_WEB_AS", "")
+	if r := run("install", "service", "--bin", exe, "--join", "expect"); r.code != 0 {
+		t.Fatalf("install --join: %+v", r)
+	}
+	b, _ = os.ReadFile(unit)
+	if !strings.Contains(string(b), "ExecStart="+exe+" hub --join expect\n") {
+		t.Fatalf("unit:\n%s", b)
+	}
+	if r := run("install", "service", "--bin", exe, "--join", "always"); r.code == 0 {
+		t.Fatalf("install --join always: %+v", r)
+	}
 
 	calls = nil
 	if r := run("uninstall", "service", "--now"); r.code != 0 {
