@@ -56,10 +56,10 @@ func plural(n int32) string {
 
 // deliveryLabels follow the head of a message of a bridged room, as in rooms.Format.
 var deliveryLabels = map[agorav1.DeliveryState]string{
-	agorav1.DeliveryState_DELIVERY_STATE_PENDING:  " · pending",
+	agorav1.DeliveryState_DELIVERY_STATE_PENDING:  " · scheduled",
 	agorav1.DeliveryState_DELIVERY_STATE_SENDING:  " · sending",
 	agorav1.DeliveryState_DELIVERY_STATE_SENT:     " · sent",
-	agorav1.DeliveryState_DELIVERY_STATE_DECLINED: " · declined",
+	agorav1.DeliveryState_DELIVERY_STATE_DECLINED: " · cancelled",
 	agorav1.DeliveryState_DELIVERY_STATE_FAILED:   " · not sent: ",
 }
 

@@ -317,7 +317,7 @@ func TestTheHubRunsABridge(t *testing.T) {
 		t.Fatalf("environment: %q", got)
 	}
 	st := b.state(t)
-	if st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || st.GetPolicy() != agorav1.BridgePolicy_BRIDGE_POLICY_APPROVE ||
+	if st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || st.GetPolicy() != agorav1.BridgePolicy_BRIDGE_POLICY_DELAY ||
 		st.GetCreatedBy() != "builder" || len(st.GetAddressees()) != 1 || st.GetAddressees()[0] != "secretary" {
 		t.Fatalf("bridge: %v", st)
 	}
@@ -384,7 +384,7 @@ func TestAddressedFromOutsideWakesTheBridgesAgent(t *testing.T) {
 	}
 }
 
-func TestApprovedMessagesGoOutAndEchoesAreIgnored(t *testing.T) {
+func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -442,7 +442,7 @@ func TestDeclinedMessagesNeverGoOut(t *testing.T) {
 	}
 	h := b.history(t)
 	if h[0].GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_DECLINED || h[1].GetAuthor() != "agora" ||
-		h[1].GetBody() != fmt.Sprintf("@secretary your message %d was not sent: owner declined it.", id) || h[1].GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
+		h[1].GetBody() != fmt.Sprintf("@secretary your message %d was not sent: owner cancelled it.", id) || h[1].GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
 		t.Fatalf("history: %v", h)
 	}
 }
@@ -495,7 +495,7 @@ func TestSendingWhileReadOnlySaysWhy(t *testing.T) {
 		t.Fatal("the message no longer waits")
 	}
 	_, err = b.webBridges.SendPending(context.Background(), connect.NewRequest(&agorav1.SendPendingRequest{MessageId: id + 100}))
-	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeNotFound || cerr.Message() != fmt.Sprintf("message %d is not pending", id+100) {
+	if !errors.As(err, &cerr) || cerr.Code() != connect.CodeNotFound || cerr.Message() != fmt.Sprintf("message %d is not scheduled", id+100) {
 		t.Fatalf("sending a message that does not wait: %v", err)
 	}
 }
@@ -504,7 +504,7 @@ func TestPoliciesOpenAndRead(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
-	// the operator's own message goes out under approve
+	// the operator's own message goes out under delay
 	resp, err := b.webRooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Room: "example-chat", Body: "hello from the app"}))
 	if err != nil {
 		t.Fatal(err)
@@ -826,7 +826,7 @@ func TestTheWebAppListsBridgesWithoutCommands(t *testing.T) {
 	if err != nil || len(resp.Msg.GetBridges()) != 1 {
 		t.Fatalf("list: %v %v", resp, err)
 	}
-	if got := resp.Msg.GetBridges()[0]; got.GetCommand() != "" || got.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || got.GetPolicy() != agorav1.BridgePolicy_BRIDGE_POLICY_APPROVE {
+	if got := resp.Msg.GetBridges()[0]; got.GetCommand() != "" || got.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || got.GetPolicy() != agorav1.BridgePolicy_BRIDGE_POLICY_DELAY {
 		t.Fatalf("bridge over the web: %v", got)
 	}
 	if b.state(t).GetCommand() != f.command() {
@@ -911,5 +911,48 @@ i=0; while [ $i -lt 1000 ]; do i=$((i+1)); echo '{"type":"in","id":"'$i'","autho
 	}
 	if n := count(); n != 1000 {
 		t.Fatalf("%d messages stored, want 1000", n)
+	}
+}
+
+func TestScheduledMessagesGoOutAfterTheDelay(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	id := b.post(t, "secretary", "looked, all fine")
+	m := b.message(t, id)
+	if m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_PENDING || !m.GetDueAt().AsTime().Equal(m.GetAt().AsTime().Add(time.Minute)) {
+		t.Fatalf("scheduled: %v", m)
+	}
+	time.Sleep(1200 * time.Millisecond) // a sweep passes without the delay passing
+	if len(f.outs()) != 0 {
+		t.Fatalf("out before the delay: %v", f.outs())
+	}
+	b.clock.add(time.Minute)
+	eventually(t, "the message going out", func() bool { return len(f.outs()) == 1 && f.outs()[0] == id })
+	eventually(t, "sent", func() bool { return b.message(t, id).GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_SENT })
+	if b.message(t, id).GetDueAt() != nil {
+		t.Fatal("a sent message has a time to go out")
+	}
+}
+
+func TestTheOperatorSendsANoteOut(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	resp, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "Draft: the fix ships tonight", Note: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	note := resp.Msg.GetId()
+	if _, err := b.bridges.SendNoteOut(context.Background(), connect.NewRequest(&agorav1.SendNoteOutRequest{MessageId: note})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("sending a note out over the socket: %v", err)
+	}
+	out, err := b.webBridges.SendNoteOut(context.Background(), connect.NewRequest(&agorav1.SendNoteOutRequest{MessageId: note}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the note going out", func() bool { return len(f.outs()) == 1 && f.outs()[0] == out.Msg.GetId() })
+	if m := b.message(t, note); !m.GetNote() || m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
+		t.Fatalf("the note changed: %v", m)
 	}
 }

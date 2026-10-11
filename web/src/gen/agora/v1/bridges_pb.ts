@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/bridges.proto.
  */
 export const file_agora_v1_bridges: GenFile = /*@__PURE__*/
-  fileDesc("ChZhZ29yYS92MS9icmlkZ2VzLnByb3RvEghhZ29yYS52MSLgAQoGQnJpZGdlEgwKBG5hbWUYASABKAkSDwoHY29tbWFuZBgCIAEoCRImCgZwb2xpY3kYAyABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kSEgoKY3JlYXRlZF9ieRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgphZGRyZXNzZWVzGAYgAygJEiQKBXN0YXRlGAcgASgOMhUuYWdvcmEudjEuQnJpZGdlU3RhdGUSEQoJbGFzdF9leGl0GAggASgJImUKEEFkZEJyaWRnZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdjb21tYW5kGAMgASgJEg8KB3B1cnBvc2UYBCABKAkSEgoKYWRkcmVzc2VlcxgFIAMoCSIpChFBZGRCcmlkZ2VSZXNwb25zZRIUCgxjcmVhdGVkX3Jvb20YASABKAgiMgoTUmVtb3ZlQnJpZGdlUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRuYW1lGAIgASgJIhYKFFJlbW92ZUJyaWRnZVJlc3BvbnNlIhQKEkxpc3RCcmlkZ2VzUmVxdWVzdCI4ChNMaXN0QnJpZGdlc1Jlc3BvbnNlEiEKB2JyaWRnZXMYASADKAsyEC5hZ29yYS52MS5CcmlkZ2UiTgoWU2V0QnJpZGdlUG9saWN5UmVxdWVzdBIMCgRuYW1lGAEgASgJEiYKBnBvbGljeRgCIAEoDjIWLmFnb3JhLnYxLkJyaWRnZVBvbGljeSIZChdTZXRCcmlkZ2VQb2xpY3lSZXNwb25zZSIoChJTZW5kUGVuZGluZ1JlcXVlc3QSEgoKbWVzc2FnZV9pZBgBIAEoAyIVChNTZW5kUGVuZGluZ1Jlc3BvbnNlIisKFURlY2xpbmVQZW5kaW5nUmVxdWVzdBISCgptZXNzYWdlX2lkGAEgASgDIhgKFkRlY2xpbmVQZW5kaW5nUmVzcG9uc2UqeAoMQnJpZGdlUG9saWN5Eh0KGUJSSURHRV9QT0xJQ1lfVU5TUEVDSUZJRUQQABIZChVCUklER0VfUE9MSUNZX0FQUFJPVkUQARIWChJCUklER0VfUE9MSUNZX09QRU4QAhIWChJCUklER0VfUE9MSUNZX1JFQUQQAyp8CgtCcmlkZ2VTdGF0ZRIcChhCUklER0VfU1RBVEVfVU5TUEVDSUZJRUQQABIYChRCUklER0VfU1RBVEVfUlVOTklORxABEhsKF0JSSURHRV9TVEFURV9SRVNUQVJUSU5HEAISGAoUQlJJREdFX1NUQVRFX1NUT1BQRUQQAzLpAwoNQnJpZGdlU2VydmljZRJECglBZGRCcmlkZ2USGi5hZ29yYS52MS5BZGRCcmlkZ2VSZXF1ZXN0GhsuYWdvcmEudjEuQWRkQnJpZGdlUmVzcG9uc2USTQoMUmVtb3ZlQnJpZGdlEh0uYWdvcmEudjEuUmVtb3ZlQnJpZGdlUmVxdWVzdBoeLmFnb3JhLnYxLlJlbW92ZUJyaWRnZVJlc3BvbnNlEkoKC0xpc3RCcmlkZ2VzEhwuYWdvcmEudjEuTGlzdEJyaWRnZXNSZXF1ZXN0Gh0uYWdvcmEudjEuTGlzdEJyaWRnZXNSZXNwb25zZRJWCg9TZXRCcmlkZ2VQb2xpY3kSIC5hZ29yYS52MS5TZXRCcmlkZ2VQb2xpY3lSZXF1ZXN0GiEuYWdvcmEudjEuU2V0QnJpZGdlUG9saWN5UmVzcG9uc2USSgoLU2VuZFBlbmRpbmcSHC5hZ29yYS52MS5TZW5kUGVuZGluZ1JlcXVlc3QaHS5hZ29yYS52MS5TZW5kUGVuZGluZ1Jlc3BvbnNlElMKDkRlY2xpbmVQZW5kaW5nEh8uYWdvcmEudjEuRGVjbGluZVBlbmRpbmdSZXF1ZXN0GiAuYWdvcmEudjEuRGVjbGluZVBlbmRpbmdSZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChZhZ29yYS92MS9icmlkZ2VzLnByb3RvEghhZ29yYS52MSLgAQoGQnJpZGdlEgwKBG5hbWUYASABKAkSDwoHY29tbWFuZBgCIAEoCRImCgZwb2xpY3kYAyABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kSEgoKY3JlYXRlZF9ieRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgphZGRyZXNzZWVzGAYgAygJEiQKBXN0YXRlGAcgASgOMhUuYWdvcmEudjEuQnJpZGdlU3RhdGUSEQoJbGFzdF9leGl0GAggASgJImUKEEFkZEJyaWRnZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdjb21tYW5kGAMgASgJEg8KB3B1cnBvc2UYBCABKAkSEgoKYWRkcmVzc2VlcxgFIAMoCSJRChFBZGRCcmlkZ2VSZXNwb25zZRIUCgxjcmVhdGVkX3Jvb20YASABKAgSJgoGcG9saWN5GAIgASgOMhYuYWdvcmEudjEuQnJpZGdlUG9saWN5IjIKE1JlbW92ZUJyaWRnZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEbmFtZRgCIAEoCSIWChRSZW1vdmVCcmlkZ2VSZXNwb25zZSIUChJMaXN0QnJpZGdlc1JlcXVlc3QiOAoTTGlzdEJyaWRnZXNSZXNwb25zZRIhCgdicmlkZ2VzGAEgAygLMhAuYWdvcmEudjEuQnJpZGdlIk4KFlNldEJyaWRnZVBvbGljeVJlcXVlc3QSDAoEbmFtZRgBIAEoCRImCgZwb2xpY3kYAiABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kiGQoXU2V0QnJpZGdlUG9saWN5UmVzcG9uc2UiKAoSU2VuZFBlbmRpbmdSZXF1ZXN0EhIKCm1lc3NhZ2VfaWQYASABKAMiFQoTU2VuZFBlbmRpbmdSZXNwb25zZSIrChVEZWNsaW5lUGVuZGluZ1JlcXVlc3QSEgoKbWVzc2FnZV9pZBgBIAEoAyIYChZEZWNsaW5lUGVuZGluZ1Jlc3BvbnNlIigKElNlbmROb3RlT3V0UmVxdWVzdBISCgptZXNzYWdlX2lkGAEgASgDIiEKE1NlbmROb3RlT3V0UmVzcG9uc2USCgoCaWQYASABKAMqlQEKDEJyaWRnZVBvbGljeRIdChlCUklER0VfUE9MSUNZX1VOU1BFQ0lGSUVEEAASHQoVQlJJREdFX1BPTElDWV9BUFBST1ZFEAEaAggBEhYKEkJSSURHRV9QT0xJQ1lfT1BFThACEhYKEkJSSURHRV9QT0xJQ1lfUkVBRBADEhcKE0JSSURHRV9QT0xJQ1lfREVMQVkQBCp8CgtCcmlkZ2VTdGF0ZRIcChhCUklER0VfU1RBVEVfVU5TUEVDSUZJRUQQABIYChRCUklER0VfU1RBVEVfUlVOTklORxABEhsKF0JSSURHRV9TVEFURV9SRVNUQVJUSU5HEAISGAoUQlJJREdFX1NUQVRFX1NUT1BQRUQQAzK1BAoNQnJpZGdlU2VydmljZRJECglBZGRCcmlkZ2USGi5hZ29yYS52MS5BZGRCcmlkZ2VSZXF1ZXN0GhsuYWdvcmEudjEuQWRkQnJpZGdlUmVzcG9uc2USTQoMUmVtb3ZlQnJpZGdlEh0uYWdvcmEudjEuUmVtb3ZlQnJpZGdlUmVxdWVzdBoeLmFnb3JhLnYxLlJlbW92ZUJyaWRnZVJlc3BvbnNlEkoKC0xpc3RCcmlkZ2VzEhwuYWdvcmEudjEuTGlzdEJyaWRnZXNSZXF1ZXN0Gh0uYWdvcmEudjEuTGlzdEJyaWRnZXNSZXNwb25zZRJWCg9TZXRCcmlkZ2VQb2xpY3kSIC5hZ29yYS52MS5TZXRCcmlkZ2VQb2xpY3lSZXF1ZXN0GiEuYWdvcmEudjEuU2V0QnJpZGdlUG9saWN5UmVzcG9uc2USSgoLU2VuZFBlbmRpbmcSHC5hZ29yYS52MS5TZW5kUGVuZGluZ1JlcXVlc3QaHS5hZ29yYS52MS5TZW5kUGVuZGluZ1Jlc3BvbnNlElMKDkRlY2xpbmVQZW5kaW5nEh8uYWdvcmEudjEuRGVjbGluZVBlbmRpbmdSZXF1ZXN0GiAuYWdvcmEudjEuRGVjbGluZVBlbmRpbmdSZXNwb25zZRJKCgtTZW5kTm90ZU91dBIcLmFnb3JhLnYxLlNlbmROb3RlT3V0UmVxdWVzdBodLmFnb3JhLnYxLlNlbmROb3RlT3V0UmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Bridge
@@ -130,6 +130,13 @@ export type AddBridgeResponse = Message<"agora.v1.AddBridgeResponse"> & {
    * @generated from field: bool created_room = 1;
    */
   createdRoom: boolean;
+
+  /**
+   * The policy the bridge got: the hub's default.
+   *
+   * @generated from field: agora.v1.BridgePolicy policy = 2;
+   */
+  policy: BridgePolicy;
 };
 
 /**
@@ -302,6 +309,42 @@ export const DeclinePendingResponseSchema: GenMessage<DeclinePendingResponse> = 
   messageDesc(file_agora_v1_bridges, 12);
 
 /**
+ * @generated from message agora.v1.SendNoteOutRequest
+ */
+export type SendNoteOutRequest = Message<"agora.v1.SendNoteOutRequest"> & {
+  /**
+   * @generated from field: int64 message_id = 1;
+   */
+  messageId: bigint;
+};
+
+/**
+ * Describes the message agora.v1.SendNoteOutRequest.
+ * Use `create(SendNoteOutRequestSchema)` to create a new message.
+ */
+export const SendNoteOutRequestSchema: GenMessage<SendNoteOutRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_bridges, 13);
+
+/**
+ * @generated from message agora.v1.SendNoteOutResponse
+ */
+export type SendNoteOutResponse = Message<"agora.v1.SendNoteOutResponse"> & {
+  /**
+   * The message that goes out.
+   *
+   * @generated from field: int64 id = 1;
+   */
+  id: bigint;
+};
+
+/**
+ * Describes the message agora.v1.SendNoteOutResponse.
+ * Use `create(SendNoteOutResponseSchema)` to create a new message.
+ */
+export const SendNoteOutResponseSchema: GenMessage<SendNoteOutResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_bridges, 14);
+
+/**
  * What goes out of a bridged room.
  *
  * @generated from enum agora.v1.BridgePolicy
@@ -313,9 +356,10 @@ export enum BridgePolicy {
   UNSPECIFIED = 0,
 
   /**
-   * Agents' messages wait for the operator; the operator's go out at once.
+   * No bridge has it: delay took its place.
    *
-   * @generated from enum value: BRIDGE_POLICY_APPROVE = 1;
+   * @generated from enum value: BRIDGE_POLICY_APPROVE = 1 [deprecated = true];
+   * @deprecated
    */
   APPROVE = 1,
 
@@ -332,6 +376,14 @@ export enum BridgePolicy {
    * @generated from enum value: BRIDGE_POLICY_READ = 3;
    */
   READ = 3,
+
+  /**
+   * Agents' messages go out once the hub's delay passed, unless the operator cancels them or
+   * sends them at once; the operator's go out at once.
+   *
+   * @generated from enum value: BRIDGE_POLICY_DELAY = 4;
+   */
+  DELAY = 4,
 }
 
 /**
@@ -388,8 +440,8 @@ export const BridgeStateSchema: GenEnum<BridgeState> = /*@__PURE__*/
 export const BridgeService: GenService<{
   /**
    * AddBridge binds a bridge to the room of its name, creating the room or attaching an existing
-   * one without a bridge, stores it with the policy approve, starts its command and subscribes
-   * the addressees to the room with the mode wake.
+   * one without a bridge, stores it with the hub's default policy, starts its command and
+   * subscribes the addressees to the room with the mode wake.
    *
    * @generated from rpc agora.v1.BridgeService.AddBridge
    */
@@ -429,7 +481,7 @@ export const BridgeService: GenService<{
     output: typeof SetBridgePolicyResponseSchema;
   },
   /**
-   * SendPending lets a pending message go out. Only the web listener serves it.
+   * SendPending lets a scheduled message go out at once. Only the web listener serves it.
    *
    * @generated from rpc agora.v1.BridgeService.SendPending
    */
@@ -439,8 +491,8 @@ export const BridgeService: GenService<{
     output: typeof SendPendingResponseSchema;
   },
   /**
-   * DeclinePending keeps a pending message from ever going out and tells its author. Only the
-   * web listener serves it.
+   * DeclinePending cancels a scheduled message, so it never goes out, and tells its author. Only
+   * the web listener serves it.
    *
    * @generated from rpc agora.v1.BridgeService.DeclinePending
    */
@@ -448,6 +500,17 @@ export const BridgeService: GenService<{
     methodKind: "unary";
     input: typeof DeclinePendingRequestSchema;
     output: typeof DeclinePendingResponseSchema;
+  },
+  /**
+   * SendNoteOut sends a note out: a new message of the note's author with its text goes out at
+   * once, and the note stays. Only the web listener serves it.
+   *
+   * @generated from rpc agora.v1.BridgeService.SendNoteOut
+   */
+  sendNoteOut: {
+    methodKind: "unary";
+    input: typeof SendNoteOutRequestSchema;
+    output: typeof SendNoteOutResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_agora_v1_bridges, 0);

@@ -58,8 +58,8 @@ var (
 	ErrNotArchived = errors.New("room not archived")
 	// ErrBridged refuses archiving a room that has a bridge.
 	ErrBridged = errors.New("bridged room")
-	// ErrUndelivered refuses archiving a room whose messages still wait for the operator.
-	ErrUndelivered = errors.New("messages wait for the operator")
+	// ErrUndelivered refuses archiving a room whose messages are still scheduled to go out.
+	ErrUndelivered = errors.New("messages scheduled to go out")
 )
 
 // A mention: @name not preceded by a letter, digit or address character, in any script. The
@@ -75,7 +75,7 @@ type Room struct {
 	CreatedAt time.Time
 	Messages  int
 	LastAt    time.Time // zero when the room has no messages
-	Pending   int       // messages waiting for the operator to send or decline them
+	Pending   int       // messages scheduled to go out
 	// ArchivedBy is the agent that archived the room, "" when it is not archived, and
 	// ArchivedAt when (zero when it is not archived).
 	ArchivedBy string
@@ -100,6 +100,9 @@ type Message struct {
 	// here), and DeliveryError why it failed.
 	Delivery      Delivery
 	DeliveryError string
+	// ScheduledAt is when a message was scheduled to go out (zero for one that is not); it goes
+	// out once the bridge's delay has passed since then.
+	ScheduledAt time.Time
 	// Quiet is set for the board's notices about a bridge: they wake no one.
 	Quiet bool
 	// Note is set for a note: a message of a bridged room that stays in Agora and is never
@@ -126,10 +129,10 @@ type Delivery string
 
 // Delivery states.
 const (
-	Pending  Delivery = "pending"  // waits for the operator
+	Pending  Delivery = "pending"  // scheduled: goes out once the delay passed, unless the operator cancels it
 	Sending  Delivery = "sending"  // the bridge has to send it
 	Sent     Delivery = "sent"     // the bridge sent it
-	Declined Delivery = "declined" // the operator declined it
+	Declined Delivery = "declined" // the operator cancelled it
 	Failed   Delivery = "failed"   // the bridge could not send it
 )
 
@@ -283,7 +286,7 @@ func (r *Rooms) List(ctx context.Context, all bool) ([]Room, error) {
 }
 
 // Archive archives room for agent (archive) or brings it back, and the board says so in
-// #general. #general, a bridged room, a room whose messages wait for the operator (pending, left
+// #general. #general, a bridged room, a room whose messages are still scheduled (pending, left
 // from a removed bridge), archiving an archived room and unarchiving one that is not archived are
 // refused.
 func (r *Rooms) Archive(ctx context.Context, agent, room string, archive bool) error {
@@ -322,9 +325,9 @@ func (r *Rooms) Archive(ctx context.Context, agent, room string, archive bool) e
 			}
 			switch {
 			case n == 1:
-				return store.Refuse(ErrUndelivered, "a message of #%s still waits for the operator; decline it first", room)
+				return store.Refuse(ErrUndelivered, "a message of #%s is still scheduled to go out; cancel it first", room)
 			case n > 1:
-				return store.Refuse(ErrUndelivered, "%d messages of #%s still wait for the operator; decline them first", n, room)
+				return store.Refuse(ErrUndelivered, "%d messages of #%s are still scheduled to go out; cancel them first", n, room)
 			}
 			verb = "archived"
 			_, err = tx.ExecContext(ctx, `UPDATE rooms SET archived_at = ?, archived_by = ? WHERE name = ?`, r.now().UnixMilli(), agent, room)
@@ -423,8 +426,8 @@ func NoticeRoomTx(ctx context.Context, tx *sql.Tx, agent string) (string, error)
 }
 
 // Post stores a message from author, a joined agent, and returns its identifier. In a bridged
-// room the message goes out under the room's outbound policy: it waits for the operator under
-// approve, goes out under open and is refused under read. Only the board posts as Board,
+// room the message goes out under the room's outbound policy: it is scheduled under delay, goes
+// out under open and is refused under read. Only the board posts as Board,
 // through PostTx.
 func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
 	return r.post(ctx, author, room, body, replyTo, sendAsAgent)
@@ -441,6 +444,13 @@ func (r *Rooms) PostFromOperator(ctx context.Context, author, room, body string,
 // bridge it is an ordinary message.
 func (r *Rooms) PostNote(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
 	return r.post(ctx, author, room, body, replyTo, keepAsNote)
+}
+
+// SendOutTx stores a message of author in the bridged room that goes out at once, as the
+// operator's messages do, inside the caller's transaction: the operator sends a note out with it.
+// The caller checks that the room's policy lets it go out.
+func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
+	return r.postTx(ctx, tx, author, room, body, replyTo, sendAsOperator)
 }
 
 // sending is how a new message of a bridged room may leave Agora.
@@ -546,9 +556,13 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 		delivery = string(m.Delivery)
 	}
 	names, all := Mentions(m.Body)
-	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet, m.Note)
+	var scheduled any
+	if m.Delivery == Pending {
+		scheduled = m.At.UnixMilli()
+	}
+	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note, scheduled_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet, m.Note, scheduled)
 	if err != nil {
 		return 0, err
 	}
@@ -707,7 +721,7 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT id, room, author, body, COALESCE(reply_to, 0), at, 0, 0,
 			COALESCE(ext_author_id, ''), COALESCE(ext_author_name, ''), COALESCE(delivery, ''), COALESCE(delivery_error, ''),
-			note, ext_id IS NOT NULL AND delivery IS NULL FROM
+			note, ext_id IS NOT NULL AND delivery IS NULL, COALESCE(scheduled_at, 0) FROM
 			(SELECT * FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?) ORDER BY id`, room, last)
 		if err != nil {
 			return err
@@ -798,7 +812,7 @@ SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed,
 	(NOT m.quiet AND EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from)) AS wake_room,
 	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
-	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL
+	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0)
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
 	AND NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL)
@@ -1062,13 +1076,16 @@ func scanMessages(rows *sql.Rows) ([]Message, error) {
 	var out []Message
 	for rows.Next() {
 		var m Message
-		var at int64
+		var at, scheduled int64
 		var wakeRoom bool
 		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
-			&m.ExtAuthorID, &m.ExtAuthorName, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming); err != nil {
+			&m.ExtAuthorID, &m.ExtAuthorName, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled); err != nil {
 			return nil, err
 		}
 		m.At = time.UnixMilli(at)
+		if scheduled > 0 {
+			m.ScheduledAt = time.UnixMilli(scheduled)
+		}
 		m.Wakes = m.Addressed || wakeRoom
 		out = append(out, m)
 	}
@@ -1076,11 +1093,15 @@ func scanMessages(rows *sql.Rows) ([]Message, error) {
 }
 
 // deliveryLabel is how a delivery state follows a message's head: "" for a message that stays
-// here, else " · pending", " · sent", " · not sent: <reason>" and so on.
+// here, else " · scheduled", " · sending", " · sent", " · cancelled" or " · not sent: <reason>".
 func deliveryLabel(d Delivery, reason string) string {
 	switch d {
 	case "":
 		return ""
+	case Pending:
+		return " · scheduled"
+	case Declined:
+		return " · cancelled"
 	case Failed:
 		return " · not sent: " + reason
 	}

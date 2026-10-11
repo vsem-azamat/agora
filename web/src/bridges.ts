@@ -19,16 +19,16 @@ export function runningText(b: Pick<Bridge, 'state' | 'lastExit'>): string {
 }
 
 /** What goes out of a bridged room. */
-export type Policy = 'approve' | 'open' | 'read';
+export type Policy = 'delay' | 'open' | 'read';
 
 const POLICIES: Record<Policy, BridgePolicy> = {
-  approve: BridgePolicy.APPROVE,
+  delay: BridgePolicy.DELAY,
   open: BridgePolicy.OPEN,
   read: BridgePolicy.READ,
 };
 
 export function policyOf(p: BridgePolicy): Policy {
-  return p === BridgePolicy.OPEN ? 'open' : p === BridgePolicy.READ ? 'read' : 'approve';
+  return p === BridgePolicy.OPEN ? 'open' : p === BridgePolicy.READ ? 'read' : 'delay';
 }
 
 export function bridgePolicy(p: Policy): BridgePolicy {
@@ -36,7 +36,7 @@ export function bridgePolicy(p: Policy): BridgePolicy {
 }
 
 export const POLICY_LABELS: Record<Policy, string> = {
-  approve: 'Ask before sending',
+  delay: 'Send after a delay',
   open: 'Send at once',
   read: 'Read only',
 };

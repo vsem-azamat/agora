@@ -1,7 +1,7 @@
 // One message on the tape: a tablet edged in its author's pigment, or the board's own thin line.
 // In a bridged room a tablet also shows where the message stands on its way out, or that it is a
 // note, which stays in Agora.
-import { Fragment, memo, useState } from 'react';
+import { Fragment, memo, useEffect, useState } from 'react';
 import type { Names } from '../board';
 import { clock, toDate } from '../board';
 import { authorName, type Delivery, deliveryOf } from '../bridges';
@@ -13,8 +13,34 @@ import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
 
 type Context = { known: Names; operator: string };
 
-/** The operator's decision on a pending message: send it or not; true once the hub took it. */
+/** The operator's decision on a scheduled message: send it at once or cancel it; true once the hub took it. */
 export type Decide = (m: Message, send: boolean) => Promise<boolean>;
+
+/** Why a scheduled message cannot go out now: the room is read only, or has no bridge any more. */
+export type Held = 'read' | 'unbridged';
+
+const HELD: Record<Held, string> = { read: 'held while read only', unbridged: 'held: no bridge' };
+
+/** The operator sends a note out; true once the hub took it. */
+export type SendOut = (m: Message) => Promise<boolean>;
+
+/** How long until a scheduled message goes out, counted every second: `goes out in 0:42`. */
+function Countdown({ due }: { due: Date | undefined }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!due) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [due]);
+  if (!due) return <span className="why">scheduled</span>;
+  const left = Math.ceil((due.getTime() - now) / 1000);
+  if (left <= 0) return <span className="why">going out…</span>;
+  return (
+    <span className="why" title={`Goes out at ${clock(due)}`}>
+      goes out in {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
+    </span>
+  );
+}
 
 function Time({ m }: { m: Message }) {
   const at = toDate(m.at);
@@ -54,10 +80,11 @@ function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
 }
 
 /**
- * A pending message's buttons: it goes out only when the operator sends it. While the room is
- * read only it cannot be sent, only declined.
+ * A scheduled message's countdown and buttons: it goes out when its time comes, unless the
+ * operator cancels it, or at once when the operator sends it. While the room is read only it is
+ * held and cannot be sent, only cancelled.
  */
-function Decision({ m, onDecide, readOnly }: { m: Message; onDecide: Decide; readOnly: boolean }) {
+function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: Held }) {
   const [busy, setBusy] = useState(false);
   const decide = (send: boolean) => {
     setBusy(true);
@@ -68,16 +95,45 @@ function Decision({ m, onDecide, readOnly }: { m: Message; onDecide: Decide; rea
   };
   return (
     <fieldset className="decide" aria-label={`Send the message of ${m.author} to ${m.room}?`}>
-      <span className="why">Waiting for you</span>
-      {readOnly && <span className="hint">read only — switch Outbound to send</span>}
-      <button type="button" className="btn" disabled={busy || readOnly} onClick={() => decide(true)}>
+      {held ? <span className="why">{HELD[held]}</span> : <Countdown due={toDate(m.dueAt)} />}
+      {held === 'read' && <span className="hint">read only — switch Outbound to send</span>}
+      <button type="button" className="btn" disabled={busy || held !== undefined} onClick={() => decide(true)}>
         <Icon name="send" />
-        Send
+        Send now
       </button>
       <button type="button" className="btn quiet" disabled={busy} onClick={() => decide(false)}>
-        Don’t send
+        Cancel
       </button>
     </fieldset>
+  );
+}
+
+/**
+ * Send out on a note: off while the call runs, on again when the hub refused it. Inline, it is the
+ * phone's, next to its inline reply.
+ */
+function SendOutButton({ m, onSendOut, inline }: { m: Message; onSendOut: SendOut; inline?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className={inline ? 'mreply' : undefined}
+      disabled={busy}
+      title={`Send this note to ${m.room} as a message of ${m.author}`}
+      onClick={() => {
+        setBusy(true);
+        void onSendOut(m).then(() => setBusy(false));
+      }}
+    >
+      {inline ? (
+        'send out'
+      ) : (
+        <>
+          <Icon name="send" />
+          Send out
+        </>
+      )}
+    </button>
   );
 }
 
@@ -89,7 +145,8 @@ export const Tablet = memo(function Tablet({
   onFocus,
   onJump,
   onDecide,
-  readOnly,
+  onSendOut,
+  held,
   ...ctx
 }: Context & {
   item: Extract<TapeItem, { kind: 'message' }>;
@@ -99,8 +156,10 @@ export const Tablet = memo(function Tablet({
   onFocus: (pair: [string, string]) => void;
   onJump: (id: bigint) => void;
   onDecide: Decide;
-  /** The room's policy is read: nothing can be sent. */
-  readOnly: boolean;
+  /** Sends a note out; none while nothing goes out of the room. */
+  onSendOut?: SendOut;
+  /** Why nothing goes out of the room now, if nothing does. */
+  held?: Held;
 }) {
   const pg = usePg();
   const { message: m, parent, to } = item;
@@ -161,6 +220,7 @@ export const Tablet = memo(function Tablet({
               reply
             </button>
           )}
+          {m.note && onSendOut && <SendOutButton m={m} onSendOut={onSendOut} inline />}
         </div>
         {parent && (
           <button
@@ -177,7 +237,7 @@ export const Tablet = memo(function Tablet({
         <div className="tx">
           <MessageBody body={m.body} {...ctx} />
         </div>
-        {d === 'pending' && <Decision m={m} onDecide={onDecide} readOnly={readOnly} />}
+        {d === 'pending' && <Decision m={m} onDecide={onDecide} held={held} />}
         {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
       </div>
       <div className="acts">
@@ -193,6 +253,7 @@ export const Tablet = memo(function Tablet({
             Thread
           </button>
         )}
+        {m.note && onSendOut && <SendOutButton m={m} onSendOut={onSendOut} />}
       </div>
     </li>
   );

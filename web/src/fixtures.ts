@@ -1,6 +1,6 @@
 // Example board data for tests, with neutral names.
 import { create, type MessageInitShape } from '@bufbuild/protobuf';
-import { timestampFromDate } from '@bufbuild/protobuf/wkt';
+import { type Timestamp, timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { CiState, type Profile, ProfileSchema } from './gen/agora/v1/agents_pb';
 import { type Bridge, BridgePolicy, BridgeSchema, BridgeState } from './gen/agora/v1/bridges_pb';
 import {
@@ -102,13 +102,13 @@ const bridgeStates: Record<string, BridgeState> = {
   stopped: BridgeState.STOPPED,
 };
 const policies: Record<string, BridgePolicy> = {
-  approve: BridgePolicy.APPROVE,
+  delay: BridgePolicy.DELAY,
   open: BridgePolicy.OPEN,
   read: BridgePolicy.READ,
 };
 
 /** A bridge as the web app lists it: without its command. */
-export function bridge(name: string, state: string, policy = 'approve', lastExit = ''): Bridge {
+export function bridge(name: string, state: string, policy = 'delay', lastExit = ''): Bridge {
   return create(BridgeSchema, {
     name,
     state: bridgeStates[state] ?? BridgeState.UNSPECIFIED,
@@ -135,11 +135,20 @@ export function outside(id: number, name: string, extId: string, body: string, m
 }
 
 /** A message of `author` in `#example-chat` on its way out, posted `min` minutes before NOW. */
-export function goingOut(id: number, author: string, body: string, min: number, state: string, error = ''): Message {
+export function goingOut(
+  id: number,
+  author: string,
+  body: string,
+  min: number,
+  state: string,
+  error = '',
+  dueAt?: Timestamp,
+): Message {
   return message(id, author, body, min, {
     room: 'example-chat',
     deliveryState: deliveries[state] ?? DeliveryState.UNSPECIFIED,
     deliveryError: error,
+    dueAt,
   });
 }
 

@@ -49,6 +49,7 @@ var webProcedures = map[string]bool{
 	agorav1connect.BridgeServiceSetBridgePolicyProcedure:   true,
 	agorav1connect.BridgeServiceSendPendingProcedure:       true,
 	agorav1connect.BridgeServiceDeclinePendingProcedure:    true,
+	agorav1connect.BridgeServiceSendNoteOutProcedure:       true,
 }
 
 // webCall marks the context of a call the web listener serves: the operator makes it.

@@ -211,6 +211,18 @@ func TestInstallService(t *testing.T) {
 	if r := run("install", "service", "--bin", exe, "--join", "always"); r.code == 0 {
 		t.Fatalf("install --join always: %+v", r)
 	}
+	if r := run("install", "service", "--bin", exe, "--bridge-policy", "open", "--bridge-delay", "30s"); r.code != 0 {
+		t.Fatalf("install --bridge-policy: %+v", r)
+	}
+	b, _ = os.ReadFile(unit)
+	if !strings.Contains(string(b), "ExecStart="+exe+" hub --bridge-policy open --bridge-delay 30s\n") {
+		t.Fatalf("unit:\n%s", b)
+	}
+	for _, bad := range [][]string{{"--bridge-policy", "approve"}, {"--bridge-delay", "soon"}, {"--bridge-delay", "0s"}} {
+		if r := run(append([]string{"install", "service", "--bin", exe}, bad...)...); r.code == 0 {
+			t.Fatalf("install %v: %+v", bad, r)
+		}
+	}
 
 	calls = nil
 	if r := run("uninstall", "service", "--now"); r.code != 0 {

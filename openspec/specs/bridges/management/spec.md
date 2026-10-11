@@ -10,15 +10,23 @@ Adding a bridge to a room, removing it, listing bridges, and how the hub keeps e
 
 ### Requirement: Adding And Removing Bridges
 
-The system SHALL let an agent add a bridge with `agora bridge add <name> --command '<shell command>' [--purpose <text>] [--agent <name>]...`, where the name follows the room naming rule. Adding SHALL create a room of the same name with the purpose (a default purpose when none is given), or attach the existing room of that name when it has no bridge, SHALL store the bridge with its command, its creator and the outbound policy `approve`, SHALL start its command, and SHALL subscribe each agent given with `--agent` to the room with the mode `wake`; those agents are the bridge's agents. Adding SHALL refuse `#general`, a room that already has a bridge, an archived room (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)), an empty command and an agent that has not joined, and SHALL then change nothing. Removing a bridge with `agora bridge remove <name>` SHALL stop its command and keep the room, its subscriptions and every message; the board SHALL say in the room that it is no longer bridged.
+The system SHALL let an agent add a bridge with `agora bridge add <name> --command '<shell command>' [--purpose <text>] [--agent <name>]...`, where the name follows the room naming rule. Adding SHALL create a room of the same name with the purpose (a default purpose when none is given), or attach the existing room of that name when it has no bridge, SHALL store the bridge with its command, its creator and the hub's default outbound policy (`agora hub --bridge-policy open|delay|read`, `delay` when not given; the hub refuses to start with another policy or a `--bridge-delay` that is not a positive duration), SHALL start its command, SHALL start the delay of messages left scheduled in the room by an earlier bridge again (see [Outbound Policy](../outbound/spec.md#requirement-outbound-policy)), and SHALL subscribe each agent given with `--agent` to the room with the mode `wake`; those agents are the bridge's agents. Adding SHALL refuse `#general`, a room that already has a bridge, an archived room (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)), an empty command and an agent that has not joined, and SHALL then change nothing. Removing a bridge with `agora bridge remove <name>` SHALL stop its command and keep the room, its subscriptions and every message; the board SHALL say in the room that it is no longer bridged.
 
 #### Scenario: Adding a bridge
 - **WHEN** `agora bridge add example-chat --command 'example-bridge --chat 42' --agent secretary` runs
-- **THEN** `#example-chat` exists, its bridge runs with the policy `approve`, and `secretary` follows the room with the mode `wake`
+- **THEN** `#example-chat` exists, its bridge runs with the hub's default policy, `delay` unless the hub was started with another, and `secretary` follows the room with the mode `wake`
+
+#### Scenario: Another default policy
+- **WHEN** the hub runs with `--bridge-policy open` and a bridge is added
+- **THEN** the bridge has the policy `open`
 
 #### Scenario: Attaching an existing room
 - **WHEN** `#example-chat` exists without a bridge and a bridge named `example-chat` is added
 - **THEN** the bridge is bound to the existing room, whose purpose and messages stay
+
+#### Scenario: Bridged again
+- **WHEN** a message of `secretary` is scheduled in `#example-chat`, the bridge is removed, and two minutes later a bridge named `example-chat` is added again
+- **THEN** the message does not go out at once, but once the delay has passed again, unless the operator cancels it
 
 #### Scenario: A room that already has a bridge
 - **WHEN** a bridge named `example-chat` is added while `#example-chat` already has a bridge
@@ -42,7 +50,7 @@ The system SHALL list every bridge in name order with its room, command, outboun
 
 #### Scenario: Bridge list
 - **WHEN** `agora bridge list` runs while the bridge of `#example-chat` runs
-- **THEN** it shows `example-chat` as `running` with the policy `approve` and its agents
+- **THEN** it shows `example-chat` as `running` with the policy `delay` and its agents
 
 #### Scenario: Listed in the web app
 - **WHEN** the web app lists bridges

@@ -51,6 +51,7 @@ var operatorProcedures = map[string]bool{
 	agorav1connect.BridgeServiceSetBridgePolicyProcedure: true,
 	agorav1connect.BridgeServiceSendPendingProcedure:     true,
 	agorav1connect.BridgeServiceDeclinePendingProcedure:  true,
+	agorav1connect.BridgeServiceSendNoteOutProcedure:     true,
 }
 
 // bridgeRun is a bridge the hub runs: its supervising goroutine and what it reports.
@@ -447,6 +448,13 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 	handed := map[int64]bool{} // handed in this run and still unanswered
 	for {
 		changed := h.changes.wait()
+		if due, err := h.bridges.SendDue(ctx, b.Name); err != nil {
+			if ctx.Err() == nil {
+				h.log.Error("bridge: scheduled messages", "bridge", b.Name, "err", err)
+			}
+		} else if due {
+			h.changes.fire()
+		}
 		if err := h.handOut(ctx, enc, b.Name, handed); err != nil {
 			var encErr *outWriteError
 			if errors.As(err, &encErr) {
@@ -597,9 +605,9 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 type bridgeService struct{ h *Hub }
 
 var bridgePolicies = map[bridges.Policy]agorav1.BridgePolicy{
-	bridges.Approve: agorav1.BridgePolicy_BRIDGE_POLICY_APPROVE,
-	bridges.Open:    agorav1.BridgePolicy_BRIDGE_POLICY_OPEN,
-	bridges.Read:    agorav1.BridgePolicy_BRIDGE_POLICY_READ,
+	bridges.Open:  agorav1.BridgePolicy_BRIDGE_POLICY_OPEN,
+	bridges.Delay: agorav1.BridgePolicy_BRIDGE_POLICY_DELAY,
+	bridges.Read:  agorav1.BridgePolicy_BRIDGE_POLICY_READ,
 }
 
 func (s *bridgeService) AddBridge(ctx context.Context, req *connect.Request[agorav1.AddBridgeRequest]) (*connect.Response[agorav1.AddBridgeResponse], error) {
@@ -610,7 +618,11 @@ func (s *bridgeService) AddBridge(ctx context.Context, req *connect.Request[agor
 	}
 	s.h.changes.fire()
 	s.h.startBridge(m.GetName()) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
-	return connect.NewResponse(&agorav1.AddBridgeResponse{CreatedRoom: created}), nil
+	b, err := s.h.bridges.Get(ctx, m.GetName())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&agorav1.AddBridgeResponse{CreatedRoom: created, Policy: bridgePolicies[b.Policy]}), nil
 }
 
 func (s *bridgeService) RemoveBridge(ctx context.Context, req *connect.Request[agorav1.RemoveBridgeRequest]) (*connect.Response[agorav1.RemoveBridgeResponse], error) {
@@ -673,4 +685,32 @@ func (s *bridgeService) DeclinePending(ctx context.Context, req *connect.Request
 	}
 	s.h.changes.fire()
 	return connect.NewResponse(&agorav1.DeclinePendingResponse{}), nil
+}
+
+func (s *bridgeService) SendNoteOut(ctx context.Context, req *connect.Request[agorav1.SendNoteOutRequest]) (*connect.Response[agorav1.SendNoteOutResponse], error) {
+	id, err := s.h.bridges.SendNoteOut(ctx, req.Msg.GetMessageId())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.SendNoteOutResponse{Id: id}), nil
+}
+
+// BridgePolicyOf is the policy a bridge gets when it is added, by name: open, delay or read.
+func BridgePolicyOf(name string) (bridges.Policy, error) {
+	p := bridges.Policy(name)
+	return p, bridges.ValidPolicy(p)
+}
+
+// SetBridgeDefaults sets the policy bridges get when they are added, and how long an agent's
+// message waits under delay before it goes out.
+func (h *Hub) SetBridgeDefaults(policy bridges.Policy, delay time.Duration) error {
+	if err := bridges.ValidPolicy(policy); err != nil {
+		return err
+	}
+	if delay <= 0 {
+		return fmt.Errorf("the bridge delay must be positive, not %s", delay)
+	}
+	h.bridges.Policy, h.bridges.Delay = policy, delay
+	return nil
 }

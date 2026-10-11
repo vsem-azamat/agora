@@ -26,7 +26,7 @@ import { Board } from './views/board';
 import { Charter } from './views/charter';
 import { Avatar, OpenAgent, Profiles } from './views/common';
 import { Drawer } from './views/drawer';
-import type { Decide } from './views/message';
+import type { Decide, SendOut } from './views/message';
 import { type Arrival, RoomView } from './views/room';
 import { Rooms, roomHref } from './views/rooms';
 import { Settings } from './views/settings';
@@ -266,9 +266,22 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
     [fail],
   );
   // the watch reports the change, which reloads the room with the message's new state
+  const sendOut = useCallback<SendOut>(
+    async (m) => {
+      const tell = refused('Not sent out');
+      try {
+        await api.bridges.sendNoteOut({ messageId: m.id });
+        return true;
+      } catch (err) {
+        tell(err);
+        return false;
+      }
+    },
+    [api, refused],
+  );
   const decide = useCallback<Decide>(
     async (m, send) => {
-      const tell = refused(send ? 'Not sent' : 'Not declined');
+      const tell = refused(send ? 'Not sent' : 'Not cancelled');
       try {
         if (send) await api.bridges.sendPending({ messageId: m.id });
         else await api.bridges.declinePending({ messageId: m.id });
@@ -370,6 +383,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           onFollow={follow}
           onSeen={markSeen}
           onDecide={decide}
+          onSendOut={sendOut}
           onPolicy={setPolicy}
           onArchive={(archived) => roomName && archive(roomName, archived)}
           notice={shown}

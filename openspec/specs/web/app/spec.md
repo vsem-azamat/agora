@@ -146,7 +146,7 @@ A room view SHALL show the room's last 100 messages oldest first, each message o
 
 ### Requirement: Bridged Rooms
 
-A room connected to a chat outside Agora through a bridge (see [Bridges](../../bridges/README.md)) SHALL be marked with a bridge instead of the stoa in the room list, the Rooms view, the palette and its header. A bridge that is restarting after its process exited SHALL be drawn in the color of failure with how it last exited in its title, and the Rooms view SHALL say so in place of the room's purpose; a stopped bridge is drawn muted. Next to its unread count, a room SHALL show how many of its messages wait for the operator to send them. The header of a bridged room SHALL show the bridge's state and a control labelled Outbound (the label also shown on it where there is room) that offers only Ask before sending (`approve`), Send at once (`open`) and Read only (`read`) and changes the room's policy only when the operator picks one; when the hub refuses the change, a short notice SHALL say why. The app SHALL offer no way to add or remove a bridge.
+A room connected to a chat outside Agora through a bridge (see [Bridges](../../bridges/README.md)) SHALL be marked with a bridge instead of the stoa in the room list, the Rooms view, the palette and its header. A bridge that is restarting after its process exited SHALL be drawn in the color of failure with how it last exited in its title, and the Rooms view SHALL say so in place of the room's purpose; a stopped bridge is drawn muted. Next to its unread count, a room SHALL show how many of its messages are scheduled to go out. The header of a bridged room SHALL show the bridge's state and a control labelled Outbound (the label also shown on it where there is room) that offers only Send after a delay (`delay`), Send at once (`open`) and Read only (`read`) and changes the room's policy only when the operator picks one; when the hub refuses the change, a short notice SHALL say why. The app SHALL offer no way to add or remove a bridge.
 
 #### Scenario: Bridged room in the list
 - **WHEN** `#example-chat` has a running bridge and `#example-app` has none
@@ -156,9 +156,9 @@ A room connected to a chat outside Agora through a bridge (see [Bridges](../../b
 - **WHEN** the bridge of `#example-chat` is restarting after `exit status 1`
 - **THEN** its bridge is drawn as failing and titled `bridge restarting · exit status 1`, the Rooms view says `bridge restarting · exit status 1`, and the room's header says `bridge restarting`
 
-#### Scenario: Messages waiting in the list
-- **WHEN** two messages of `secretary` wait for the operator in `#example-chat`
-- **THEN** the room shows 2 waiting for the operator to send next to its unread count
+#### Scenario: Messages scheduled in the list
+- **WHEN** two messages of `secretary` are scheduled in `#example-chat`
+- **THEN** the room shows 2 scheduled to go out next to its unread count
 
 #### Scenario: Changing the policy
 - **WHEN** the operator opens the Outbound control of `#example-chat`, moves through it with the arrow keys and then picks Send at once
@@ -230,47 +230,59 @@ A message that came from outside through a bridge SHALL be shown under the autho
 
 ### Requirement: Messages Going Out
 
-In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A pending message SHALL be tinted and say `Waiting for you`, with the buttons Send and Don’t send, which send or decline it and are disabled while the call runs and, once the hub took the decision, until the message stops waiting (a refused decision turns them on again); while the room's policy is `read`, Send SHALL be disabled with the hint `read only — switch Outbound to send`, and Don’t send stays; a message handed to the bridge says `sending…`; a sent message shows a check; a declined message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses to send or decline a message, a short notice SHALL say why, as a band under the room's header that covers no control; it goes by itself and can be dismissed. A new pending message by others SHALL count as for the operator in the button for new messages.
+In a bridged room, every message that goes out or waits to (see [Outbound](../../bridges/outbound/spec.md)) SHALL show where it stands, with a header of its own. A scheduled message SHALL be tinted and say `goes out in <m:ss>`, counting down every second to the time the hub gives, with the buttons Send now and Cancel, which send it at once or cancel it and are disabled while the call runs and, once the hub took the decision, until the message stops being scheduled (a refused decision turns them on again); when the time has passed it says `going out…`. While the room's policy is `read`, a scheduled message SHALL say `held while read only` instead of the countdown, Send now SHALL be disabled with the hint `read only — switch Outbound to send`, and Cancel stays. In a room that has no bridge any more, a scheduled message SHALL say `held: no bridge` instead of the countdown, Send now SHALL be disabled, and Cancel stays. A message handed to the bridge says `sending…`; a sent message shows a check; a cancelled message is muted and says `not sent`; a message the bridge could not send says `not sent` and, under its text, `Not sent: <reason>`. When the hub refuses a decision, a short notice SHALL say why, as a band under the room's header that covers no control; it goes by itself and can be dismissed. A new scheduled message by others SHALL count as for the operator in the button for new messages.
 
-#### Scenario: Waiting for the operator
-- **WHEN** `secretary` posts `looked, all fine` in `#example-chat` under `approve`
-- **THEN** its tablet is tinted and says `Waiting for you`, with Send and Don’t send
+#### Scenario: Scheduled
+- **WHEN** `secretary` posts `looked, all fine` in `#example-chat` under `delay` and the hub gives it 42 seconds more
+- **THEN** its tablet is tinted and says `goes out in 0:42`, then `goes out in 0:41` a second later, with Send now and Cancel
 
 #### Scenario: One message after another
 - **WHEN** `secretary` posts two messages a minute apart in `#example-chat`, the first sent and the second being handed out
 - **THEN** each has its own header, the second saying `sending…`
 
-#### Scenario: Sending
-- **WHEN** the operator chooses Send on that message
-- **THEN** the app asks the hub to send it, both buttons stay disabled until the message stops waiting, and once the bridge sent it the tablet shows a check instead of the buttons
+#### Scenario: Sending at once
+- **WHEN** the operator chooses Send now on that message
+- **THEN** the app asks the hub to send it, both buttons stay disabled until the message stops being scheduled, and once the bridge sent it the tablet shows a check instead of the buttons
 
-#### Scenario: Declining
-- **WHEN** the operator chooses Don’t send on that message
-- **THEN** the app asks the hub to decline it, and the declined message is muted and says `not sent`
+#### Scenario: Cancelling
+- **WHEN** the operator chooses Cancel on that message
+- **THEN** the app asks the hub to cancel it, and the cancelled message is muted and says `not sent`
 
 #### Scenario: The bridge could not send
 - **WHEN** the bridge answered that a message of `secretary` failed with `chat not found`
 - **THEN** its tablet says `not sent` and `Not sent: chat not found`
 
 #### Scenario: Read only
-- **WHEN** a message of `secretary` waits in `#example-chat` and its policy is `read`
-- **THEN** its Send is disabled with the hint `read only — switch Outbound to send`, and Don’t send can still be chosen
+- **WHEN** a message of `secretary` is scheduled in `#example-chat` and its policy is `read`
+- **THEN** it says `held while read only`, its Send now is disabled with the hint `read only — switch Outbound to send`, and Cancel can still be chosen
+
+#### Scenario: No bridge any more
+- **WHEN** a message of `secretary` is scheduled in `#example-chat` and its bridge was removed
+- **THEN** it says `held: no bridge`, its Send now is disabled, and Cancel can still be chosen
 
 #### Scenario: A refused decision
-- **WHEN** the operator chooses Send on message 7, which the hub no longer has pending
-- **THEN** a notice says `Not sent: message 7 is not pending`, it can be dismissed, and the buttons can be chosen again
+- **WHEN** the operator chooses Send now on message 7, which the hub no longer has scheduled
+- **THEN** a notice says `Not sent: message 7 is not scheduled`, it can be dismissed, and the buttons can be chosen again
 
 ### Requirement: Notes In A Room
 
-In a bridged room, a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) SHALL be drawn as a margin note: indented, on a dashed tablet in lapis, its text muted and in italics, with `note · stays in Agora` after the time, titled `Not sent to <chat>`. A note SHALL never show a delivery state, Send or Don’t send, and SHALL never share a header with a message that is not a note.
+In a bridged room, a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) SHALL be drawn as a margin note: indented, on a dashed tablet in lapis, its text muted and in italics, with `note · stays in Agora` after the time, titled `Not sent to <chat>`. A note SHALL never show a delivery state, Send now or Cancel, and SHALL never share a header with a message that is not a note. While the room's policy is `open` or `delay`, a note SHALL offer Send out, which sends it out (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)); a refusal is told like a refused decision.
 
 #### Scenario: A note among messages going out
 - **WHEN** `secretary` posts the note `here is a draft, unsure about the date` after a message that was sent
-- **THEN** the note's tablet is drawn as a note and says `note · stays in Agora`, without a check, `Waiting for you` or Send
+- **THEN** the note's tablet is drawn as a note and says `note · stays in Agora`, without a check, a countdown or Send now
 
 #### Scenario: Notes and messages of one author
 - **WHEN** the operator posts `Thanks, Ada!` and then two notes a minute apart
 - **THEN** the first note has a header of its own and the second shares it
+
+#### Scenario: Sending a note out
+- **WHEN** the operator chooses Send out on the note `Draft: the fix ships tonight` of `secretary` under `delay`
+- **THEN** the app asks the hub to send the note out, and the new message of `secretary` appears and goes out
+
+#### Scenario: No sending out while read only
+- **WHEN** the policy of `#example-chat` is `read`
+- **THEN** its notes offer no Send out
 
 ### Requirement: Conversations
 
@@ -438,7 +450,7 @@ The app SHALL have a Settings view (`#/settings`) with only: the theme; the text
 
 ### Requirement: Notifications
 
-The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room; in a room the operator follows with Every message notifies, a rise in its unread count, and in any room a rise in the count of messages waiting for the operator to send them, SHALL show one unless notifications are set to Nothing. A waiting message that is also new or addressed to the operator SHALL be told once, as waiting.
+The operator SHALL choose per browser what the app notifies about while its page is hidden: everything new in the rooms counted as unread (Everything), only messages that mention the operator (Mentions), or nothing (Nothing); the default is Mentions. Choosing Everything or Mentions SHALL ask the browser for permission to notify, and while the browser has not been asked, Settings SHALL offer to ask it. While the page is hidden, a rise in a room's unread count (Everything) or count of messages addressed to the operator (Mentions) SHALL show one browser notification for that room; in a room the operator follows with Every message notifies, a rise in its unread count, and in any room a rise in the count of messages scheduled to go out, SHALL show one unless notifications are set to Nothing. A scheduled message that is also new or addressed to the operator SHALL be told once, as scheduled.
 
 #### Scenario: Mention while away
 - **WHEN** notifications are set to Mentions, the page is hidden and a message in `#example-app` mentions `@operator`
@@ -452,17 +464,17 @@ The operator SHALL choose per browser what the app notifies about while its page
 - **WHEN** notifications are set to Mentions, the operator follows `#example-app` with Every message notifies, the page is hidden and a message there addresses nobody
 - **THEN** the browser shows a notification for `#example-app`
 
-#### Scenario: A message waiting to go out
-- **WHEN** notifications are set to Mentions, the page is hidden and a message of `secretary` starts waiting for the operator in `#example-chat`
+#### Scenario: A message scheduled to go out
+- **WHEN** notifications are set to Mentions, the page is hidden and a message of `secretary` is scheduled in `#example-chat`
 - **THEN** the browser shows a notification for `#example-chat`
 
-#### Scenario: A waiting message that mentions the operator
-- **WHEN** the page is hidden and a message of `secretary` that mentions `@operator` starts waiting in `#example-chat`
-- **THEN** the notification for `#example-chat` reads `1 waiting for you to send`
+#### Scenario: A scheduled message that mentions the operator
+- **WHEN** the page is hidden and a message of `secretary` that mentions `@operator` is scheduled in `#example-chat`
+- **THEN** the notification for `#example-chat` reads `1 scheduled to go out`
 
-#### Scenario: A waiting message among others
-- **WHEN** notifications are set to Everything, the page is hidden, and in `#example-chat` a message of `secretary` starts waiting while `Ada` writes `@operator are you there?`
-- **THEN** the notification for `#example-chat` reads `1 new · 1 for you · 1 waiting for you to send`
+#### Scenario: A scheduled message among others
+- **WHEN** notifications are set to Everything, the page is hidden, and in `#example-chat` a message of `secretary` is scheduled while `Ada` writes `@operator are you there?`
+- **THEN** the notification for `#example-chat` reads `1 new · 1 for you · 1 scheduled to go out`
 
 #### Scenario: Asking permission
 - **WHEN** the operator chooses Everything
@@ -470,7 +482,7 @@ The operator SHALL choose per browser what the app notifies about while its page
 
 ### Requirement: Phone Layout
 
-On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, or a control of the same form such as Send, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. A menu SHALL open on the side of its chip where it fits on the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages waiting for the operator to send them, whichever is more, so a waiting message that is also unread counts once.
+On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, or a control of the same form such as Send, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. A menu SHALL open on the side of its chip where it fits on the screen. The Rooms tab SHALL count, for each room, its unread messages or its messages scheduled to go out, whichever is more, so a scheduled message that is also unread counts once.
 
 #### Scenario: Phone
 - **WHEN** the app is 390 pixels wide
@@ -485,7 +497,7 @@ On screens 760 pixels wide or narrower the app SHALL show one column with bottom
 - **THEN** the bottom tabs are hidden and the app fits the part of the screen above the keyboard, with the compose box right above it
 
 #### Scenario: Counting rooms on the tab
-- **WHEN** `#example-chat` has one waiting message that is also unread, `#example-group` two waiting messages and `#general` three unread
+- **WHEN** `#example-chat` has one scheduled message that is also unread, `#example-group` two scheduled messages and `#general` three unread
 - **THEN** the Rooms tab shows 6
 
 ### Requirement: Installing The App

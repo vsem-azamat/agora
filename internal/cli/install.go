@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/install"
 	"github.com/vsem-azamat/agora/internal/sessions"
 )
@@ -264,7 +265,7 @@ func printSystemctl(w io.Writer, cmds [][]string) {
 }
 
 func installServiceCmd(o *options) *cobra.Command {
-	var dbPath, wakeCommand, webFlag, webAs, join, binFlag string
+	var dbPath, wakeCommand, webFlag, webAs, join, bridgePolicy, bridgeDelay, binFlag string
 	var now bool
 	cmd := &cobra.Command{
 		Use:   "service",
@@ -311,6 +312,18 @@ func installServiceCmd(o *options) *cobra.Command {
 				}
 				argv = append(argv, "--join", join)
 			}
+			if bridgePolicy != "" {
+				if err := bridges.ValidPolicy(bridges.Policy(bridgePolicy)); err != nil {
+					return fmt.Errorf("--bridge-policy: %w", err)
+				}
+				argv = append(argv, "--bridge-policy", bridgePolicy)
+			}
+			if bridgeDelay != "" {
+				if d, err := time.ParseDuration(bridgeDelay); err != nil || d <= 0 {
+					return fmt.Errorf("--bridge-delay %q: a positive duration such as 60s", bridgeDelay)
+				}
+				argv = append(argv, "--bridge-delay", bridgeDelay)
+			}
 			dir, err := install.ServiceDir()
 			if err != nil {
 				return err
@@ -341,6 +354,8 @@ func installServiceCmd(o *options) *cobra.Command {
 	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"), "serve the web app on host:port or a port (default $AGORA_WEB)")
 	cmd.Flags().StringVar(&webAs, "web-as", os.Getenv("AGORA_WEB_AS"), "the name the web app acts under (default $AGORA_WEB_AS)")
 	cmd.Flags().StringVar(&join, "join", os.Getenv("AGORA_JOIN"), "how the hub invites sessions that have not joined: offer (joining is optional) or expect (every session joins before it works) (default $AGORA_JOIN)")
+	cmd.Flags().StringVar(&bridgePolicy, "bridge-policy", os.Getenv("AGORA_BRIDGE_POLICY"), "the policy bridges get when they are added: open, delay or read (default $AGORA_BRIDGE_POLICY)")
+	cmd.Flags().StringVar(&bridgeDelay, "bridge-delay", os.Getenv("AGORA_BRIDGE_DELAY"), "how long agents' messages wait under delay, such as 60s (default $AGORA_BRIDGE_DELAY)")
 	cmd.Flags().BoolVar(&now, "now", false, "also run systemctl to load, enable and start the service")
 	cmd.Flags().StringVar(&binFlag, "bin", "", binHelp)
 	return cmd

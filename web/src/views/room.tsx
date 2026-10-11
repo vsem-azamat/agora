@@ -34,7 +34,7 @@ import { ChoiceMenu } from './choice';
 import { AgentLink, Avatar } from './common';
 import { Composer } from './composer';
 import { FollowControls } from './follow';
-import { BoardLine, type Decide, Tablet } from './message';
+import { BoardLine, type Decide, type SendOut, Tablet } from './message';
 import { OutsiderAvatar, OutsiderName } from './outside';
 import { RoomIcon, shortDate } from './rooms';
 import { Notice } from './shell';
@@ -85,6 +85,8 @@ export function RoomView(props: {
   onSeen: (id: bigint) => void;
   /** Sends or declines a pending message. */
   onDecide: Decide;
+  /** Sends a note out. */
+  onSendOut: SendOut;
   /** Changes what goes out through the room's bridge. */
   onPolicy: (p: Policy) => void;
   /** Archives the room, or brings it back. */
@@ -248,6 +250,9 @@ export function RoomView(props: {
   const deciding = useRef(props.onDecide);
   deciding.current = props.onDecide;
   const decide = useCallback<Decide>((m, send) => deciding.current(m, send), []);
+  const sending = useRef(props.onSendOut);
+  sending.current = props.onSendOut;
+  const sendOut = useCallback<SendOut>((m) => sending.current(m), []);
 
   // a reply to a note is a note too, unless the operator chooses otherwise
   const noting = useRef(props.onNote);
@@ -392,7 +397,8 @@ export function RoomView(props: {
                       onFocus={setFocus}
                       onJump={jump}
                       onDecide={decide}
-                      readOnly={readOnly}
+                      onSendOut={props.bridge && !readOnly && !archived ? sendOut : undefined}
+                      held={readOnly ? 'read' : props.bridge ? undefined : 'unbridged'}
                       {...ctx}
                     />
                   );

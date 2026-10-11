@@ -27,12 +27,17 @@ type BridgePolicy int32
 
 const (
 	BridgePolicy_BRIDGE_POLICY_UNSPECIFIED BridgePolicy = 0
-	// Agents' messages wait for the operator; the operator's go out at once.
+	// No bridge has it: delay took its place.
+	//
+	// Deprecated: Marked as deprecated in agora/v1/bridges.proto.
 	BridgePolicy_BRIDGE_POLICY_APPROVE BridgePolicy = 1
 	// Every message goes out at once.
 	BridgePolicy_BRIDGE_POLICY_OPEN BridgePolicy = 2
 	// Nothing goes out; agents may not post.
 	BridgePolicy_BRIDGE_POLICY_READ BridgePolicy = 3
+	// Agents' messages go out once the hub's delay passed, unless the operator cancels them or
+	// sends them at once; the operator's go out at once.
+	BridgePolicy_BRIDGE_POLICY_DELAY BridgePolicy = 4
 )
 
 // Enum value maps for BridgePolicy.
@@ -42,12 +47,14 @@ var (
 		1: "BRIDGE_POLICY_APPROVE",
 		2: "BRIDGE_POLICY_OPEN",
 		3: "BRIDGE_POLICY_READ",
+		4: "BRIDGE_POLICY_DELAY",
 	}
 	BridgePolicy_value = map[string]int32{
 		"BRIDGE_POLICY_UNSPECIFIED": 0,
 		"BRIDGE_POLICY_APPROVE":     1,
 		"BRIDGE_POLICY_OPEN":        2,
 		"BRIDGE_POLICY_READ":        3,
+		"BRIDGE_POLICY_DELAY":       4,
 	}
 )
 
@@ -322,7 +329,9 @@ func (x *AddBridgeRequest) GetAddressees() []string {
 type AddBridgeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// True when the room was created, false when an existing room was attached.
-	CreatedRoom   bool `protobuf:"varint,1,opt,name=created_room,json=createdRoom,proto3" json:"created_room,omitempty"`
+	CreatedRoom bool `protobuf:"varint,1,opt,name=created_room,json=createdRoom,proto3" json:"created_room,omitempty"`
+	// The policy the bridge got: the hub's default.
+	Policy        BridgePolicy `protobuf:"varint,2,opt,name=policy,proto3,enum=agora.v1.BridgePolicy" json:"policy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -362,6 +371,13 @@ func (x *AddBridgeResponse) GetCreatedRoom() bool {
 		return x.CreatedRoom
 	}
 	return false
+}
+
+func (x *AddBridgeResponse) GetPolicy() BridgePolicy {
+	if x != nil {
+		return x.Policy
+	}
+	return BridgePolicy_BRIDGE_POLICY_UNSPECIFIED
 }
 
 type RemoveBridgeRequest struct {
@@ -781,6 +797,95 @@ func (*DeclinePendingResponse) Descriptor() ([]byte, []int) {
 	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{12}
 }
 
+type SendNoteOutRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendNoteOutRequest) Reset() {
+	*x = SendNoteOutRequest{}
+	mi := &file_agora_v1_bridges_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendNoteOutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendNoteOutRequest) ProtoMessage() {}
+
+func (x *SendNoteOutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_bridges_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendNoteOutRequest.ProtoReflect.Descriptor instead.
+func (*SendNoteOutRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SendNoteOutRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+type SendNoteOutResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The message that goes out.
+	Id            int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendNoteOutResponse) Reset() {
+	*x = SendNoteOutResponse{}
+	mi := &file_agora_v1_bridges_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendNoteOutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendNoteOutResponse) ProtoMessage() {}
+
+func (x *SendNoteOutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_bridges_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendNoteOutResponse.ProtoReflect.Descriptor instead.
+func (*SendNoteOutResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_bridges_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SendNoteOutResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
 var File_agora_v1_bridges_proto protoreflect.FileDescriptor
 
 const file_agora_v1_bridges_proto_rawDesc = "" +
@@ -806,9 +911,10 @@ const file_agora_v1_bridges_proto_rawDesc = "" +
 	"\apurpose\x18\x04 \x01(\tR\apurpose\x12\x1e\n" +
 	"\n" +
 	"addressees\x18\x05 \x03(\tR\n" +
-	"addressees\"6\n" +
+	"addressees\"f\n" +
 	"\x11AddBridgeResponse\x12!\n" +
-	"\fcreated_room\x18\x01 \x01(\bR\vcreatedRoom\"?\n" +
+	"\fcreated_room\x18\x01 \x01(\bR\vcreatedRoom\x12.\n" +
+	"\x06policy\x18\x02 \x01(\x0e2\x16.agora.v1.BridgePolicyR\x06policy\"?\n" +
 	"\x13RemoveBridgeRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"\x16\n" +
@@ -827,24 +933,31 @@ const file_agora_v1_bridges_proto_rawDesc = "" +
 	"\x15DeclinePendingRequest\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\x03R\tmessageId\"\x18\n" +
-	"\x16DeclinePendingResponse*x\n" +
+	"\x16DeclinePendingResponse\"3\n" +
+	"\x12SendNoteOutRequest\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\x03R\tmessageId\"%\n" +
+	"\x13SendNoteOutResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id*\x95\x01\n" +
 	"\fBridgePolicy\x12\x1d\n" +
-	"\x19BRIDGE_POLICY_UNSPECIFIED\x10\x00\x12\x19\n" +
-	"\x15BRIDGE_POLICY_APPROVE\x10\x01\x12\x16\n" +
+	"\x19BRIDGE_POLICY_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x15BRIDGE_POLICY_APPROVE\x10\x01\x1a\x02\b\x01\x12\x16\n" +
 	"\x12BRIDGE_POLICY_OPEN\x10\x02\x12\x16\n" +
-	"\x12BRIDGE_POLICY_READ\x10\x03*|\n" +
+	"\x12BRIDGE_POLICY_READ\x10\x03\x12\x17\n" +
+	"\x13BRIDGE_POLICY_DELAY\x10\x04*|\n" +
 	"\vBridgeState\x12\x1c\n" +
 	"\x18BRIDGE_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14BRIDGE_STATE_RUNNING\x10\x01\x12\x1b\n" +
 	"\x17BRIDGE_STATE_RESTARTING\x10\x02\x12\x18\n" +
-	"\x14BRIDGE_STATE_STOPPED\x10\x032\xe9\x03\n" +
+	"\x14BRIDGE_STATE_STOPPED\x10\x032\xb5\x04\n" +
 	"\rBridgeService\x12D\n" +
 	"\tAddBridge\x12\x1a.agora.v1.AddBridgeRequest\x1a\x1b.agora.v1.AddBridgeResponse\x12M\n" +
 	"\fRemoveBridge\x12\x1d.agora.v1.RemoveBridgeRequest\x1a\x1e.agora.v1.RemoveBridgeResponse\x12J\n" +
 	"\vListBridges\x12\x1c.agora.v1.ListBridgesRequest\x1a\x1d.agora.v1.ListBridgesResponse\x12V\n" +
 	"\x0fSetBridgePolicy\x12 .agora.v1.SetBridgePolicyRequest\x1a!.agora.v1.SetBridgePolicyResponse\x12J\n" +
 	"\vSendPending\x12\x1c.agora.v1.SendPendingRequest\x1a\x1d.agora.v1.SendPendingResponse\x12S\n" +
-	"\x0eDeclinePending\x12\x1f.agora.v1.DeclinePendingRequest\x1a .agora.v1.DeclinePendingResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
+	"\x0eDeclinePending\x12\x1f.agora.v1.DeclinePendingRequest\x1a .agora.v1.DeclinePendingResponse\x12J\n" +
+	"\vSendNoteOut\x12\x1c.agora.v1.SendNoteOutRequest\x1a\x1d.agora.v1.SendNoteOutResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
 	file_agora_v1_bridges_proto_rawDescOnce sync.Once
@@ -859,7 +972,7 @@ func file_agora_v1_bridges_proto_rawDescGZIP() []byte {
 }
 
 var file_agora_v1_bridges_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agora_v1_bridges_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_agora_v1_bridges_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_agora_v1_bridges_proto_goTypes = []any{
 	(BridgePolicy)(0),               // 0: agora.v1.BridgePolicy
 	(BridgeState)(0),                // 1: agora.v1.BridgeState
@@ -876,31 +989,36 @@ var file_agora_v1_bridges_proto_goTypes = []any{
 	(*SendPendingResponse)(nil),     // 12: agora.v1.SendPendingResponse
 	(*DeclinePendingRequest)(nil),   // 13: agora.v1.DeclinePendingRequest
 	(*DeclinePendingResponse)(nil),  // 14: agora.v1.DeclinePendingResponse
-	(*timestamppb.Timestamp)(nil),   // 15: google.protobuf.Timestamp
+	(*SendNoteOutRequest)(nil),      // 15: agora.v1.SendNoteOutRequest
+	(*SendNoteOutResponse)(nil),     // 16: agora.v1.SendNoteOutResponse
+	(*timestamppb.Timestamp)(nil),   // 17: google.protobuf.Timestamp
 }
 var file_agora_v1_bridges_proto_depIdxs = []int32{
 	0,  // 0: agora.v1.Bridge.policy:type_name -> agora.v1.BridgePolicy
-	15, // 1: agora.v1.Bridge.created_at:type_name -> google.protobuf.Timestamp
+	17, // 1: agora.v1.Bridge.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 2: agora.v1.Bridge.state:type_name -> agora.v1.BridgeState
-	2,  // 3: agora.v1.ListBridgesResponse.bridges:type_name -> agora.v1.Bridge
-	0,  // 4: agora.v1.SetBridgePolicyRequest.policy:type_name -> agora.v1.BridgePolicy
-	3,  // 5: agora.v1.BridgeService.AddBridge:input_type -> agora.v1.AddBridgeRequest
-	5,  // 6: agora.v1.BridgeService.RemoveBridge:input_type -> agora.v1.RemoveBridgeRequest
-	7,  // 7: agora.v1.BridgeService.ListBridges:input_type -> agora.v1.ListBridgesRequest
-	9,  // 8: agora.v1.BridgeService.SetBridgePolicy:input_type -> agora.v1.SetBridgePolicyRequest
-	11, // 9: agora.v1.BridgeService.SendPending:input_type -> agora.v1.SendPendingRequest
-	13, // 10: agora.v1.BridgeService.DeclinePending:input_type -> agora.v1.DeclinePendingRequest
-	4,  // 11: agora.v1.BridgeService.AddBridge:output_type -> agora.v1.AddBridgeResponse
-	6,  // 12: agora.v1.BridgeService.RemoveBridge:output_type -> agora.v1.RemoveBridgeResponse
-	8,  // 13: agora.v1.BridgeService.ListBridges:output_type -> agora.v1.ListBridgesResponse
-	10, // 14: agora.v1.BridgeService.SetBridgePolicy:output_type -> agora.v1.SetBridgePolicyResponse
-	12, // 15: agora.v1.BridgeService.SendPending:output_type -> agora.v1.SendPendingResponse
-	14, // 16: agora.v1.BridgeService.DeclinePending:output_type -> agora.v1.DeclinePendingResponse
-	11, // [11:17] is the sub-list for method output_type
-	5,  // [5:11] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	0,  // 3: agora.v1.AddBridgeResponse.policy:type_name -> agora.v1.BridgePolicy
+	2,  // 4: agora.v1.ListBridgesResponse.bridges:type_name -> agora.v1.Bridge
+	0,  // 5: agora.v1.SetBridgePolicyRequest.policy:type_name -> agora.v1.BridgePolicy
+	3,  // 6: agora.v1.BridgeService.AddBridge:input_type -> agora.v1.AddBridgeRequest
+	5,  // 7: agora.v1.BridgeService.RemoveBridge:input_type -> agora.v1.RemoveBridgeRequest
+	7,  // 8: agora.v1.BridgeService.ListBridges:input_type -> agora.v1.ListBridgesRequest
+	9,  // 9: agora.v1.BridgeService.SetBridgePolicy:input_type -> agora.v1.SetBridgePolicyRequest
+	11, // 10: agora.v1.BridgeService.SendPending:input_type -> agora.v1.SendPendingRequest
+	13, // 11: agora.v1.BridgeService.DeclinePending:input_type -> agora.v1.DeclinePendingRequest
+	15, // 12: agora.v1.BridgeService.SendNoteOut:input_type -> agora.v1.SendNoteOutRequest
+	4,  // 13: agora.v1.BridgeService.AddBridge:output_type -> agora.v1.AddBridgeResponse
+	6,  // 14: agora.v1.BridgeService.RemoveBridge:output_type -> agora.v1.RemoveBridgeResponse
+	8,  // 15: agora.v1.BridgeService.ListBridges:output_type -> agora.v1.ListBridgesResponse
+	10, // 16: agora.v1.BridgeService.SetBridgePolicy:output_type -> agora.v1.SetBridgePolicyResponse
+	12, // 17: agora.v1.BridgeService.SendPending:output_type -> agora.v1.SendPendingResponse
+	14, // 18: agora.v1.BridgeService.DeclinePending:output_type -> agora.v1.DeclinePendingResponse
+	16, // 19: agora.v1.BridgeService.SendNoteOut:output_type -> agora.v1.SendNoteOutResponse
+	13, // [13:20] is the sub-list for method output_type
+	6,  // [6:13] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_bridges_proto_init() }
@@ -914,7 +1032,7 @@ func file_agora_v1_bridges_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_bridges_proto_rawDesc), len(file_agora_v1_bridges_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

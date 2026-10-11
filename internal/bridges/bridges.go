@@ -24,10 +24,13 @@ type Policy string
 
 // Outbound policies.
 const (
-	Approve Policy = "approve" // agents' messages wait for the operator
-	Open    Policy = "open"    // every message goes out at once
-	Read    Policy = "read"    // nothing goes out; agents may not post
+	Open  Policy = "open"  // every message goes out at once
+	Delay Policy = "delay" // agents' messages go out once the delay passed, unless the operator cancels them
+	Read  Policy = "read"  // nothing goes out; agents may not post
 )
+
+// DefaultDelay is how long an agent's message waits under Delay when the hub sets no delay.
+const DefaultDelay = time.Minute
 
 const (
 	// Truncated ends a message from outside that was shortened to rooms.MaxBody characters.
@@ -43,7 +46,7 @@ const (
 )
 
 var (
-	// ErrNotFound means there is no such bridge, or no such pending message.
+	// ErrNotFound means there is no such bridge, no such scheduled message or no such note.
 	ErrNotFound = errors.New("not found")
 	// ErrExists means the room already has a bridge.
 	ErrExists = errors.New("bridge exists")
@@ -65,6 +68,31 @@ type Bridges struct {
 	db    *sql.DB
 	rooms *rooms.Rooms
 	now   func() time.Time
+
+	// Policy is the outbound policy a bridge gets when it is added; Delay when "".
+	Policy Policy
+	// Delay is how long an agent's message waits under Delay; DefaultDelay when 0.
+	Delay time.Duration
+}
+
+// delay is how long an agent's message waits under Delay.
+func (b *Bridges) delay() time.Duration {
+	if b.Delay <= 0 {
+		return DefaultDelay
+	}
+	return b.Delay
+}
+
+// DueAt is when a message scheduled at goes out.
+func (b *Bridges) DueAt(scheduled time.Time) time.Time { return scheduled.Add(b.delay()) }
+
+// ValidPolicy refuses a policy that is not open, delay or read.
+func ValidPolicy(p Policy) error {
+	switch p {
+	case Open, Delay, Read:
+		return nil
+	}
+	return store.Refuse(store.ErrInvalid, "policy %q: open, delay or read", p)
 }
 
 // New returns Bridges over db; now is the clock (time.Now when nil).
@@ -124,8 +152,18 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 		} else if err := rooms.RequireUnarchivedTx(ctx, tx, name); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO bridges (name, command, created_by, created_at) VALUES (?, ?, ?, ?)`,
-			name, command, agent, b.now().UnixMilli()); err != nil {
+		policy := b.Policy
+		if policy == "" {
+			policy = Delay
+		}
+		// messages left scheduled by a bridge removed before they went out start their delay
+		// again, so none goes out the moment the room is bridged again
+		if _, err := tx.ExecContext(ctx, `UPDATE messages SET scheduled_at = ? WHERE room = ? AND delivery = 'pending'`,
+			b.now().UnixMilli(), name); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO bridges (name, command, policy, created_by, created_at) VALUES (?, ?, ?, ?, ?)`,
+			name, command, policy, agent, b.now().UnixMilli()); err != nil {
 			return err
 		}
 		for _, a := range addressees {
@@ -201,10 +239,8 @@ func (b *Bridges) Get(ctx context.Context, name string) (Bridge, error) {
 
 // SetPolicy changes the outbound policy of the bridge name.
 func (b *Bridges) SetPolicy(ctx context.Context, name string, p Policy) error {
-	switch p {
-	case Approve, Open, Read:
-	default:
-		return store.Refuse(store.ErrInvalid, "policy %q: approve, open or read", p)
+	if err := ValidPolicy(p); err != nil {
+		return err
 	}
 	res, err := b.db.ExecContext(ctx, `UPDATE bridges SET policy = ? WHERE name = ?`, p, name)
 	if err != nil {
@@ -396,31 +432,79 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 	return changed, err
 }
 
-// SendPending lets the pending message id go out: its room must have a bridge whose policy is
-// not read.
+// SendDue lets the scheduled messages of the bridge's room go out whose delay has passed, unless
+// the policy is read, and reports whether any did.
+func (b *Bridges) SendDue(ctx context.Context, name string) (bool, error) {
+	res, err := b.db.ExecContext(ctx, `UPDATE messages SET delivery = 'sending'
+		WHERE room = :room AND delivery = 'pending' AND scheduled_at <= :due
+			AND EXISTS (SELECT 1 FROM bridges WHERE name = :room AND policy != 'read')`,
+		sql.Named("room", name), sql.Named("due", b.now().Add(-b.delay()).UnixMilli()))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// SendPending lets the scheduled message id go out at once: its room must have a bridge whose
+// policy is not read.
 func (b *Bridges) SendPending(ctx context.Context, id int64) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var room, policy string
 		err := tx.QueryRowContext(ctx, `SELECT m.room, COALESCE(b.policy, '') FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room
 			WHERE m.id = ? AND m.delivery = 'pending'`, id).Scan(&room, &policy)
 		if errors.Is(err, sql.ErrNoRows) {
-			return store.Refuse(ErrNotFound, "message %d is not pending", id)
+			return store.Refuse(ErrNotFound, "message %d is not scheduled", id)
 		}
 		if err != nil {
 			return err
 		}
-		switch Policy(policy) {
-		case "":
-			return store.Refuse(store.ErrInvalid, "#%s has no bridge", room)
-		case Read:
-			return store.Refuse(rooms.ErrReadOnly, "#%s is read-only; nothing goes out", room)
+		if err := mayGoOut(room, Policy(policy)); err != nil {
+			return err
 		}
 		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Pending, rooms.Sending, "")
 		return err
 	})
 }
 
-// DeclinePending keeps the pending message id from ever going out, and the board tells its
+// mayGoOut refuses sending out of room, whose bridge has policy ("" without a bridge), when
+// nothing goes out of it.
+func mayGoOut(room string, policy Policy) error {
+	switch policy {
+	case "":
+		return store.Refuse(store.ErrInvalid, "#%s has no bridge", room)
+	case Read:
+		return store.Refuse(rooms.ErrReadOnly, "#%s is read-only; nothing goes out", room)
+	}
+	return nil
+}
+
+// SendNoteOut sends the note id out: a new message of the note's author with its text, replying
+// to what the note replies to, goes out at once, and the note stays. Its room must have a bridge
+// whose policy is not read. It returns the new message's identifier.
+func (b *Bridges) SendNoteOut(ctx context.Context, id int64) (int64, error) {
+	var out int64
+	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
+		var room, author, body, policy string
+		var reply int64
+		err := tx.QueryRowContext(ctx, `SELECT m.room, m.author, m.body, COALESCE(m.reply_to, 0), COALESCE(b.policy, '')
+			FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room WHERE m.id = ? AND m.note`, id).Scan(&room, &author, &body, &reply, &policy)
+		if errors.Is(err, sql.ErrNoRows) {
+			return store.Refuse(ErrNotFound, "message %d is not a note", id)
+		}
+		if err != nil {
+			return err
+		}
+		if err := mayGoOut(room, Policy(policy)); err != nil {
+			return err
+		}
+		out, err = b.rooms.SendOutTx(ctx, tx, author, room, body, reply)
+		return err
+	})
+	return out, err
+}
+
+// DeclinePending cancels the scheduled message id, so it never goes out, and the board tells its
 // author in the room.
 func (b *Bridges) DeclinePending(ctx context.Context, id int64, operator string) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
@@ -429,13 +513,13 @@ func (b *Bridges) DeclinePending(ctx context.Context, id int64, operator string)
 			return err
 		}
 		if !ok {
-			return store.Refuse(ErrNotFound, "message %d is not pending", id)
+			return store.Refuse(ErrNotFound, "message %d is not scheduled", id)
 		}
 		who := "the operator"
 		if operator != "" {
 			who = operator
 		}
-		return b.tell(ctx, tx, author, room, id, who+" declined it")
+		return b.tell(ctx, tx, author, room, id, who+" cancelled it")
 	})
 }
 

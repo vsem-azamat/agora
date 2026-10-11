@@ -55,7 +55,7 @@ export type TapeItem =
       cont: boolean;
       toYou: boolean;
       own: boolean;
-      /** Waits for the operator to send or decline it. */
+      /** Scheduled: goes out after the delay unless the operator cancels it or sends it at once. */
       waiting: boolean;
     };
 

@@ -875,6 +875,32 @@ func TestWebSetting(t *testing.T) {
 	}
 }
 
+func TestBridgeSettings(t *testing.T) {
+	cases := []struct {
+		name, policyEnv, delayEnv string
+		args                      []string
+		want                      string // in the log
+		code                      int
+	}{
+		{"defaults", "", "", nil, "bridge_policy=delay bridge_delay=1m0s", 0},
+		{"flags", "", "", []string{"--bridge-policy", "open", "--bridge-delay", "30s"}, "bridge_policy=open bridge_delay=30s", 0},
+		{"from the environment", "read", "2m", nil, "bridge_policy=read bridge_delay=2m0s", 0},
+		{"the former policy", "", "", []string{"--bridge-policy", "approve"}, `--bridge-policy: policy "approve": open, delay or read`, 1},
+		{"no delay", "", "", []string{"--bridge-delay", "0s"}, "--bridge-delay: the bridge delay must be positive", 1},
+		{"a delay that is no duration", "", "soon", nil, `AGORA_BRIDGE_DELAY="soon"`, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("AGORA_BRIDGE_POLICY", c.policyEnv)
+			t.Setenv("AGORA_BRIDGE_DELAY", c.delayEnv)
+			log, code := hubLog(t, c.args...)
+			if code != c.code || !strings.Contains(log, c.want) {
+				t.Fatalf("exit %d, log: %s", code, log)
+			}
+		})
+	}
+}
+
 func TestWebToken(t *testing.T) {
 	ctx := context.Background()
 	plain := startHub(t)
@@ -914,14 +940,15 @@ func TestBridges(t *testing.T) {
 	agora(ctx, socket, "builder", "join", "builder")
 	agora(ctx, socket, "secretary", "join", "secretary")
 	r := agora(ctx, socket, "builder", "bridge", "add", "example-chat", "--command", "exec sleep 600", "--purpose", "the example chat", "--agent", "secretary")
-	if r.code != 0 || !strings.Contains(r.stdout, "created #example-chat") || !strings.Contains(r.stdout, "subscribed secretary to #example-chat with the mode wake") {
+	if r.code != 0 || !strings.Contains(r.stdout, "created #example-chat; its bridge runs with the outbound policy delay: agents' messages go out after the hub's delay") ||
+		!strings.Contains(r.stdout, "subscribed secretary to #example-chat with the mode wake") {
 		t.Fatalf("add: %+v", r)
 	}
 	if r := agora(ctx, socket, "builder", "bridge", "add", "example-chat", "--command", "exec sleep 600"); r.code == 0 || !strings.Contains(r.stderr, "already has a bridge") {
 		t.Fatalf("add again: %+v", r)
 	}
 	if r := agora(ctx, socket, "builder", "bridge", "list"); !strings.Contains(r.stdout, "#example-chat") || !strings.Contains(r.stdout, "running") ||
-		!strings.Contains(r.stdout, "policy approve") || !strings.Contains(r.stdout, "agents secretary") || !strings.Contains(r.stdout, "exec sleep 600") {
+		!strings.Contains(r.stdout, "policy delay") || !strings.Contains(r.stdout, "agents secretary") || !strings.Contains(r.stdout, "exec sleep 600") {
 		t.Fatalf("list: %+v", r)
 	}
 	if r := agora(ctx, socket, "secretary", "subscribe", "example-chat"); !strings.Contains(r.stdout, "#example-chat (wake)") {
@@ -930,7 +957,7 @@ func TestBridges(t *testing.T) {
 	if r := agora(ctx, socket, "secretary", "post", "example-chat", "looked, all fine"); r.code != 0 {
 		t.Fatalf("post: %+v", r)
 	}
-	if r := agora(ctx, socket, "x", "read", "example-chat"); !strings.Contains(r.stdout, "secretary · ") || !strings.Contains(r.stdout, "· pending") {
+	if r := agora(ctx, socket, "x", "read", "example-chat"); !strings.Contains(r.stdout, "secretary · ") || !strings.Contains(r.stdout, "· scheduled") {
 		t.Fatalf("read: %+v", r)
 	}
 	if r := agora(ctx, socket, "secretary", "post", "example-chat", "--note", "here is a draft, unsure about the date"); r.code != 0 {

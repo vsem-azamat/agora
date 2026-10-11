@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -128,12 +129,16 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	return out
 }
 
-func messagesPB(msgs []rooms.Message) []*agorav1.Message {
+// messagesPB converts msgs; due gives when a scheduled message goes out.
+func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.Message {
 	out := make([]*agorav1.Message, 0, len(msgs))
 	for _, m := range msgs {
 		pb := &agorav1.Message{
 			Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed,
 			DeliveryState: deliveryStates[m.Delivery], DeliveryError: m.DeliveryError, Note: m.Note, Incoming: m.Incoming,
+		}
+		if m.Delivery == rooms.Pending && !m.ScheduledAt.IsZero() {
+			pb.DueAt = timestamppb.New(due(m.ScheduledAt))
 		}
 		if m.External() {
 			pb.ExternalAuthor = &agorav1.ExternalAuthor{Bridge: m.Room, Id: m.ExtAuthorID, Name: m.ExtAuthorName}
