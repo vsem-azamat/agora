@@ -2,10 +2,11 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, page, parseRoute } from './App';
 import type { Api } from './api';
-import { useRoom } from './useHub';
+import { forgetLoadedBuild, useRoom } from './useHub';
 
 afterEach(() => {
   cleanup();
+  forgetLoadedBuild();
   vi.unstubAllGlobals();
   localStorage.clear();
   history.replaceState(null, '', '/');
@@ -168,6 +169,28 @@ describe('an upgraded hub', () => {
     await act(async () => new Promise((r) => setTimeout(r, 50)));
     expect(reload).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Reload/ })).toBeNull();
+  });
+
+  it('waits for a draft left in another room', async () => {
+    const { comeBack, reload } = await opened();
+    location.hash = '#/rooms/general';
+    fireEvent.change(await screen.findByLabelText('Message #general'), { target: { value: 'almost done' } });
+    location.hash = '#/rooms/example-app';
+    await screen.findByLabelText('Message #example-app');
+    await comeBack('a964c856ff7e');
+    await screen.findByRole('button', { name: 'Updated · Reload' });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the build of the page when the operator signs in again', async () => {
+    const { comeBack, reload } = await opened();
+    location.hash = '#/rooms/general';
+    fireEvent.change(await screen.findByLabelText('Message #general'), { target: { value: 'almost done' } });
+    await comeBack('a964c856ff7e');
+    await screen.findByRole('button', { name: 'Updated · Reload' });
+    // a new link in the same tab signs in again, with the upgraded hub already running
+    location.hash = '#token=other-token';
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
 
   it('keeps a draft, reloads when the operator asks, and by itself once the draft is erased', async () => {

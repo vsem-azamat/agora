@@ -42,6 +42,15 @@ type HubData = {
 
 const RETRY_MS = 2000;
 
+// The hub's build (`version commit`) the page was loaded with, kept for the page rather than for
+// a sign-in, so signing in again cannot take an upgraded hub's build for the page's own.
+let loadedWith: string | undefined;
+
+/** Forgets the page's build, as a new page would; for tests. */
+export function forgetLoadedBuild() {
+  loadedWith = undefined;
+}
+
 /** The counts per room: unread and addressed from the hub's unread counts, scheduled from the rooms. */
 export function roomCounts(
   unread: { room: string; unread: number; addressed: number }[],
@@ -61,8 +70,6 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
   const loading = useRef<Promise<void> | undefined>(undefined);
   const again = useRef(false);
   const revision = useRef(0n);
-  // the hub's build the app was loaded with; another one means the hub was upgraded
-  const first = useRef<string | undefined>(undefined);
   const [upgraded, setUpgraded] = useState(false);
 
   const fail = useCallback(
@@ -86,8 +93,8 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.bridges.listBridges({}),
     ]);
     const build = `${who.version} ${who.commit}`;
-    first.current ??= build;
-    if (build !== first.current) setUpgraded(true);
+    loadedWith ??= build;
+    if (build !== loadedWith) setUpgraded(true);
     const active = rooms.rooms.filter((r) => !r.archivedBy);
     setData({
       operator: who.name,

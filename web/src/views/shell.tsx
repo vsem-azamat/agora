@@ -50,8 +50,8 @@ export function Bar(props: {
       )}
       <div className="r">
         {props.onReload ? (
-          <button type="button" className="live updated" onClick={props.onReload}>
-            Updated · Reload
+          <button type="button" className="live updated" onClick={props.onReload} aria-label="Updated · Reload">
+            <span className="upd">Updated · </span>Reload
           </button>
         ) : (
           <span className={`live ${props.status}`}>{statusText(props.status, props.active)}</span>

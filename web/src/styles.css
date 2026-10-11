@@ -2115,6 +2115,7 @@ a.archivedrow:hover {
   .motto,
   .find kbd,
   .live:not(.updated),
+  .live .upd,
   .acctname,
   .acctbtn .chev {
     display: none;

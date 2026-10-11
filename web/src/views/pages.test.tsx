@@ -282,10 +282,10 @@ describe('Phone layout', () => {
     expect(phone).toMatch(/\.tabs \{[^}]*display: grid;/);
   });
 
-  it('hides the live status but keeps Updated · Reload', () => {
+  it('hides the live status but keeps Reload, without Updated', () => {
     const css = readFileSync('src/styles.css', 'utf8'); // vitest runs in web/
     const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
-    expect(phone).toMatch(/\.live:not\(\.updated\),/);
+    expect(phone).toMatch(/\.live:not\(\.updated\),\s*\.live \.upd,/);
   });
 
   it('keeps the compose box to the width of the screen while replying to a long message', () => {
