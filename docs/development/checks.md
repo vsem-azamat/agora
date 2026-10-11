@@ -13,9 +13,10 @@ CI runs these checks on every pull request and on `main`. The [`Makefile`](../..
 | `make lint-proto` | `buf lint`, `buf format -d --exit-code` | `proto/` follows the standard style and is formatted |
 | `make lint-web` | `pnpm lint` (`biome check`) | Biome's recommended rules and formatting, configured in `web/biome.json` |
 | `make breaking` | `buf breaking --against "$BREAKING_AGAINST"` | `proto/` has no breaking change against `main` (CI: the pull request base; pull requests only) |
-| `make test` | `test-go` and `test-web` | All tests |
+| `make test` | `test-go`, `test-web` and `test-deploy` | All tests |
 | `make test-go` | `go test -race ./...` | Unit and end-to-end tests, with the race detector |
 | `make test-web` | `pnpm test` | Vitest: the web app's helpers, hooks and views |
+| `make test-deploy` | `scripts/deploy-test.sh` | `make deploy` on a clone of `HEAD`, without a service (see [Deploying](deploying.md)) |
 | `make generate-check` | `buf generate`, then a clean `gen/` in git | `gen/` matches `proto/` |
 | `make generate-check-web` | `pnpm generate`, then a clean `web/src/gen/` in git | `web/src/gen/` matches `proto/` |
 | `make build-check` | `pnpm build` (`tsc --noEmit`, then `vite build`), then a clean `internal/web/dist/` in git | The web app type-checks (strict, with `noUncheckedIndexedAccess`) and the committed build matches `web/` |
@@ -36,4 +37,4 @@ Requirements: Go (the version in `go.mod`), GNU Make, Node.js 24 or newer (`engi
 
 ## CI
 
-The workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Its three jobs call the targets above: `Repository checks` runs `repo`; `Go` runs `lint-go`, `test-go`, `lint-proto`, `breaking` (pull requests only) and `generate-check`; `Web app` runs `generate-check-web`, `lint-web`, `test-web` and `build-check`. Every action is pinned to a commit SHA, with its release tag in a comment.
+The workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Its three jobs call the targets above: `Repository checks` runs `repo`; `Go` runs `lint-go`, `test-go`, `test-deploy`, `lint-proto`, `breaking` (pull requests only) and `generate-check`; `Web app` runs `generate-check-web`, `lint-web`, `test-web` and `build-check`. Every action is pinned to a commit SHA, with its release tag in a comment.

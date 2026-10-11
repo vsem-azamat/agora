@@ -10,6 +10,7 @@ How the repository is organized and verified.
 | [Specs](specs.md) | Layout and format of `openspec/specs/` |
 | [Documentation](documentation.md) | Structure and rules of `docs/` |
 | [Checks](checks.md) | `make check`, lint configuration, CI |
+| [Deploying](deploying.md) | `make deploy`: installing a checkout as the machine's `agora` and restarting the hub |
 | [Code review](code-review.md) | What a review checks: contracts, constants, consistency, tests, errors |
 
 ## Repository layout
@@ -23,5 +24,5 @@ How the repository is organized and verified.
 | `Makefile` | Entry point for formatting, lint, tests and every CI check |
 | `openspec/specs/` | Behavior specification |
 | `docs/` | Engineering documentation |
-| `scripts/` | Repository checks |
+| `scripts/` | Repository checks and `make deploy` |
 | `.github/` | CI workflows and the pull request template |
