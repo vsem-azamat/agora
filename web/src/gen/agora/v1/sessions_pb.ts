@@ -120,7 +120,8 @@ export type ReportRequest = Message<"agora.v1.ReportRequest"> & {
   pidStart: bigint;
 
   /**
-   * Why the session ends (for END), as the agent tool reports it, e.g. "clear".
+   * Why the session starts (for START) or ends (for END), as the agent tool reports it, e.g.
+   * "compact" or "clear".
    *
    * @generated from field: string reason = 9;
    */

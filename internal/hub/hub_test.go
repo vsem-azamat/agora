@@ -242,7 +242,7 @@ func (r *running) idleAgentWithPID(t *testing.T, name, session, terminal string,
 	}
 }
 
-func TestInterruptedTurnWaitsAtThePrompt(t *testing.T) {
+func TestFailedTurnWaitsAtThePrompt(t *testing.T) {
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	bg := context.Background()

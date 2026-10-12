@@ -49,6 +49,10 @@ const (
 // process; the name and places move to the new session when it starts.
 const EndReasonClear = "clear"
 
+// StartReasonCompact is the start reason of a session that goes on after its conversation was
+// compacted.
+const StartReasonCompact = "compact"
+
 // UnknownKind is the kind of a session whose connector did not say.
 const UnknownKind = "unknown"
 
@@ -71,7 +75,7 @@ type Report struct {
 	CWD        string
 	Terminal   string
 	StopActive bool   // the turn already continues because of an earlier block
-	Reason     string // why the session ends, for End
+	Reason     string // why the session starts (Start) or ends (End)
 }
 
 // Reply is what the connector should tell the agent.
@@ -171,10 +175,6 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	now := s.now()
 	var agent string
 	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
-		var live bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE id = ? AND state != ?)`, r.SessionID, Ended).Scan(&live); err != nil {
-			return err
-		}
 		if err := register(ctx, tx, r, now); err != nil {
 			return err
 		}
@@ -201,10 +201,10 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 			}
 			return setState(ctx, tx, r.SessionID, Busy, now)
 		case Start:
-			// A new, resumed or cleared session starts at the prompt. A compaction starts a live
+			// A new, resumed or cleared session starts at the prompt. A compaction starts the
 			// session again with no turn and, when it runs while idle or on /compact, no stop
 			// after it: the session keeps its state, and a connector waiting on it keeps waiting.
-			if live {
+			if r.Reason == StartReasonCompact {
 				return nil
 			}
 			return setState(ctx, tx, r.SessionID, Idle, now)

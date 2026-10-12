@@ -261,7 +261,8 @@ type ReportRequest struct {
 	StopActive bool `protobuf:"varint,7,opt,name=stop_active,json=stopActive,proto3" json:"stop_active,omitempty"`
 	// Start time of the process, in the units the platform reports (0 when unknown).
 	PidStart int64 `protobuf:"varint,8,opt,name=pid_start,json=pidStart,proto3" json:"pid_start,omitempty"`
-	// Why the session ends (for END), as the agent tool reports it, e.g. "clear".
+	// Why the session starts (for START) or ends (for END), as the agent tool reports it, e.g.
+	// "compact" or "clear".
 	Reason        string `protobuf:"bytes,9,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -46,6 +46,7 @@ type hookInput struct {
 	CWD            string `json:"cwd"`
 	StopHookActive bool   `json:"stop_hook_active"`
 	Reason         string `json:"reason"` // SessionEnd: why the session ends, e.g. "clear"
+	Source         string `json:"source"` // SessionStart: why the session starts, e.g. "compact"
 	Error          string `json:"error"`  // StopFailure: the kind of API error
 }
 
@@ -62,7 +63,7 @@ var events = map[string]agorav1.SessionEvent{
 // TransientFailures are the StopFailure errors after which the session waits at its prompt and
 // can work again; after the others (a usage limit, billing, authentication) it cannot, so they
 // are not reported.
-const TransientFailures = "overloaded|server_error|unknown|invalid_request|max_output_tokens"
+const TransientFailures = "overloaded|server_error|unknown|max_output_tokens"
 
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
@@ -83,9 +84,13 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	if pid > 0 {
 		start = proc.StartTime(pid)
 	}
+	reason := h.Reason
+	if ev == agorav1.SessionEvent_SESSION_EVENT_START {
+		reason = h.Source
+	}
 	resp, err := client.Report(ctx, connect.NewRequest(&agorav1.ReportRequest{
 		SessionId: h.SessionID, Kind: Kind, Event: ev, Pid: int32(pid), PidStart: start,
-		Cwd: h.CWD, Terminal: os.Getenv("AGORA_TERMINAL"), StopActive: h.StopHookActive, Reason: h.Reason,
+		Cwd: h.CWD, Terminal: os.Getenv("AGORA_TERMINAL"), StopActive: h.StopHookActive, Reason: reason,
 	}))
 	if err != nil {
 		return fmt.Errorf("report to hub: %w", err)

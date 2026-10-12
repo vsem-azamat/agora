@@ -90,7 +90,7 @@ func TestInstallIntoMissingSettings(t *testing.T) {
 		t.Errorf("PostToolUse matcher: %v", post["matcher"])
 	}
 	for _, g := range s["hooks"].(map[string]any)["StopFailure"].([]any) {
-		if m := g.(map[string]any)["matcher"]; m != "overloaded|server_error|unknown|invalid_request|max_output_tokens" {
+		if m := g.(map[string]any)["matcher"]; m != "overloaded|server_error|unknown|max_output_tokens" {
 			t.Errorf("StopFailure matcher: %v", m)
 		}
 	}

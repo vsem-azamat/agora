@@ -22,7 +22,7 @@ The connector SHALL exit successfully and print nothing whenever it fails, inclu
 
 ### Requirement: Hook Events Report The Session
 
-The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an API error the session can work again from (`StopFailure` with error `overloaded`, `server_error`, `unknown`, `invalid_request` or `max_output_tokens`), adding nothing to the agent's context, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session end.
+The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an API error the session can work again from (`StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens`), adding nothing to the agent's context, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session start (its `source`) or end.
 
 #### Scenario: Start and end
 - **WHEN** a Claude Code session starts and later exits

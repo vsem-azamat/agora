@@ -64,6 +64,17 @@ func (e env) report(t *testing.T, id string, ev sessions.Event) sessions.Reply {
 	return r
 }
 
+// compact reports the start that follows a compaction.
+func (e env) compact(t *testing.T, id string) {
+	t.Helper()
+	if _, err := e.s.Report(ctx, sessions.Report{
+		SessionID: id, Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111,
+		CWD: "/src/example-app", Reason: sessions.StartReasonCompact,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (e env) join(t *testing.T, name, session string) {
 	t.Helper()
 	if _, err := e.s.Join(ctx, name, session, false); err != nil {
@@ -191,7 +202,7 @@ func TestCompactionWhileIdleKeepsTheWait(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.report(t, "session-1", sessions.Start) // compacted while idle: no turn and no stop follow
+	e.compact(t, "session-1") // compacted while idle: no turn and no stop follow
 	if st := e.state(t, "session-1"); st != sessions.Idle {
 		t.Fatalf("after compaction: %s", st)
 	}
@@ -201,6 +212,21 @@ func TestCompactionWhileIdleKeepsTheWait(t *testing.T) {
 	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
 	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57?") {
 		t.Fatalf("wake %+v done %v err %v", w, done, err)
+	}
+}
+
+func TestResumedSessionStartsIdle(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.report(t, "session-1", sessions.Prompt) // still busy when the hub last heard of it
+	e.report(t, "session-1", sessions.Start)  // resumed under the same id, not ended in between
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after resume: %s", st)
+	}
+	e.report(t, "session-1", sessions.End)
+	e.report(t, "session-1", sessions.Start)
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after resuming an ended session: %s", st)
 	}
 }
 
@@ -214,7 +240,7 @@ func TestCompactionDuringATurnKeepsItBusy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.report(t, "session-1", sessions.Start) // compacted automatically while the agent works
+	e.compact(t, "session-1") // compacted automatically while the agent works
 	if st := e.state(t, "session-1"); st != sessions.Busy {
 		t.Fatalf("after compaction: %s", st)
 	}

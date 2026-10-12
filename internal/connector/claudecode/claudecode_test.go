@@ -120,6 +120,13 @@ func TestFailuresPrintNothing(t *testing.T) {
 	}
 }
 
+func TestStartSourceIsReported(t *testing.T) {
+	hub := &fakeHub{reply: &agorav1.ReportResponse{}}
+	if _, err := run(t, hub, `{"session_id":"session-1","hook_event_name":"SessionStart","source":"compact"}`); err != nil || hub.got.GetReason() != "compact" {
+		t.Fatalf("err %v report %v", err, hub.got)
+	}
+}
+
 func TestWaitingAtThePromptIsReported(t *testing.T) {
 	for _, input := range []string{
 		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"overloaded"}`,
@@ -137,6 +144,7 @@ func TestFailuresThatKeepTheSessionFromWorkingAreIgnored(t *testing.T) {
 	for _, in := range []string{
 		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"rate_limit"}`,
 		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"billing_error"}`,
+		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"invalid_request"}`,
 		`{"session_id":"session-1","hook_event_name":"Notification","notification_type":"idle_prompt"}`,
 	} {
 		hub := &fakeHub{}

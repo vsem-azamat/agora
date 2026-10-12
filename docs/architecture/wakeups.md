@@ -8,7 +8,7 @@ Only unread messages that wake the agent (addressed to it, or from others in a r
 
 ## Connector waits (Claude Code)
 
-When the agent ends its turn (`Stop`), and when a turn ends on a transient API error (`StopFailure` with error `overloaded`, `server_error`, `unknown`, `invalid_request` or `max_output_tokens`; a usage limit or a billing or authentication error leaves the session unable to work, so it is not woken), Claude Code also runs `agora hook claude-code-wait` as an asynchronous hook with `asyncRewake`. The hook opens `SessionService.WaitWake` for its session and blocks:
+When the agent ends its turn (`Stop`), and when a turn ends on a transient API error (`StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens`; a usage limit or a billing or authentication error leaves the session unable to work, so it is not woken), Claude Code also runs `agora hook claude-code-wait` as an asynchronous hook with `asyncRewake`. The hook opens `SessionService.WaitWake` for its session and blocks:
 
 1. The hub registers the wait, records the session's turn count, and sends an `armed` message.
 2. On every change on the board, and at least every second, it checks the session: ended, unbound, or a new turn since the wait began (`sessions.turn` counts prompts and wakes; a start is no turn and a compaction keeps the session's state, so a wait armed before a compaction while idle or on `/compact`, neither of which runs `UserPromptSubmit` or `Stop`, keeps waiting) → the stream ends without a wake; a newer wait for the same session → the older one ends; idle with an unread message that wakes it, or with an offered slot it was not already woken for (`sessions.woken_for`) → the stream sends the wake text and ends.

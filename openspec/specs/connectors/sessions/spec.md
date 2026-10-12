@@ -22,7 +22,7 @@ The system SHALL record each agent session a connector reports with its identifi
 
 ### Requirement: Session States
 
-The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session that starts new, resumed or after a cleared conversation SHALL be `idle`; a start of a live session (after compaction) SHALL keep its state, and no start SHALL count as a new turn. A session SHALL become `idle` when its connector reports that it waits at its prompt after a turn that ended without the end being reported.
+The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session that starts new, resumed or after a cleared conversation SHALL be `idle`; a start that the agent tool reports as caused by compaction SHALL keep the session's state, and no start SHALL count as a new turn. A session SHALL become `idle` when its connector reports that it waits at its prompt after a turn that ended without the end being reported.
 
 #### Scenario: Turn ends
 - **WHEN** the agent ends its turn and the connector lets it
