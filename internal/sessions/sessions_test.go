@@ -156,8 +156,12 @@ func TestNameOfAnEndedSessionIsFree(t *testing.T) {
 func TestSessionStatesFollowEvents(t *testing.T) {
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
-	if st := e.state(t, "session-1"); st != sessions.Busy {
+	if st := e.state(t, "session-1"); st != sessions.Idle {
 		t.Fatalf("after start: %s", st)
+	}
+	e.report(t, "session-1", sessions.Prompt)
+	if st := e.state(t, "session-1"); st != sessions.Busy {
+		t.Fatalf("after prompt: %s", st)
 	}
 	e.report(t, "session-1", sessions.Stop)
 	if st := e.state(t, "session-1"); st != sessions.Idle {
@@ -166,6 +170,54 @@ func TestSessionStatesFollowEvents(t *testing.T) {
 	e.report(t, "session-1", sessions.Prompt)
 	if st := e.state(t, "session-1"); st != sessions.Busy {
 		t.Fatalf("after prompt: %s", st)
+	}
+	// An interrupted turn has no stop; the connector reports the session waiting at its prompt.
+	if r := e.report(t, "session-1", sessions.Waiting); r != (sessions.Reply{}) {
+		t.Fatalf("waiting replied %+v", r)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after waiting: %s", st)
+	}
+}
+
+func TestCompactionWhileIdleKeepsTheWait(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.report(t, "session-1", sessions.Prompt)
+	e.report(t, "session-1", sessions.Stop)
+	turn, err := e.s.Turn(ctx, "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.report(t, "session-1", sessions.Start) // compacted while idle: no turn and no stop follow
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after compaction: %s", st)
+	}
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0); err != nil {
+		t.Fatal(err)
+	}
+	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
+	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57?") {
+		t.Fatalf("wake %+v done %v err %v", w, done, err)
+	}
+}
+
+func TestWaitingDeliversNothing(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.report(t, "session-1", sessions.Prompt)
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder ping", 0); err != nil {
+		t.Fatal(err)
+	}
+	e.clock.add(sessions.ToolCheckEvery)
+	if r := e.report(t, "session-1", sessions.Waiting); r != (sessions.Reply{}) {
+		t.Fatalf("waiting replied %+v", r)
+	}
+	if left, total, _ := e.r.Unread(ctx, "builder", rooms.Everything, 0); total != 1 || len(left) != 1 {
+		t.Fatalf("%d unread", total)
 	}
 }
 

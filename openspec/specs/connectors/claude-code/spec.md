@@ -22,11 +22,19 @@ The connector SHALL exit successfully and print nothing whenever it fails, inclu
 
 ### Requirement: Hook Events Report The Session
 
-The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session end.
+The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an error (`StopFailure`) and when Claude Code notifies that the prompt has waited for input (`Notification` of type `idle_prompt`), adding nothing to the agent's context for either, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session end.
 
 #### Scenario: Start and end
 - **WHEN** a Claude Code session starts and later exits
 - **THEN** the hub records the session as started and then as `ended`
+
+#### Scenario: Interrupted turn
+- **WHEN** the user interrupts the agent's turn, so no `Stop` hook runs, and Claude Code then notifies `idle_prompt`
+- **THEN** the hub records the session as `idle`
+
+#### Scenario: Other notifications
+- **WHEN** Claude Code notifies `permission_prompt`
+- **THEN** the hook reports nothing and prints nothing
 
 ### Requirement: Sessions Without A Name Are Invited To The Board
 

@@ -40,6 +40,9 @@ const (
 	Tool   Event = "tool"
 	Stop   Event = "stop"
 	End    Event = "end"
+	// Waiting reports a session waiting at its prompt after a turn whose end was not reported,
+	// such as an interrupted one.
+	Waiting Event = "waiting"
 )
 
 // EndReasonClear is the end reason of a session replaced by a new conversation in the same
@@ -188,18 +191,23 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 			}
 		}
 		switch r.Event {
-		case Start, Prompt:
+		case Prompt:
 			if _, err := tx.ExecContext(ctx, `UPDATE sessions SET turn = turn + 1 WHERE id = ?`, r.SessionID); err != nil {
 				return err
 			}
 			return setState(ctx, tx, r.SessionID, Busy, now)
+		case Start, Waiting:
+			// Every start (a new or resumed session, /clear, compaction) ends at the prompt, and
+			// a compaction while idle is followed by no stop; a start is no turn, so a connector
+			// already waiting on the session keeps waiting.
+			return setState(ctx, tx, r.SessionID, Idle, now)
 		case End:
 			return s.endTx(ctx, tx, r.SessionID, now)
 		}
 		return nil
 	})
-	if err != nil || r.Event == End {
-		return Reply{}, err
+	if err != nil || r.Event == End || r.Event == Waiting {
+		return Reply{}, err // nothing a waiting session's connector shows reaches the agent
 	}
 	if r.Event == Stop {
 		return s.stop(ctx, r, agent, now)

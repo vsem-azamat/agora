@@ -14,11 +14,12 @@ import (
 type sessionService struct{ h *Hub }
 
 var events = map[agorav1.SessionEvent]sessions.Event{
-	agorav1.SessionEvent_SESSION_EVENT_START:  sessions.Start,
-	agorav1.SessionEvent_SESSION_EVENT_PROMPT: sessions.Prompt,
-	agorav1.SessionEvent_SESSION_EVENT_TOOL:   sessions.Tool,
-	agorav1.SessionEvent_SESSION_EVENT_STOP:   sessions.Stop,
-	agorav1.SessionEvent_SESSION_EVENT_END:    sessions.End,
+	agorav1.SessionEvent_SESSION_EVENT_START:   sessions.Start,
+	agorav1.SessionEvent_SESSION_EVENT_PROMPT:  sessions.Prompt,
+	agorav1.SessionEvent_SESSION_EVENT_TOOL:    sessions.Tool,
+	agorav1.SessionEvent_SESSION_EVENT_STOP:    sessions.Stop,
+	agorav1.SessionEvent_SESSION_EVENT_END:     sessions.End,
+	agorav1.SessionEvent_SESSION_EVENT_WAITING: sessions.Waiting,
 }
 
 func (s *sessionService) Report(ctx context.Context, req *connect.Request[agorav1.ReportRequest]) (*connect.Response[agorav1.ReportResponse], error) {

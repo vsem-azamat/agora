@@ -29,6 +29,9 @@ enum SessionEvent {
   SESSION_EVENT_TOOL = 3;
   SESSION_EVENT_STOP = 4;
   SESSION_EVENT_END = 5;
+  // The session waits at its prompt after a turn whose end was not reported, such as an
+  // interrupted one.
+  SESSION_EVENT_WAITING = 6;
 }
 
 enum SessionState {

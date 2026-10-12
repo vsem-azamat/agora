@@ -67,15 +67,23 @@ func claudeCodeHooks(bin, terminalEnv string) []eventGroup {
 		hook = `AGORA_TERMINAL="${` + terminalEnv + `:-$AGORA_TERMINAL}" ` + hook
 	}
 	plain := hookGroup{Hooks: []hookEntry{{Type: "command", Command: hook}}}
+	wait := hookGroup{Hooks: []hookEntry{{
+		Type: "command", Command: shellQuote(bin) + " hook claude-code-wait",
+		Async: true, AsyncRewake: true, Timeout: WaitTimeout,
+	}}}
+	// A turn that is interrupted or fails runs no Stop hook; StopFailure and the idle_prompt
+	// notification tell the hub that the session waits at its prompt, and wait for it.
+	idle := func(g hookGroup) hookGroup { g.Matcher = "idle_prompt"; return g }
 	return []eventGroup{
 		{"SessionStart", plain},
 		{"UserPromptSubmit", plain},
 		{"PostToolUse", hookGroup{Matcher: "*", Hooks: plain.Hooks}},
 		{"Stop", plain},
-		{"Stop", hookGroup{Hooks: []hookEntry{{
-			Type: "command", Command: shellQuote(bin) + " hook claude-code-wait",
-			Async: true, AsyncRewake: true, Timeout: WaitTimeout,
-		}}}},
+		{"Stop", wait},
+		{"StopFailure", plain},
+		{"StopFailure", wait},
+		{"Notification", idle(plain)},
+		{"Notification", idle(wait)},
 		{"SessionEnd", plain},
 	}
 }

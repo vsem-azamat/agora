@@ -44,6 +44,7 @@ type hookInput struct {
 	CWD            string `json:"cwd"`
 	StopHookActive bool   `json:"stop_hook_active"`
 	Reason         string `json:"reason"` // SessionEnd: why the session ends, e.g. "clear"
+	Notification   string `json:"notification_type"`
 }
 
 var events = map[string]agorav1.SessionEvent{
@@ -52,7 +53,14 @@ var events = map[string]agorav1.SessionEvent{
 	"PostToolUse":      agorav1.SessionEvent_SESSION_EVENT_TOOL,
 	"Stop":             agorav1.SessionEvent_SESSION_EVENT_STOP,
 	"SessionEnd":       agorav1.SessionEvent_SESSION_EVENT_END,
+	// A turn that ends on an API error, or an interrupted one, runs no Stop hook.
+	"StopFailure":  agorav1.SessionEvent_SESSION_EVENT_WAITING,
+	"Notification": agorav1.SessionEvent_SESSION_EVENT_WAITING,
 }
+
+// idleNotification is the Notification type Claude Code sends when its prompt has waited for
+// input; other notifications are not reported.
+const idleNotification = "idle_prompt"
 
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
@@ -63,7 +71,7 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		return fmt.Errorf("read hook input: %w", err)
 	}
 	ev, ok := events[h.HookEventName]
-	if !ok {
+	if !ok || h.HookEventName == "Notification" && h.Notification != idleNotification {
 		return nil // an event the connector does not handle
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
@@ -84,7 +92,8 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	switch {
 	case reply.GetBlock():
 		return json.NewEncoder(out).Encode(map[string]any{"decision": "block", "reason": reply.GetBlockReason()})
-	case reply.GetContext() != "" && ev != agorav1.SessionEvent_SESSION_EVENT_STOP && ev != agorav1.SessionEvent_SESSION_EVENT_END:
+	case reply.GetContext() != "" && (ev == agorav1.SessionEvent_SESSION_EVENT_START || ev == agorav1.SessionEvent_SESSION_EVENT_PROMPT ||
+		ev == agorav1.SessionEvent_SESSION_EVENT_TOOL):
 		return json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]any{
 			"hookEventName": h.HookEventName, "additionalContext": reply.GetContext(),
 		}})

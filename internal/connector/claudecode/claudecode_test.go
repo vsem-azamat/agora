@@ -120,6 +120,27 @@ func TestFailuresPrintNothing(t *testing.T) {
 	}
 }
 
+func TestWaitingAtThePromptIsReported(t *testing.T) {
+	for _, input := range []string{
+		`{"session_id":"session-1","hook_event_name":"Notification","notification_type":"idle_prompt"}`,
+		`{"session_id":"session-1","hook_event_name":"StopFailure"}`,
+	} {
+		hub := &fakeHub{reply: &agorav1.ReportResponse{Context: "ignored"}}
+		out, err := run(t, hub, input)
+		if out != "" || err != nil || hub.got.GetEvent() != agorav1.SessionEvent_SESSION_EVENT_WAITING {
+			t.Errorf("%s: out %q err %v report %v", input, out, err, hub.got)
+		}
+	}
+}
+
+func TestOtherNotificationsAreIgnored(t *testing.T) {
+	hub := &fakeHub{}
+	in := `{"session_id":"session-1","hook_event_name":"Notification","notification_type":"permission_prompt"}`
+	if out, err := run(t, hub, in); out != "" || err != nil || hub.got != nil {
+		t.Fatalf("out %q err %v report %v", out, err, hub.got)
+	}
+}
+
 func TestUnknownEventsAreIgnored(t *testing.T) {
 	hub := &fakeHub{}
 	if out, err := run(t, hub, `{"session_id":"session-1","hook_event_name":"PreCompact"}`); out != "" || err != nil || hub.got != nil {

@@ -40,6 +40,10 @@ The system SHALL let a connector wait on behalf of an idle session: the wait end
 - **WHEN** the session receives a new prompt while its connector waits
 - **THEN** the wait ends without a wake
 
+#### Scenario: Compaction while waiting
+- **WHEN** the session of `builder` is idle with a connector waiting, its conversation is compacted, and then another agent posts `@builder can you take #57?`
+- **THEN** the wait ends with a wake that contains that message
+
 #### Scenario: Unclaimed offer
 - **WHEN** the agent was woken for an offered slot and ends its turn without claiming it
 - **THEN** the next wait does not wake it again for the same slot
@@ -54,7 +58,7 @@ The system SHALL let a connector wait on behalf of an idle session: the wait end
 
 ### Requirement: Claude Code Wakes Through An Asynchronous Hook
 
-The Claude Code connector SHALL wait in an asynchronous hook that runs when the agent ends its turn and wakes Claude Code by exiting with code 2 and the wake text, so the agent is woken whatever terminal it runs in. On any failure, including an unreachable hub, the hook SHALL end quietly with code 0.
+The Claude Code connector SHALL wait in an asynchronous hook that runs when the agent ends its turn, when a turn ends on an error, and when Claude Code notifies that the prompt has waited for input, and wakes Claude Code by exiting with code 2 and the wake text, so the agent is woken whatever terminal it runs in. On any failure, including an unreachable hub, the hook SHALL end quietly with code 0.
 
 #### Scenario: Wake
 - **WHEN** the waiting hook receives a wake

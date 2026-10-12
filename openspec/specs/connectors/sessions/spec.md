@@ -14,7 +14,7 @@ The system SHALL record each agent session a connector reports with its identifi
 
 #### Scenario: New session
 - **WHEN** a connector reports a session starting
-- **THEN** the session is recorded with those details and state `busy`
+- **THEN** the session is recorded with those details and state `idle`
 
 #### Scenario: Session that started before the connector
 - **WHEN** the first event the hub receives from a session is not its start
@@ -22,7 +22,7 @@ The system SHALL record each agent session a connector reports with its identifi
 
 ### Requirement: Session States
 
-The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change.
+The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session SHALL be `idle` once it starts, whatever the reason for the start (a new or resumed session, a cleared conversation, or compaction), and once its connector reports that it waits at its prompt; a start SHALL not count as a new turn.
 
 #### Scenario: Turn ends
 - **WHEN** the agent ends its turn and the connector lets it
@@ -31,6 +31,14 @@ The system SHALL keep each session `busy`, `idle` or `ended` as reported by its 
 #### Scenario: New prompt
 - **WHEN** the agent receives a new prompt
 - **THEN** its session becomes `busy`
+
+#### Scenario: Compacted while idle
+- **WHEN** the agent's session is idle after its turn and the conversation is compacted, which starts the session again with no turn after it
+- **THEN** the session stays `idle`, and a connector waiting on its behalf keeps waiting
+
+#### Scenario: Turn ended without its end reported
+- **WHEN** the agent's turn is interrupted, so the connector never reports its end, and the connector later reports that the session waits at its prompt
+- **THEN** the session becomes `idle`
 
 ### Requirement: Dead Processes End Their Sessions
 

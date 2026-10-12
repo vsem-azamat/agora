@@ -31,6 +31,9 @@ const (
 	SessionEvent_SESSION_EVENT_TOOL        SessionEvent = 3
 	SessionEvent_SESSION_EVENT_STOP        SessionEvent = 4
 	SessionEvent_SESSION_EVENT_END         SessionEvent = 5
+	// The session waits at its prompt after a turn whose end was not reported, such as an
+	// interrupted one.
+	SessionEvent_SESSION_EVENT_WAITING SessionEvent = 6
 )
 
 // Enum value maps for SessionEvent.
@@ -42,6 +45,7 @@ var (
 		3: "SESSION_EVENT_TOOL",
 		4: "SESSION_EVENT_STOP",
 		5: "SESSION_EVENT_END",
+		6: "SESSION_EVENT_WAITING",
 	}
 	SessionEvent_value = map[string]int32{
 		"SESSION_EVENT_UNSPECIFIED": 0,
@@ -50,6 +54,7 @@ var (
 		"SESSION_EVENT_TOOL":        3,
 		"SESSION_EVENT_STOP":        4,
 		"SESSION_EVENT_END":         5,
+		"SESSION_EVENT_WAITING":     6,
 	}
 )
 
@@ -841,14 +846,15 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"<\n" +
 	"\x10WaitWakeResponse\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
-	"\x05armed\x18\x02 \x01(\bR\x05armed*\xa7\x01\n" +
+	"\x05armed\x18\x02 \x01(\bR\x05armed*\xc2\x01\n" +
 	"\fSessionEvent\x12\x1d\n" +
 	"\x19SESSION_EVENT_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13SESSION_EVENT_START\x10\x01\x12\x18\n" +
 	"\x14SESSION_EVENT_PROMPT\x10\x02\x12\x16\n" +
 	"\x12SESSION_EVENT_TOOL\x10\x03\x12\x16\n" +
 	"\x12SESSION_EVENT_STOP\x10\x04\x12\x15\n" +
-	"\x11SESSION_EVENT_END\x10\x05*\x91\x01\n" +
+	"\x11SESSION_EVENT_END\x10\x05\x12\x19\n" +
+	"\x15SESSION_EVENT_WAITING\x10\x06*\x91\x01\n" +
 	"\fSessionState\x12\x1d\n" +
 	"\x19SESSION_STATE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12SESSION_STATE_BUSY\x10\x01\x12\x16\n" +
