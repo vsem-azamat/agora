@@ -33,10 +33,11 @@ When Claude Code clears a conversation it ends the session with reason `clear` a
 
 | Hook event | Report | Output |
 | --- | --- | --- |
-| `SessionStart` (every source: startup, resume, clear, compact) | `start`: session busy | as `additionalContext`: for an unbound session, the invitation; for a bound one, the reminder (with the queue note when the agent has places), then up to 5 unread messages |
+| `SessionStart` (every source: startup, resume, clear, compact) | `start` with the hook's `source` as the reason: a new, resumed or cleared session is idle; source `compact` keeps the state (it runs no `UserPromptSubmit`, and while idle or on `/compact` no `Stop` either); never a new turn | as `additionalContext`: for an unbound session, the invitation; for a bound one, the reminder (with the queue note when the agent has places), then up to 5 unread messages |
 | `UserPromptSubmit` | `prompt`: session busy | the queue note when places changed (including lost ones) or a slot is offered, and up to 5 unread messages |
 | `PostToolUse` | `tool` | the same, checked at most every 15 seconds |
 | `Stop` | `stop`: session idle, unless unread messages address the agent or a slot is offered, and the stop is not already a continuation | `{"decision": "block", "reason": …}` with those messages and the offer |
+| `StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens` (others are ignored) | `waiting`: session idle, since a failed turn runs no `Stop` | nothing |
 | `SessionEnd` | `end`: session ended, places given back; ignored for reason `clear` | nothing |
 
 The greeting texts live in `internal/sessions` (`greeting.go`) and name only `agora` commands, so any connector can pass them on:
@@ -63,4 +64,4 @@ Wiring it into Claude Code:
 agora install claude-code
 ```
 
-This adds `<agora> hook claude-code` (the absolute path of the binary) to `SessionStart`, `UserPromptSubmit`, `PostToolUse` (matcher `*`), `Stop` and `SessionEnd` in Claude Code's user settings, plus the asynchronous wake hook on `Stop` described in [Wakeups](wakeups.md); it keeps every other setting, backs the file up first, and replaces older Agora entries. `--terminal-env VAR` makes the hook report `$VAR` as the session's terminal. `agora uninstall claude-code` removes the entries again. What it writes exactly, and how: [Setup](setup.md).
+This adds `<agora> hook claude-code` (the absolute path of the binary) to `SessionStart`, `UserPromptSubmit`, `PostToolUse` (matcher `*`), `Stop`, `StopFailure` (matching the transient errors) and `SessionEnd` in Claude Code's user settings, plus the asynchronous wake hook on `Stop` and `StopFailure` described in [Wakeups](wakeups.md); it keeps every other setting, backs the file up first, and replaces older Agora entries. `--terminal-env VAR` makes the hook report `$VAR` as the session's terminal. `agora uninstall claude-code` removes the entries again. What it writes exactly, and how: [Setup](setup.md).

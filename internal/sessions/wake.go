@@ -13,7 +13,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
-// Turn returns the session's turn count, which grows with every prompt and start.
+// Turn returns the session's turn count, which grows with every prompt and wake.
 func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
 	var turn int64
 	err := s.db.QueryRowContext(ctx, `SELECT turn FROM sessions WHERE id = ?`, sessionID).Scan(&turn)

@@ -29,6 +29,9 @@ enum SessionEvent {
   SESSION_EVENT_TOOL = 3;
   SESSION_EVENT_STOP = 4;
   SESSION_EVENT_END = 5;
+  // The session waits at its prompt after a turn that ended without a stop, such as a failed
+  // one.
+  SESSION_EVENT_WAITING = 6;
 }
 
 enum SessionState {
@@ -63,7 +66,8 @@ message ReportRequest {
   bool stop_active = 7;
   // Start time of the process, in the units the platform reports (0 when unknown).
   int64 pid_start = 8;
-  // Why the session ends (for END), as the agent tool reports it, e.g. "clear".
+  // Why the session starts (for START) or ends (for END), as the agent tool reports it, e.g.
+  // "compact" or "clear".
   string reason = 9;
 }
 

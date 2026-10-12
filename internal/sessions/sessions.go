@@ -40,11 +40,18 @@ const (
 	Tool   Event = "tool"
 	Stop   Event = "stop"
 	End    Event = "end"
+	// Waiting reports a session waiting at its prompt after a turn that ended without a stop,
+	// such as one that failed.
+	Waiting Event = "waiting"
 )
 
 // EndReasonClear is the end reason of a session replaced by a new conversation in the same
 // process; the name and places move to the new session when it starts.
 const EndReasonClear = "clear"
+
+// StartReasonCompact is the start reason of a session that goes on after its conversation was
+// compacted.
+const StartReasonCompact = "compact"
 
 // UnknownKind is the kind of a session whose connector did not say.
 const UnknownKind = "unknown"
@@ -68,7 +75,7 @@ type Report struct {
 	CWD        string
 	Terminal   string
 	StopActive bool   // the turn already continues because of an earlier block
-	Reason     string // why the session ends, for End
+	Reason     string // why the session starts (Start) or ends (End)
 }
 
 // Reply is what the connector should tell the agent.
@@ -188,18 +195,28 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 			}
 		}
 		switch r.Event {
-		case Start, Prompt:
+		case Prompt:
 			if _, err := tx.ExecContext(ctx, `UPDATE sessions SET turn = turn + 1 WHERE id = ?`, r.SessionID); err != nil {
 				return err
 			}
 			return setState(ctx, tx, r.SessionID, Busy, now)
+		case Start:
+			// A new, resumed or cleared session starts at the prompt. A compaction starts the
+			// session again with no turn and, when it runs while idle or on /compact, no stop
+			// after it: the session keeps its state, and a connector waiting on it keeps waiting.
+			if r.Reason == StartReasonCompact {
+				return nil
+			}
+			return setState(ctx, tx, r.SessionID, Idle, now)
+		case Waiting:
+			return setState(ctx, tx, r.SessionID, Idle, now)
 		case End:
 			return s.endTx(ctx, tx, r.SessionID, now)
 		}
 		return nil
 	})
-	if err != nil || r.Event == End {
-		return Reply{}, err
+	if err != nil || r.Event == End || r.Event == Waiting {
+		return Reply{}, err // nothing a waiting session's connector shows reaches the agent
 	}
 	if r.Event == Stop {
 		return s.stop(ctx, r, agent, now)

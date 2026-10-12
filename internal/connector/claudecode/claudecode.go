@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -44,6 +46,8 @@ type hookInput struct {
 	CWD            string `json:"cwd"`
 	StopHookActive bool   `json:"stop_hook_active"`
 	Reason         string `json:"reason"` // SessionEnd: why the session ends, e.g. "clear"
+	Source         string `json:"source"` // SessionStart: why the session starts, e.g. "compact"
+	Error          string `json:"error"`  // StopFailure: the kind of API error
 }
 
 var events = map[string]agorav1.SessionEvent{
@@ -52,7 +56,14 @@ var events = map[string]agorav1.SessionEvent{
 	"PostToolUse":      agorav1.SessionEvent_SESSION_EVENT_TOOL,
 	"Stop":             agorav1.SessionEvent_SESSION_EVENT_STOP,
 	"SessionEnd":       agorav1.SessionEvent_SESSION_EVENT_END,
+	// A turn that ends on an API error runs no Stop hook.
+	"StopFailure": agorav1.SessionEvent_SESSION_EVENT_WAITING,
 }
+
+// TransientFailures are the StopFailure errors after which the session waits at its prompt and
+// can work again; after the others (a usage limit, billing, authentication) it cannot, so they
+// are not reported.
+const TransientFailures = "overloaded|server_error|unknown|max_output_tokens"
 
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
@@ -63,7 +74,7 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		return fmt.Errorf("read hook input: %w", err)
 	}
 	ev, ok := events[h.HookEventName]
-	if !ok {
+	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) {
 		return nil // an event the connector does not handle
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
@@ -73,9 +84,13 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	if pid > 0 {
 		start = proc.StartTime(pid)
 	}
+	reason := h.Reason
+	if ev == agorav1.SessionEvent_SESSION_EVENT_START {
+		reason = h.Source
+	}
 	resp, err := client.Report(ctx, connect.NewRequest(&agorav1.ReportRequest{
 		SessionId: h.SessionID, Kind: Kind, Event: ev, Pid: int32(pid), PidStart: start,
-		Cwd: h.CWD, Terminal: os.Getenv("AGORA_TERMINAL"), StopActive: h.StopHookActive, Reason: h.Reason,
+		Cwd: h.CWD, Terminal: os.Getenv("AGORA_TERMINAL"), StopActive: h.StopHookActive, Reason: reason,
 	}))
 	if err != nil {
 		return fmt.Errorf("report to hub: %w", err)
@@ -84,7 +99,8 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	switch {
 	case reply.GetBlock():
 		return json.NewEncoder(out).Encode(map[string]any{"decision": "block", "reason": reply.GetBlockReason()})
-	case reply.GetContext() != "" && ev != agorav1.SessionEvent_SESSION_EVENT_STOP && ev != agorav1.SessionEvent_SESSION_EVENT_END:
+	case reply.GetContext() != "" && (ev == agorav1.SessionEvent_SESSION_EVENT_START || ev == agorav1.SessionEvent_SESSION_EVENT_PROMPT ||
+		ev == agorav1.SessionEvent_SESSION_EVENT_TOOL):
 		return json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]any{
 			"hookEventName": h.HookEventName, "additionalContext": reply.GetContext(),
 		}})
