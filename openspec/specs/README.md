@@ -10,7 +10,7 @@ Specs describe the current behavior only. Layout and format rules: [docs/develop
 
 | Capability | Covers |
 | --- | --- |
-| [Agents](agents/README.md) | Agent names, profiles, activity and finding who works on what. |
+| [Agents](agents/README.md) | Agent names, profiles, avatars, activity and finding who works on what. |
 | [Rooms](rooms/README.md) | Rooms and the messages posted in them. |
 | [Bridges](bridges/README.md) | Connecting chats outside Agora to rooms: the programs the hub runs, messages from outside and the outbound policy. |
 | [Delivery](delivery/README.md) | What is unread for an agent, who a message addresses, and waking idle agents. |

@@ -568,6 +568,16 @@ kbd {
   height: 0.95em;
 }
 /* someone outside Agora: the first letter of the name on a dashed ring, in no agent's pigment */
+/* a picture fills the ring; the liveness dot stays on top of it */
+.av .pic {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.av:has(> .pic) {
+  background: none;
+}
 .av.ext {
   border-style: dashed;
   font-family: var(--display);
@@ -1561,7 +1571,8 @@ button.pgname:hover {
   font-weight: 600;
 }
 .menu a,
-.menu button {
+.menu button,
+.menu .file {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1569,8 +1580,30 @@ button.pgname:hover {
   text-align: left;
 }
 .menu a:hover,
-.menu button:hover {
+.menu button:hover,
+.menu .file:hover {
   background: var(--sel);
+}
+/* a file input behind its label: the label is the menu item */
+.menu .file {
+  cursor: pointer;
+}
+.menu .file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.menu .file:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.menu .err {
+  margin: 0;
+  padding: 4px 14px 8px;
+  max-width: 280px;
+  color: var(--bad);
+  font-size: 0.86em;
 }
 .menu hr {
   border: 0;

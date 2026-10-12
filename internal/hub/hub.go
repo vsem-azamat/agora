@@ -13,6 +13,7 @@ import (
 
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/avatars"
 	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/governance"
@@ -65,6 +66,7 @@ type Hub struct {
 	gov      *governance.Governance
 	tokens   *webtoken.Tokens
 	bridges  *bridges.Bridges
+	avatars  *avatars.Avatars
 	alive    func(pid int, start int64) bool
 	changes  *signal
 	log      *slog.Logger
@@ -89,6 +91,7 @@ type Hub struct {
 	rotated     *signal                // fires when the web token is replaced
 
 	bridgeRuns bridgeRuns // the bridges the hub runs while it serves
+	avatarRate avatarRate // how many avatar lines each bridge may still send
 
 	waitMu  sync.Mutex
 	waiters map[string]*waiter // by session id
@@ -104,9 +107,9 @@ func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 	r := rooms.New(db, now)
 	return &Hub{
 		db: db, queue: q, sessions: sessions.New(db, q, r, now), agents: agents.New(db, now), rooms: r, gov: governance.New(db, r, now), tokens: webtoken.New(db, now),
-		bridges: bridges.New(db, r, now),
-		alive:   proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
-		waiters: map[string]*waiter{}, waking: map[string]bool{},
+		bridges: bridges.New(db, r, now), avatars: avatars.New(db, now),
+		alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
+		waiters: map[string]*waiter{}, waking: map[string]bool{}, avatarRate: avatarRate{limits: map[string]*avatarLimit{}},
 		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,
 		bridgeRuns: bridgeRuns{runs: map[string]*bridgeRun{}, minDelay: bridgeMinDelay, maxDelay: bridgeMaxDelay, steady: bridgeSteady, drain: bridgeDrain},
 	}

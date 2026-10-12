@@ -415,7 +415,10 @@ type ExternalAuthor struct {
 	// The author's identifier in the outside service.
 	Id string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	// The author's name there.
-	Name          string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// The SHA-256 of the avatar the bridge sent for the author, which the web listener serves at
+	// /avatars/<hash>; empty when there is none.
+	Avatar        string `protobuf:"bytes,4,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -467,6 +470,13 @@ func (x *ExternalAuthor) GetId() string {
 func (x *ExternalAuthor) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *ExternalAuthor) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
 	}
 	return ""
 }
@@ -1654,11 +1664,12 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	" \x01(\tR\rdeliveryError\x12\x12\n" +
 	"\x04note\x18\v \x01(\bR\x04note\x12\x1a\n" +
 	"\bincoming\x18\f \x01(\bR\bincoming\x121\n" +
-	"\x06due_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x05dueAt\"L\n" +
+	"\x06due_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x05dueAt\"d\n" +
 	"\x0eExternalAuthor\x12\x16\n" +
 	"\x06bridge\x18\x01 \x01(\tR\x06bridge\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\"R\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x16\n" +
+	"\x06avatar\x18\x04 \x01(\tR\x06avatar\"R\n" +
 	"\fSubscription\x12\x12\n" +
 	"\x04room\x18\x01 \x01(\tR\x04room\x12.\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x1a.agora.v1.SubscriptionModeR\x04mode\"W\n" +

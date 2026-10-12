@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/agents.proto.
  */
 export const file_agora_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIpMECgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRInCgdzZXNzaW9uGBAgASgOMhYuYWdvcmEudjEuU2Vzc2lvblN0YXRlEjAKCGNpX3N0YXRlGBEgAygLMh4uYWdvcmEudjEuUHJvZmlsZS5DaVN0YXRlRW50cnkSDAoEaWNvbhgSIAEoCRIPCgdwaWdtZW50GBMgASgJEiYKCGZvcm1lcmx5GBQgAygLMhQuYWdvcmEudjEuRm9ybWVyTmFtZRpBCgxDaVN0YXRlRW50cnkSCwoDa2V5GAEgASgFEiAKBXZhbHVlGAIgASgOMhEuYWdvcmEudjEuQ2lTdGF0ZToCOAFKBAgMEA1KBAgPEBBSDXNlc3Npb25fc3RhdGVSAmNpIkoKCkZvcm1lck5hbWUSDAoEbmFtZRgBIAEoCRIuCgpyZW5hbWVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCK4AgoUVXBkYXRlUHJvZmlsZVJlcXVlc3QSDQoFYWdlbnQYASABKAkSEQoEa2luZBgCIAEoCUgAiAEBEhQKB3Byb2plY3QYAyABKAlIAYgBARIRCgR0YXNrGAQgASgJSAKIAQESEwoGc3RhdHVzGAUgASgJSAOIAQESEAoDY3dkGAYgASgJSASIAQESEgoFYWJvdXQYByABKAlIBYgBARIPCgdhZGRfcHJzGAggAygFEhAKCGRyb3BfcHJzGAkgAygFEhEKBGljb24YCiABKAlIBogBARIUCgdwaWdtZW50GAsgASgJSAeIAQFCBwoFX2tpbmRCCgoIX3Byb2plY3RCBwoFX3Rhc2tCCQoHX3N0YXR1c0IGCgRfY3dkQggKBl9hYm91dEIHCgVfaWNvbkIKCghfcGlnbWVudCI7ChVVcGRhdGVQcm9maWxlUmVzcG9uc2USIgoHcHJvZmlsZRgBIAEoCzIRLmFnb3JhLnYxLlByb2ZpbGUiHQoMTGVhdmVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJIiEKDUxlYXZlUmVzcG9uc2USEAoIcmVsZWFzZWQYASADKAkiIAoRTGlzdEFnZW50c1JlcXVlc3QSCwoDYWxsGAEgASgIIjcKEkxpc3RBZ2VudHNSZXNwb25zZRIhCgZhZ2VudHMYASADKAsyES5hZ29yYS52MS5Qcm9maWxlIjYKCldob1JlcXVlc3QSDQoFcXVlcnkYASABKAkSDAoEcGF0aBgCIAEoCBILCgNhbGwYAyABKAgiMAoLV2hvUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSIsCg1SZW5hbWVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkiNAoOUmVuYW1lUmVzcG9uc2USIgoHcHJvZmlsZRgBIAEoCzIRLmFnb3JhLnYxLlByb2ZpbGUqYAoHQ2lTdGF0ZRIYChRDSV9TVEFURV9VTlNQRUNJRklFRBAAEhIKDkNJX1NUQVRFX0dSRUVOEAESEAoMQ0lfU1RBVEVfUkVEEAISFQoRQ0lfU1RBVEVfQ09ORkxJQ1QQAzLUAgoMQWdlbnRTZXJ2aWNlElAKDVVwZGF0ZVByb2ZpbGUSHi5hZ29yYS52MS5VcGRhdGVQcm9maWxlUmVxdWVzdBofLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXNwb25zZRI4CgVMZWF2ZRIWLmFnb3JhLnYxLkxlYXZlUmVxdWVzdBoXLmFnb3JhLnYxLkxlYXZlUmVzcG9uc2USRwoKTGlzdEFnZW50cxIbLmFnb3JhLnYxLkxpc3RBZ2VudHNSZXF1ZXN0GhwuYWdvcmEudjEuTGlzdEFnZW50c1Jlc3BvbnNlEjIKA1dobxIULmFnb3JhLnYxLldob1JlcXVlc3QaFS5hZ29yYS52MS5XaG9SZXNwb25zZRI7CgZSZW5hbWUSFy5hZ29yYS52MS5SZW5hbWVSZXF1ZXN0GhguYWdvcmEudjEuUmVuYW1lUmVzcG9uc2VCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
+  fileDesc("ChVhZ29yYS92MS9hZ2VudHMucHJvdG8SCGFnb3JhLnYxIqMECgdQcm9maWxlEgwKBG5hbWUYASABKAkSDAoEa2luZBgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEgwKBHRhc2sYBCABKAkSDgoGc3RhdHVzGAUgASgJEgsKA2N3ZBgGIAEoCRIOCgZicmFuY2gYByABKAkSCwoDcHJzGAggAygFEg0KBWFib3V0GAkgASgJEi0KCWpvaW5lZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKdXBkYXRlZF9hdBgLIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGYWN0aXZlGA0gASgIEhEKCWZvdW5kX3BycxgOIAMoBRInCgdzZXNzaW9uGBAgASgOMhYuYWdvcmEudjEuU2Vzc2lvblN0YXRlEjAKCGNpX3N0YXRlGBEgAygLMh4uYWdvcmEudjEuUHJvZmlsZS5DaVN0YXRlRW50cnkSDAoEaWNvbhgSIAEoCRIPCgdwaWdtZW50GBMgASgJEiYKCGZvcm1lcmx5GBQgAygLMhQuYWdvcmEudjEuRm9ybWVyTmFtZRIOCgZhdmF0YXIYFSABKAkaQQoMQ2lTdGF0ZUVudHJ5EgsKA2tleRgBIAEoBRIgCgV2YWx1ZRgCIAEoDjIRLmFnb3JhLnYxLkNpU3RhdGU6AjgBSgQIDBANSgQIDxAQUg1zZXNzaW9uX3N0YXRlUgJjaSJKCgpGb3JtZXJOYW1lEgwKBG5hbWUYASABKAkSLgoKcmVuYW1lZF9hdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiuAIKFFVwZGF0ZVByb2ZpbGVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEhEKBGtpbmQYAiABKAlIAIgBARIUCgdwcm9qZWN0GAMgASgJSAGIAQESEQoEdGFzaxgEIAEoCUgCiAEBEhMKBnN0YXR1cxgFIAEoCUgDiAEBEhAKA2N3ZBgGIAEoCUgEiAEBEhIKBWFib3V0GAcgASgJSAWIAQESDwoHYWRkX3BycxgIIAMoBRIQCghkcm9wX3BycxgJIAMoBRIRCgRpY29uGAogASgJSAaIAQESFAoHcGlnbWVudBgLIAEoCUgHiAEBQgcKBV9raW5kQgoKCF9wcm9qZWN0QgcKBV90YXNrQgkKB19zdGF0dXNCBgoEX2N3ZEIICgZfYWJvdXRCBwoFX2ljb25CCgoIX3BpZ21lbnQiOwoVVXBkYXRlUHJvZmlsZVJlc3BvbnNlEiIKB3Byb2ZpbGUYASABKAsyES5hZ29yYS52MS5Qcm9maWxlIh0KDExlYXZlUmVxdWVzdBINCgVhZ2VudBgBIAEoCSIhCg1MZWF2ZVJlc3BvbnNlEhAKCHJlbGVhc2VkGAEgAygJIiAKEUxpc3RBZ2VudHNSZXF1ZXN0EgsKA2FsbBgBIAEoCCI3ChJMaXN0QWdlbnRzUmVzcG9uc2USIQoGYWdlbnRzGAEgAygLMhEuYWdvcmEudjEuUHJvZmlsZSI2CgpXaG9SZXF1ZXN0Eg0KBXF1ZXJ5GAEgASgJEgwKBHBhdGgYAiABKAgSCwoDYWxsGAMgASgIIjAKC1dob1Jlc3BvbnNlEiEKBmFnZW50cxgBIAMoCzIRLmFnb3JhLnYxLlByb2ZpbGUiLAoNUmVuYW1lUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRuYW1lGAIgASgJIjQKDlJlbmFtZVJlc3BvbnNlEiIKB3Byb2ZpbGUYASABKAsyES5hZ29yYS52MS5Qcm9maWxlIj4KEFNldEF2YXRhclJlcXVlc3QSDQoFYWdlbnQYASABKAkSDQoFaW1hZ2UYAiABKAwSDAoEbWltZRgDIAEoCSI3ChFTZXRBdmF0YXJSZXNwb25zZRIiCgdwcm9maWxlGAEgASgLMhEuYWdvcmEudjEuUHJvZmlsZSIjChJDbGVhckF2YXRhclJlcXVlc3QSDQoFYWdlbnQYASABKAkiOQoTQ2xlYXJBdmF0YXJSZXNwb25zZRIiCgdwcm9maWxlGAEgASgLMhEuYWdvcmEudjEuUHJvZmlsZSpgCgdDaVN0YXRlEhgKFENJX1NUQVRFX1VOU1BFQ0lGSUVEEAASEgoOQ0lfU1RBVEVfR1JFRU4QARIQCgxDSV9TVEFURV9SRUQQAhIVChFDSV9TVEFURV9DT05GTElDVBADMuYDCgxBZ2VudFNlcnZpY2USUAoNVXBkYXRlUHJvZmlsZRIeLmFnb3JhLnYxLlVwZGF0ZVByb2ZpbGVSZXF1ZXN0Gh8uYWdvcmEudjEuVXBkYXRlUHJvZmlsZVJlc3BvbnNlEjgKBUxlYXZlEhYuYWdvcmEudjEuTGVhdmVSZXF1ZXN0GhcuYWdvcmEudjEuTGVhdmVSZXNwb25zZRJHCgpMaXN0QWdlbnRzEhsuYWdvcmEudjEuTGlzdEFnZW50c1JlcXVlc3QaHC5hZ29yYS52MS5MaXN0QWdlbnRzUmVzcG9uc2USMgoDV2hvEhQuYWdvcmEudjEuV2hvUmVxdWVzdBoVLmFnb3JhLnYxLldob1Jlc3BvbnNlEjsKBlJlbmFtZRIXLmFnb3JhLnYxLlJlbmFtZVJlcXVlc3QaGC5hZ29yYS52MS5SZW5hbWVSZXNwb25zZRJECglTZXRBdmF0YXISGi5hZ29yYS52MS5TZXRBdmF0YXJSZXF1ZXN0GhsuYWdvcmEudjEuU2V0QXZhdGFyUmVzcG9uc2USSgoLQ2xlYXJBdmF0YXISHC5hZ29yYS52MS5DbGVhckF2YXRhclJlcXVlc3QaHS5hZ29yYS52MS5DbGVhckF2YXRhclJlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_agora_v1_sessions, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Profile
@@ -124,6 +124,14 @@ export type Profile = Message<"agora.v1.Profile"> & {
    * @generated from field: repeated agora.v1.FormerName formerly = 20;
    */
   formerly: FormerName[];
+
+  /**
+   * The SHA-256 of the agent's avatar, which the web listener serves at /avatars/<hash>; empty
+   * when it has none.
+   *
+   * @generated from field: string avatar = 21;
+   */
+  avatar: string;
 };
 
 /**
@@ -411,6 +419,92 @@ export const RenameResponseSchema: GenMessage<RenameResponse> = /*@__PURE__*/
   messageDesc(file_agora_v1_agents, 11);
 
 /**
+ * @generated from message agora.v1.SetAvatarRequest
+ */
+export type SetAvatarRequest = Message<"agora.v1.SetAvatarRequest"> & {
+  /**
+   * The acting agent, whose avatar changes.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * The image file.
+   *
+   * @generated from field: bytes image = 2;
+   */
+  image: Uint8Array;
+
+  /**
+   * The image's media type; empty to read it from the content only.
+   *
+   * @generated from field: string mime = 3;
+   */
+  mime: string;
+};
+
+/**
+ * Describes the message agora.v1.SetAvatarRequest.
+ * Use `create(SetAvatarRequestSchema)` to create a new message.
+ */
+export const SetAvatarRequestSchema: GenMessage<SetAvatarRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 12);
+
+/**
+ * @generated from message agora.v1.SetAvatarResponse
+ */
+export type SetAvatarResponse = Message<"agora.v1.SetAvatarResponse"> & {
+  /**
+   * @generated from field: agora.v1.Profile profile = 1;
+   */
+  profile?: Profile | undefined;
+};
+
+/**
+ * Describes the message agora.v1.SetAvatarResponse.
+ * Use `create(SetAvatarResponseSchema)` to create a new message.
+ */
+export const SetAvatarResponseSchema: GenMessage<SetAvatarResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 13);
+
+/**
+ * @generated from message agora.v1.ClearAvatarRequest
+ */
+export type ClearAvatarRequest = Message<"agora.v1.ClearAvatarRequest"> & {
+  /**
+   * The acting agent, whose avatar is cleared.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+};
+
+/**
+ * Describes the message agora.v1.ClearAvatarRequest.
+ * Use `create(ClearAvatarRequestSchema)` to create a new message.
+ */
+export const ClearAvatarRequestSchema: GenMessage<ClearAvatarRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 14);
+
+/**
+ * @generated from message agora.v1.ClearAvatarResponse
+ */
+export type ClearAvatarResponse = Message<"agora.v1.ClearAvatarResponse"> & {
+  /**
+   * @generated from field: agora.v1.Profile profile = 1;
+   */
+  profile?: Profile | undefined;
+};
+
+/**
+ * Describes the message agora.v1.ClearAvatarResponse.
+ * Use `create(ClearAvatarResponseSchema)` to create a new message.
+ */
+export const ClearAvatarResponseSchema: GenMessage<ClearAvatarResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_agents, 15);
+
+/**
  * CiState is the CI state of a pull request as the board reports it.
  *
  * @generated from enum agora.v1.CiState
@@ -506,6 +600,27 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof RenameRequestSchema;
     output: typeof RenameResponseSchema;
+  },
+  /**
+   * SetAvatar makes an image the agent's avatar: PNG, JPEG or WebP up to 256 KiB and 1024 pixels
+   * a side, drawn again, or SVG up to 32 KiB, checked against an allowlist.
+   *
+   * @generated from rpc agora.v1.AgentService.SetAvatar
+   */
+  setAvatar: {
+    methodKind: "unary";
+    input: typeof SetAvatarRequestSchema;
+    output: typeof SetAvatarResponseSchema;
+  },
+  /**
+   * ClearAvatar leaves the agent without an avatar, drawn with its sigil.
+   *
+   * @generated from rpc agora.v1.AgentService.ClearAvatar
+   */
+  clearAvatar: {
+    methodKind: "unary";
+    input: typeof ClearAvatarRequestSchema;
+    output: typeof ClearAvatarResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_agora_v1_agents, 0);

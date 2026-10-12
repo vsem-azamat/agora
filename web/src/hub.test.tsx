@@ -473,6 +473,129 @@ describe('sigils', () => {
   });
 });
 
+describe('avatars', () => {
+  const HASH = 'b'.repeat(64);
+  const PNG = new Uint8Array([137, 80, 78, 71]);
+
+  /** The fake hub where builder and the operator have avatars, builder wrote ten messages in general and Ada one from outside; `avatar` answers /avatars/. */
+  function avatarHub(avatar: (url: string) => Response, calls: [string, unknown][] = []) {
+    const hub = fakeHub([]);
+    const reply = (json: unknown, status = 200) =>
+      new Response(JSON.stringify(json), { status, headers: { 'Content-Type': 'application/json' } });
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/avatars/')) return avatar(url);
+      const proc = url.replace(/^.*\/agora\.v1\./, '');
+      const raw = typeof init?.body === 'string' ? init.body : new TextDecoder().decode(init?.body as Uint8Array);
+      switch (proc) {
+        case 'AgentService/ListAgents':
+          return reply({
+            agents: [
+              { name: 'builder', session: 'SESSION_STATE_BUSY', active: true, icon: 'anvil', avatar: HASH },
+              { name: 'operator', session: 'SESSION_STATE_OFFLINE', active: true, icon: 'olive' },
+            ],
+          });
+        case 'RoomService/History':
+          return reply({
+            messages: [
+              ...Array.from({ length: 10 }, (_, i) => ({
+                id: String(i + 1),
+                room: 'general',
+                author: 'builder',
+                body: `note ${i}`,
+              })),
+              {
+                id: '11',
+                room: 'general',
+                body: 'hi',
+                externalAuthor: { bridge: 'example-chat', id: '42', name: 'Ada', avatar: HASH },
+              },
+            ],
+          });
+        case 'AgentService/SetAvatar':
+          calls.push([proc, JSON.parse(raw)]);
+          return raw.includes(btoa('<svg><script'))
+            ? reply(
+                { code: 'invalid_argument', message: 'the SVG is not accepted: the element script is not allowed' },
+                400,
+              )
+            : reply({});
+        case 'AgentService/ClearAvatar':
+          calls.push([proc, JSON.parse(raw)]);
+          return reply({});
+      }
+      return hub(input, init);
+    });
+  }
+
+  it('draws an agent and a person outside with their avatars and fetches each once', async () => {
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      avatarHub((url) => {
+        fetched.push(url);
+        return new Response(PNG, { headers: { 'Content-Type': 'image/png' } });
+      }),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"] .av img.pic')).not.toBeNull());
+    location.hash = '#/rooms/general';
+    await waitFor(() => expect(container.querySelectorAll('[data-mid] .av img.pic').length).toBeGreaterThan(1));
+    expect(container.querySelector('[data-mid="11"] .av.ext img.pic')?.getAttribute('src')).toBe(
+      'data:image/png;base64,iVBORw==',
+    );
+    expect(container.querySelector('.acctbtn .av img')).toBeNull();
+    expect(fetched).toEqual([`${location.origin}/avatars/${HASH}?size=128`]);
+    location.hash = '#/';
+  });
+
+  it('draws the sigil when the avatar cannot be had', async () => {
+    vi.stubGlobal(
+      'fetch',
+      avatarHub(() => new Response('', { status: 404 })),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"] .av')).not.toBeNull());
+    await new Promise((r) => setTimeout(r, 20));
+    const av = container.querySelector('[data-agent="builder"] .av') as HTMLElement;
+    expect(av.querySelector('img')).toBeNull();
+    expect(av.dataset.sigil).toBe('anvil');
+  });
+
+  it('lets the operator pick its avatar in the account menu and says why one is refused', async () => {
+    const calls: [string, unknown][] = [];
+    vi.stubGlobal(
+      'fetch',
+      avatarHub(() => new Response('', { status: 404 }), calls),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    openMenu();
+    expect(screen.queryByRole('button', { name: 'Remove avatar' })).toBeNull();
+    const input = screen.getByLabelText('Set avatar…') as HTMLInputElement;
+    expect(input.accept).toBe('image/png,image/jpeg,image/webp,image/svg+xml');
+    fireEvent.change(input, {
+      target: { files: [new File(['<svg><script/></svg>'], 'face.svg', { type: 'image/svg+xml' })] },
+    });
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'the SVG is not accepted: the element script is not allowed',
+    );
+    expect(calls).toEqual([['AgentService/SetAvatar', { agent: 'operator', image: btoa('<svg><script/></svg>') }]]);
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(300 * 1024)], 'big.png')] } });
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe('An avatar is at most 256 KiB; this file is 300 KiB'),
+    );
+    expect(calls).toHaveLength(1);
+    fireEvent.change(input, { target: { files: [new File(['<svg/>'], 'face.svg')] } });
+    await waitFor(() => expect(document.getElementById('account-menu')).toBeNull());
+    expect(calls[1]).toEqual(['AgentService/SetAvatar', { agent: 'operator', image: btoa('<svg/>') }]);
+  });
+});
+
 describe('sidebar', () => {
   it('marks either a room or a project as current, never both', async () => {
     const { container } = await signedIn();

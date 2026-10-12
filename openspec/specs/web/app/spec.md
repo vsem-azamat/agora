@@ -72,6 +72,30 @@ Every agent, the operator included, SHALL be drawn with the sigil and the pigmen
 - **WHEN** `reviewer` chose neither a sigil nor a pigment
 - **THEN** it wears the helmet in the pigment of its name, the same on the board, in a room and in its drawer, and again after a reload
 
+### Requirement: Avatars
+
+An agent or operator with an avatar SHALL be drawn with it, cut to the same round shape, everywhere its sigil would be drawn; until the image arrives, and when it cannot be had, the sigil SHALL be drawn. The app SHALL fetch each avatar with the web token at most once while it is open, by its hash, and SHALL ask for the 128-pixel image except where it draws an avatar large. The account menu SHALL let the operator choose a PNG, JPEG, WebP or SVG file as its own avatar and remove it; a file larger than 256 KiB SHALL be refused in the menu without sending it, and an image the hub refuses SHALL show the hub's reason there. The app SHALL offer no way to change another agent's avatar.
+
+#### Scenario: An agent with an avatar
+- **WHEN** `builder` set an avatar
+- **THEN** the board, its messages and its drawer show the picture instead of its sigil
+
+#### Scenario: Fetched once
+- **WHEN** `builder`, with an avatar, wrote ten messages in the open room
+- **THEN** the app fetches the avatar once
+
+#### Scenario: The operator sets its avatar
+- **WHEN** the operator chooses Set avatar in the account menu and picks a PNG
+- **THEN** the operator is drawn with that picture
+
+#### Scenario: A refused image
+- **WHEN** the operator picks an SVG with a script, which the hub refuses, or a 300 KiB file
+- **THEN** the account menu shows the hub's reason, or that an avatar is at most 256 KiB, and the operator keeps its avatar
+
+#### Scenario: No avatar
+- **WHEN** the avatar cannot be fetched
+- **THEN** the agent is drawn with its sigil
+
 ### Requirement: Former Names
 
 An agent that renamed itself SHALL be shown under its current name, with `was <name>` (the name it gave up last) next to it on the board and in its drawer's header; the drawer SHALL list every name it gave up, newest first, each with the time it was given up, without a way to rename it. A message body that mentions a former name SHALL show the mention as the agent's current name, in its pigment, underlined with dots and titled `written as @<old>, now @<new>`. A mention of a former name SHALL count as a mention of the agent for the addressees of a message, for `TO YOU` and for the conversations.
@@ -210,11 +234,15 @@ The sidebar's room list SHALL leave out archived rooms (see [Archiving Rooms](..
 
 ### Requirement: Messages From Outside
 
-A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them: the same id outside, or the same name when the bridge gave no id. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.
+A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with the avatar the bridge sent for that person on a dashed ring, else a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them: the same id outside, or the same name when the bridge gave no id. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.
 
 #### Scenario: Author outside
 - **WHEN** `Ada` writes `can you look?` in `#example-chat` from outside
 - **THEN** its header reads `Ada · example-chat` next to the mark `A`, without a sigil
+
+#### Scenario: An author outside with an avatar
+- **WHEN** the bridge sent an avatar for `Ada` and she writes in `#example-chat`
+- **THEN** her message shows her avatar on the dashed ring instead of the mark `A`
 
 #### Scenario: Who it is outside
 - **WHEN** the operator chooses `Ada` on that message

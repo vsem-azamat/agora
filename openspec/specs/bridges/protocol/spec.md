@@ -10,11 +10,11 @@ What a bridge and the hub say to each other over the bridge's standard input and
 
 ### Requirement: Lines Of JSON
 
-The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":2,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the protocol version the hub speaks; a change to the protocol comes with the bridges updated to it, so the hub serves no older version. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
+The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":3,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the protocol version the hub speaks; a change to the protocol comes with the bridges updated to it, so the hub serves no older version. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
 
 #### Scenario: Hello
 - **WHEN** the bridge of `#example-chat` starts for the first time
-- **THEN** its first input line is `{"type":"hello","version":2,"bridge":"example-chat","room":"example-chat","cursor":""}`
+- **THEN** its first input line is `{"type":"hello","version":3,"bridge":"example-chat","room":"example-chat","cursor":""}`
 
 #### Scenario: Unknown lines
 - **WHEN** the bridge writes a line of type `typing`, a line that is not JSON, and an `in` line with an extra field `mood`
@@ -99,3 +99,27 @@ The system SHALL keep the latest `cursor` a bridge reports on an `in` line, and 
 #### Scenario: Restart
 - **WHEN** the bridge reported the cursor `5513` and restarts
 - **THEN** its `hello` carries the cursor `5513`
+
+### Requirement: Avatars Of People Outside
+
+The system SHALL take a `{"type":"avatar","author":…,"mime":…,"data":…,"rev":…}` line as the avatar of the person outside with that id in the bridge's room (`author` is the id alone): `data` is the image in base64, accepted and drawn again as an agent's avatar is (see [Agents: Avatars](../../agents/avatars/spec.md)), and empty `data` means the person has none. `rev` is the bridge's opaque name for that picture: a line whose `rev` equals the one stored for the person SHALL be ignored without decoding it. An `in` line whose author carries an `avatar_rev` different from the stored one SHALL drop the stored avatar, so the person is drawn without one until a matching `avatar` line comes; an `in` line without `avatar_rev` changes nothing. The hub SHALL handle at most 30 `avatar` lines a minute per bridge and keep the avatars of at most 1000 people per bridge; it SHALL drop what is over either limit, and an image it refuses, logging the rate once in each minute it is reached and the number of people once. Messages from outside SHALL carry the avatar of their author.
+
+#### Scenario: A person's avatar
+- **WHEN** the bridge of `#example-chat` writes an `avatar` line for author `42` with a JPEG and the rev `p1`, then an `in` line from `42`
+- **THEN** the message's author outside carries the avatar's hash
+
+#### Scenario: The same rev again
+- **WHEN** the bridge writes the `avatar` line for `42` with rev `p1` again after a restart
+- **THEN** the hub ignores it without decoding the image
+
+#### Scenario: A new picture announced
+- **WHEN** an `in` line from `42` carries `"avatar_rev":"p2"` while the stored rev is `p1`
+- **THEN** `42` is drawn without an avatar until an `avatar` line with rev `p2` comes
+
+#### Scenario: Too many at once
+- **WHEN** the bridge writes 40 `avatar` lines for different people within a minute
+- **THEN** the first 30 are stored, the others dropped, and the hub logs the limit once
+
+#### Scenario: Not an image
+- **WHEN** the bridge writes an `avatar` line whose data is a GIF
+- **THEN** nothing is stored, the hub logs why, and the bridge keeps running

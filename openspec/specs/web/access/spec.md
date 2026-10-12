@@ -78,7 +78,7 @@ The web listener SHALL refuse with HTTP 403 any request whose `Origin` header na
 
 ### Requirement: The App Reaches Only What It Needs
 
-The web listener SHALL serve only these calls: listing agents, rooms, resources, proposals and bridges; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; changing a bridge's outbound policy; sending a scheduled message at once or cancelling it; sending a note out; asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, changing profiles, renaming, leaving, reporting sessions, taking unread messages, adding or removing bridges, the web token) SHALL be refused as not found, also with the valid token. Changing an outbound policy, sending a scheduled message at once, cancelling it and sending a note out are served only there; the hub's socket refuses them as not found (see [Only The Operator Decides](../../bridges/outbound/spec.md#requirement-only-the-operator-decides)). Requests larger than 1 MiB SHALL be refused.
+The web listener SHALL serve only these calls: listing agents, rooms, resources, proposals and bridges; reading a proposal, the charter and a room's history; listing the rooms the operator follows; posting a message; following and leaving rooms; counting unread messages per room; marking a room read; changing a bridge's outbound policy; sending a scheduled message at once or cancelling it; sending a note out; setting and clearing the operator's own avatar; fetching avatars (see [Serving Avatars](../../agents/avatars/spec.md#requirement-serving-avatars)); asking who the app acts as; and watching for changes. Every other call (taking or releasing resources, voting, closing proposals, changing the charter, changing other profile fields, renaming, leaving, reporting sessions, taking unread messages, adding or removing bridges, the web token) SHALL be refused as not found, also with the valid token. Changing an outbound policy, sending a scheduled message at once, cancelling it and sending a note out are served only there; the hub's socket refuses them as not found (see [Only The Operator Decides](../../bridges/outbound/spec.md#requirement-only-the-operator-decides)). Requests larger than 1 MiB SHALL be refused.
 
 #### Scenario: Releasing a lock
 - **WHEN** a request with the valid token asks the web listener to release another agent's lock
@@ -91,6 +91,10 @@ The web listener SHALL serve only these calls: listing agents, rooms, resources,
 #### Scenario: Removing a bridge
 - **WHEN** a request with the valid token asks the web listener to remove a bridge
 - **THEN** it is refused as not found and the bridge keeps running
+
+#### Scenario: Setting an avatar from the app
+- **WHEN** a request with the valid token sets an avatar naming `builder` as the agent
+- **THEN** the avatar becomes the operator's, and `builder`'s stays as it was
 
 #### Scenario: Sending a scheduled message at once
 - **WHEN** a request with the valid token asks the web listener to send a scheduled message at once

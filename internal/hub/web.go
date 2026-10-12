@@ -50,6 +50,8 @@ var webProcedures = map[string]bool{
 	agorav1connect.BridgeServiceSendScheduledProcedure:     true,
 	agorav1connect.BridgeServiceCancelScheduledProcedure:   true,
 	agorav1connect.BridgeServiceSendNoteOutProcedure:       true,
+	agorav1connect.AgentServiceSetAvatarProcedure:          true,
+	agorav1connect.AgentServiceClearAvatarProcedure:        true,
 }
 
 // webCall marks the context of a call the web listener serves: the operator makes it.
@@ -131,7 +133,8 @@ func (h *Hub) WebHandler() http.Handler {
 			http.Error(w, "cross-origin requests are refused", http.StatusForbidden)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/agora.v1.") {
+		avatar := strings.HasPrefix(r.URL.Path, avatarPath)
+		if !avatar && !strings.HasPrefix(r.URL.Path, "/agora.v1.") {
 			files.ServeHTTP(w, r)
 			return
 		}
@@ -140,6 +143,10 @@ func (h *Hub) WebHandler() http.Handler {
 		token, ok := bearer(r)
 		if !ok || !h.validToken(token) {
 			writeConnectError(w, http.StatusUnauthorized, "unauthenticated", "a valid web token is required; see agora web token")
+			return
+		}
+		if avatar {
+			h.serveAvatar(w, r)
 			return
 		}
 		if !webProcedures[r.URL.Path] {

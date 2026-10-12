@@ -32,6 +32,7 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 - [The Shell](app/spec.md#requirement-the-shell)
 - [The Board](app/spec.md#requirement-the-board)
 - [Sigils And Pigments](app/spec.md#requirement-sigils-and-pigments)
+- [Avatars](app/spec.md#requirement-avatars)
 - [Former Names](app/spec.md#requirement-former-names)
 - [Room List](app/spec.md#requirement-room-list)
 - [Messages In A Room](app/spec.md#requirement-messages-in-a-room)
