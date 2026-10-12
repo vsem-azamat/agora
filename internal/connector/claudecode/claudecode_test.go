@@ -122,8 +122,8 @@ func TestFailuresPrintNothing(t *testing.T) {
 
 func TestWaitingAtThePromptIsReported(t *testing.T) {
 	for _, input := range []string{
-		`{"session_id":"session-1","hook_event_name":"Notification","notification_type":"idle_prompt"}`,
-		`{"session_id":"session-1","hook_event_name":"StopFailure"}`,
+		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"overloaded"}`,
+		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"server_error"}`,
 	} {
 		hub := &fakeHub{reply: &agorav1.ReportResponse{Context: "ignored"}}
 		out, err := run(t, hub, input)
@@ -133,11 +133,16 @@ func TestWaitingAtThePromptIsReported(t *testing.T) {
 	}
 }
 
-func TestOtherNotificationsAreIgnored(t *testing.T) {
-	hub := &fakeHub{}
-	in := `{"session_id":"session-1","hook_event_name":"Notification","notification_type":"permission_prompt"}`
-	if out, err := run(t, hub, in); out != "" || err != nil || hub.got != nil {
-		t.Fatalf("out %q err %v report %v", out, err, hub.got)
+func TestFailuresThatKeepTheSessionFromWorkingAreIgnored(t *testing.T) {
+	for _, in := range []string{
+		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"rate_limit"}`,
+		`{"session_id":"session-1","hook_event_name":"StopFailure","error":"billing_error"}`,
+		`{"session_id":"session-1","hook_event_name":"Notification","notification_type":"idle_prompt"}`,
+	} {
+		hub := &fakeHub{}
+		if out, err := run(t, hub, in); out != "" || err != nil || hub.got != nil {
+			t.Errorf("%s: out %q err %v report %v", in, out, err, hub.got)
+		}
 	}
 }
 

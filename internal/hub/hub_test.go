@@ -242,6 +242,24 @@ func (r *running) idleAgentWithPID(t *testing.T, name, session, terminal string,
 	}
 }
 
+func TestInterruptedTurnWaitsAtThePrompt(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	bg := context.Background()
+	for _, ev := range []agorav1.SessionEvent{agorav1.SessionEvent_SESSION_EVENT_PROMPT, agorav1.SessionEvent_SESSION_EVENT_WAITING} {
+		if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: ev})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := r.sessions.ListSessions(bg, connect.NewRequest(&agorav1.ListSessionsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := list.Msg.GetSessions(); len(s) != 1 || s[0].GetState() != agorav1.SessionState_SESSION_STATE_IDLE {
+		t.Fatalf("sessions %v", s)
+	}
+}
+
 func (r *running) post(t *testing.T, author, body string) {
 	t.Helper()
 	bg := context.Background()

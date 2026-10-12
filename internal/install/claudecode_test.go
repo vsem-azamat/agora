@@ -75,7 +75,6 @@ func TestInstallIntoMissingSettings(t *testing.T) {
 		"PostToolUse":      {bin + " hook claude-code"},
 		"Stop":             {bin + " hook claude-code", bin + " hook claude-code-wait async"},
 		"StopFailure":      {bin + " hook claude-code", bin + " hook claude-code-wait async"},
-		"Notification":     {bin + " hook claude-code", bin + " hook claude-code-wait async"},
 		"SessionEnd":       {bin + " hook claude-code"},
 	}
 	if len(s["hooks"].(map[string]any)) != len(want) {
@@ -90,12 +89,12 @@ func TestInstallIntoMissingSettings(t *testing.T) {
 	if post["matcher"] != "*" {
 		t.Errorf("PostToolUse matcher: %v", post["matcher"])
 	}
-	for _, g := range s["hooks"].(map[string]any)["Notification"].([]any) {
-		if m := g.(map[string]any)["matcher"]; m != "idle_prompt" {
-			t.Errorf("Notification matcher: %v", m)
+	for _, g := range s["hooks"].(map[string]any)["StopFailure"].([]any) {
+		if m := g.(map[string]any)["matcher"]; m != "overloaded|server_error|unknown|invalid_request|max_output_tokens" {
+			t.Errorf("StopFailure matcher: %v", m)
 		}
 	}
-	for _, ev := range []string{"Stop", "StopFailure", "Notification"} {
+	for _, ev := range []string{"Stop", "StopFailure"} {
 		wait := s["hooks"].(map[string]any)[ev].([]any)[1].(map[string]any)["hooks"].([]any)[0].(map[string]any)
 		if wait["asyncRewake"] != true || wait["timeout"] != float64(86400) || wait["type"] != "command" {
 			t.Errorf("%s wait hook: %v", ev, wait)

@@ -31,8 +31,8 @@ const (
 	SessionEvent_SESSION_EVENT_TOOL        SessionEvent = 3
 	SessionEvent_SESSION_EVENT_STOP        SessionEvent = 4
 	SessionEvent_SESSION_EVENT_END         SessionEvent = 5
-	// The session waits at its prompt after a turn whose end was not reported, such as an
-	// interrupted one.
+	// The session waits at its prompt after a turn that ended without a stop, such as a failed
+	// one.
 	SessionEvent_SESSION_EVENT_WAITING SessionEvent = 6
 )
 

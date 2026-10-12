@@ -37,8 +37,8 @@ What install writes, with `<agora>` the binary's path (single-quoted for the she
 | --- | --- |
 | `SessionStart`, `UserPromptSubmit`, `SessionEnd` | `{"hooks": [{"type": "command", "command": "<agora> hook claude-code"}]}` |
 | `PostToolUse` | the same with `"matcher": "*"` |
-| `Stop`, `StopFailure` | the same, then `{"hooks": [{"type": "command", "command": "<agora> hook claude-code-wait", "async": true, "asyncRewake": true, "timeout": 86400}]}` |
-| `Notification` | both of `Stop`'s groups, each with `"matcher": "idle_prompt"` |
+| `Stop` | the same, then `{"hooks": [{"type": "command", "command": "<agora> hook claude-code-wait", "async": true, "asyncRewake": true, "timeout": 86400}]}` |
+| `StopFailure` | both of `Stop`'s groups, each with `"matcher": "overloaded\|server_error\|unknown\|invalid_request\|max_output_tokens"` |
 
 `--terminal-env VAR` (validated as `[A-Za-z_][A-Za-z0-9_]*`) prefixes the `hook claude-code` command with `AGORA_TERMINAL="${VAR:-$AGORA_TERMINAL}" ` (an empty `VAR` keeps an `AGORA_TERMINAL` set otherwise), so the hook reports the value of whatever variable the user's terminal system sets as the session's terminal, which the hub's wake command receives (see [Wakeups](wakeups.md)). The wait hook does not use a terminal.
 

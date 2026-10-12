@@ -355,8 +355,8 @@ export enum SessionEvent {
   END = 5,
 
   /**
-   * The session waits at its prompt after a turn whose end was not reported, such as an
-   * interrupted one.
+   * The session waits at its prompt after a turn that ended without a stop, such as a failed
+   * one.
    *
    * @generated from enum value: SESSION_EVENT_WAITING = 6;
    */

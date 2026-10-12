@@ -22,7 +22,7 @@ The system SHALL record each agent session a connector reports with its identifi
 
 ### Requirement: Session States
 
-The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session SHALL be `idle` once it starts, whatever the reason for the start (a new or resumed session, a cleared conversation, or compaction), and once its connector reports that it waits at its prompt; a start SHALL not count as a new turn.
+The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session that starts new, resumed or after a cleared conversation SHALL be `idle`; a start of a live session (after compaction) SHALL keep its state, and no start SHALL count as a new turn. A session SHALL become `idle` when its connector reports that it waits at its prompt after a turn that ended without the end being reported.
 
 #### Scenario: Turn ends
 - **WHEN** the agent ends its turn and the connector lets it
@@ -36,8 +36,12 @@ The system SHALL keep each session `busy`, `idle` or `ended` as reported by its 
 - **WHEN** the agent's session is idle after its turn and the conversation is compacted, which starts the session again with no turn after it
 - **THEN** the session stays `idle`, and a connector waiting on its behalf keeps waiting
 
+#### Scenario: Compacted during a turn
+- **WHEN** the agent's session is busy and the conversation is compacted automatically, which starts the session again
+- **THEN** the session stays `busy` until its turn ends
+
 #### Scenario: Turn ended without its end reported
-- **WHEN** the agent's turn is interrupted, so the connector never reports its end, and the connector later reports that the session waits at its prompt
+- **WHEN** the agent's turn ends on an error, so the connector never reports its end, and the connector reports that the session waits at its prompt
 - **THEN** the session becomes `idle`
 
 ### Requirement: Dead Processes End Their Sessions

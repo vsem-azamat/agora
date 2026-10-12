@@ -40,8 +40,8 @@ const (
 	Tool   Event = "tool"
 	Stop   Event = "stop"
 	End    Event = "end"
-	// Waiting reports a session waiting at its prompt after a turn whose end was not reported,
-	// such as an interrupted one.
+	// Waiting reports a session waiting at its prompt after a turn that ended without a stop,
+	// such as one that failed.
 	Waiting Event = "waiting"
 )
 
@@ -171,6 +171,10 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	now := s.now()
 	var agent string
 	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		var live bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE id = ? AND state != ?)`, r.SessionID, Ended).Scan(&live); err != nil {
+			return err
+		}
 		if err := register(ctx, tx, r, now); err != nil {
 			return err
 		}
@@ -196,10 +200,15 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 				return err
 			}
 			return setState(ctx, tx, r.SessionID, Busy, now)
-		case Start, Waiting:
-			// Every start (a new or resumed session, /clear, compaction) ends at the prompt, and
-			// a compaction while idle is followed by no stop; a start is no turn, so a connector
-			// already waiting on the session keeps waiting.
+		case Start:
+			// A new, resumed or cleared session starts at the prompt. A compaction starts a live
+			// session again with no turn and, when it runs while idle or on /compact, no stop
+			// after it: the session keeps its state, and a connector waiting on it keeps waiting.
+			if live {
+				return nil
+			}
+			return setState(ctx, tx, r.SessionID, Idle, now)
+		case Waiting:
 			return setState(ctx, tx, r.SessionID, Idle, now)
 		case End:
 			return s.endTx(ctx, tx, r.SessionID, now)

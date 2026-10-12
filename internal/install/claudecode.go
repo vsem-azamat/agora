@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 )
 
 // WaitTimeout is the timeout, in seconds, of the asynchronous wake hook. Claude Code enforces
@@ -71,19 +73,17 @@ func claudeCodeHooks(bin, terminalEnv string) []eventGroup {
 		Type: "command", Command: shellQuote(bin) + " hook claude-code-wait",
 		Async: true, AsyncRewake: true, Timeout: WaitTimeout,
 	}}}
-	// A turn that is interrupted or fails runs no Stop hook; StopFailure and the idle_prompt
-	// notification tell the hub that the session waits at its prompt, and wait for it.
-	idle := func(g hookGroup) hookGroup { g.Matcher = "idle_prompt"; return g }
+	// A turn that fails runs no Stop hook; StopFailure tells the hub that the session waits at
+	// its prompt, and waits for it, after errors the session can work again from.
+	failed := func(g hookGroup) hookGroup { g.Matcher = claudecode.TransientFailures; return g }
 	return []eventGroup{
 		{"SessionStart", plain},
 		{"UserPromptSubmit", plain},
 		{"PostToolUse", hookGroup{Matcher: "*", Hooks: plain.Hooks}},
 		{"Stop", plain},
 		{"Stop", wait},
-		{"StopFailure", plain},
-		{"StopFailure", wait},
-		{"Notification", idle(plain)},
-		{"Notification", idle(wait)},
+		{"StopFailure", failed(plain)},
+		{"StopFailure", failed(wait)},
 		{"SessionEnd", plain},
 	}
 }

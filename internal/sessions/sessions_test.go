@@ -204,6 +204,28 @@ func TestCompactionWhileIdleKeepsTheWait(t *testing.T) {
 	}
 }
 
+func TestCompactionDuringATurnKeepsItBusy(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.report(t, "session-1", sessions.Prompt)
+	turn, err := e.s.Turn(ctx, "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.report(t, "session-1", sessions.Start) // compacted automatically while the agent works
+	if st := e.state(t, "session-1"); st != sessions.Busy {
+		t.Fatalf("after compaction: %s", st)
+	}
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0); err != nil {
+		t.Fatal(err)
+	}
+	if w, done, err := e.s.CheckWake(ctx, "session-1", turn); w != nil || done || err != nil {
+		t.Fatalf("woke a working agent: %+v done %v err %v", w, done, err)
+	}
+}
+
 func TestWaitingDeliversNothing(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
