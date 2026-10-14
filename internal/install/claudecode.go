@@ -28,7 +28,7 @@ var ErrNoClaude = errors.New("no claude on the PATH")
 
 // ClaudeCodeVersion returns the version `claude --version` prints, as major.minor.patch.
 func ClaudeCodeVersion(ctx context.Context) (string, error) {
-	v, err := claudecode.VersionOf(ctx, "claude")
+	v, err := claudecode.VersionOf(ctx, "claude", claudecode.VersionTimeout)
 	if errors.Is(err, exec.ErrNotFound) {
 		return "", ErrNoClaude
 	}
@@ -114,7 +114,7 @@ func claudeCodeHooks(bin, terminalEnv string, stopFailure bool) []eventGroup {
 // InstallClaudeCode puts Agora's hooks into the Claude Code settings file at path: it removes
 // every Agora hook entry, adds the current ones, and writes the file unless that changes
 // nothing. Everything else in the file is kept, in its order. stopFailure says whether to add
-// the StopFailure hooks (see StopFailureReportsCredentials).
+// the StopFailure hooks (see claudecode.ReportsCredentials).
 func InstallClaudeCode(path, bin, terminalEnv string, stopFailure bool, now time.Time) (Change, error) {
 	if terminalEnv != "" && !ValidEnvName(terminalEnv) {
 		return Change{}, fmt.Errorf("--terminal-env %q: give the name of an environment variable, like TERM_HANDLE", terminalEnv)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/vsem-azamat/agora/internal/cli"
+	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
@@ -670,6 +672,48 @@ func TestWaitHookWakesWithExitCodeTwo(t *testing.T) {
 	select {
 	case r := <-done:
 		if r.code != 2 || !strings.Contains(r.stderr, "please review") {
+			t.Fatalf("%+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("hook did not wake")
+	}
+}
+
+func TestWaitHookWakesEvenWhenItsVersionLookupFailsUnderDebug(t *testing.T) {
+	socket := startHub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "session-wait")
+	t.Setenv("AGORA_DEBUG", "1")
+	old := claudecode.InvokingVersion
+	claudecode.InvokingVersion = func(context.Context) (string, error) { return "", errors.New("lookup failed") }
+	t.Cleanup(func() { claudecode.InvokingVersion = old })
+	hook := func(input string) {
+		var out, errOut bytes.Buffer
+		cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code"}, strings.NewReader(input), &out, &errOut)
+	}
+	hook(`{"session_id":"session-wait","hook_event_name":"SessionStart"}`)
+	agora(ctx, socket, "", "join", "builder")
+	hook(`{"session_id":"session-wait","hook_event_name":"Stop"}`)
+	type result struct {
+		code   int
+		stderr string
+	}
+	done := make(chan result, 1)
+	go func() {
+		var out, errOut bytes.Buffer
+		code := cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code-wait"},
+			strings.NewReader(`{"session_id":"session-wait","hook_event_name":"StopFailure","error":"server_error"}`), &out, &errOut)
+		done <- result{code, errOut.String()}
+	}()
+	time.Sleep(300 * time.Millisecond)
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "reviewer", "join", "reviewer")
+	agora(ctx, socket, "reviewer", "post", "general", "@builder", "please", "review")
+	select {
+	case r := <-done:
+		if r.code != 2 || !strings.Contains(r.stderr, "please review") || !strings.Contains(r.stderr, "lookup failed") {
 			t.Fatalf("%+v", r)
 		}
 	case <-ctx.Done():

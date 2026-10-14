@@ -143,10 +143,17 @@ func TestWaitingAtThePromptIsReported(t *testing.T) {
 	}
 }
 
+// TestMain keeps the tests independent of the Claude Code that runs them: the version lookup
+// finds no version, except in the tests of the lookup itself.
+func TestMain(m *testing.M) {
+	claudecode.SetInvokingVersion(func(context.Context) (string, error) { return "", nil })
+	os.Exit(m.Run())
+}
+
 func TestFailureUnderAnOlderClaudeCodeIsIgnored(t *testing.T) {
 	const in = `{"session_id":"session-1","hook_event_name":"StopFailure","error":"server_error"}`
 	for version, reported := range map[string]bool{"2.1.250": false, "2.1.266": false, "2.1.267": true, "2.1.299": true, "": true} {
-		t.Cleanup(claudecode.SetInvokingVersion(func(context.Context) string { return version }))
+		t.Cleanup(claudecode.SetInvokingVersion(func(context.Context) (string, error) { return version, nil }))
 		hub := &fakeHub{reply: &agorav1.ReportResponse{}}
 		if out, err := run(t, hub, in); out != "" || err != nil || (hub.got != nil) != reported {
 			t.Errorf("version %q: out %q err %v report %v", version, out, err, hub.got)
@@ -164,12 +171,66 @@ func TestFailureUnderAnOlderClaudeCodeIsIgnored(t *testing.T) {
 	}
 }
 
+func TestOtherEventsUnderAnOlderClaudeCodeAreReported(t *testing.T) {
+	t.Cleanup(claudecode.SetInvokingVersion(func(context.Context) (string, error) { return "2.1.250", nil }))
+	for _, ev := range []string{"Stop", "UserPromptSubmit", "PostToolUse", "SessionStart", "PreCompact"} {
+		hub := &fakeHub{reply: &agorav1.ReportResponse{}}
+		if _, err := run(t, hub, `{"session_id":"session-1","hook_event_name":"`+ev+`","trigger":"manual"}`); err != nil || hub.got == nil {
+			t.Errorf("%s: err %v report %v", ev, err, hub.got)
+		}
+	}
+}
+
+func TestAnUnreadableVersionCountsAsNewAndIsReportedForDebugging(t *testing.T) {
+	t.Cleanup(claudecode.SetInvokingVersion(func(context.Context) (string, error) { return "", errors.New("no answer") }))
+	hub := &fakeHub{reply: &agorav1.ReportResponse{}}
+	_, err := run(t, hub, `{"session_id":"session-1","hook_event_name":"StopFailure","error":"overloaded"}`)
+	if hub.got == nil || err == nil || !strings.Contains(err.Error(), "no answer") {
+		t.Fatalf("err %v report %v", err, hub.got)
+	}
+}
+
+func script(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestTheLookupOfTheProcessVersionFailsOpen(t *testing.T) {
+	for name, tc := range map[string]struct {
+		exe         string
+		version     string
+		wantErr     bool
+		maxDuration time.Duration
+	}{
+		"prints a version":   {script(t, "echo '2.1.250 (Claude Code)'\n"), "2.1.250", false, 3 * time.Second},
+		"no process":         {"", "", true, time.Second},
+		"fails":              {script(t, "echo boom >&2\nexit 1\n"), "", true, 3 * time.Second},
+		"prints no version":  {script(t, "echo v20.1.0\n"), "", true, 3 * time.Second},
+		"hangs":              {script(t, "sleep 30\n"), "", true, 3 * time.Second},
+		"hangs with a child": {script(t, "(sleep 30) &\nsleep 30\n"), "", true, 3 * time.Second},
+	} {
+		t.Cleanup(claudecode.SetExecutable(tc.exe))
+		began := time.Now()
+		v, err := claudecode.LookUpVersion(context.Background())
+		if v != tc.version || (err != nil) != tc.wantErr || time.Since(began) > tc.maxDuration {
+			t.Errorf("%s: %q, %v after %s", name, v, err, time.Since(began))
+		}
+		if err != nil && !claudecode.ReportsCredentials(v) {
+			t.Errorf("%s: an unknown version must count as new", name)
+		}
+	}
+}
+
 func TestVersionOfTheClaudeCodeProcessIsRead(t *testing.T) {
 	script := filepath.Join(t.TempDir(), "claude")
 	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'Update available'\necho '2.1.250 (Claude Code)'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := claudecode.VersionOf(context.Background(), script); err != nil || got != "2.1.250" {
+	if got, err := claudecode.VersionOf(context.Background(), script, claudecode.VersionTimeout); err != nil || got != "2.1.250" {
 		t.Fatalf("%q %v", got, err)
 	}
 }

@@ -491,11 +491,14 @@ func hookCmd(o *options) *cobra.Command {
 				return nil
 			case "claude-code-wait":
 				text, err := claudecode.Wait(cmd.Context(), o.sessions(), cmd.InOrStdin())
+				if text != "" { // the hub marked the messages read: always wake
+					if err != nil && debug {
+						fmt.Fprintln(cmd.ErrOrStderr(), "agora:", err)
+					}
+					return &exitError{code: claudecode.ExitWake, msg: text}
+				}
 				if err != nil && debug {
 					return err
-				}
-				if text != "" {
-					return &exitError{code: claudecode.ExitWake, msg: text}
 				}
 				return nil
 			default:

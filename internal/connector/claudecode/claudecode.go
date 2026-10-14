@@ -5,6 +5,7 @@ package claudecode
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -72,34 +73,44 @@ const TransientFailures = "overloaded|server_error|unknown|max_output_tokens"
 // for with /compact, and one Claude Code starts by itself.
 const CompactTriggers = "manual|auto"
 
-// invokingVersion returns the version of the Claude Code process that runs the hook, or "" when
-// it cannot be told: every Claude Code on a machine reads the same settings file, so the hook
-// asks the process it runs under, not the first `claude` on the PATH.
-var invokingVersion = func(ctx context.Context) string {
-	exe := proc.Executable(agentPID())
+// InvokingVersion returns the version of the Claude Code process that runs the hook, or "" with
+// the reason when it cannot be told: every Claude Code on a machine reads the same settings
+// file, so the hook asks the process it runs under, not the first `claude` on the PATH. Tests,
+// which may run under any Claude Code, replace it.
+var InvokingVersion = lookUpVersion
+
+// executable is the program of the Claude Code process the hook runs under, or "".
+var executable = func() string { return proc.Executable(agentPID()) }
+
+// lookUpVersion asks the executable for its version. A process that is not found, and one that
+// prints no version (an npm install runs under node, which prints node's), count as unknown.
+func lookUpVersion(ctx context.Context) (string, error) {
+	exe := executable()
 	if exe == "" {
-		return ""
+		return "", errors.New("no Claude Code process found above the hook")
 	}
-	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
-	defer cancel()
-	v, err := VersionOf(ctx, exe)
-	if err != nil {
-		return ""
-	}
-	return v
+	return VersionOf(ctx, exe, VersionLookupTimeout)
 }
 
 // runsBeforeCredentialErrors reports whether a StopFailure hook runs under a Claude Code before
 // StopFailureSince, which reports a failure to load credentials as a transient error: the
-// hooks then leave the session alone.
-func runsBeforeCredentialErrors(ctx context.Context, h hookInput) bool {
-	return h.HookEventName == "StopFailure" && !ReportsCredentials(invokingVersion(ctx))
+// hooks then leave the session alone. A version that cannot be told counts as new enough; the
+// reason is returned for AGORA_DEBUG.
+func runsBeforeCredentialErrors(ctx context.Context, h hookInput) (bool, error) {
+	if h.HookEventName != "StopFailure" {
+		return false, nil
+	}
+	v, err := InvokingVersion(ctx)
+	if err != nil {
+		v = ""
+	}
+	return !ReportsCredentials(v), err
 }
 
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
 // never disturbs the session.
-func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io.Reader, out io.Writer) error {
+func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io.Reader, out io.Writer) (err error) {
 	var h hookInput
 	if err := json.NewDecoder(in).Decode(&h); err != nil {
 		return fmt.Errorf("read hook input: %w", err)
@@ -109,7 +120,9 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		h.HookEventName == "PreCompact" && !slices.Contains(strings.Split(CompactTriggers, "|"), h.Trigger) {
 		return nil // an event the connector does not handle
 	}
-	if runsBeforeCredentialErrors(ctx, h) {
+	older, verr := runsBeforeCredentialErrors(ctx, h)
+	defer func() { err = errors.Join(err, verr) }()
+	if older {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
@@ -176,12 +189,14 @@ const GiveUpAfter = 5 * time.Minute
 // wait ends without a wake (the session got busy, ended, a newer wait took over, or the hub
 // stayed unreachable for GiveUpAfter). The caller exits with code 2 and the text to wake
 // Claude Code, or 0.
-func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io.Reader) (string, error) {
+func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io.Reader) (text string, err error) {
 	var h hookInput
 	if err := json.NewDecoder(in).Decode(&h); err != nil {
 		return "", fmt.Errorf("read hook input: %w", err)
 	}
-	if runsBeforeCredentialErrors(ctx, h) {
+	older, verr := runsBeforeCredentialErrors(ctx, h)
+	defer func() { err = errors.Join(err, verr) }()
+	if older {
 		return "", nil
 	}
 	reached := time.Now() // the last time the hub answered

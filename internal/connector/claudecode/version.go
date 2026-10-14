@@ -17,19 +17,29 @@ import (
 // StopFailure hooks take for transient errors and wake the session for.
 const StopFailureSince = "2.1.267"
 
-// VersionTimeout bounds how long asking Claude Code for its version waits.
+// VersionTimeout bounds how long install waits for `claude --version`.
 const VersionTimeout = 10 * time.Second
+
+// VersionLookupTimeout bounds how long a hook waits for the Claude Code process it runs under to
+// print its version; with the second a child holding the output may take to let go (WaitDelay),
+// a lookup takes at most 2 seconds.
+const VersionLookupTimeout = time.Second
+
+// versionWaitDelay is how long a command that exited, but whose child holds its output open, is
+// waited for.
+const versionWaitDelay = time.Second
 
 // versionRE finds a version at the start of a line, so a line printed before it is skipped.
 var versionRE = regexp.MustCompile(`(?m)^\s*(\d+)\.(\d+)\.(\d+)`)
 
-// VersionOf returns the version that `command --version` prints, as major.minor.patch. A
-// command that is not found gives an error that matches exec.ErrNotFound.
-func VersionOf(ctx context.Context, command string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, VersionTimeout)
+// VersionOf returns the version that `command --version` prints, as major.minor.patch, waiting
+// at most timeout (and ctx). A command that is not found gives an error that matches
+// exec.ErrNotFound.
+func VersionOf(ctx context.Context, command string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, command, "--version")
-	cmd.WaitDelay = time.Second // a child left holding the output does not keep the caller waiting
+	cmd.WaitDelay = versionWaitDelay // a child left holding the output does not keep the caller waiting
 	out, err := cmd.Output()
 	var exitErr *exec.ExitError
 	switch {
@@ -37,15 +47,15 @@ func VersionOf(ctx context.Context, command string) (string, error) {
 		return "", err
 	case errors.Is(err, exec.ErrWaitDelay): // claude exited; a child of it kept the output open
 	case ctx.Err() != nil:
-		return "", fmt.Errorf("claude --version did not answer within %s", VersionTimeout)
+		return "", fmt.Errorf("%s --version did not answer within %s", command, timeout)
 	case errors.As(err, &exitErr) && len(bytes.TrimSpace(exitErr.Stderr)) > 0:
-		return "", fmt.Errorf("claude --version: %w: %s", err, firstLine(exitErr.Stderr))
+		return "", fmt.Errorf("%s --version: %w: %s", command, err, firstLine(exitErr.Stderr))
 	case err != nil:
-		return "", fmt.Errorf("claude --version: %w", err)
+		return "", fmt.Errorf("%s --version: %w", command, err)
 	}
 	m := versionRE.FindStringSubmatch(string(out))
 	if m == nil {
-		return "", fmt.Errorf("claude --version printed no version: %q", strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("%s --version printed no version: %q", command, strings.TrimSpace(string(out)))
 	}
 	return m[1] + "." + m[2] + "." + m[3], nil
 }
