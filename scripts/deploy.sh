@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Deploys this checkout as the local agora: pulls, checks, builds, keeps a backup of the binary
 # and the database, replaces the binary the hub's service runs atomically, restarts the service
-# and verifies the result. Everything machine-specific comes from a variable; see
+# and verifies the result (RESTART replaces systemctl). Everything machine-specific comes from a variable; see
 # docs/development/deploying.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SERVICE=${SERVICE-agora-hub} # systemd user unit; empty: the hub is not restarted or checked
+SERVICE=${SERVICE-agora-hub} # systemd user unit; empty: no unit is restarted or checked
+RESTART=${RESTART-}       # shell command that restarts the hub, instead of systemctl; empty: systemctl
 DB=${DB:-${AGORA_DB:-${XDG_STATE_HOME:-$HOME/.local/state}/agora/agora.db}}
 WEB_URL=${WEB_URL-}       # checked for 200; empty: not checked
 CHECK=${CHECK-check}      # make target run first; empty: none
@@ -42,6 +43,7 @@ if [ -n "$SERVICE" ]; then
   [ -n "$runs" ] || die "cannot read the binary from the ExecStart of $SERVICE; set BIN"
   [ "$runs" -ef "$BIN" ] || [ "$runs" = "$BIN" ] || die "$SERVICE runs $runs, not $BIN; set BIN to it"
 fi
+[ -z "$RESTART" ] || [ -n "$SERVICE" ] || echo "RESTART restarts the hub; nothing checks its service (SERVICE is empty)"
 [ -z "$WEB_URL" ] || command -v curl >/dev/null || die "curl is needed to check WEB_URL"
 [ "$BACKUP" != 1 ] || [ ! -f "$DB" ] || command -v sqlite3 >/dev/null || die "sqlite3 is needed to back up $DB; install it, or set BACKUP=0"
 echo "binary: $BIN"
@@ -99,7 +101,11 @@ fi
 rollback() {
   local q
   echo "deploy: to go back to what ran before:" >&2
-  [ -z "$SERVICE" ] || echo "  systemctl --user stop $(printf %q "$SERVICE")" >&2
+  if [ -n "$RESTART" ]; then
+    echo "  stop the hub the way you do" >&2
+  elif [ -n "$SERVICE" ]; then
+    echo "  systemctl --user stop $(printf %q "$SERVICE")" >&2
+  fi
   if [ -n "$db_bak" ]; then
     q=$(printf %q "$DB")
     echo "  cp $(printf %q "$db_bak") $q && rm -f $q-wal $q-shm" >&2
@@ -111,7 +117,12 @@ rollback() {
   else
     echo "  (BACKUP=0: there are no backups to restore)" >&2
   fi
-  [ -z "$SERVICE" ] || echo "  systemctl --user start $(printf %q "$SERVICE")" >&2
+  if [ -n "$RESTART" ]; then
+    # the command relies on the BIN and DB the script exported
+    echo "  BIN=$(printf %q "$BIN") DB=$(printf %q "$DB") bash -c $(printf %q "$RESTART")" >&2
+  elif [ -n "$SERVICE" ]; then
+    echo "  systemctl --user start $(printf %q "$SERVICE")" >&2
+  fi
 }
 
 step "install"
@@ -119,9 +130,14 @@ mv -f "$new" "$BIN" # a rename within one directory: the old binary or the new o
 trap 'status=$?; [ "$status" = 0 ] || rollback; exit "$status"' EXIT
 echo "$BIN"
 
+if [ -n "$RESTART" ]; then
+  step "restart: $RESTART"
+  export BIN DB # for the command
+  bash -c "$RESTART" || die "the restart command failed"
+fi
 if [ -n "$SERVICE" ]; then
   step "restart $SERVICE"
-  systemctl --user restart "$SERVICE"
+  [ -n "$RESTART" ] || systemctl --user restart "$SERVICE"
   for _ in $(seq "$WAIT_TRIES"); do
     systemctl --user is-active --quiet "$SERVICE" && break
     sleep "$WAIT_STEP"
@@ -138,7 +154,7 @@ step "verify"
 installed=$("$BIN" version)
 [ "$installed" = "$built" ] || die "the installed binary says '$installed', not '$built'"
 echo "$installed"
-if [ -n "$SERVICE" ]; then
+if [ -n "$SERVICE" ] || [ -n "$RESTART" ]; then
   # the hub may take a moment to listen after the unit is active; the CLI finds its socket
   # through AGORA_SOCKET or XDG_RUNTIME_DIR, as for any agora command
   for _ in $(seq "$WAIT_TRIES"); do
@@ -148,12 +164,14 @@ if [ -n "$SERVICE" ]; then
   status=$("$BIN" status) || die "agora status fails"
   echo "agora status: ok"
   # what answers on the socket is the build just installed, not an older hub still running
+  restarter=${RESTART:+the restart command}
+  restarter=${restarter:-$SERVICE}
   # only the first line is the hub's own; a later one can be an agent's text
   case "${status%%$'\n'*}" in
     "HUB "*) running=${status%%$'\n'*}; running=${running#HUB } ;;
-    *) die "agora status does not show the running hub's version; check that $SERVICE restarted, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket" ;;
+    *) die "agora status does not show the running hub's version; check that $restarter restarted the hub, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket" ;;
   esac
-  [ "$running" = "$built" ] || die "the hub that answers is '$running', not '$built'; check that $SERVICE restarted, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket"
+  [ "$running" = "$built" ] || die "the hub that answers is '$running', not '$built'; check that $restarter restarted the hub, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket"
   echo "the running hub is $running"
 fi
 if [ -n "$WEB_URL" ]; then
