@@ -327,6 +327,51 @@ func TestUnreadLimitAndTotal(t *testing.T) {
 	}
 }
 
+// Rows past the limit are never read: one that cannot be scanned lies beyond it.
+func TestUnreadLimitIsAppliedInTheQuery(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	var last int64
+	for range 4 {
+		last = e.post(t, "reviewer", "general", "x")
+	}
+	if _, err := e.db.Exec(`UPDATE messages SET at = 'not a time' WHERE id = ?`, last); err != nil {
+		t.Fatal(err)
+	}
+	got, total, err := e.r.Unread(ctx, "builder", rooms.Everything, 2)
+	if err != nil || len(got) != 2 || total != 4 {
+		t.Fatalf("%d of %d: %v", len(got), total, err)
+	}
+	// the filter counts too
+	if got, total, err = e.r.Unread(ctx, "builder", rooms.Addressed, 2); err != nil || len(got) != 0 || total != 0 {
+		t.Fatalf("addressed: %d of %d: %v", len(got), total, err)
+	}
+}
+
+// Leaving mentions looks at the room's messages only: an unreadable message of another room
+// does not stand in its way.
+func TestLeavingMentionsReadsOnlyItsRoom(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	for _, room := range []string{"example-app", "other-app"} {
+		if err := e.r.Create(ctx, room, "work", "reviewer"); err != nil {
+			t.Fatal(err)
+		}
+		e.subscribe(t, "builder", room, rooms.ModeMentions)
+	}
+	e.post(t, "reviewer", "example-app", "chatter")
+	addressed := e.post(t, "reviewer", "example-app", "@builder look")
+	other := e.post(t, "reviewer", "other-app", "@builder look too")
+	if _, err := e.db.Exec(`UPDATE messages SET at = 'not a time' WHERE id = ?`, other); err != nil {
+		t.Fatal(err)
+	}
+	e.subscribe(t, "builder", "example-app", rooms.ModeAll)
+	var pos int64
+	if err := e.db.QueryRow(`SELECT last_id FROM read_positions WHERE agent = 'builder' AND room = 'example-app'`).Scan(&pos); err != nil || pos != addressed-1 {
+		t.Fatalf("position %d (%v), want %d", pos, err, addressed-1)
+	}
+}
+
 func TestFormatShortensLongBodies(t *testing.T) {
 	m := rooms.Message{ID: 3, Room: "general", Author: "builder", Body: strings.Repeat("x", 800)}
 	if out := rooms.Format(m, 700); !strings.HasSuffix(out, "…") || strings.Count(out, "x") != 700 {

@@ -10,6 +10,24 @@ import (
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
+// scansMessages reports whether a step of a query plan walks the whole messages table, in the
+// format of SQLite before 3.36 ("SCAN TABLE messages AS m") and after ("SCAN m", "SCAN messages").
+func scansMessages(step string) bool {
+	step = strings.Replace(step, "SCAN TABLE ", "SCAN ", 1)
+	return strings.HasPrefix(step, "SCAN m") || strings.HasPrefix(step, "SCAN messages")
+}
+
+func TestScansMessagesKnowsBothPlanFormats(t *testing.T) {
+	for step, want := range map[string]bool{
+		"SCAN m": true, "SCAN messages": true, "SCAN TABLE messages AS m": true, "SCAN TABLE m": true,
+		"SEARCH m USING INTEGER PRIMARY KEY (rowid=?)": false, "SCAN subscriptions": false, "SCAN TABLE subscriptions AS f": false,
+	} {
+		if got := scansMessages(step); got != want {
+			t.Errorf("scansMessages(%q) = %v, want %v", step, got, want)
+		}
+	}
+}
+
 // TestUnreadQueryReachesMessagesThroughIndexes keeps the unread query from scanning the
 // messages table, whatever the modes of the rooms followed: the planner must start from the
 // candidates and look each message up by its id.
@@ -34,7 +52,7 @@ func TestUnreadQueryReachesMessagesThroughIndexes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rows, err := db.QueryContext(ctx, `EXPLAIN QUERY PLAN `+unreadQuery, sql.Named("a", "reader"), sql.Named("general", General))
+	rows, err := db.QueryContext(ctx, `EXPLAIN QUERY PLAN `+unreadQuery, sql.Named("a", "reader"), sql.Named("general", General), sql.Named("room", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +70,7 @@ func TestUnreadQueryReachesMessagesThroughIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, step := range plan {
-		if strings.HasPrefix(step, "SCAN m") || strings.HasPrefix(step, "SCAN messages") {
+		if scansMessages(step) {
 			t.Fatalf("the unread query scans messages (%q):\n%s", step, strings.Join(plan, "\n"))
 		}
 	}

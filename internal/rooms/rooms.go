@@ -219,18 +219,6 @@ const (
 	Quiet
 )
 
-func (f Filter) keeps(m Message) bool {
-	switch f {
-	case Addressed:
-		return m.Addressed
-	case Waking:
-		return m.Wakes
-	case Quiet:
-		return !m.Wakes
-	}
-	return true
-}
-
 // Rooms keeps rooms and messages in the hub database.
 type Rooms struct {
 	db  *sql.DB
@@ -1031,7 +1019,7 @@ func countUnread(ctx context.Context, tx *sql.Tx, msgs []Message, reader string)
 		return err
 	}
 	unread, err := tx.QueryContext(ctx, `SELECT thread, COUNT(*) FROM (`+unreadQuery+`) WHERE thread IN (SELECT value FROM json_each(:roots)) GROUP BY thread`,
-		sql.Named("a", reader), sql.Named("general", General), sql.Named("roots", in))
+		sql.Named("a", reader), sql.Named("general", General), sql.Named("room", nil), sql.Named("roots", in))
 	if err != nil {
 		return err
 	}
@@ -1123,7 +1111,7 @@ func (r *Rooms) Threads(ctx context.Context, room, reader string, withUnread boo
 			}
 			if joined {
 				if err := tx.QueryRowContext(ctx, `SELECT COALESCE(json_group_array(DISTINCT thread), '[]') FROM (`+unreadQuery+`) WHERE thread != 0`,
-					sql.Named("a", reader), sql.Named("general", General)).Scan(&untitled); err != nil {
+					sql.Named("a", reader), sql.Named("general", General), sql.Named("room", nil)).Scan(&untitled); err != nil {
 					return err
 				}
 			}
@@ -1183,7 +1171,7 @@ func (r *Rooms) Unread(ctx context.Context, agent string, filter Filter, limit i
 	var total int
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
-		out, total, err = unread(ctx, tx, agent, filter, limit)
+		out, total, err = unread(ctx, tx, agent, "", filter, limit)
 		return err
 	})
 	return out, total, err
@@ -1196,11 +1184,7 @@ func (r *Rooms) UnreadCount(ctx context.Context, agent string, filter Filter) (i
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 			return err
 		}
-		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`)
-			WHERE CASE :f WHEN :addressed THEN addressed WHEN :waking THEN addressed OR wake_room
-				WHEN :quiet THEN NOT (addressed OR wake_room) ELSE 1 END`,
-			sql.Named("a", agent), sql.Named("general", General), sql.Named("f", filter),
-			sql.Named("addressed", Addressed), sql.Named("waking", Waking), sql.Named("quiet", Quiet)).Scan(&n)
+		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE `+unreadFilter, unreadArgs(agent, "", filter)...).Scan(&n)
 	})
 	return n, err
 }
@@ -1213,7 +1197,7 @@ func (r *Rooms) Take(ctx context.Context, agent string, filter Filter, limit int
 	var total int
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
-		if out, total, err = unread(ctx, tx, agent, filter, limit); err != nil {
+		if out, total, err = unread(ctx, tx, agent, "", filter, limit); err != nil {
 			return err
 		}
 		if filter != Everything {
@@ -1229,8 +1213,8 @@ func (r *Rooms) Take(ctx context.Context, agent string, filter Filter, limit int
 // ModeMentions after the position (messages_to_all, so their chatter is never walked), and
 // messages mentioning the agent by name (mentions_agent). Replies in threads that are not also
 // posted to the room come only through mentions (a reply mentions its thread's participants),
-// after the agent's reading position in their thread (thread_reads), not in the room. It takes the agent as :a and General
-// as :general. wake_room says the message is in a room the agent follows with ModeWake and
+// after the agent's reading position in their thread (thread_reads), not in the room. It takes the agent as :a, General
+// as :general and, to look at one room only, that room as :room (NULL for every room). wake_room says the message is in a room the agent follows with ModeWake and
 // came after the mode became ModeWake.
 const unreadQuery = `
 WITH followed(room, mode, wake_from) AS (
@@ -1243,16 +1227,16 @@ WITH followed(room, mode, wake_from) AS (
 	SELECT m.id, 1 AS followed FROM followed AS f
 	JOIN messages AS m ON m.room = f.room
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
-	WHERE f.mode != 'mentions' AND (m.thread IS NULL OR m.also)
+	WHERE f.mode != 'mentions' AND (m.thread IS NULL OR m.also) AND (:room IS NULL OR f.room = :room)
 	UNION
 	SELECT m.id, 1 FROM followed AS f
 	JOIN messages AS m INDEXED BY messages_to_all ON m.room = f.room AND m.to_all
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
-	WHERE f.mode = 'mentions' AND (m.thread IS NULL OR m.also)
+	WHERE f.mode = 'mentions' AND (m.thread IS NULL OR m.also) AND (:room IS NULL OR f.room = :room)
 	UNION
 	SELECT m.id, EXISTS (SELECT 1 FROM followed WHERE room = m.room) FROM mentions AS mm
 	JOIN messages AS m ON m.id = mm.message_id
-	WHERE mm.agent = :a
+	WHERE mm.agent = :a AND (:room IS NULL OR m.room = :room)
 		AND m.id > CASE WHEN m.thread IS NULL OR m.also
 			THEN COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room), (SELECT read_from FROM start))
 			ELSE COALESCE((SELECT last_id FROM thread_reads WHERE agent = :a AND root = m.thread), (SELECT read_from FROM start)) END
@@ -1268,32 +1252,49 @@ WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a A
 GROUP BY m.id
 ORDER BY m.id`
 
-func unread(ctx context.Context, tx *sql.Tx, agent string, filter Filter, limit int) ([]Message, int, error) {
+// unreadFilter keeps the rows of unreadQuery that pass the filter :f, as Filter.keeps does.
+const unreadFilter = `CASE :f WHEN :addressed THEN addressed WHEN :waking THEN addressed OR wake_room
+	WHEN :quiet THEN NOT (addressed OR wake_room) ELSE 1 END`
+
+// unreadArgs binds the parameters of unreadQuery and unreadFilter; room "" means every room.
+func unreadArgs(agent, room string, filter Filter) []any {
+	var only any
+	if room != "" {
+		only = room
+	}
+	return []any{
+		sql.Named("a", agent), sql.Named("general", General), sql.Named("room", only), sql.Named("f", filter),
+		sql.Named("addressed", Addressed), sql.Named("waking", Waking), sql.Named("quiet", Quiet),
+	}
+}
+
+// unread returns up to limit (<= 0: all) of agent's unread messages that pass filter, in room
+// when it is not "", oldest first, and how many there are in all; the limit is applied in the query.
+func unread(ctx context.Context, tx *sql.Tx, agent, room string, filter Filter, limit int) ([]Message, int, error) {
 	if err := agents.ExistsTx(ctx, tx, agent); err != nil {
 		return nil, 0, err
 	}
-	rows, err := tx.QueryContext(ctx, unreadQuery, sql.Named("a", agent), sql.Named("general", General))
+	args := unreadArgs(agent, room, filter)
+	sqlLimit := -1 // no limit
+	if limit > 0 {
+		sqlLimit = limit
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT * FROM (`+unreadQuery+`) WHERE `+unreadFilter+` ORDER BY 1 LIMIT :limit`,
+		append(args, sql.Named("limit", sqlLimit))...)
 	if err != nil {
 		return nil, 0, err
 	}
-	all, err := scanMessages(rows)
+	out, err := scanMessages(rows)
 	if err != nil {
 		return nil, 0, err
 	}
-	if filter != Everything {
-		var kept []Message
-		for _, m := range all {
-			if filter.keeps(m) {
-				kept = append(kept, m)
-			}
+	total := len(out)
+	if limit > 0 && total == limit {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE `+unreadFilter, args...).Scan(&total); err != nil {
+			return nil, 0, err
 		}
-		all = kept
 	}
-	total := len(all)
-	if limit > 0 && len(all) > limit {
-		all = all[:limit]
-	}
-	return all, total, nil
+	return out, total, nil
 }
 
 // RoomUnread counts an agent's unread messages in one room.
@@ -1316,7 +1317,7 @@ func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, e
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT room, SUM(thread = 0 OR also), SUM(addressed AND (thread = 0 OR also)), SUM(thread != 0 AND NOT also)
 			FROM (`+unreadQuery+`) GROUP BY room ORDER BY room`,
-			sql.Named("a", agent), sql.Named("general", General))
+			sql.Named("a", agent), sql.Named("general", General), sql.Named("room", nil))
 		if err != nil {
 			return err
 		}
@@ -1481,16 +1482,13 @@ func subscribe(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode) e
 		return nil // already followed this way: keep reading where it is
 	}
 	if old == ModeMentions {
-		addressed, _, err := unread(ctx, tx, agent, Addressed, 0)
+		addressed, _, err := unread(ctx, tx, agent, room, Addressed, 1)
 		if err != nil {
 			return err
 		}
 		through := newest
-		for _, m := range addressed {
-			if m.Room == room {
-				through = m.ID - 1
-				break
-			}
+		if len(addressed) > 0 {
+			through = addressed[0].ID - 1
 		}
 		if err := moveForward(ctx, tx, agent, room, through); err != nil {
 			return err
