@@ -1158,6 +1158,54 @@ func TestBridgeListShowsWhatThePlatformCanDo(t *testing.T) {
 	}
 }
 
+func TestBridgeListShowsTheProtocolVersion(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	for name, hello := range map[string]string{
+		"old-chat":  `echo '{"type":"hello","version":2}'; `,
+		"same-chat": `echo '{"type":"hello","version":3}'; `,
+		"mute-chat": ``,
+	} {
+		if r := agora(ctx, socket, "builder", "bridge", "add", name, "--command", hello+"exec sleep 600"); r.code != 0 {
+			t.Fatalf("add: %+v", r)
+		}
+	}
+	want := map[string]string{
+		"#old-chat":  "protocol v2, hub v3 (mismatch)",
+		"#same-chat": "protocol v3",
+		"#mute-chat": "protocol not reported",
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		r := agora(ctx, socket, "builder", "bridge", "list")
+		lines := map[string]string{}
+		for _, line := range strings.Split(r.stdout, "\n") {
+			for room := range want {
+				if strings.HasPrefix(line, room) {
+					lines[room] = line
+				}
+			}
+		}
+		ok := len(lines) == len(want)
+		for room, text := range want {
+			ok = ok && strings.Contains(lines[room], text)
+		}
+		if ok {
+			if strings.Contains(lines["#same-chat"], "mismatch") || strings.Contains(lines["#mute-chat"], "mismatch") {
+				t.Fatalf("a mismatch where there is none: %+v", r)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("list: %+v", r)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestThreadsFromTheCommandLine(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()

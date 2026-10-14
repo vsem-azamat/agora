@@ -71,6 +71,10 @@ message Bridge {
   string last_exit = 8;
   // What the bridge said its platform can do in its current run; unset when it said nothing.
   BridgeCaps caps = 9;
+  // The protocol version the bridge said it speaks in its current run; 0 when it said none.
+  int32 protocol_version = 10;
+  // The protocol version the hub speaks, to compare with protocol_version.
+  int32 hub_protocol_version = 11;
 }
 
 // What a bridge's platform can do, as the bridge says it in short words; empty when unknown.

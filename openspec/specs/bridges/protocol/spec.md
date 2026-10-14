@@ -10,15 +10,31 @@ What a bridge and the hub say to each other over the bridge's standard input and
 
 ### Requirement: Lines Of JSON
 
-The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":3,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the protocol version the hub speaks. Versions are not negotiated: the hub speaks only its own version, and a change to the protocol comes with the bridges updated to it. The hub SHALL read no version from a bridge: a `version` in a bridge's `hello` is an unknown field like any other. A bridge that gets a `version` it does not know SHOULD say so on its standard error and keep working with the lines and fields it knows, rather than exit, since the hub would only start it again. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
+The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":3,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the protocol version the hub speaks. Versions are not negotiated: the hub speaks only its own version, and a change to the protocol comes with the bridges updated to it. A bridge's `hello` MAY carry `version`, the protocol version the bridge speaks, a positive integer written in digits, at most 2147483647: every `hello` SHALL replace the version the hub keeps for the bridge's current run, as it replaces the caps, and the hub SHALL clear it when the bridge stops, and show it next to its own version in `agora bridge list` and in the web app, marking a difference as a mismatch. A `hello` without a usable `version` clears it, leaving the version not reported, which is no error and no mismatch, and a mismatch never blocks the bridge or its messages. A bridge that gets a `version` it does not know SHOULD say so on its standard error and keep working with the lines and fields it knows, rather than exit, since the hub would only start it again. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
 
 #### Scenario: Hello
 - **WHEN** the bridge of `#example-chat` starts for the first time
 - **THEN** its first input line is `{"type":"hello","version":3,"bridge":"example-chat","room":"example-chat","cursor":""}`
 
-#### Scenario: A version the hub does not know
-- **WHEN** a bridge's `hello` is `{"type":"hello","version":99,"caps":{"threads":"topic"}}`
-- **THEN** the hub reads its caps and ignores the version
+#### Scenario: A bridge reports another version
+- **WHEN** a bridge answers `hello` with `{"type":"hello","version":2,"caps":{"threads":"topic"}}` while the hub speaks version 3
+- **THEN** the hub reads its caps, keeps the version 2, `agora bridge list` and the web app show `protocol v2, hub v3` as a mismatch, and the bridge keeps working
+
+#### Scenario: A bridge reports the hub's version
+- **WHEN** a bridge answers `hello` with `{"type":"hello","version":3}` while the hub speaks version 3
+- **THEN** `agora bridge list` shows `protocol v3` and the web app shows no mismatch
+
+#### Scenario: A bridge reports no version
+- **WHEN** a bridge never answers `hello`, or answers it with a `version` that is not a positive integer written in digits (such as `3.0`, `2e0` or `"3"`)
+- **THEN** its version is not reported: `agora bridge list` says `protocol not reported` and the web app shows no mismatch
+
+#### Scenario: A later hello without a version
+- **WHEN** a bridge answers `hello` with `{"type":"hello","version":2}` and later, in the same run, with `{"type":"hello","caps":{"threads":"topic"}}`
+- **THEN** its version is not reported any more
+
+#### Scenario: A bridge stops
+- **WHEN** a bridge that reported the version 2 exits and the hub starts it again
+- **THEN** its version is not reported until the new run says it
 
 #### Scenario: Unknown lines
 - **WHEN** the bridge writes a line of type `typing`, a line that is not JSON, and an `in` line with an extra field `mood`

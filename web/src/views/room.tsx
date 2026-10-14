@@ -10,7 +10,7 @@ import {
   type RoomCount,
   toDate,
 } from '../board';
-import { authorKey, POLICY_LABELS, type Policy, policyOf, runningOf, runningText } from '../bridges';
+import { authorKey, POLICY_LABELS, type Policy, policyOf, protocolMismatch, runningOf, runningText } from '../bridges';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Bridge } from '../gen/agora/v1/bridges_pb';
 import type { ExternalAuthor, Message, Room } from '../gen/agora/v1/rooms_pb';
@@ -715,11 +715,17 @@ function ArchiveControl(props: { room: string; onArchive: () => void }) {
 /** A bridged room's state and its outbound policy, which only the operator changes. */
 function BridgeControls(props: { room: string; bridge: Bridge; onPolicy: (p: Policy) => void }) {
   const running = runningOf(props.bridge);
+  const mismatch = protocolMismatch(props.bridge);
   return (
     <div className="bridge">
       <span className={`brstate ${running}`} title={`Bridge ${runningText(props.bridge)}`}>
         {running === 'running' ? 'bridged' : `bridge ${running}`}
       </span>
+      {mismatch && (
+        <span className="brwarn" title={`The bridge speaks another protocol version than the hub (${mismatch})`}>
+          {mismatch}
+        </span>
+      )}
       <ChoiceMenu
         name="Outbound"
         shown

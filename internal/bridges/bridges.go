@@ -552,6 +552,16 @@ func ReadCaps(raw map[string]json.RawMessage) Caps {
 	return Caps{Personas: read("personas"), Threads: read("threads")}
 }
 
+// ReadVersion reads the protocol version of a bridge's hello: a positive integer given as a JSON
+// number, 0 (not reported) for anything else.
+func ReadVersion(raw json.RawMessage) int32 {
+	var n int32
+	if json.Unmarshal(raw, &n) != nil || n < 1 {
+		return 0
+	}
+	return n
+}
+
 // Out is a message to hand to a bridge.
 type Out struct {
 	ID      int64

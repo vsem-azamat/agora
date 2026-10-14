@@ -109,12 +109,14 @@ const policies: Record<string, BridgePolicy> = {
 };
 
 /** A bridge as the web app lists it: without its command. */
-export function bridge(name: string, state: string, policy = 'delay', lastExit = ''): Bridge {
+export function bridge(name: string, state: string, policy = 'delay', lastExit = '', protocolVersion = 0): Bridge {
   return create(BridgeSchema, {
     name,
     state: bridgeStates[state] ?? BridgeState.UNSPECIFIED,
     policy: policies[policy] ?? BridgePolicy.UNSPECIFIED,
     lastExit,
+    protocolVersion,
+    hubProtocolVersion: 3,
     addressees: ['secretary'],
   });
 }

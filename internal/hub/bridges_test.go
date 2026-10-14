@@ -1139,6 +1139,42 @@ func TestABridgeSaysWhatItsPlatformCanDo(t *testing.T) {
 	eventually(t, "caps cleared", func() bool { return b.state(t).GetCaps() == nil })
 }
 
+func TestABridgeReportsItsProtocolVersion(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	if s := b.state(t); s.GetProtocolVersion() != 0 || s.GetHubProtocolVersion() != hub.ProtocolVersion {
+		t.Fatalf("before hello: %v", s)
+	}
+	// a version that is no positive integer is not reported
+	for i, bad := range []string{`"3"`, `0`, `-2`, `2.5`, `null`, `99999999999`} {
+		// each hello carries caps of its own, to wait until the hub has read it
+		topic := fmt.Sprintf("topic%d", i)
+		f.send(`{"type":"hello","version":` + bad + `,"caps":{"threads":"` + topic + `"}}`)
+		eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == topic })
+		if v := b.state(t).GetProtocolVersion(); v != 0 {
+			t.Fatalf("version %s read as %d", bad, v)
+		}
+	}
+	f.send(`{"type":"hello","version":2}`)
+	eventually(t, "version", func() bool { return b.state(t).GetProtocolVersion() == 2 })
+	// every hello replaces it: one without a usable version clears it
+	f.send(`{"type":"hello","caps":{"threads":"again"}}`)
+	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == "again" })
+	if v := b.state(t).GetProtocolVersion(); v != 0 {
+		t.Fatalf("a hello without a version kept version %d", v)
+	}
+	f.send(`{"type":"hello","version":2}`)
+	eventually(t, "version", func() bool { return b.state(t).GetProtocolVersion() == 2 })
+	// the bridge keeps working with another version
+	f.send(`{"type":"in","id":"1","author":{"id":"42","name":"Ada"},"text":"hello"}`)
+	eventually(t, "the message", func() bool { return len(b.history(t)) == 1 })
+	// a new run says it again, or nothing
+	f.set("exit", "")
+	eventually(t, "restart", func() bool { return f.starts() == 2 })
+	eventually(t, "version cleared", func() bool { return b.state(t).GetProtocolVersion() == 0 })
+}
+
 // lastOut is the last out line the fake bridge received.
 func (f fake) lastOut() map[string]any {
 	var out map[string]any
