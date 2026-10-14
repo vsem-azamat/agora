@@ -10,11 +10,15 @@ What a bridge and the hub say to each other over the bridge's standard input and
 
 ### Requirement: Lines Of JSON
 
-The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":3,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the protocol version the hub speaks; a change to the protocol comes with the bridges updated to it, so the hub serves no older version. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
+The hub and a bridge SHALL exchange one JSON object per line: the hub writes to the bridge's standard input, the bridge to its standard output. Every object SHALL have a `type`. The hub SHALL write `{"type":"hello","version":3,"bridge":…,"room":…,"cursor":…}` first after every start; `version` is the protocol version the hub speaks. Versions are not negotiated: the hub speaks only its own version, and a change to the protocol comes with the bridges updated to it. The hub SHALL read no version from a bridge: a `version` in a bridge's `hello` is an unknown field like any other. A bridge that gets a `version` it does not know SHOULD say so on its standard error and keep working with the lines and fields it knows, rather than exit, since the hub would only start it again. The hub SHALL ignore lines of an unknown type, unknown fields, lines that are not JSON objects and lines longer than 1 MiB, logging all but the first two; bridges SHALL ignore unknown types and fields too. Content a bridge cannot pass as text, such as a photo or a voice message, SHALL be passed as a short placeholder in `text`, like `[photo]` or `[voice 0:12]`.
 
 #### Scenario: Hello
 - **WHEN** the bridge of `#example-chat` starts for the first time
 - **THEN** its first input line is `{"type":"hello","version":3,"bridge":"example-chat","room":"example-chat","cursor":""}`
+
+#### Scenario: A version the hub does not know
+- **WHEN** a bridge's `hello` is `{"type":"hello","version":99,"caps":{"threads":"topic"}}`
+- **THEN** the hub reads its caps and ignores the version
 
 #### Scenario: Unknown lines
 - **WHEN** the bridge writes a line of type `typing`, a line that is not JSON, and an `in` line with an extra field `mood`
