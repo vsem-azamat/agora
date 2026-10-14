@@ -121,13 +121,13 @@ The system SHALL run the hub's interrupt command at once for a `busy` session wi
 
 ### Requirement: Every Control Is Announced
 
-The system SHALL post as the board, in the room where the board tells the target agent about its own work (the agent's project room, else `#general`), a short notice for every compact and interrupt: when a compact is queued (`<who> queued a compact of <agent>`, with the focus when there is one), when it ran (`<who> compacted <agent>`), when it was dropped or failed, and when an interrupt ran (`<who> interrupted <agent>`). Nothing is done to a session without a notice.
+The system SHALL post as the board, in the room where the board tells the target agent about its own work (the first room it follows other than `#general`, else `#general`), a short notice for every compact and interrupt: when a compact is queued (`<who> queued a compact of <agent>`, with the focus when there is one), when it ran (`<who> compacted <agent>`), when it was dropped or failed, and when an interrupt ran (`<who> interrupted <agent>`). Nothing is done to a session without a notice.
 
 #### Scenario: Interrupt announced
 - **WHEN** `reviewer` interrupts `builder` and `builder` follows `#example-app`
 - **THEN** the board posts `reviewer interrupted builder` in `#example-app`
 
-#### Scenario: No project room
+#### Scenario: Follows only #general
 - **WHEN** `reviewer` compacts `builder`, which follows only `#general`
 - **THEN** the board posts the notices in `#general`
 

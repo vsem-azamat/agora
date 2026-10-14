@@ -61,7 +61,7 @@ The hub first takes a per-agent key, which only refuses a second interrupt early
 
 ## Announcing and telling
 
-Notices are posted as the board with `Rooms.PostTx` in `rooms.NoticeRoomTx(target)`, the room where the board tells an agent about its own work: its second followed room (the project room), else `#general`. A compact posts when queued, and again when it ran, failed or was dropped; an interrupt posts when it ran.
+Notices are posted as the board with `Rooms.PostTx` in `rooms.NoticeRoomTx(target)`, the room where the board tells an agent about its own work: the first room it follows other than `#general`, else `#general`. A compact posts when queued, and again when it ran, failed or was dropped; an interrupt posts when it ran.
 
 `Sessions.Report` adds notes from `done` rows with `told = 0` to the context it returns for `prompt`, `tool` and `start` events, each set to `told` by a compare-and-set so concurrent hooks add it once. After a compaction the connector's start (source `compact`) carries "`<who>` compacted your conversation", with the focus; the first prompt after an interrupt carries "`<who>` interrupted your turn".
 
