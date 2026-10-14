@@ -1148,4 +1148,14 @@ describe('threads in the room', () => {
     expect(nextUnreadThread([{ root: 50n, unread: 2 }], [withUnread], 40n)).toBe(50n);
     expect(nextUnreadThread([{ root: 50n, unread: 0 }], [], undefined)).toBeUndefined();
   });
+
+  it('keeps Cancel on a scheduled reply in the thread of a room whose bridge was removed', () => {
+    const waiting = [
+      message(40, 'builder', 'root', 30),
+      { ...goingOut(41, 'secretary', 'waiting', 20, 'scheduled'), room: 'example-app', thread: 40n },
+    ];
+    room(ms, { onThread: vi.fn(), thread: open(40n, waiting) });
+    const panel = screen.getByRole('complementary', { name: 'Thread' });
+    expect(within(panel).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+  });
 });
