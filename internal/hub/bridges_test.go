@@ -1284,8 +1284,9 @@ func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
 func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	// ignores TERM, so it stops only when killed, and floods lines of topic 77 until then; the
-	// trap is set before the first line
-	old := `trap '' TERM; echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old","thread":{"key":"77","title":"Old"}}'; done`
+	// trap is set before the first line, and lines of about 4 KB keep the backlog the stop has to
+	// read small
+	old := `trap '' TERM; pad=$(printf '%04000d' 0); echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old'$pad'","thread":{"key":"77","title":"Old"}}'; done`
 	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: old})); err != nil {
 		t.Fatal(err)
 	}
@@ -1301,6 +1302,21 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 	}
 	if st := b.state(t); st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || len(g.received()) == 0 {
 		t.Fatalf("bridge left %v, the new command never ran", st.GetState())
+	}
+	// a line of the old process handled after the change made key 77 again (a second thread
+	// titled Old): without it the test would prove nothing about forgetting the keys
+	lt, err := b.rooms.ListThreads(context.Background(), connect.NewRequest(&agorav1.ListThreadsRequest{Room: "example-chat"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	olds := 0
+	for _, th := range lt.Msg.GetThreads() {
+		if th.GetTitle() == "Old" {
+			olds++
+		}
+	}
+	if olds < 2 {
+		t.Fatalf("no line of the old process made key 77 again after the change (%d threads titled Old)", olds)
 	}
 	// the keys the old process wrote while it stopped are forgotten although the call gave up
 	g.send(`{"type":"in","id":"n1","author":{"name":"Bob"},"text":"NEWCHAT","thread":{"key":"77","title":"New"}}`)
