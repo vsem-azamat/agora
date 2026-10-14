@@ -16,12 +16,14 @@ A release is a `v*` tag on `main`. Only the maintainer creates tags (see [`AGENT
    GoReleaser is given the pushed tag (`GORELEASER_CURRENT_TAG`), so a final tag on the commit of an rc tag builds the final version.
 5. It packs `agora_<version>_<os>_<arch>.tar.gz` with `LICENSE` and `README.md`, writes `checksums.txt` (SHA-256), and publishes a GitHub release. The release has a changelog from the commits since the previous tag, and is marked as a pre-release when the tag is one, such as `v0.4.0-rc.1`.
 
-To try the configuration without publishing:
+CI runs the same GoReleaser (the action's prebuilt binary, which builds with the Go on `PATH`, the version in `go.mod`) with `check` and `release --snapshot --clean` on every pull request: the `Release config` job, see [Checks](checks.md). A snapshot builds, packs and checksums every target; the changelog and the publishing steps run only on a real tag. To try it by hand without publishing:
 
 ```sh
 go run github.com/goreleaser/goreleaser/v2@v2.18.2 check
 go run github.com/goreleaser/goreleaser/v2@v2.18.2 release --snapshot --clean   # into dist/, which git ignores
 ```
+
+`go run` builds GoReleaser with the newer Go it requires and may switch the toolchain for the builds too, so check `go version` of a binary built this way before relying on it.
 
 A snapshot gets no version at build time, so its `agora version` says `dev`, or the tag when the commit has one; it never claims a release it was not built from.
 

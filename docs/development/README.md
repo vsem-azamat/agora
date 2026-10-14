@@ -22,7 +22,7 @@ How the repository is organized and verified.
 | `proto/` | API contract; `gen/` holds the code generated from it |
 | `web/` | The web app's sources; its build is committed in `internal/web/dist/` |
 | `tools/` | Pinned development tools: code generators in `tools/go.mod`, golangci-lint in `tools/lint/go.mod` |
-| `Makefile` | Entry point for formatting, lint, tests and every CI check |
+| `Makefile` | Entry point for formatting, lint, tests and every CI check but the release config |
 | `openspec/specs/` | Behavior specification |
 | `docs/` | Engineering documentation |
 | `scripts/` | Repository checks and `make deploy` |
