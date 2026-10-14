@@ -4,6 +4,7 @@
 package bridges
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -183,7 +184,8 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 }
 
 // Remove deletes the bridge name; its room, subscriptions and messages stay, and the board says
-// in the room that it is no longer bridged.
+// in the room that it is no longer bridged. Messages of the room left sending are marked not
+// sent, since no bridge answers for them any more, and the board tells their authors.
 func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 	name = strings.TrimPrefix(name, "#")
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
@@ -197,8 +199,20 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 		if n, _ := res.RowsAffected(); n == 0 {
 			return store.Refuse(ErrNotFound, "no bridge %s; see `agora bridge list`", name)
 		}
-		_, err = b.rooms.PostTx(ctx, tx, rooms.Board, name, agent+" removed the bridge of this room; the room stays, no longer bridged.", 0)
-		return err
+		if _, err := b.rooms.PostTx(ctx, tx, rooms.Board, name, agent+" removed the bridge of this room; the room stays, no longer bridged.", 0); err != nil {
+			return err
+		}
+		// no bridge answers for the messages left sending any more
+		failed, err := failSending(ctx, tx, name)
+		if err != nil {
+			return err
+		}
+		for _, f := range failed {
+			if err := b.tell(ctx, tx, f.author, name, f.id, removedReason); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -301,6 +315,39 @@ func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Change
 	}
 	return out, nil
 }
+
+// settled is a message failSending marked not sent.
+type settled struct {
+	id     int64
+	author string
+}
+
+// failSending marks the messages of room still sending as not sent, since its bridge was
+// removed, and returns them in posting order.
+func failSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error) {
+	rows, err := tx.QueryContext(ctx, `UPDATE messages SET delivery = 'failed', delivery_error = ?
+		WHERE room = ? AND delivery = 'sending' RETURNING id, author`, removedReason, room)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []settled
+	for rows.Next() {
+		var m settled
+		if err := rows.Scan(&m.id, &m.author); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	slices.SortFunc(out, func(a, b settled) int { return cmp.Compare(a.id, b.id) })
+	return out, nil
+}
+
+// removedReason is why a message left sending when its bridge was removed was not sent.
+const removedReason = "the bridge was removed"
 
 // List returns every bridge in name order.
 func (b *Bridges) List(ctx context.Context) ([]Bridge, error) {
@@ -594,6 +641,15 @@ func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 		err := tx.QueryRowContext(ctx, `SELECT m.room, COALESCE(b.policy, '') FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room
 			WHERE m.id = ? AND m.delivery = 'scheduled'`, id).Scan(&room, &policy)
 		if errors.Is(err, sql.ErrNoRows) {
+			// its delay may have let it go out a moment before: then it is going out, as asked
+			var delivery string
+			err := tx.QueryRowContext(ctx, `SELECT COALESCE(delivery, '') FROM messages WHERE id = ?`, id).Scan(&delivery)
+			if err == nil && (rooms.Delivery(delivery) == rooms.Sending || rooms.Delivery(delivery) == rooms.Sent) {
+				return nil
+			}
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
 			return store.Refuse(ErrNotFound, "message %d is not scheduled", id)
 		}
 		if err != nil {
