@@ -158,6 +158,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
   const [restarts, setRestarts] = useState(0);
   useEffect(() => watchWallClock(() => setRestarts((n) => n + 1)), []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a clock set while open restarts the watch
   useEffect(() => {
     const abort = new AbortController();
     (async () => {
@@ -178,7 +179,6 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       }
     })();
     return () => abort.abort();
-    // biome-ignore lint/correctness/useExhaustiveDependencies: a clock set while open restarts the watch
   }, [api, load, fail, restarts]);
 
   return { data, status, fail, upgraded };
