@@ -14,7 +14,7 @@ How `internal/rooms` implements [`openspec/specs/rooms/`](../../openspec/specs/r
 | `thread_leaves` | The agents that left a thread |
 | `thread_reads` | How far an agent has read a thread: its reading position there, apart from the room's |
 | `mentions` | The names each message mentions, parsed once when it is posted; for a message from outside marked as addressed, also its bridge's agents |
-| `subscriptions` | Which agent follows which room, its `mode` (`all`, `mentions` or `wake`) and `wake_from` (the room's newest message when the mode last changed); `general` is followed implicitly with `all`, and has a row only once the agent gave it a mode |
+| `subscriptions` | Which agent follows which room, its `mode` (`all`, `mentions` or `wake`) and `wake_from` (the room's newest message when the mode last changed), `by_project` (set when the row was made by following the agent's project room, see [Agents](agents.md); `Subscribe` clears it on any explicit call, so a subscription the agent touched is its own); `general` is followed implicitly with `all`, and has a row only once the agent gave it a mode |
 | `read_positions` | Per agent and room, the last message read; without a row, `agents.read_from` applies |
 | `read_marks` | Single messages read out of order, which the reading position skips |
 

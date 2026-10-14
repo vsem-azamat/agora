@@ -527,6 +527,43 @@ func TestJoiningFollowsTheProjectRoom(t *testing.T) {
 	}
 }
 
+func TestChangingTheProjectMovesTheProjectRoom(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	for _, room := range []string{"alpha", "beta", "gamma"} {
+		agora(ctx, socket, "owner", "join", "owner")
+		agora(ctx, socket, "owner", "room-create", room, "work on "+room)
+	}
+	follows := func(who string) string { return agora(ctx, socket, who, "subscribe", "general").stdout }
+	agora(ctx, socket, "builder", "join", "builder", "--project", "alpha")
+	r := agora(ctx, socket, "builder", "join", "builder", "--project", "beta")
+	if r.code != 0 || !strings.Contains(r.stdout, "following #beta, your project's room") || !strings.Contains(r.stdout, "no longer following #alpha, the room of your old project") {
+		t.Fatalf("join with another project: %+v", r)
+	}
+	if got := follows("builder"); !strings.Contains(got, "#beta") || strings.Contains(got, "#alpha") {
+		t.Fatalf("follows after join: %s", got)
+	}
+	// set follows too
+	r = agora(ctx, socket, "builder", "set", "--project", "gamma")
+	if r.code != 0 || !strings.Contains(r.stdout, "following #gamma, your project's room") || !strings.Contains(r.stdout, "no longer following #beta") {
+		t.Fatalf("set --project: %+v", r)
+	}
+	// a mode chosen by hand makes the subscription the agent's own
+	agora(ctx, socket, "builder", "subscribe", "gamma", "--mode", "wake")
+	agora(ctx, socket, "builder", "set", "--project", "alpha")
+	if got := follows("builder"); !strings.Contains(got, "#gamma (wake)") || !strings.Contains(got, "#alpha") {
+		t.Fatalf("follows after set: %s", got)
+	}
+	// a project without a room: the old room goes, and the output says how to create the new one
+	r = agora(ctx, socket, "builder", "set", "--project", "delta")
+	if r.code != 0 || !strings.Contains(r.stdout, "no room #delta for your project yet; create it with agora room-create delta '<purpose>'") ||
+		!strings.Contains(r.stdout, "no longer following #alpha") {
+		t.Fatalf("set --project without a room: %+v", r)
+	}
+}
+
 // TestJoinExpectedReachesTheGreeting runs the hub command with --join expect and starts a
 // session through the hook: the greeting expects it to join.
 func TestJoinExpectedReachesTheGreeting(t *testing.T) {

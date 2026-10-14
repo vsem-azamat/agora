@@ -299,6 +299,48 @@ func TestProfilesCarryTheirProjectRoom(t *testing.T) {
 	}
 }
 
+func TestAProfileUpdateWithAProjectMovesTheProjectRoom(t *testing.T) {
+	r := start(t)
+	bg := context.Background()
+	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	for _, room := range []string{"alpha", "my-beta"} {
+		if _, err := r.rooms.CreateRoom(bg, connect.NewRequest(&agorav1.CreateRoomRequest{Agent: "builder", Name: room, Purpose: "work"})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := r.rooms.Subscribe(bg, connect.NewRequest(&agorav1.SubscribeRequest{Agent: "builder", Rooms: []string{"alpha", "my-beta"}})); err != nil {
+		t.Fatal(err)
+	}
+	update := func(project string) *agorav1.ProjectRoom {
+		resp, err := r.agents.UpdateProfile(bg, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Project: &project}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.Msg.GetProjectRoom()
+	}
+	if got := update("alpha"); got.GetRoom() != "alpha" || got.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FOLLOWING {
+		t.Fatalf("first project: %v", got)
+	}
+	got := update("my.beta")
+	if got.GetRoom() != "my-beta" || got.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FOLLOWING || got.GetUnfollowed() != "alpha" {
+		t.Fatalf("another project: %v", got)
+	}
+	subs, err := r.rooms.Subscribe(bg, connect.NewRequest(&agorav1.SubscribeRequest{Agent: "builder", Rooms: []string{"general"}, Follow: true}))
+	if err != nil || strings.Join(subs.Msg.GetRooms(), " ") != "general my-beta" {
+		t.Fatalf("follows %v %v", subs, err)
+	}
+	if got := update("gamma"); got.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_MISSING || got.GetUnfollowed() != "my-beta" {
+		t.Fatalf("project without a room: %v", got)
+	}
+	// a request that leaves the project alone says nothing about project rooms
+	task := "x"
+	if resp, err := r.agents.UpdateProfile(bg, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Task: &task})); err != nil || resp.Msg.GetProjectRoom() != nil {
+		t.Fatalf("task only: %v %v", resp, err)
+	}
+}
+
 func (r *running) post(t *testing.T, author, body string) {
 	t.Helper()
 	bg := context.Background()

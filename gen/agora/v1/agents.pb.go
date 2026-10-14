@@ -78,6 +78,65 @@ func (CiState) EnumDescriptor() ([]byte, []int) {
 	return file_agora_v1_agents_proto_rawDescGZIP(), []int{0}
 }
 
+type ProjectRoomState int32
+
+const (
+	ProjectRoomState_PROJECT_ROOM_STATE_UNSPECIFIED ProjectRoomState = 0
+	// The project has no room name, so it has no room.
+	ProjectRoomState_PROJECT_ROOM_STATE_NONE ProjectRoomState = 1
+	// The agent follows the project's room.
+	ProjectRoomState_PROJECT_ROOM_STATE_FOLLOWING ProjectRoomState = 2
+	// The project has a room name, but no such room exists yet.
+	ProjectRoomState_PROJECT_ROOM_STATE_MISSING ProjectRoomState = 3
+	// The room exists but cannot be followed; detail says why.
+	ProjectRoomState_PROJECT_ROOM_STATE_FAILED ProjectRoomState = 4
+)
+
+// Enum value maps for ProjectRoomState.
+var (
+	ProjectRoomState_name = map[int32]string{
+		0: "PROJECT_ROOM_STATE_UNSPECIFIED",
+		1: "PROJECT_ROOM_STATE_NONE",
+		2: "PROJECT_ROOM_STATE_FOLLOWING",
+		3: "PROJECT_ROOM_STATE_MISSING",
+		4: "PROJECT_ROOM_STATE_FAILED",
+	}
+	ProjectRoomState_value = map[string]int32{
+		"PROJECT_ROOM_STATE_UNSPECIFIED": 0,
+		"PROJECT_ROOM_STATE_NONE":        1,
+		"PROJECT_ROOM_STATE_FOLLOWING":   2,
+		"PROJECT_ROOM_STATE_MISSING":     3,
+		"PROJECT_ROOM_STATE_FAILED":      4,
+	}
+)
+
+func (x ProjectRoomState) Enum() *ProjectRoomState {
+	p := new(ProjectRoomState)
+	*p = x
+	return p
+}
+
+func (x ProjectRoomState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ProjectRoomState) Descriptor() protoreflect.EnumDescriptor {
+	return file_agora_v1_agents_proto_enumTypes[1].Descriptor()
+}
+
+func (ProjectRoomState) Type() protoreflect.EnumType {
+	return &file_agora_v1_agents_proto_enumTypes[1]
+}
+
+func (x ProjectRoomState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ProjectRoomState.Descriptor instead.
+func (ProjectRoomState) EnumDescriptor() ([]byte, []int) {
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{1}
+}
+
 type Profile struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Name    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -467,8 +526,10 @@ func (x *UpdateProfileRequest) GetPigment() string {
 }
 
 type UpdateProfileResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Profile       *Profile               `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Profile *Profile               `protobuf:"bytes,1,opt,name=profile,proto3" json:"profile,omitempty"`
+	// Set when the request set the project: what became of the project's room.
+	ProjectRoom   *ProjectRoom `protobuf:"bytes,2,opt,name=project_room,json=projectRoom,proto3" json:"project_room,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -510,6 +571,84 @@ func (x *UpdateProfileResponse) GetProfile() *Profile {
 	return nil
 }
 
+func (x *UpdateProfileResponse) GetProjectRoom() *ProjectRoom {
+	if x != nil {
+		return x.ProjectRoom
+	}
+	return nil
+}
+
+// What setting the agent's project did to its subscriptions.
+type ProjectRoom struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The new project's room name; empty when the project has no room name.
+	Room  string           `protobuf:"bytes,1,opt,name=room,proto3" json:"room,omitempty"`
+	State ProjectRoomState `protobuf:"varint,2,opt,name=state,proto3,enum=agora.v1.ProjectRoomState" json:"state,omitempty"`
+	// The old project's room the agent stopped following; empty when it kept it.
+	Unfollowed    string `protobuf:"bytes,3,opt,name=unfollowed,proto3" json:"unfollowed,omitempty"`
+	Detail        string `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectRoom) Reset() {
+	*x = ProjectRoom{}
+	mi := &file_agora_v1_agents_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectRoom) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectRoom) ProtoMessage() {}
+
+func (x *ProjectRoom) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_agents_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectRoom.ProtoReflect.Descriptor instead.
+func (*ProjectRoom) Descriptor() ([]byte, []int) {
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ProjectRoom) GetRoom() string {
+	if x != nil {
+		return x.Room
+	}
+	return ""
+}
+
+func (x *ProjectRoom) GetState() ProjectRoomState {
+	if x != nil {
+		return x.State
+	}
+	return ProjectRoomState_PROJECT_ROOM_STATE_UNSPECIFIED
+}
+
+func (x *ProjectRoom) GetUnfollowed() string {
+	if x != nil {
+		return x.Unfollowed
+	}
+	return ""
+}
+
+func (x *ProjectRoom) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
 type LeaveRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The acting agent, which leaves.
@@ -520,7 +659,7 @@ type LeaveRequest struct {
 
 func (x *LeaveRequest) Reset() {
 	*x = LeaveRequest{}
-	mi := &file_agora_v1_agents_proto_msgTypes[4]
+	mi := &file_agora_v1_agents_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -532,7 +671,7 @@ func (x *LeaveRequest) String() string {
 func (*LeaveRequest) ProtoMessage() {}
 
 func (x *LeaveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[4]
+	mi := &file_agora_v1_agents_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -545,7 +684,7 @@ func (x *LeaveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveRequest.ProtoReflect.Descriptor instead.
 func (*LeaveRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{4}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *LeaveRequest) GetAgent() string {
@@ -565,7 +704,7 @@ type LeaveResponse struct {
 
 func (x *LeaveResponse) Reset() {
 	*x = LeaveResponse{}
-	mi := &file_agora_v1_agents_proto_msgTypes[5]
+	mi := &file_agora_v1_agents_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +716,7 @@ func (x *LeaveResponse) String() string {
 func (*LeaveResponse) ProtoMessage() {}
 
 func (x *LeaveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[5]
+	mi := &file_agora_v1_agents_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +729,7 @@ func (x *LeaveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveResponse.ProtoReflect.Descriptor instead.
 func (*LeaveResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{5}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *LeaveResponse) GetReleased() []string {
@@ -609,7 +748,7 @@ type ListAgentsRequest struct {
 
 func (x *ListAgentsRequest) Reset() {
 	*x = ListAgentsRequest{}
-	mi := &file_agora_v1_agents_proto_msgTypes[6]
+	mi := &file_agora_v1_agents_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -621,7 +760,7 @@ func (x *ListAgentsRequest) String() string {
 func (*ListAgentsRequest) ProtoMessage() {}
 
 func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[6]
+	mi := &file_agora_v1_agents_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -634,7 +773,7 @@ func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentsRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{6}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListAgentsRequest) GetAll() bool {
@@ -656,7 +795,7 @@ type ListAgentsResponse struct {
 
 func (x *ListAgentsResponse) Reset() {
 	*x = ListAgentsResponse{}
-	mi := &file_agora_v1_agents_proto_msgTypes[7]
+	mi := &file_agora_v1_agents_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +807,7 @@ func (x *ListAgentsResponse) String() string {
 func (*ListAgentsResponse) ProtoMessage() {}
 
 func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[7]
+	mi := &file_agora_v1_agents_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +820,7 @@ func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentsResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{7}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListAgentsResponse) GetAgents() []*Profile {
@@ -717,7 +856,7 @@ type WhoRequest struct {
 
 func (x *WhoRequest) Reset() {
 	*x = WhoRequest{}
-	mi := &file_agora_v1_agents_proto_msgTypes[8]
+	mi := &file_agora_v1_agents_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -729,7 +868,7 @@ func (x *WhoRequest) String() string {
 func (*WhoRequest) ProtoMessage() {}
 
 func (x *WhoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[8]
+	mi := &file_agora_v1_agents_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -742,7 +881,7 @@ func (x *WhoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WhoRequest.ProtoReflect.Descriptor instead.
 func (*WhoRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{8}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WhoRequest) GetQuery() string {
@@ -775,7 +914,7 @@ type WhoResponse struct {
 
 func (x *WhoResponse) Reset() {
 	*x = WhoResponse{}
-	mi := &file_agora_v1_agents_proto_msgTypes[9]
+	mi := &file_agora_v1_agents_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -787,7 +926,7 @@ func (x *WhoResponse) String() string {
 func (*WhoResponse) ProtoMessage() {}
 
 func (x *WhoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[9]
+	mi := &file_agora_v1_agents_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -800,7 +939,7 @@ func (x *WhoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WhoResponse.ProtoReflect.Descriptor instead.
 func (*WhoResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{9}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *WhoResponse) GetAgents() []*Profile {
@@ -822,7 +961,7 @@ type RenameRequest struct {
 
 func (x *RenameRequest) Reset() {
 	*x = RenameRequest{}
-	mi := &file_agora_v1_agents_proto_msgTypes[10]
+	mi := &file_agora_v1_agents_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -834,7 +973,7 @@ func (x *RenameRequest) String() string {
 func (*RenameRequest) ProtoMessage() {}
 
 func (x *RenameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[10]
+	mi := &file_agora_v1_agents_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -847,7 +986,7 @@ func (x *RenameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameRequest.ProtoReflect.Descriptor instead.
 func (*RenameRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{10}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *RenameRequest) GetAgent() string {
@@ -874,7 +1013,7 @@ type RenameResponse struct {
 
 func (x *RenameResponse) Reset() {
 	*x = RenameResponse{}
-	mi := &file_agora_v1_agents_proto_msgTypes[11]
+	mi := &file_agora_v1_agents_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -886,7 +1025,7 @@ func (x *RenameResponse) String() string {
 func (*RenameResponse) ProtoMessage() {}
 
 func (x *RenameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[11]
+	mi := &file_agora_v1_agents_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -899,7 +1038,7 @@ func (x *RenameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameResponse.ProtoReflect.Descriptor instead.
 func (*RenameResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{11}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RenameResponse) GetProfile() *Profile {
@@ -923,7 +1062,7 @@ type SetAvatarRequest struct {
 
 func (x *SetAvatarRequest) Reset() {
 	*x = SetAvatarRequest{}
-	mi := &file_agora_v1_agents_proto_msgTypes[12]
+	mi := &file_agora_v1_agents_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -935,7 +1074,7 @@ func (x *SetAvatarRequest) String() string {
 func (*SetAvatarRequest) ProtoMessage() {}
 
 func (x *SetAvatarRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[12]
+	mi := &file_agora_v1_agents_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -948,7 +1087,7 @@ func (x *SetAvatarRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAvatarRequest.ProtoReflect.Descriptor instead.
 func (*SetAvatarRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{12}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SetAvatarRequest) GetAgent() string {
@@ -981,7 +1120,7 @@ type SetAvatarResponse struct {
 
 func (x *SetAvatarResponse) Reset() {
 	*x = SetAvatarResponse{}
-	mi := &file_agora_v1_agents_proto_msgTypes[13]
+	mi := &file_agora_v1_agents_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -993,7 +1132,7 @@ func (x *SetAvatarResponse) String() string {
 func (*SetAvatarResponse) ProtoMessage() {}
 
 func (x *SetAvatarResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[13]
+	mi := &file_agora_v1_agents_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1006,7 +1145,7 @@ func (x *SetAvatarResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAvatarResponse.ProtoReflect.Descriptor instead.
 func (*SetAvatarResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{13}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SetAvatarResponse) GetProfile() *Profile {
@@ -1026,7 +1165,7 @@ type ClearAvatarRequest struct {
 
 func (x *ClearAvatarRequest) Reset() {
 	*x = ClearAvatarRequest{}
-	mi := &file_agora_v1_agents_proto_msgTypes[14]
+	mi := &file_agora_v1_agents_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1038,7 +1177,7 @@ func (x *ClearAvatarRequest) String() string {
 func (*ClearAvatarRequest) ProtoMessage() {}
 
 func (x *ClearAvatarRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[14]
+	mi := &file_agora_v1_agents_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1051,7 +1190,7 @@ func (x *ClearAvatarRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearAvatarRequest.ProtoReflect.Descriptor instead.
 func (*ClearAvatarRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{14}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ClearAvatarRequest) GetAgent() string {
@@ -1070,7 +1209,7 @@ type ClearAvatarResponse struct {
 
 func (x *ClearAvatarResponse) Reset() {
 	*x = ClearAvatarResponse{}
-	mi := &file_agora_v1_agents_proto_msgTypes[15]
+	mi := &file_agora_v1_agents_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1082,7 +1221,7 @@ func (x *ClearAvatarResponse) String() string {
 func (*ClearAvatarResponse) ProtoMessage() {}
 
 func (x *ClearAvatarResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_agents_proto_msgTypes[15]
+	mi := &file_agora_v1_agents_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1095,7 +1234,7 @@ func (x *ClearAvatarResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearAvatarResponse.ProtoReflect.Descriptor instead.
 func (*ClearAvatarResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_agents_proto_rawDescGZIP(), []int{15}
+	return file_agora_v1_agents_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ClearAvatarResponse) GetProfile() *Profile {
@@ -1163,9 +1302,17 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\x06_aboutB\a\n" +
 	"\x05_iconB\n" +
 	"\n" +
-	"\b_pigment\"D\n" +
+	"\b_pigment\"~\n" +
 	"\x15UpdateProfileResponse\x12+\n" +
-	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile\"$\n" +
+	"\aprofile\x18\x01 \x01(\v2\x11.agora.v1.ProfileR\aprofile\x128\n" +
+	"\fproject_room\x18\x02 \x01(\v2\x15.agora.v1.ProjectRoomR\vprojectRoom\"\x8b\x01\n" +
+	"\vProjectRoom\x12\x12\n" +
+	"\x04room\x18\x01 \x01(\tR\x04room\x120\n" +
+	"\x05state\x18\x02 \x01(\x0e2\x1a.agora.v1.ProjectRoomStateR\x05state\x12\x1e\n" +
+	"\n" +
+	"unfollowed\x18\x03 \x01(\tR\n" +
+	"unfollowed\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\"$\n" +
 	"\fLeaveRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\"+\n" +
 	"\rLeaveResponse\x12\x1a\n" +
@@ -1204,7 +1351,13 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\x14CI_STATE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eCI_STATE_GREEN\x10\x01\x12\x10\n" +
 	"\fCI_STATE_RED\x10\x02\x12\x15\n" +
-	"\x11CI_STATE_CONFLICT\x10\x032\xe6\x03\n" +
+	"\x11CI_STATE_CONFLICT\x10\x03*\xb4\x01\n" +
+	"\x10ProjectRoomState\x12\"\n" +
+	"\x1ePROJECT_ROOM_STATE_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17PROJECT_ROOM_STATE_NONE\x10\x01\x12 \n" +
+	"\x1cPROJECT_ROOM_STATE_FOLLOWING\x10\x02\x12\x1e\n" +
+	"\x1aPROJECT_ROOM_STATE_MISSING\x10\x03\x12\x1d\n" +
+	"\x19PROJECT_ROOM_STATE_FAILED\x10\x042\xe6\x03\n" +
 	"\fAgentService\x12P\n" +
 	"\rUpdateProfile\x12\x1e.agora.v1.UpdateProfileRequest\x1a\x1f.agora.v1.UpdateProfileResponse\x128\n" +
 	"\x05Leave\x12\x16.agora.v1.LeaveRequest\x1a\x17.agora.v1.LeaveResponse\x12G\n" +
@@ -1227,63 +1380,67 @@ func file_agora_v1_agents_proto_rawDescGZIP() []byte {
 	return file_agora_v1_agents_proto_rawDescData
 }
 
-var file_agora_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_agora_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_agora_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_agora_v1_agents_proto_goTypes = []any{
 	(CiState)(0),                  // 0: agora.v1.CiState
-	(*Profile)(nil),               // 1: agora.v1.Profile
-	(*FormerName)(nil),            // 2: agora.v1.FormerName
-	(*UpdateProfileRequest)(nil),  // 3: agora.v1.UpdateProfileRequest
-	(*UpdateProfileResponse)(nil), // 4: agora.v1.UpdateProfileResponse
-	(*LeaveRequest)(nil),          // 5: agora.v1.LeaveRequest
-	(*LeaveResponse)(nil),         // 6: agora.v1.LeaveResponse
-	(*ListAgentsRequest)(nil),     // 7: agora.v1.ListAgentsRequest
-	(*ListAgentsResponse)(nil),    // 8: agora.v1.ListAgentsResponse
-	(*WhoRequest)(nil),            // 9: agora.v1.WhoRequest
-	(*WhoResponse)(nil),           // 10: agora.v1.WhoResponse
-	(*RenameRequest)(nil),         // 11: agora.v1.RenameRequest
-	(*RenameResponse)(nil),        // 12: agora.v1.RenameResponse
-	(*SetAvatarRequest)(nil),      // 13: agora.v1.SetAvatarRequest
-	(*SetAvatarResponse)(nil),     // 14: agora.v1.SetAvatarResponse
-	(*ClearAvatarRequest)(nil),    // 15: agora.v1.ClearAvatarRequest
-	(*ClearAvatarResponse)(nil),   // 16: agora.v1.ClearAvatarResponse
-	nil,                           // 17: agora.v1.Profile.CiStateEntry
-	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
-	(SessionState)(0),             // 19: agora.v1.SessionState
+	(ProjectRoomState)(0),         // 1: agora.v1.ProjectRoomState
+	(*Profile)(nil),               // 2: agora.v1.Profile
+	(*FormerName)(nil),            // 3: agora.v1.FormerName
+	(*UpdateProfileRequest)(nil),  // 4: agora.v1.UpdateProfileRequest
+	(*UpdateProfileResponse)(nil), // 5: agora.v1.UpdateProfileResponse
+	(*ProjectRoom)(nil),           // 6: agora.v1.ProjectRoom
+	(*LeaveRequest)(nil),          // 7: agora.v1.LeaveRequest
+	(*LeaveResponse)(nil),         // 8: agora.v1.LeaveResponse
+	(*ListAgentsRequest)(nil),     // 9: agora.v1.ListAgentsRequest
+	(*ListAgentsResponse)(nil),    // 10: agora.v1.ListAgentsResponse
+	(*WhoRequest)(nil),            // 11: agora.v1.WhoRequest
+	(*WhoResponse)(nil),           // 12: agora.v1.WhoResponse
+	(*RenameRequest)(nil),         // 13: agora.v1.RenameRequest
+	(*RenameResponse)(nil),        // 14: agora.v1.RenameResponse
+	(*SetAvatarRequest)(nil),      // 15: agora.v1.SetAvatarRequest
+	(*SetAvatarResponse)(nil),     // 16: agora.v1.SetAvatarResponse
+	(*ClearAvatarRequest)(nil),    // 17: agora.v1.ClearAvatarRequest
+	(*ClearAvatarResponse)(nil),   // 18: agora.v1.ClearAvatarResponse
+	nil,                           // 19: agora.v1.Profile.CiStateEntry
+	(*timestamppb.Timestamp)(nil), // 20: google.protobuf.Timestamp
+	(SessionState)(0),             // 21: agora.v1.SessionState
 }
 var file_agora_v1_agents_proto_depIdxs = []int32{
-	18, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
-	18, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
-	19, // 2: agora.v1.Profile.session:type_name -> agora.v1.SessionState
-	17, // 3: agora.v1.Profile.ci_state:type_name -> agora.v1.Profile.CiStateEntry
-	2,  // 4: agora.v1.Profile.formerly:type_name -> agora.v1.FormerName
-	18, // 5: agora.v1.FormerName.renamed_at:type_name -> google.protobuf.Timestamp
-	1,  // 6: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
-	1,  // 7: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
-	1,  // 8: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
-	1,  // 9: agora.v1.RenameResponse.profile:type_name -> agora.v1.Profile
-	1,  // 10: agora.v1.SetAvatarResponse.profile:type_name -> agora.v1.Profile
-	1,  // 11: agora.v1.ClearAvatarResponse.profile:type_name -> agora.v1.Profile
-	0,  // 12: agora.v1.Profile.CiStateEntry.value:type_name -> agora.v1.CiState
-	3,  // 13: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
-	5,  // 14: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
-	7,  // 15: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
-	9,  // 16: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
-	11, // 17: agora.v1.AgentService.Rename:input_type -> agora.v1.RenameRequest
-	13, // 18: agora.v1.AgentService.SetAvatar:input_type -> agora.v1.SetAvatarRequest
-	15, // 19: agora.v1.AgentService.ClearAvatar:input_type -> agora.v1.ClearAvatarRequest
-	4,  // 20: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
-	6,  // 21: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
-	8,  // 22: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
-	10, // 23: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
-	12, // 24: agora.v1.AgentService.Rename:output_type -> agora.v1.RenameResponse
-	14, // 25: agora.v1.AgentService.SetAvatar:output_type -> agora.v1.SetAvatarResponse
-	16, // 26: agora.v1.AgentService.ClearAvatar:output_type -> agora.v1.ClearAvatarResponse
-	20, // [20:27] is the sub-list for method output_type
-	13, // [13:20] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	20, // 0: agora.v1.Profile.joined_at:type_name -> google.protobuf.Timestamp
+	20, // 1: agora.v1.Profile.updated_at:type_name -> google.protobuf.Timestamp
+	21, // 2: agora.v1.Profile.session:type_name -> agora.v1.SessionState
+	19, // 3: agora.v1.Profile.ci_state:type_name -> agora.v1.Profile.CiStateEntry
+	3,  // 4: agora.v1.Profile.formerly:type_name -> agora.v1.FormerName
+	20, // 5: agora.v1.FormerName.renamed_at:type_name -> google.protobuf.Timestamp
+	2,  // 6: agora.v1.UpdateProfileResponse.profile:type_name -> agora.v1.Profile
+	6,  // 7: agora.v1.UpdateProfileResponse.project_room:type_name -> agora.v1.ProjectRoom
+	1,  // 8: agora.v1.ProjectRoom.state:type_name -> agora.v1.ProjectRoomState
+	2,  // 9: agora.v1.ListAgentsResponse.agents:type_name -> agora.v1.Profile
+	2,  // 10: agora.v1.WhoResponse.agents:type_name -> agora.v1.Profile
+	2,  // 11: agora.v1.RenameResponse.profile:type_name -> agora.v1.Profile
+	2,  // 12: agora.v1.SetAvatarResponse.profile:type_name -> agora.v1.Profile
+	2,  // 13: agora.v1.ClearAvatarResponse.profile:type_name -> agora.v1.Profile
+	0,  // 14: agora.v1.Profile.CiStateEntry.value:type_name -> agora.v1.CiState
+	4,  // 15: agora.v1.AgentService.UpdateProfile:input_type -> agora.v1.UpdateProfileRequest
+	7,  // 16: agora.v1.AgentService.Leave:input_type -> agora.v1.LeaveRequest
+	9,  // 17: agora.v1.AgentService.ListAgents:input_type -> agora.v1.ListAgentsRequest
+	11, // 18: agora.v1.AgentService.Who:input_type -> agora.v1.WhoRequest
+	13, // 19: agora.v1.AgentService.Rename:input_type -> agora.v1.RenameRequest
+	15, // 20: agora.v1.AgentService.SetAvatar:input_type -> agora.v1.SetAvatarRequest
+	17, // 21: agora.v1.AgentService.ClearAvatar:input_type -> agora.v1.ClearAvatarRequest
+	5,  // 22: agora.v1.AgentService.UpdateProfile:output_type -> agora.v1.UpdateProfileResponse
+	8,  // 23: agora.v1.AgentService.Leave:output_type -> agora.v1.LeaveResponse
+	10, // 24: agora.v1.AgentService.ListAgents:output_type -> agora.v1.ListAgentsResponse
+	12, // 25: agora.v1.AgentService.Who:output_type -> agora.v1.WhoResponse
+	14, // 26: agora.v1.AgentService.Rename:output_type -> agora.v1.RenameResponse
+	16, // 27: agora.v1.AgentService.SetAvatar:output_type -> agora.v1.SetAvatarResponse
+	18, // 28: agora.v1.AgentService.ClearAvatar:output_type -> agora.v1.ClearAvatarResponse
+	22, // [22:29] is the sub-list for method output_type
+	15, // [15:22] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_agents_proto_init() }
@@ -1298,8 +1455,8 @@ func file_agora_v1_agents_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_agents_proto_rawDesc), len(file_agora_v1_agents_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   17,
+			NumEnums:      2,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

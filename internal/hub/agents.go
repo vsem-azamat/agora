@@ -8,6 +8,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/version"
 )
 
@@ -22,12 +23,35 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 	for _, n := range m.GetDropPrs() {
 		u.DropPRs = append(u.DropPRs, int(n))
 	}
+	var oldProject string
+	if m.Project != nil {
+		if old, err := s.h.agents.Get(ctx, m.GetAgent()); err == nil {
+			oldProject = old.Project
+		}
+	}
 	p, err := s.h.agents.Update(ctx, m.GetAgent(), u)
 	if err != nil {
 		return nil, toConnect(err)
 	}
+	resp := &agorav1.UpdateProfileResponse{Profile: profilePB(p)}
+	if m.Project != nil {
+		// the project's room moves with the project, for every client
+		switch f, err := s.h.rooms.FollowProject(ctx, m.GetAgent(), oldProject, p.Project); {
+		case err != nil:
+			s.h.log.Error("follow the project's room", "agent", m.GetAgent(), "err", err)
+		default:
+			resp.ProjectRoom = &agorav1.ProjectRoom{Room: f.Room, State: projectRoomStates[f.State], Unfollowed: f.Unfollowed, Detail: f.Detail}
+		}
+	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.UpdateProfileResponse{Profile: profilePB(p)}), nil
+	return connect.NewResponse(resp), nil
+}
+
+var projectRoomStates = map[rooms.ProjectState]agorav1.ProjectRoomState{
+	rooms.ProjectNone:      agorav1.ProjectRoomState_PROJECT_ROOM_STATE_NONE,
+	rooms.ProjectFollowing: agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FOLLOWING,
+	rooms.ProjectNoRoom:    agorav1.ProjectRoomState_PROJECT_ROOM_STATE_MISSING,
+	rooms.ProjectFailed:    agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED,
 }
 
 func (s *agentService) Rename(ctx context.Context, req *connect.Request[agorav1.RenameRequest]) (*connect.Response[agorav1.RenameResponse], error) {

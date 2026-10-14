@@ -56,6 +56,30 @@ When an agent joins with `agora join <name> --project <project>`, the system SHA
 - **WHEN** an agent runs `agora join builder --project my.app` while `#my-app` exists, and another runs `agora join tester --project 2048-game` while no room `#p-2048-game` exists
 - **THEN** `builder` follows `#my-app`, and the output for `tester` says to create the room with `agora room-create p-2048-game '<purpose>'`
 
+### Requirement: A Changed Project Moves The Project's Room
+
+The system SHALL, whenever an agent's project is set (by `agora join --project`, `agora set --project` or any other client), make the agent follow the new project's room as joining does, and SHALL, when the project differs from the old one, stop following the old project's room if the agent's subscription to it was made by such a project follow and the agent has not touched it since; following the room, changing its mode or unfollowing it by hand makes the subscription the agent's own, and one the agent already followed on its own before stays. The hub SHALL do this itself, so every client behaves the same, and the answer to the profile update SHALL name the room followed or missing and the room no longer followed; the commands say so in their output. Setting the same project again SHALL change no subscription except to follow a project room that exists.
+
+#### Scenario: Joining again with another project
+- **WHEN** `builder` ran `agora join builder --project alpha`, so it follows `#alpha`, and runs `agora join builder --project beta` while `#beta` exists
+- **THEN** `builder` follows `#general` and `#beta` and no longer `#alpha`, and the output says so
+
+#### Scenario: Set follows too
+- **WHEN** `builder`, whose project is `alpha`, runs `agora set --project beta` while `#beta` exists
+- **THEN** `builder` follows `#beta` and no longer `#alpha`, and the output says so
+
+#### Scenario: The agent changed the old subscription
+- **WHEN** `builder` joined with `--project alpha`, then ran `agora subscribe alpha --mode wake`, and sets its project to `beta`
+- **THEN** `builder` still follows `#alpha` with the mode `wake`, and follows `#beta`
+
+#### Scenario: A room the agent followed on its own
+- **WHEN** `builder` followed `#alpha` before it joined with `--project alpha` and sets its project to `beta`
+- **THEN** `builder` still follows `#alpha`
+
+#### Scenario: A project without a room
+- **WHEN** `builder` follows `#alpha` through its project and sets its project to `gamma`, for which no room exists
+- **THEN** `builder` no longer follows `#alpha`, follows only `#general`, and the output says how to create the room for `gamma`
+
 ### Requirement: A Name Belongs To One Live Session
 
 The system SHALL refuse a name bound to another session that has not ended, unless the joining agent explicitly forces the claim, and SHALL then unbind the name from the other session.
