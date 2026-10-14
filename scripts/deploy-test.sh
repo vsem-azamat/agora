@@ -46,7 +46,9 @@ fi
 
 # a check after the install fails: the message says how to go back, with the backups taken
 sleep 1 # a new backup name
-WEB_URL=http://127.0.0.1:1/ run && fail "a deploy whose web app does not answer succeeded"
+before=$(ls "$BIN".bak-* | wc -l)
+KEEP_BACKUPS=1 WEB_URL=http://127.0.0.1:1/ run && fail "a deploy whose web app does not answer succeeded"
+[ "$(ls "$BIN".bak-* | wc -l)" = $((before + 1)) ] || fail "a failed deploy pruned backups"
 grep -q "to go back to what ran before" "$tmp/out" && grep -q "mv .*agora.bak-" "$tmp/out" || { cat "$tmp/out"; fail "no way back"; }
 if command -v sqlite3 >/dev/null; then
   grep -q "rm -f .*-wal .*-shm" "$tmp/out" || { cat "$tmp/out"; fail "the way back does not restore the database"; }
@@ -63,6 +65,66 @@ grep -q "is a symbolic link" "$tmp/out" || { cat "$tmp/out"; fail "the refusal o
 
 SERVICE=agora-deploy-test-none run && fail "a deploy to a missing service went on"
 grep -q "set SERVICE=" "$tmp/out" || { cat "$tmp/out"; fail "the refusal of a missing service does not say why"; }
+
+# old backups are pruned: this deploy's own backup stays whatever the names say (the seeded ones
+# are dated in the future, as after the clock went back an hour), then the newest others, up to
+# KEEP_BACKUPS, for the binary and the database alike; a file that merely starts like a backup stays
+sleep 1
+for n in 1 2 3; do
+  touch "$BIN.bak-2999010$n-000000" "$DB.bak-2999010$n-000000"
+done
+touch "$BIN.bak-2020-01" "$BIN.bak-notes" "$BIN.bak-20200101-000000"
+bins_list() { ls "$BIN".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*; }
+bins() { ls "$BIN".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l; }
+KEEP_BACKUPS=2 run || { cat "$tmp/out"; fail "a deploy that prunes backups failed"; }
+[ "$(bins)" = 2 ] && [ -e "$BIN.bak-29990103-000000" ] && ! ls "$BIN".bak-20200101-* "$BIN".bak-29990101-* >/dev/null 2>&1 \
+  || { ls "$tmp/bin"; fail "the binary's backups are not this deploy's and the newest other"; }
+[ "$(bins_list | grep -c "bak-$(date +%Y)")" = 1 ] || fail "this deploy's own backup was removed"
+[ -e "$BIN.bak-notes" ] && [ -e "$BIN.bak-2020-01" ] || fail "pruning removed a file that is not a backup"
+if command -v sqlite3 >/dev/null; then
+  [ "$(ls "$DB".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l)" = 2 ] && [ -e "$DB.bak-29990103-000000" ] || { ls "$state"; fail "the database's backups are not this deploy's and the newest other"; }
+fi
+sleep 1
+# BACKUP=0 takes no backup and prunes none
+BACKUP=0 KEEP_BACKUPS=1 run || { cat "$tmp/out"; fail "a deploy without backups failed"; }
+[ "$(bins)" = 2 ] || fail "BACKUP=0 pruned backups"
+# 02 is the number 2
+KEEP_BACKUPS=02 run || { cat "$tmp/out"; fail "a deploy with KEEP_BACKUPS=02 failed"; }
+[ "$(bins)" = 2 ] || fail "KEEP_BACKUPS=02 did not keep 2"
+# 08 is the number 8, not an octal number that does not exist
+for n in 4 5 6 7 8 9; do
+  touch "$BIN.bak-2999010$n-000000"
+done
+sleep 1
+KEEP_BACKUPS=08 run || { cat "$tmp/out"; fail "a deploy with KEEP_BACKUPS=08 failed"; }
+[ "$(bins)" = 8 ] || { ls "$tmp/bin"; fail "KEEP_BACKUPS=08 did not keep 8"; }
+sleep 1
+KEEP_BACKUPS=0 run || { cat "$tmp/out"; fail "a deploy that keeps every backup failed"; }
+[ "$(bins)" = 9 ] || fail "KEEP_BACKUPS=0 removed backups"
+# a deploy that takes no database backup (there is no database) still keeps KEEP_BACKUPS of the
+# database's older ones, none of which is this deploy's
+if [ -f "$DB" ]; then
+  mv "$DB" "$DB.aside"
+  sleep 1
+  KEEP_BACKUPS=1 run || { cat "$tmp/out"; fail "a deploy without a database failed"; }
+  [ "$(ls "$DB".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l)" = 1 ] || { ls "$state"; fail "a deploy without a database did not keep exactly 1 of its backups"; }
+  mv "$DB.aside" "$DB"
+fi
+# a backup that cannot be removed is said, by hand, and the deploy still succeeded
+mkdir -p "$tmp/rmshim"
+cat >"$tmp/rmshim/rm" <<SHIM
+#!/usr/bin/env bash
+case "\$*" in *bak-29990103*) exit 1 ;; esac
+exec $(command -v rm) "\$@"
+SHIM
+chmod +x "$tmp/rmshim/rm"
+touch "$BIN.bak-29990102-000000" "$BIN.bak-29990103-000000"
+sleep 1
+PATH="$tmp/rmshim:$PATH" KEEP_BACKUPS=1 run || { cat "$tmp/out"; fail "a deploy that could not remove a backup failed"; }
+grep -q "could not remove .*bak-29990103-000000; remove it by hand" "$tmp/out" || { cat "$tmp/out"; fail "the backup that stays is not named"; }
+[ -e "$BIN.bak-29990103-000000" ] && [ ! -e "$BIN.bak-29990102-000000" ] || fail "pruning stopped at the backup it could not remove"
+KEEP_BACKUPS=two run && fail "a KEEP_BACKUPS that is not a number was accepted"
+grep -q "KEEP_BACKUPS=two is not a number" "$tmp/out" || { cat "$tmp/out"; fail "the refusal of KEEP_BACKUPS does not say why"; }
 
 # a service whose restart starts the hub from the installed binary, as systemd would; a stub
 # systemctl, since the test has no systemd. FAKE_RESTART=0: the restart leaves the old hub running.

@@ -16,6 +16,7 @@
    - It copies the binary to `<binary>.bak-<time>`.
    - It copies the database with `VACUUM INTO` to `<database>.bak-<time>`, readable by its owner only, so a migration can be undone. The copy is consistent while the hub writes.
    - It says so when there is no database at `DB`.
+   - After the deploy succeeded, it removes the oldest backups it made, keeping `KEEP_BACKUPS` of the binary and of the database each: this deploy's own and the newest others by name (a name is the local time, so after the clock went back the newest name may not be the newest backup, and this deploy's backup is never removed). A file whose name is not `<file>.bak-<date>-<time>` is never removed.
 6. **Install.** It renames the new binary over the old one within one directory, so the binary is always either the old one or the new one.
 7. **Restart.** It runs `systemctl --user restart <service>`, waits up to 10 seconds for the unit to be active, and checks that the running process is the new binary.
 8. **Verify.**
@@ -41,6 +42,7 @@ When anything fails after the install, the script prints the commands that go ba
 | `WEB` | `1` | `0`: build without the web app, which serves only the API |
 | `PULL` | `1` | `0`: deploy the checkout as it is, without pulling |
 | `BACKUP` | `1` | `0`: no backups, and nothing to go back to |
+| `KEEP_BACKUPS` | `5` | How many backups of the binary, and of the database, stay after a successful deploy; `0`: all of them. Only with `BACKUP=1` |
 | `SKILL_DIRS` | empty | Directories, separated by spaces, to reinstall the agent skill into |
 
 For example:
@@ -49,9 +51,9 @@ For example:
 make deploy WEB_URL=http://127.0.0.1:8484/ SKILL_DIRS="$HOME/.claude/skills $HOME/.agents/skills"
 ```
 
-Backups are kept; remove old ones by hand. `make test-deploy`, part of `make test`, commits the working tree's script into a clone of `HEAD` in a temporary directory and runs it there without a service and with `WEB=0`, since the clone has no web dependencies installed. It checks:
+A failed deploy removes nothing, so the backups its way back names stay. `make test-deploy`, part of `make test`, commits the working tree's script into a clone of `HEAD` in a temporary directory and runs it there without a service and with `WEB=0`, since the clone has no web dependencies installed. It checks:
 - the installed version;
-- the backups, with a quote and a space in the database's path;
+- the backups and their pruning to `KEEP_BACKUPS`, with a quote and a space in the database's path;
 - the way back after a failed check;
 - a restart that starts the new build and one that leaves the old hub running, through a stub `systemctl`;
 - the refusal of a tree with an untracked file, of a symbolic link and of a missing service.

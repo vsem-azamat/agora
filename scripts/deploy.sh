@@ -13,6 +13,7 @@ CHECK=${CHECK-check}      # make target run first; empty: none
 WEB=${WEB-1}              # 1: build the web app into the binary (make build-web); 0: API only
 PULL=${PULL-1}            # 1: git pull --ff-only first
 BACKUP=${BACKUP-1}        # 1: back up the binary and the database
+KEEP_BACKUPS=${KEEP_BACKUPS-5} # backups of the binary, and of the database, kept after a deploy; 0: all
 SKILL_DIRS=${SKILL_DIRS-} # space-separated: agora install skill --dir
 COMMIT_LEN=12             # as agora version names a commit
 WAIT_TRIES=20             # times WAIT_STEP: how long the service and the hub get to come up
@@ -44,6 +45,10 @@ if [ -n "$SERVICE" ]; then
 fi
 [ -z "$WEB_URL" ] || command -v curl >/dev/null || die "curl is needed to check WEB_URL"
 [ "$BACKUP" != 1 ] || [ ! -f "$DB" ] || command -v sqlite3 >/dev/null || die "sqlite3 is needed to back up $DB; install it, or set BACKUP=0"
+case "$KEEP_BACKUPS" in
+  "" | *[!0-9]*) die "KEEP_BACKUPS=$KEEP_BACKUPS is not a number" ;;
+esac
+KEEP_BACKUPS=$((10#$KEEP_BACKUPS)) # 08 is a number, not bad octal
 echo "binary: $BIN"
 
 step "checkout"
@@ -165,5 +170,26 @@ fi
 for dir in $SKILL_DIRS; do
   "$BIN" install skill --dir "$dir"
 done
+
+# keeps KEEP_BACKUPS backups of a file named <file>.bak-<time>: this deploy's own ($2, which may be
+# empty), then the newest of the others. The names are in local time, which can go back an hour,
+# so the newest name is not always the newest backup.
+prune() {
+  local old=() i keep=$KEEP_BACKUPS
+  [ -z "$2" ] || keep=$((keep - 1))
+  for i in "$1".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]; do
+    if [ -f "$i" ] && [ "$i" != "$2" ]; then old+=("$i"); fi
+  done
+  [ "${#old[@]}" -gt "$keep" ] || return 0
+  for i in "${old[@]:0:${#old[@]}-keep}"; do
+    # a failure to remove one is no failure of the deploy
+    if rm -f -- "$i"; then echo "removed $i"; else echo "deploy: could not remove $i; remove it by hand" >&2; fi
+  done
+}
+if [ "$BACKUP" = 1 ] && [ "$KEEP_BACKUPS" -gt 0 ]; then
+  step "prune backups"
+  prune "$BIN" "$bin_bak"
+  prune "$DB" "$db_bak"
+fi
 
 step "deployed $head"
