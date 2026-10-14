@@ -62,21 +62,25 @@ func set(names ...string) map[string]bool {
 // url( can be checked to point inside the image.
 var cssFunction = regexp.MustCompile(`(?i)([a-z-]*)\s*\(\s*['"]?\s*(.?)`)
 
-// cssSkipped finds, from left to right, strings and comments; a comment is read as nothing, so
-// it cannot hide a property, and a string as an empty one, so comment marks in it hide nothing.
-// A comment left open runs to the end, a string to the end of its line; escapes are refused.
-var cssSkipped = regexp.MustCompile(`(?s)"[^"\n]*"?|'[^'\n]*'?|/\*.*?(\*/|$)`)
+// cssSkipped finds, from left to right, unquoted urls, strings and comments, as a browser reads
+// them: a comment is read as nothing, so it cannot hide a property, and a url or a string as an
+// empty one, so comment marks or quotes in it hide nothing. An unquoted url runs to its `)`, a
+// comment left open to the end, a string to the end of its line; escapes are refused.
+var cssSkipped = regexp.MustCompile(`(?is)url\(\s*[^\s"')][^)]*\)?|"[^"\n]*"?|'[^'\n]*'?|/\*.*?(\*/|$)`)
 
 func skipped(m string) string {
-	if strings.HasPrefix(m, "/*") {
+	switch {
+	case strings.HasPrefix(m, "/*"):
 		return ""
+	case strings.HasPrefix(m, `"`), strings.HasPrefix(m, "'"):
+		return `""`
 	}
-	return `""`
+	return "url()"
 }
 
 // cssProperty finds every name followed by a colon in a style: every property it sets, and
 // (refused with them) the element names before a pseudo-class.
-var cssProperty = regexp.MustCompile(`([A-Za-z0-9_-]+)\s*:`)
+var cssProperty = regexp.MustCompile(`([-\w\x{80}-\x{10FFFF}]+)\s*:`)
 
 // svgFunctions are the functions a value may use: colors, transforms, calc, and url(#…).
 var svgFunctions = set("url", "rgb", "rgba", "hsl", "hsla", "calc",
