@@ -62,9 +62,17 @@ func set(names ...string) map[string]bool {
 // url( can be checked to point inside the image.
 var cssFunction = regexp.MustCompile(`(?i)([a-z-]*)\s*\(\s*['"]?\s*(.?)`)
 
-// cssComment finds comments, which a browser reads as nothing, so they cannot hide a property;
-// one left open runs to the end.
-var cssComment = regexp.MustCompile(`(?s)/\*.*?(\*/|$)`)
+// cssSkipped finds, from left to right, strings and comments; a comment is read as nothing, so
+// it cannot hide a property, and a string as an empty one, so comment marks in it hide nothing.
+// A comment left open runs to the end, a string to the end of its line; escapes are refused.
+var cssSkipped = regexp.MustCompile(`(?s)"[^"\n]*"?|'[^'\n]*'?|/\*.*?(\*/|$)`)
+
+func skipped(m string) string {
+	if strings.HasPrefix(m, "/*") {
+		return ""
+	}
+	return `""`
+}
 
 // cssProperty finds every name followed by a colon in a style: every property it sets, and
 // (refused with them) the element names before a pseudo-class.
@@ -89,7 +97,7 @@ func checkValue(what, v string, style bool) error {
 		return refuseSVG("%s uses @ rules", what)
 	}
 	if style {
-		for _, m := range cssProperty.FindAllStringSubmatch(cssComment.ReplaceAllString(v, ""), -1) {
+		for _, m := range cssProperty.FindAllStringSubmatch(cssSkipped.ReplaceAllStringFunc(v, skipped), -1) {
 			if !styleProperties[strings.ToLower(m[1])] {
 				return refuseSVG("%s uses the property %s", what, m[1])
 			}
@@ -116,6 +124,7 @@ func sanitize(data []byte) ([]byte, error) {
 	dec.Entity = nil // only the five predefined entities
 	var out bytes.Buffer
 	var open []string
+	var style strings.Builder // the text of the style element, checked as a whole at its end
 	root := false
 	for {
 		tok, err := dec.Token()
@@ -144,6 +153,9 @@ func sanitize(data []byte) ([]byte, error) {
 			if !svgElements[name] {
 				return nil, refuseSVG("the element %s is not allowed", name)
 			}
+			if len(open) > 0 && open[len(open)-1] == "style" {
+				return nil, refuseSVG("the style element holds an element")
+			}
 			if !root && name != "svg" {
 				return nil, refuseSVG("the root element is %s, not svg", name)
 			}
@@ -158,6 +170,12 @@ func sanitize(data []byte) ([]byte, error) {
 			out.WriteString(">")
 			open = append(open, name)
 		case xml.EndElement:
+			if t.Name.Local == "style" {
+				if err := checkValue("the style element", style.String(), true); err != nil {
+					return nil, err
+				}
+				style.Reset()
+			}
 			out.WriteString("</" + t.Name.Local + ">")
 			open = open[:len(open)-1]
 		case xml.CharData:
@@ -168,9 +186,7 @@ func sanitize(data []byte) ([]byte, error) {
 				continue
 			}
 			if open[len(open)-1] == "style" {
-				if err := checkValue("the style element", string(t), true); err != nil {
-					return nil, err
-				}
+				style.Write(t)
 			}
 			out.WriteString(textEscaper.Replace(string(t)))
 		}
