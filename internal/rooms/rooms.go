@@ -1920,15 +1920,19 @@ func (r *Rooms) FollowProject(ctx context.Context, agent, oldProject, newProject
 			out.State = ProjectFollowing // followed already: the agent's own, or by an earlier project follow
 			return nil
 		}
-		if err := RequireUnarchivedTx(ctx, tx, room); err != nil {
-			out.State, out.Detail = ProjectFailed, err.Error()
+		archived, err := isArchived(ctx, tx, room)
+		if err != nil {
+			return err
+		}
+		if archived {
+			out.State, out.Detail = ProjectFailed, fmt.Sprintf("#%s is archived; bring it back first with `agora room-unarchive %s`", room, room)
 			return nil
 		}
 		if err := subscribe(ctx, tx, agent, room, ""); err != nil {
 			return err
 		}
 		out.State = ProjectFollowing
-		_, err := tx.ExecContext(ctx, `UPDATE subscriptions SET by_project = 1 WHERE agent = ? AND room = ?`, agent, room)
+		_, err = tx.ExecContext(ctx, `UPDATE subscriptions SET by_project = 1 WHERE agent = ? AND room = ?`, agent, room)
 		return err
 	})
 	return out, err
