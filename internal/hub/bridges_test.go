@@ -1245,6 +1245,28 @@ func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
 	})
 }
 
+func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	ready := filepath.Join(shortDir(t), "ready")
+	// ignores TERM, so it stops only when killed; the file says the trap is set
+	old := fmt.Sprintf(`trap '' TERM; touch '%s'; echo '{"type":"hello"}'; while :; do sleep 0.1; done`, ready)
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: old})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the old command", func() bool { _, err := os.Stat(ready); return err == nil })
+	g := newFake(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, _ = b.bridges.SetBridge(ctx, connect.NewRequest(&agorav1.SetBridgeRequest{Agent: "builder", Name: "example-chat", Command: proto.String(g.command())}))
+	deadline := time.Now().Add(15 * time.Second) // the old process is killed after 5 s
+	for len(g.received()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if st := b.state(t); st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || len(g.received()) == 0 {
+		t.Fatalf("bridge left %v, the new command never ran", st.GetState())
+	}
+}
+
 func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
