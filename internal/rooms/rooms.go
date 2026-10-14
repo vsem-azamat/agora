@@ -52,7 +52,7 @@ func ValidName(s string) bool { return nameRE.MatchString(s) }
 // even so (one letter, or only separators).
 func ProjectRoom(project string) string {
 	var b strings.Builder
-	for i := 0; i < len(project); i++ {
+	for i := range len(project) {
 		c := project[i]
 		switch {
 		case c >= 'A' && c <= 'Z':
