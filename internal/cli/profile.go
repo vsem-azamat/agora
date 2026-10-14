@@ -148,11 +148,7 @@ func (o *options) reportProjectRoom(pr *agorav1.ProjectRoom) {
 	case agorav1.ProjectRoomState_PROJECT_ROOM_STATE_MISSING:
 		fmt.Fprintf(o.out, "no room #%s for your project yet; create it with agora room-create %s '<purpose>'\n", room, room)
 	case agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED:
-		what := "your project's room"
-		if room != "" {
-			what = "#" + room + ", your project's room"
-		}
-		fmt.Fprintf(o.out, "not following %s: %s\n", what, pr.GetDetail())
+		fmt.Fprintf(o.out, "%s\n", pr.GetDetail())
 	}
 }
 

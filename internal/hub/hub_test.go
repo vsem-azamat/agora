@@ -286,29 +286,56 @@ func TestManualCompactionOfABusySessionMakesItIdle(t *testing.T) {
 }
 
 func TestAFailedProjectRoomFollowLeavesTheProfileUpdatedAndSaysWhatToDo(t *testing.T) {
-	r := start(t)
-	bg := context.Background()
-	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
-		t.Fatal(err)
+	setup := func(t *testing.T) *running {
+		r := start(t)
+		bg := context.Background()
+		if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+			t.Fatal(err)
+		}
+		for _, room := range []string{"alpha", "beta"} {
+			if _, err := r.rooms.CreateRoom(bg, connect.NewRequest(&agorav1.CreateRoomRequest{Agent: "builder", Name: room, Purpose: "work"})); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := r.rooms.Subscribe(bg, connect.NewRequest(&agorav1.SubscribeRequest{Agent: "builder", Rooms: []string{"alpha", "beta"}, Follow: false})); err != nil {
+			t.Fatal(err)
+		}
+		return r
 	}
-	if _, err := r.rooms.CreateRoom(bg, connect.NewRequest(&agorav1.CreateRoomRequest{Agent: "builder", Name: "alpha", Purpose: "work"})); err != nil {
-		t.Fatal(err)
+	update := func(t *testing.T, r *running, project string) *agorav1.UpdateProfileResponse {
+		resp, err := r.agents.UpdateProfile(context.Background(), connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Project: &project}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.Msg
 	}
-	if _, err := r.rooms.Subscribe(bg, connect.NewRequest(&agorav1.SubscribeRequest{Agent: "builder", Rooms: []string{"alpha"}, Follow: false})); err != nil {
-		t.Fatal(err)
+	trigger := func(t *testing.T, r *running, when string) {
+		if _, err := r.db.ExecContext(context.Background(), `CREATE TRIGGER no_subs `+when+` ON subscriptions BEGIN SELECT RAISE(ABORT, 'disk on fire'); END`); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := r.db.ExecContext(bg, `CREATE TRIGGER no_subs BEFORE INSERT ON subscriptions BEGIN SELECT RAISE(ABORT, 'disk on fire'); END`); err != nil {
-		t.Fatal(err)
+	// following the new room fails
+	r := setup(t)
+	update(t, r, "alpha")
+	trigger(t, r, "BEFORE INSERT")
+	got := update(t, r, "beta")
+	pr := got.GetProjectRoom()
+	if got.GetProfile().GetProject() != "beta" || pr.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED || pr.GetRoom() != "beta" ||
+		!strings.Contains(pr.GetDetail(), "agora subscribe beta") || !strings.Contains(pr.GetDetail(), "agora unsubscribe <room>") || strings.Contains(pr.GetDetail(), "disk on fire") {
+		t.Fatalf("project %q room %v", got.GetProfile().GetProject(), pr)
 	}
-	project := "alpha"
-	resp, err := r.agents.UpdateProfile(bg, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Project: &project}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	pr := resp.Msg.GetProjectRoom()
-	if resp.Msg.GetProfile().GetProject() != "alpha" || pr.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED || pr.GetRoom() != "alpha" ||
-		!strings.Contains(pr.GetDetail(), "agora subscribe alpha") || strings.Contains(pr.GetDetail(), "disk on fire") {
-		t.Fatalf("project %q room %v", resp.Msg.GetProfile().GetProject(), pr)
+	// leaving the old room fails, for a project with a room, one without, and none
+	for project, room := range map[string]string{"beta": "beta", "my/app": "", "": ""} {
+		r := setup(t)
+		update(t, r, "alpha")
+		trigger(t, r, "BEFORE DELETE")
+		got := update(t, r, project)
+		pr := got.GetProjectRoom()
+		if got.GetProfile().GetProject() != project || pr.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED || pr.GetRoom() != room ||
+			!strings.Contains(pr.GetDetail(), "could not update your project room subscriptions") || strings.Contains(pr.GetDetail(), "disk on fire") ||
+			strings.Contains(pr.GetDetail(), "agora subscribe `") || (room == "") == strings.Contains(pr.GetDetail(), "agora subscribe") {
+			t.Fatalf("project %q: room %v", project, pr)
+		}
 	}
 }
 

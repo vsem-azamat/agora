@@ -33,13 +33,26 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 		switch f, err := s.h.rooms.FollowProject(ctx, m.GetAgent()); {
 		case err != nil: // the profile is updated; the output says why the room is not followed
 			s.h.log.Error("follow the project's room", "agent", m.GetAgent(), "err", err)
-			resp.ProjectRoom = &agorav1.ProjectRoom{Room: rooms.ProjectRoom(p.Project), State: agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED, Detail: "could not follow it; follow it yourself with `agora subscribe " + rooms.ProjectRoom(p.Project) + "`"}
+			room := rooms.ProjectRoom(p.Project)
+			resp.ProjectRoom = &agorav1.ProjectRoom{Room: room, State: agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED, Detail: followFailedAdvice(room)}
 		default:
 			resp.ProjectRoom = &agorav1.ProjectRoom{Room: f.Room, State: projectRoomStates[f.State], Unfollowed: f.Unfollowed, Detail: f.Detail}
 		}
 	}
 	s.h.changes.fire()
 	return connect.NewResponse(resp), nil
+}
+
+// followFailedAdvice says what to do after the project room subscriptions could not be updated:
+// the failure may have come from following the new room or from leaving the old one, and the
+// update was undone as a whole, so the old room may still be followed. The database error stays
+// in the hub's log.
+func followFailedAdvice(room string) string {
+	if room == "" {
+		return "could not update your project room subscriptions; if you still follow your old project's room, leave it with `agora unsubscribe <room>`"
+	}
+	return "could not update your project room subscriptions; follow #" + room + " with `agora subscribe " + room +
+		"`, and leave your old project's room with `agora unsubscribe <room>` if you still follow it"
 }
 
 var projectRoomStates = map[rooms.ProjectState]agorav1.ProjectRoomState{

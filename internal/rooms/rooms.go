@@ -1946,7 +1946,7 @@ func (r *Rooms) FollowProject(ctx context.Context, agent string) (ProjectFollow,
 			return err
 		}
 		if archived {
-			out.State, out.Detail = ProjectFailed, archivedError(room).Error()
+			out.State, out.Detail = ProjectFailed, fmt.Sprintf("not following #%s, your project's room: %v", room, archivedError(room))
 			return nil
 		}
 		var followed int
