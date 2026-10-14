@@ -635,8 +635,10 @@ func (x *ListAgentsRequest) GetAll() bool {
 }
 
 type ListAgentsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agents        []*Profile             `protobuf:"bytes,1,rep,name=agents,proto3" json:"agents,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Agents []*Profile             `protobuf:"bytes,1,rep,name=agents,proto3" json:"agents,omitempty"`
+	// The version and commit of the running hub, as `agora version` prints them: `<version> (<commit>)`.
+	HubVersion    string `protobuf:"bytes,2,opt,name=hub_version,json=hubVersion,proto3" json:"hub_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -676,6 +678,13 @@ func (x *ListAgentsResponse) GetAgents() []*Profile {
 		return x.Agents
 	}
 	return nil
+}
+
+func (x *ListAgentsResponse) GetHubVersion() string {
+	if x != nil {
+		return x.HubVersion
+	}
+	return ""
 }
 
 type WhoRequest struct {
@@ -1143,9 +1152,11 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\rLeaveResponse\x12\x1a\n" +
 	"\breleased\x18\x01 \x03(\tR\breleased\"%\n" +
 	"\x11ListAgentsRequest\x12\x10\n" +
-	"\x03all\x18\x01 \x01(\bR\x03all\"?\n" +
+	"\x03all\x18\x01 \x01(\bR\x03all\"`\n" +
 	"\x12ListAgentsResponse\x12)\n" +
-	"\x06agents\x18\x01 \x03(\v2\x11.agora.v1.ProfileR\x06agents\"H\n" +
+	"\x06agents\x18\x01 \x03(\v2\x11.agora.v1.ProfileR\x06agents\x12\x1f\n" +
+	"\vhub_version\x18\x02 \x01(\tR\n" +
+	"hubVersion\"H\n" +
 	"\n" +
 	"WhoRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x12\n" +

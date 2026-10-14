@@ -250,6 +250,9 @@ func statusCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if v := agents.Msg.GetHubVersion(); v != "" {
+				fmt.Fprintf(o.out, "HUB agora %s\n", v)
+			}
 			which := " active"
 			if all {
 				which = ""

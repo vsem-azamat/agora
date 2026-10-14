@@ -2,11 +2,16 @@
 # Runs the working tree's scripts/deploy.sh on a clone of HEAD in a temporary directory, without a
 # service: the binary is installed and names the clone's HEAD, a second run keeps backups of the
 # binary and the database, a failed check after the install says how to go back, and a tree with
-# changes, a symbolic link as the binary and a missing service are refused.
+# changes, a symbolic link as the binary and a missing service are refused, and a restart that
+# leaves the old hub running is caught by the version the hub reports.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+cleanup() {
+  [ ! -f "$tmp/hub.pid" ] || kill "$(cat "$tmp/hub.pid")" 2>/dev/null || true
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
 fail() { echo "deploy-test: $*" >&2; exit 1; }
 
 git clone -q . "$tmp/repo"
@@ -58,4 +63,43 @@ grep -q "is a symbolic link" "$tmp/out" || { cat "$tmp/out"; fail "the refusal o
 
 SERVICE=agora-deploy-test-none run && fail "a deploy to a missing service went on"
 grep -q "set SERVICE=" "$tmp/out" || { cat "$tmp/out"; fail "the refusal of a missing service does not say why"; }
+
+# a service whose restart starts the hub from the installed binary, as systemd would; a stub
+# systemctl, since the test has no systemd. FAKE_RESTART=0: the restart leaves the old hub running.
+mkdir -p "$tmp/fake" "$state"
+cat >"$tmp/fake/systemctl" <<'STUB'
+#!/usr/bin/env bash
+shift # --user
+case "$1" in
+  cat | is-active) exit 0 ;;
+  show)
+    case "$3" in
+      ExecStart) echo "{ path=$BIN ; argv[]=$BIN hub ; ignore_errors=no }" ;;
+      MainPID) echo 0 ;;
+    esac ;;
+  restart)
+    [ "$FAKE_RESTART" = 1 ] || exit 0
+    if [ -f "$FAKE_PID" ]; then
+      kill "$(cat "$FAKE_PID")" 2>/dev/null || true
+      while kill -0 "$(cat "$FAKE_PID")" 2>/dev/null; do sleep 0.1; done
+    fi
+    rm -f "$AGORA_SOCKET"
+    "$BIN" hub --db "$DB" >/dev/null 2>&1 &
+    echo $! >"$FAKE_PID" ;;
+esac
+STUB
+chmod +x "$tmp/fake/systemctl"
+export AGORA_SOCKET="$tmp/hub.sock" FAKE_PID="$tmp/hub.pid"
+svc() { PATH="$tmp/fake:$PATH" SERVICE=agora-fake BACKUP=0 FAKE_RESTART="$1" run; }
+
+svc 1 || { cat "$tmp/out"; fail "a deploy that restarts the hub failed"; }
+grep -q "the running hub is agora .*($head)" "$tmp/out" || { cat "$tmp/out"; fail "the running hub's version is not reported"; }
+
+git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null \
+  commit -q --allow-empty -m next --no-verify
+new=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
+svc 0 && fail "a deploy whose hub still runs the old build succeeded"
+grep -q "the hub that answers is 'agora .*($head)', not 'agora .*($new)'" "$tmp/out" || { cat "$tmp/out"; fail "the stale hub is not named"; }
+svc 1 || { cat "$tmp/out"; fail "the deploy that restarts the hub failed on the new commit"; }
+grep -q "the running hub is agora .*($new)" "$tmp/out" || { cat "$tmp/out"; fail "the new hub's version is not reported"; }
 echo "deploy-test: ok"

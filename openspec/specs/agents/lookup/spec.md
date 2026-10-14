@@ -10,11 +10,15 @@ Finding out who works on what: the board overview, and finding the owner of a pu
 
 ### Requirement: Board Overview
 
-The system SHALL show an overview of active agents with name, status, session state (`busy`, `idle` or `offline`), project, pull requests (declared and found), time since the last update and task, followed by every resource that someone holds or waits for.
+The system SHALL show an overview of active agents with name, status, session state (`busy`, `idle` or `offline`), project, pull requests (declared and found), time since the last update and task, followed by every resource that someone holds or waits for. The hub SHALL report its own version and commit with the overview, and the overview SHALL show them.
 
 #### Scenario: Overview
 - **WHEN** an agent asks for the board status while `builder` works and holds `example-app/merge`
 - **THEN** it sees `builder` with those fields and `example-app/merge` with its holder
+
+#### Scenario: Hub version
+- **WHEN** an agent asks for the board status
+- **THEN** it also sees which version and commit the running hub was built from, as `agora version` shows them for a binary, whichever binary the CLI is
 
 #### Scenario: Including inactive agents
 - **WHEN** the overview is requested for all agents

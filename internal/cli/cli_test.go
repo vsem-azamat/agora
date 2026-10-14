@@ -17,6 +17,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
+	"github.com/vsem-azamat/agora/internal/version"
 )
 
 // startHub runs a hub on a temporary socket and returns the socket path.
@@ -421,6 +422,15 @@ func TestProfilesStatusWhoAndLeave(t *testing.T) {
 	}
 	if r := agora(ctx, socket, "", "status"); !strings.Contains(r.stdout, "AGENTS (1 active)") {
 		t.Fatalf("status after rejoin: %s", r.stdout)
+	}
+}
+
+func TestStatusShowsTheHubsVersion(t *testing.T) {
+	socket := startHub(t)
+	r := agora(context.Background(), socket, "", "status")
+	want := "HUB agora " + version.Get().String() + "\n"
+	if r.code != 0 || !strings.HasPrefix(r.stdout, want) {
+		t.Fatalf("status does not start with %q:\n%+v", want, r)
 	}
 }
 

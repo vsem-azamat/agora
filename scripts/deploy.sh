@@ -145,8 +145,13 @@ if [ -n "$SERVICE" ]; then
     "$BIN" status >/dev/null 2>&1 && break
     sleep "$WAIT_STEP"
   done
-  "$BIN" status >/dev/null || die "agora status fails"
+  status=$("$BIN" status) || die "agora status fails"
   echo "agora status: ok"
+  # what answers on the socket is the build just installed, not an older hub still running
+  running=$(printf '%s\n' "$status" | sed -n 's/^HUB //p')
+  [ -n "$running" ] || die "the running hub does not report its version: it is older than this build"
+  [ "$running" = "$built" ] || die "the hub that answers is '$running', not '$built'"
+  echo "the running hub is $running"
 fi
 if [ -n "$WEB_URL" ]; then
   code=$(curl -s -o /dev/null -w '%{http_code}' "$WEB_URL" || true)
