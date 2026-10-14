@@ -247,6 +247,46 @@ func TestANoteIsSentOutAgainWhenItsMessageDidNotGoOut(t *testing.T) {
 	}
 }
 
+func TestANoteWhoseMessageMayHaveGoneOutCountsAsSentOut(t *testing.T) {
+	e, _ := newDelayEnv(t)
+	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := e.b.SendNoteOut(ctx, note)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the bridge is removed before it answered: the message is unconfirmed, it may be in the chat
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	var state rooms.Delivery
+	for _, m := range e.history(t) {
+		if m.ID == first {
+			state = m.Delivery
+		}
+	}
+	if state != rooms.Unconfirmed {
+		t.Fatalf("the message is %q, want unconfirmed", state)
+	}
+	if _, err := e.b.Add(ctx, "builder", "example-chat", "example-bridge --chat 42", "", []string{"secretary"}); err != nil {
+		t.Fatal(err)
+	}
+	again, err := e.b.SendNoteOut(ctx, note)
+	if err != nil || again != first {
+		t.Fatalf("sending it out again: %d %v, want %d and nothing sent", again, err, first)
+	}
+	for _, m := range e.history(t) {
+		if m.ID == note && m.SentOut != first {
+			t.Fatalf("the note links %d, not %d", m.SentOut, first)
+		}
+	}
+	if outs, _ := outgoing(t, e); len(outs) != 0 {
+		t.Fatalf("nothing more goes out: %+v", outs)
+	}
+}
+
 func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
 	e, _ := newDelayEnv(t)
 	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})

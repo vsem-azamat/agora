@@ -9,7 +9,16 @@ import { Icon } from '../icons';
 import { atBottom } from '../tape';
 import { AgentLink, Avatar, MessageBody, usePg } from './common';
 import { Composer } from './composer';
-import { type Decide, Decision, DeliveryMark, DeliveryNote, type Held, NoteMark, type SendOut, SendOutButton } from './message';
+import {
+  type Decide,
+  Decision,
+  DeliveryMark,
+  DeliveryNote,
+  type Held,
+  NoteMark,
+  type SendOut,
+  SendOutButton,
+} from './message';
 import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
 import { roomHref } from './rooms';
 
