@@ -12,7 +12,7 @@ cleanup() {
   rm -rf "$tmp"
 }
 trap cleanup EXIT
-fail() { echo "deploy-test: $*" >&2; exit 1; }
+fail() { echo "deploy-test: $*" >&2; [ ! -f "$tmp/hub.log" ] || { echo "the hub started by the test said:" >&2; cat "$tmp/hub.log" >&2; }; exit 1; }
 
 git clone -q . "$tmp/repo"
 # the script under test is the working tree's, committed in the clone so its tree is clean
@@ -84,12 +84,13 @@ case "$1" in
       while kill -0 "$(cat "$FAKE_PID")" 2>/dev/null; do sleep 0.1; done
     fi
     rm -f "$AGORA_SOCKET"
-    "$BIN" hub --db "$DB" >/dev/null 2>&1 &
+    env -u AGORA_WEB -u AGORA_WEB_AS -u AGORA_JOIN -u AGORA_WAKE_COMMAND -u AGORA_WAKE_TEXT -u AGORA_TERMINAL \
+      -u AGORA_BRIDGE_POLICY -u AGORA_BRIDGE_DELAY -u AGORA_DB "$BIN" hub --db "$DB" --watch-prs=false >>"$HUB_LOG" 2>&1 &
     echo $! >"$FAKE_PID" ;;
 esac
 STUB
 chmod +x "$tmp/fake/systemctl"
-export AGORA_SOCKET="$tmp/hub.sock" FAKE_PID="$tmp/hub.pid"
+export HUB_LOG="$tmp/hub.log" AGORA_SOCKET="$tmp/hub.sock" FAKE_PID="$tmp/hub.pid"
 svc() { PATH="$tmp/fake:$PATH" SERVICE=agora-fake BACKUP=0 FAKE_RESTART="$1" run; }
 
 svc 1 || { cat "$tmp/out"; fail "a deploy that restarts the hub failed"; }
