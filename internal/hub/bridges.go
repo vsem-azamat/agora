@@ -775,3 +775,17 @@ func (h *Hub) SetBridgeDefaults(policy bridges.Policy, delay time.Duration) erro
 	h.bridges.Policy, h.bridges.Delay = policy, delay
 	return nil
 }
+
+func (s *bridgeService) SetBridge(ctx context.Context, req *connect.Request[agorav1.SetBridgeRequest]) (*connect.Response[agorav1.SetBridgeResponse], error) {
+	m := req.Msg
+	name := strings.TrimPrefix(m.GetName(), "#")
+	got, err := s.h.bridges.Set(ctx, m.GetAgent(), name, bridges.Change{SetAgents: m.GetSetAddressees(), Agents: m.GetAddressees(), Command: m.GetCommand()})
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	if got.Restart && s.h.stopBridge(name) {
+		s.h.startBridge(name) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.SetBridgeResponse{Addressees: got.Agents, Dropped: got.Dropped, Restarted: got.Restart}), nil
+}

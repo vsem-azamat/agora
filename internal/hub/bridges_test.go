@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -716,6 +717,55 @@ func TestRemovingABridge(t *testing.T) {
 	resp, err := b.bridges.ListBridges(context.Background(), connect.NewRequest(&agorav1.ListBridgesRequest{}))
 	if err != nil || len(resp.Msg.GetBridges()) != 0 {
 		t.Fatalf("bridges: %v %v", resp, err)
+	}
+}
+
+func TestChangingABridge(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	f.send(`{"type":"in","id":"5513","author":{"id":"42","name":"Ada"},"text":"hi","cursor":"5513"}`)
+	eventually(t, "the message", func() bool { return len(b.history(t)) == 1 })
+	set := func(req *agorav1.SetBridgeRequest) *agorav1.SetBridgeResponse {
+		t.Helper()
+		req.Agent, req.Name = "builder", "example-chat"
+		resp, err := b.bridges.SetBridge(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.Msg
+	}
+	// not over the web
+	if _, err := b.webBridges.SetBridge(context.Background(), connect.NewRequest(&agorav1.SetBridgeRequest{Name: "example-chat", Command: "x"})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("set over the web: %v", err)
+	}
+	// agents only: the same process goes on
+	got := set(&agorav1.SetBridgeRequest{SetAddressees: true, Addressees: []string{"builder"}})
+	if got.GetRestarted() || !slices.Equal(got.GetAddressees(), []string{"builder"}) || !slices.Equal(got.GetDropped(), []string{"secretary"}) {
+		t.Fatalf("set agents: %v", got)
+	}
+	if st := b.state(t); !slices.Equal(st.GetAddressees(), []string{"builder"}) || st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING {
+		t.Fatalf("bridge: %v", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if f.starts() != 1 {
+		t.Fatalf("the bridge started %d times", f.starts())
+	}
+	// a new command: the old process stops and the new one starts with the cursor
+	pid := f.pid(0)
+	g := newFake(t)
+	if got := set(&agorav1.SetBridgeRequest{Command: g.command()}); !got.GetRestarted() {
+		t.Fatalf("set command: %v", got)
+	}
+	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("the old process after a new command: %v", err)
+	}
+	eventually(t, "the new command's hello", func() bool { return len(g.received()) > 0 })
+	if hello := g.received()[0]; hello["type"] != "hello" || hello["cursor"] != "5513" {
+		t.Fatalf("hello: %v", hello)
+	}
+	if f.starts() != 1 {
+		t.Fatalf("the old command started %d times", f.starts())
 	}
 }
 

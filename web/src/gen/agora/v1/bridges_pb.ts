@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/bridges.proto.
  */
 export const file_agora_v1_bridges: GenFile = /*@__PURE__*/
-  fileDesc("ChZhZ29yYS92MS9icmlkZ2VzLnByb3RvEghhZ29yYS52MSKEAgoGQnJpZGdlEgwKBG5hbWUYASABKAkSDwoHY29tbWFuZBgCIAEoCRImCgZwb2xpY3kYAyABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kSEgoKY3JlYXRlZF9ieRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgphZGRyZXNzZWVzGAYgAygJEiQKBXN0YXRlGAcgASgOMhUuYWdvcmEudjEuQnJpZGdlU3RhdGUSEQoJbGFzdF9leGl0GAggASgJEiIKBGNhcHMYCSABKAsyFC5hZ29yYS52MS5CcmlkZ2VDYXBzIi8KCkJyaWRnZUNhcHMSEAoIcGVyc29uYXMYASABKAkSDwoHdGhyZWFkcxgCIAEoCSJlChBBZGRCcmlkZ2VSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkSDwoHY29tbWFuZBgDIAEoCRIPCgdwdXJwb3NlGAQgASgJEhIKCmFkZHJlc3NlZXMYBSADKAkiUQoRQWRkQnJpZGdlUmVzcG9uc2USFAoMY3JlYXRlZF9yb29tGAEgASgIEiYKBnBvbGljeRgCIAEoDjIWLmFnb3JhLnYxLkJyaWRnZVBvbGljeSIyChNSZW1vdmVCcmlkZ2VSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkiFgoUUmVtb3ZlQnJpZGdlUmVzcG9uc2UiFAoSTGlzdEJyaWRnZXNSZXF1ZXN0IjgKE0xpc3RCcmlkZ2VzUmVzcG9uc2USIQoHYnJpZGdlcxgBIAMoCzIQLmFnb3JhLnYxLkJyaWRnZSJOChZTZXRCcmlkZ2VQb2xpY3lSZXF1ZXN0EgwKBG5hbWUYASABKAkSJgoGcG9saWN5GAIgASgOMhYuYWdvcmEudjEuQnJpZGdlUG9saWN5IhkKF1NldEJyaWRnZVBvbGljeVJlc3BvbnNlIioKFFNlbmRTY2hlZHVsZWRSZXF1ZXN0EhIKCm1lc3NhZ2VfaWQYASABKAMiFwoVU2VuZFNjaGVkdWxlZFJlc3BvbnNlIiwKFkNhbmNlbFNjaGVkdWxlZFJlcXVlc3QSEgoKbWVzc2FnZV9pZBgBIAEoAyIZChdDYW5jZWxTY2hlZHVsZWRSZXNwb25zZSIoChJTZW5kTm90ZU91dFJlcXVlc3QSEgoKbWVzc2FnZV9pZBgBIAEoAyIhChNTZW5kTm90ZU91dFJlc3BvbnNlEgoKAmlkGAEgASgDKpMBCgxCcmlkZ2VQb2xpY3kSHQoZQlJJREdFX1BPTElDWV9VTlNQRUNJRklFRBAAEhYKEkJSSURHRV9QT0xJQ1lfT1BFThACEhYKEkJSSURHRV9QT0xJQ1lfUkVBRBADEhcKE0JSSURHRV9QT0xJQ1lfREVMQVkQBCIECAEQASoVQlJJREdFX1BPTElDWV9BUFBST1ZFKnwKC0JyaWRnZVN0YXRlEhwKGEJSSURHRV9TVEFURV9VTlNQRUNJRklFRBAAEhgKFEJSSURHRV9TVEFURV9SVU5OSU5HEAESGwoXQlJJREdFX1NUQVRFX1JFU1RBUlRJTkcQAhIYChRCUklER0VfU1RBVEVfU1RPUFBFRBADMr4ECg1CcmlkZ2VTZXJ2aWNlEkQKCUFkZEJyaWRnZRIaLmFnb3JhLnYxLkFkZEJyaWRnZVJlcXVlc3QaGy5hZ29yYS52MS5BZGRCcmlkZ2VSZXNwb25zZRJNCgxSZW1vdmVCcmlkZ2USHS5hZ29yYS52MS5SZW1vdmVCcmlkZ2VSZXF1ZXN0Gh4uYWdvcmEudjEuUmVtb3ZlQnJpZGdlUmVzcG9uc2USSgoLTGlzdEJyaWRnZXMSHC5hZ29yYS52MS5MaXN0QnJpZGdlc1JlcXVlc3QaHS5hZ29yYS52MS5MaXN0QnJpZGdlc1Jlc3BvbnNlElYKD1NldEJyaWRnZVBvbGljeRIgLmFnb3JhLnYxLlNldEJyaWRnZVBvbGljeVJlcXVlc3QaIS5hZ29yYS52MS5TZXRCcmlkZ2VQb2xpY3lSZXNwb25zZRJQCg1TZW5kU2NoZWR1bGVkEh4uYWdvcmEudjEuU2VuZFNjaGVkdWxlZFJlcXVlc3QaHy5hZ29yYS52MS5TZW5kU2NoZWR1bGVkUmVzcG9uc2USVgoPQ2FuY2VsU2NoZWR1bGVkEiAuYWdvcmEudjEuQ2FuY2VsU2NoZWR1bGVkUmVxdWVzdBohLmFnb3JhLnYxLkNhbmNlbFNjaGVkdWxlZFJlc3BvbnNlEkoKC1NlbmROb3RlT3V0EhwuYWdvcmEudjEuU2VuZE5vdGVPdXRSZXF1ZXN0Gh0uYWdvcmEudjEuU2VuZE5vdGVPdXRSZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChZhZ29yYS92MS9icmlkZ2VzLnByb3RvEghhZ29yYS52MSKEAgoGQnJpZGdlEgwKBG5hbWUYASABKAkSDwoHY29tbWFuZBgCIAEoCRImCgZwb2xpY3kYAyABKA4yFi5hZ29yYS52MS5CcmlkZ2VQb2xpY3kSEgoKY3JlYXRlZF9ieRgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgphZGRyZXNzZWVzGAYgAygJEiQKBXN0YXRlGAcgASgOMhUuYWdvcmEudjEuQnJpZGdlU3RhdGUSEQoJbGFzdF9leGl0GAggASgJEiIKBGNhcHMYCSABKAsyFC5hZ29yYS52MS5CcmlkZ2VDYXBzIi8KCkJyaWRnZUNhcHMSEAoIcGVyc29uYXMYASABKAkSDwoHdGhyZWFkcxgCIAEoCSJlChBBZGRCcmlkZ2VSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkSDwoHY29tbWFuZBgDIAEoCRIPCgdwdXJwb3NlGAQgASgJEhIKCmFkZHJlc3NlZXMYBSADKAkiUQoRQWRkQnJpZGdlUmVzcG9uc2USFAoMY3JlYXRlZF9yb29tGAEgASgIEiYKBnBvbGljeRgCIAEoDjIWLmFnb3JhLnYxLkJyaWRnZVBvbGljeSIyChNSZW1vdmVCcmlkZ2VSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBG5hbWUYAiABKAkiFgoUUmVtb3ZlQnJpZGdlUmVzcG9uc2UibAoQU2V0QnJpZGdlUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRuYW1lGAIgASgJEhYKDnNldF9hZGRyZXNzZWVzGAMgASgIEhIKCmFkZHJlc3NlZXMYBCADKAkSDwoHY29tbWFuZBgFIAEoCSJLChFTZXRCcmlkZ2VSZXNwb25zZRISCgphZGRyZXNzZWVzGAEgAygJEg8KB2Ryb3BwZWQYAiADKAkSEQoJcmVzdGFydGVkGAMgASgIIhQKEkxpc3RCcmlkZ2VzUmVxdWVzdCI4ChNMaXN0QnJpZGdlc1Jlc3BvbnNlEiEKB2JyaWRnZXMYASADKAsyEC5hZ29yYS52MS5CcmlkZ2UiTgoWU2V0QnJpZGdlUG9saWN5UmVxdWVzdBIMCgRuYW1lGAEgASgJEiYKBnBvbGljeRgCIAEoDjIWLmFnb3JhLnYxLkJyaWRnZVBvbGljeSIZChdTZXRCcmlkZ2VQb2xpY3lSZXNwb25zZSIqChRTZW5kU2NoZWR1bGVkUmVxdWVzdBISCgptZXNzYWdlX2lkGAEgASgDIhcKFVNlbmRTY2hlZHVsZWRSZXNwb25zZSIsChZDYW5jZWxTY2hlZHVsZWRSZXF1ZXN0EhIKCm1lc3NhZ2VfaWQYASABKAMiGQoXQ2FuY2VsU2NoZWR1bGVkUmVzcG9uc2UiKAoSU2VuZE5vdGVPdXRSZXF1ZXN0EhIKCm1lc3NhZ2VfaWQYASABKAMiIQoTU2VuZE5vdGVPdXRSZXNwb25zZRIKCgJpZBgBIAEoAyqTAQoMQnJpZGdlUG9saWN5Eh0KGUJSSURHRV9QT0xJQ1lfVU5TUEVDSUZJRUQQABIWChJCUklER0VfUE9MSUNZX09QRU4QAhIWChJCUklER0VfUE9MSUNZX1JFQUQQAxIXChNCUklER0VfUE9MSUNZX0RFTEFZEAQiBAgBEAEqFUJSSURHRV9QT0xJQ1lfQVBQUk9WRSp8CgtCcmlkZ2VTdGF0ZRIcChhCUklER0VfU1RBVEVfVU5TUEVDSUZJRUQQABIYChRCUklER0VfU1RBVEVfUlVOTklORxABEhsKF0JSSURHRV9TVEFURV9SRVNUQVJUSU5HEAISGAoUQlJJREdFX1NUQVRFX1NUT1BQRUQQAzKEBQoNQnJpZGdlU2VydmljZRJECglBZGRCcmlkZ2USGi5hZ29yYS52MS5BZGRCcmlkZ2VSZXF1ZXN0GhsuYWdvcmEudjEuQWRkQnJpZGdlUmVzcG9uc2USTQoMUmVtb3ZlQnJpZGdlEh0uYWdvcmEudjEuUmVtb3ZlQnJpZGdlUmVxdWVzdBoeLmFnb3JhLnYxLlJlbW92ZUJyaWRnZVJlc3BvbnNlEkQKCVNldEJyaWRnZRIaLmFnb3JhLnYxLlNldEJyaWRnZVJlcXVlc3QaGy5hZ29yYS52MS5TZXRCcmlkZ2VSZXNwb25zZRJKCgtMaXN0QnJpZGdlcxIcLmFnb3JhLnYxLkxpc3RCcmlkZ2VzUmVxdWVzdBodLmFnb3JhLnYxLkxpc3RCcmlkZ2VzUmVzcG9uc2USVgoPU2V0QnJpZGdlUG9saWN5EiAuYWdvcmEudjEuU2V0QnJpZGdlUG9saWN5UmVxdWVzdBohLmFnb3JhLnYxLlNldEJyaWRnZVBvbGljeVJlc3BvbnNlElAKDVNlbmRTY2hlZHVsZWQSHi5hZ29yYS52MS5TZW5kU2NoZWR1bGVkUmVxdWVzdBofLmFnb3JhLnYxLlNlbmRTY2hlZHVsZWRSZXNwb25zZRJWCg9DYW5jZWxTY2hlZHVsZWQSIC5hZ29yYS52MS5DYW5jZWxTY2hlZHVsZWRSZXF1ZXN0GiEuYWdvcmEudjEuQ2FuY2VsU2NoZWR1bGVkUmVzcG9uc2USSgoLU2VuZE5vdGVPdXQSHC5hZ29yYS52MS5TZW5kTm90ZU91dFJlcXVlc3QaHS5hZ29yYS52MS5TZW5kTm90ZU91dFJlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Bridge
@@ -219,6 +219,85 @@ export const RemoveBridgeResponseSchema: GenMessage<RemoveBridgeResponse> = /*@_
   messageDesc(file_agora_v1_bridges, 5);
 
 /**
+ * @generated from message agora.v1.SetBridgeRequest
+ */
+export type SetBridgeRequest = Message<"agora.v1.SetBridgeRequest"> & {
+  /**
+   * The acting agent.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * Replace the bridge's agents with addressees, none when it is empty.
+   *
+   * @generated from field: bool set_addressees = 3;
+   */
+  setAddressees: boolean;
+
+  /**
+   * The new agents; agents that were not among them are subscribed to the room with the mode
+   * wake.
+   *
+   * @generated from field: repeated string addressees = 4;
+   */
+  addressees: string[];
+
+  /**
+   * The new command; empty leaves it.
+   *
+   * @generated from field: string command = 5;
+   */
+  command: string;
+};
+
+/**
+ * Describes the message agora.v1.SetBridgeRequest.
+ * Use `create(SetBridgeRequestSchema)` to create a new message.
+ */
+export const SetBridgeRequestSchema: GenMessage<SetBridgeRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_bridges, 6);
+
+/**
+ * @generated from message agora.v1.SetBridgeResponse
+ */
+export type SetBridgeResponse = Message<"agora.v1.SetBridgeResponse"> & {
+  /**
+   * The bridge's agents now, in name order.
+   *
+   * @generated from field: repeated string addressees = 1;
+   */
+  addressees: string[];
+
+  /**
+   * The agents no longer among them, in name order; they still follow the room.
+   *
+   * @generated from field: repeated string dropped = 2;
+   */
+  dropped: string[];
+
+  /**
+   * The command changed, and the hub started the new one.
+   *
+   * @generated from field: bool restarted = 3;
+   */
+  restarted: boolean;
+};
+
+/**
+ * Describes the message agora.v1.SetBridgeResponse.
+ * Use `create(SetBridgeResponseSchema)` to create a new message.
+ */
+export const SetBridgeResponseSchema: GenMessage<SetBridgeResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_bridges, 7);
+
+/**
  * @generated from message agora.v1.ListBridgesRequest
  */
 export type ListBridgesRequest = Message<"agora.v1.ListBridgesRequest"> & {
@@ -229,7 +308,7 @@ export type ListBridgesRequest = Message<"agora.v1.ListBridgesRequest"> & {
  * Use `create(ListBridgesRequestSchema)` to create a new message.
  */
 export const ListBridgesRequestSchema: GenMessage<ListBridgesRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 6);
+  messageDesc(file_agora_v1_bridges, 8);
 
 /**
  * @generated from message agora.v1.ListBridgesResponse
@@ -246,7 +325,7 @@ export type ListBridgesResponse = Message<"agora.v1.ListBridgesResponse"> & {
  * Use `create(ListBridgesResponseSchema)` to create a new message.
  */
 export const ListBridgesResponseSchema: GenMessage<ListBridgesResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 7);
+  messageDesc(file_agora_v1_bridges, 9);
 
 /**
  * @generated from message agora.v1.SetBridgePolicyRequest
@@ -268,7 +347,7 @@ export type SetBridgePolicyRequest = Message<"agora.v1.SetBridgePolicyRequest"> 
  * Use `create(SetBridgePolicyRequestSchema)` to create a new message.
  */
 export const SetBridgePolicyRequestSchema: GenMessage<SetBridgePolicyRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 8);
+  messageDesc(file_agora_v1_bridges, 10);
 
 /**
  * @generated from message agora.v1.SetBridgePolicyResponse
@@ -281,7 +360,7 @@ export type SetBridgePolicyResponse = Message<"agora.v1.SetBridgePolicyResponse"
  * Use `create(SetBridgePolicyResponseSchema)` to create a new message.
  */
 export const SetBridgePolicyResponseSchema: GenMessage<SetBridgePolicyResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 9);
+  messageDesc(file_agora_v1_bridges, 11);
 
 /**
  * @generated from message agora.v1.SendScheduledRequest
@@ -298,7 +377,7 @@ export type SendScheduledRequest = Message<"agora.v1.SendScheduledRequest"> & {
  * Use `create(SendScheduledRequestSchema)` to create a new message.
  */
 export const SendScheduledRequestSchema: GenMessage<SendScheduledRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 10);
+  messageDesc(file_agora_v1_bridges, 12);
 
 /**
  * @generated from message agora.v1.SendScheduledResponse
@@ -311,7 +390,7 @@ export type SendScheduledResponse = Message<"agora.v1.SendScheduledResponse"> & 
  * Use `create(SendScheduledResponseSchema)` to create a new message.
  */
 export const SendScheduledResponseSchema: GenMessage<SendScheduledResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 11);
+  messageDesc(file_agora_v1_bridges, 13);
 
 /**
  * @generated from message agora.v1.CancelScheduledRequest
@@ -328,7 +407,7 @@ export type CancelScheduledRequest = Message<"agora.v1.CancelScheduledRequest"> 
  * Use `create(CancelScheduledRequestSchema)` to create a new message.
  */
 export const CancelScheduledRequestSchema: GenMessage<CancelScheduledRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 12);
+  messageDesc(file_agora_v1_bridges, 14);
 
 /**
  * @generated from message agora.v1.CancelScheduledResponse
@@ -341,7 +420,7 @@ export type CancelScheduledResponse = Message<"agora.v1.CancelScheduledResponse"
  * Use `create(CancelScheduledResponseSchema)` to create a new message.
  */
 export const CancelScheduledResponseSchema: GenMessage<CancelScheduledResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 13);
+  messageDesc(file_agora_v1_bridges, 15);
 
 /**
  * @generated from message agora.v1.SendNoteOutRequest
@@ -358,7 +437,7 @@ export type SendNoteOutRequest = Message<"agora.v1.SendNoteOutRequest"> & {
  * Use `create(SendNoteOutRequestSchema)` to create a new message.
  */
 export const SendNoteOutRequestSchema: GenMessage<SendNoteOutRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 14);
+  messageDesc(file_agora_v1_bridges, 16);
 
 /**
  * @generated from message agora.v1.SendNoteOutResponse
@@ -377,7 +456,7 @@ export type SendNoteOutResponse = Message<"agora.v1.SendNoteOutResponse"> & {
  * Use `create(SendNoteOutResponseSchema)` to create a new message.
  */
 export const SendNoteOutResponseSchema: GenMessage<SendNoteOutResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_bridges, 15);
+  messageDesc(file_agora_v1_bridges, 17);
 
 /**
  * What goes out of a bridged room.
@@ -486,6 +565,17 @@ export const BridgeService: GenService<{
     methodKind: "unary";
     input: typeof RemoveBridgeRequestSchema;
     output: typeof RemoveBridgeResponseSchema;
+  },
+  /**
+   * SetBridge changes a bridge's agents or command in place; its cursor stays. The hub starts
+   * the new command when the command changed.
+   *
+   * @generated from rpc agora.v1.BridgeService.SetBridge
+   */
+  setBridge: {
+    methodKind: "unary";
+    input: typeof SetBridgeRequestSchema;
+    output: typeof SetBridgeResponseSchema;
   },
   /**
    * ListBridges returns every bridge with its state, in name order.

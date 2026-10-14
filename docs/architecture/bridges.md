@@ -6,6 +6,7 @@ How the hub implements [`openspec/specs/bridges/`](../../openspec/specs/bridges/
 
 ```sh
 agora bridge add example-chat --command 'example-bridge --chat 42' --agent secretary [--purpose '…']
+agora bridge set example-chat --agent secretary --agent builder [--command '…']
 agora bridge list
 agora bridge remove example-chat
 ```
@@ -19,7 +20,7 @@ The bridge's tables and the columns of `messages` for bridged rooms:
 | Table or column | Holds |
 | --- | --- |
 | `bridges` | Name (also its room's; references `rooms`), command, `policy` (`open`, `delay`, `read`), creator, creation time, the latest `cursor` |
-| `bridge_agents` | The agents a bridge was added with; deleted with the bridge |
+| `bridge_agents` | The bridge's agents, set when it is added or changed; deleted with the bridge |
 | `messages.ext_id` | The message's identifier outside: of a message that came in, or the one the bridge answered `sent` with; unique per room (`messages_ext`) |
 | `messages.ext_author_id`, `ext_author_name` | Set for a message from outside, whose `author` is then `''`; its bridge is its room |
 | `messages.delivery`, `delivery_error`, `scheduled_at` | `scheduled`, `sending`, `sent`, `cancelled` or `failed` (with the reason) for a message that goes out; `NULL` for one that stays here. `scheduled_at` is when a message was scheduled: its posting time, or when its room was bridged again |
@@ -32,6 +33,10 @@ The bridge's tables and the columns of `messages` for bridged rooms:
 ## Adding and removing
 
 `internal/bridges.Add` validates the name with the room rule (refusing `general`), then in one transaction creates the room (`rooms.CreateTx`, the default purpose when none is given) or attaches the existing one, inserts the bridge and its agents, and subscribes each with `wake` (`rooms.SubscribeTx`). The hub then starts it. `Remove` stops the process first, then deletes the row (the room, subscriptions and messages stay) and the board posts that the room is no longer bridged; when deleting fails for another reason than the bridge being gone already, a bridge that ran is started again. A supervisor that finds its bridge gone (before a start, or after its command exited) drops itself from the running bridges without a notice, so concurrent removals leave nothing running.
+
+## Changing
+
+`internal/bridges.Set` changes a bridge in one transaction: with agents given, it replaces the rows of `bridge_agents`, subscribes the agents that were not among them with `wake` (the others keep the mode they follow the room with) and leaves the dropped agents' subscriptions; with a command that differs from the stored one, it updates `bridges.command`. The cursor, policy and creator are not touched. The board posts a notice (`rooms.NoticeTx`, waking no one) saying who changed what, without the command, which may hold credentials. `SetBridge` then stops the bridge's run and starts a new one only when the command changed, so the new run's hello carries the stored cursor; a change of agents needs no restart, since `Receive` reads `bridge_agents` for every addressed line.
 
 ## Running
 

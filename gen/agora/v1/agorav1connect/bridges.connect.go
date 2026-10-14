@@ -38,6 +38,8 @@ const (
 	// BridgeServiceRemoveBridgeProcedure is the fully-qualified name of the BridgeService's
 	// RemoveBridge RPC.
 	BridgeServiceRemoveBridgeProcedure = "/agora.v1.BridgeService/RemoveBridge"
+	// BridgeServiceSetBridgeProcedure is the fully-qualified name of the BridgeService's SetBridge RPC.
+	BridgeServiceSetBridgeProcedure = "/agora.v1.BridgeService/SetBridge"
 	// BridgeServiceListBridgesProcedure is the fully-qualified name of the BridgeService's ListBridges
 	// RPC.
 	BridgeServiceListBridgesProcedure = "/agora.v1.BridgeService/ListBridges"
@@ -63,6 +65,9 @@ type BridgeServiceClient interface {
 	AddBridge(context.Context, *connect.Request[v1.AddBridgeRequest]) (*connect.Response[v1.AddBridgeResponse], error)
 	// RemoveBridge stops a bridge; its room and messages stay.
 	RemoveBridge(context.Context, *connect.Request[v1.RemoveBridgeRequest]) (*connect.Response[v1.RemoveBridgeResponse], error)
+	// SetBridge changes a bridge's agents or command in place; its cursor stays. The hub starts
+	// the new command when the command changed.
+	SetBridge(context.Context, *connect.Request[v1.SetBridgeRequest]) (*connect.Response[v1.SetBridgeResponse], error)
 	// ListBridges returns every bridge with its state, in name order.
 	ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error)
 	// SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
@@ -98,6 +103,12 @@ func NewBridgeServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+BridgeServiceRemoveBridgeProcedure,
 			connect.WithSchema(bridgeServiceMethods.ByName("RemoveBridge")),
+			connect.WithClientOptions(opts...),
+		),
+		setBridge: connect.NewClient[v1.SetBridgeRequest, v1.SetBridgeResponse](
+			httpClient,
+			baseURL+BridgeServiceSetBridgeProcedure,
+			connect.WithSchema(bridgeServiceMethods.ByName("SetBridge")),
 			connect.WithClientOptions(opts...),
 		),
 		listBridges: connect.NewClient[v1.ListBridgesRequest, v1.ListBridgesResponse](
@@ -137,6 +148,7 @@ func NewBridgeServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 type bridgeServiceClient struct {
 	addBridge       *connect.Client[v1.AddBridgeRequest, v1.AddBridgeResponse]
 	removeBridge    *connect.Client[v1.RemoveBridgeRequest, v1.RemoveBridgeResponse]
+	setBridge       *connect.Client[v1.SetBridgeRequest, v1.SetBridgeResponse]
 	listBridges     *connect.Client[v1.ListBridgesRequest, v1.ListBridgesResponse]
 	setBridgePolicy *connect.Client[v1.SetBridgePolicyRequest, v1.SetBridgePolicyResponse]
 	sendScheduled   *connect.Client[v1.SendScheduledRequest, v1.SendScheduledResponse]
@@ -152,6 +164,11 @@ func (c *bridgeServiceClient) AddBridge(ctx context.Context, req *connect.Reques
 // RemoveBridge calls agora.v1.BridgeService.RemoveBridge.
 func (c *bridgeServiceClient) RemoveBridge(ctx context.Context, req *connect.Request[v1.RemoveBridgeRequest]) (*connect.Response[v1.RemoveBridgeResponse], error) {
 	return c.removeBridge.CallUnary(ctx, req)
+}
+
+// SetBridge calls agora.v1.BridgeService.SetBridge.
+func (c *bridgeServiceClient) SetBridge(ctx context.Context, req *connect.Request[v1.SetBridgeRequest]) (*connect.Response[v1.SetBridgeResponse], error) {
+	return c.setBridge.CallUnary(ctx, req)
 }
 
 // ListBridges calls agora.v1.BridgeService.ListBridges.
@@ -187,6 +204,9 @@ type BridgeServiceHandler interface {
 	AddBridge(context.Context, *connect.Request[v1.AddBridgeRequest]) (*connect.Response[v1.AddBridgeResponse], error)
 	// RemoveBridge stops a bridge; its room and messages stay.
 	RemoveBridge(context.Context, *connect.Request[v1.RemoveBridgeRequest]) (*connect.Response[v1.RemoveBridgeResponse], error)
+	// SetBridge changes a bridge's agents or command in place; its cursor stays. The hub starts
+	// the new command when the command changed.
+	SetBridge(context.Context, *connect.Request[v1.SetBridgeRequest]) (*connect.Response[v1.SetBridgeResponse], error)
 	// ListBridges returns every bridge with its state, in name order.
 	ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error)
 	// SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
@@ -218,6 +238,12 @@ func NewBridgeServiceHandler(svc BridgeServiceHandler, opts ...connect.HandlerOp
 		BridgeServiceRemoveBridgeProcedure,
 		svc.RemoveBridge,
 		connect.WithSchema(bridgeServiceMethods.ByName("RemoveBridge")),
+		connect.WithHandlerOptions(opts...),
+	)
+	bridgeServiceSetBridgeHandler := connect.NewUnaryHandler(
+		BridgeServiceSetBridgeProcedure,
+		svc.SetBridge,
+		connect.WithSchema(bridgeServiceMethods.ByName("SetBridge")),
 		connect.WithHandlerOptions(opts...),
 	)
 	bridgeServiceListBridgesHandler := connect.NewUnaryHandler(
@@ -256,6 +282,8 @@ func NewBridgeServiceHandler(svc BridgeServiceHandler, opts ...connect.HandlerOp
 			bridgeServiceAddBridgeHandler.ServeHTTP(w, r)
 		case BridgeServiceRemoveBridgeProcedure:
 			bridgeServiceRemoveBridgeHandler.ServeHTTP(w, r)
+		case BridgeServiceSetBridgeProcedure:
+			bridgeServiceSetBridgeHandler.ServeHTTP(w, r)
 		case BridgeServiceListBridgesProcedure:
 			bridgeServiceListBridgesHandler.ServeHTTP(w, r)
 		case BridgeServiceSetBridgePolicyProcedure:
@@ -281,6 +309,10 @@ func (UnimplementedBridgeServiceHandler) AddBridge(context.Context, *connect.Req
 
 func (UnimplementedBridgeServiceHandler) RemoveBridge(context.Context, *connect.Request[v1.RemoveBridgeRequest]) (*connect.Response[v1.RemoveBridgeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.RemoveBridge is not implemented"))
+}
+
+func (UnimplementedBridgeServiceHandler) SetBridge(context.Context, *connect.Request[v1.SetBridgeRequest]) (*connect.Response[v1.SetBridgeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.BridgeService.SetBridge is not implemented"))
 }
 
 func (UnimplementedBridgeServiceHandler) ListBridges(context.Context, *connect.Request[v1.ListBridgesRequest]) (*connect.Response[v1.ListBridgesResponse], error) {

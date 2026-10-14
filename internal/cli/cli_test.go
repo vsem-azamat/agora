@@ -966,6 +966,24 @@ func TestBridges(t *testing.T) {
 	if r := agora(ctx, socket, "x", "read", "example-chat", "--last", "1"); !strings.Contains(r.stdout, "secretary · ") || !strings.Contains(r.stdout, " · note\n  here is a draft") {
 		t.Fatalf("read a note: %+v", r)
 	}
+	if r := agora(ctx, socket, "builder", "bridge", "set", "example-chat"); r.code == 0 || !strings.Contains(r.stderr, "--agent, --no-agents or --command") {
+		t.Fatalf("set nothing: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--agent", "builder", "--no-agents"); r.code == 0 || !strings.Contains(r.stderr, "--agent or --no-agents") {
+		t.Fatalf("set agents and none: %+v", r)
+	}
+	r = agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--agent", "builder")
+	if r.code != 0 || !strings.Contains(r.stdout, "#example-chat: agents builder") ||
+		!strings.Contains(r.stdout, "secretary still follows #example-chat") || strings.Contains(r.stdout, "restarted") {
+		t.Fatalf("set agents: %+v", r)
+	}
+	r = agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--command", "exec sleep 601", "--no-agents")
+	if r.code != 0 || !strings.Contains(r.stdout, "#example-chat: agents none") || !strings.Contains(r.stdout, "the hub restarted the bridge with the new command") {
+		t.Fatalf("set command: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "bridge", "list"); !strings.Contains(r.stdout, "agents -") || !strings.Contains(r.stdout, "exec sleep 601") {
+		t.Fatalf("list after setting: %+v", r)
+	}
 	if r := agora(ctx, socket, "builder", "bridge", "remove", "example-chat"); r.code != 0 || !strings.Contains(r.stdout, "the room stays") {
 		t.Fatalf("remove: %+v", r)
 	}

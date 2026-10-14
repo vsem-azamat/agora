@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -15,7 +16,7 @@ func bridgeCmd(o *options) *cobra.Command {
 		Use:   "bridge",
 		Short: "Connect rooms to chats outside Agora through bridge programs the hub runs",
 	}
-	cmd.AddCommand(bridgeAddCmd(o), bridgeRemoveCmd(o), bridgeListCmd(o))
+	cmd.AddCommand(bridgeAddCmd(o), bridgeSetCmd(o), bridgeRemoveCmd(o), bridgeListCmd(o))
 	return cmd
 }
 
@@ -53,6 +54,56 @@ func bridgeAddCmd(o *options) *cobra.Command {
 	cmd.Flags().StringVar(&purpose, "purpose", "", "purpose of the room, when the bridge creates it")
 	cmd.Flags().StringArrayVar(&addressees, "agent", nil, "agent that follows the room with the mode wake and is addressed by messages addressed to the bridge (repeatable)")
 	_ = cmd.MarkFlagRequired("command")
+	return cmd
+}
+
+func bridgeSetCmd(o *options) *cobra.Command {
+	var command string
+	var addressees []string
+	var none bool
+	cmd := &cobra.Command{
+		Use:   "set <name> [--agent <name>]... [--no-agents] [--command '<shell command>']",
+		Short: "Change a bridge's agents or command in place; it keeps its cursor, and only a new command restarts it",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			setAgents := cmd.Flags().Changed("agent")
+			if setAgents && none {
+				return errors.New("give --agent or --no-agents, not both")
+			}
+			if !setAgents && !none && !cmd.Flags().Changed("command") {
+				return errors.New("nothing to change: give --agent, --no-agents or --command")
+			}
+			if cmd.Flags().Changed("command") && strings.TrimSpace(command) == "" {
+				return errors.New("a bridge needs a command")
+			}
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			bridge := roomArg(args[0])
+			resp, err := o.bridges().SetBridge(cmd.Context(), connect.NewRequest(&agorav1.SetBridgeRequest{
+				Agent: name, Name: bridge, SetAddressees: setAgents || none, Addressees: addressees, Command: command,
+			}))
+			if err != nil {
+				return err
+			}
+			agents := "none"
+			if len(resp.Msg.GetAddressees()) > 0 {
+				agents = strings.Join(resp.Msg.GetAddressees(), ", ")
+			}
+			fmt.Fprintf(o.out, "#%s: agents %s\n", bridge, agents)
+			if d := resp.Msg.GetDropped(); len(d) > 0 {
+				fmt.Fprintf(o.out, "%s still follows #%s; to stop, run `agora --as <name> unsubscribe %s`\n", strings.Join(d, ", "), bridge, bridge)
+			}
+			if resp.Msg.GetRestarted() {
+				fmt.Fprintln(o.out, "the hub restarted the bridge with the new command; it keeps its cursor")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringArrayVar(&addressees, "agent", nil, "agent that replaces the bridge's agents: it follows the room with the mode wake and is addressed by messages addressed to the bridge (repeatable)")
+	cmd.Flags().BoolVar(&none, "no-agents", false, "leave the bridge without agents")
+	cmd.Flags().StringVar(&command, "command", "", "new shell command for the bridge; the hub restarts it when the command changed")
 	return cmd
 }
 

@@ -202,6 +202,102 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 	})
 }
 
+// Change is what Set changes in a bridge.
+type Change struct {
+	SetAgents bool     // replace the bridge's agents with Agents
+	Agents    []string // the new agents; none when empty
+	Command   string   // the new command; "" leaves it
+}
+
+// Changed is what Set did.
+type Changed struct {
+	Agents  []string // the bridge's agents now, in name order
+	Dropped []string // the agents no longer among them, in name order
+	Restart bool     // the command changed, so the hub runs the new one
+}
+
+// Set changes the bridge name in place, all at once: it replaces its agents, subscribing those
+// that were not among them to the room with the mode wake, and its command. Its cursor, policy
+// and creator stay, and so do the subscriptions of the agents it drops. The board says in the
+// room what agent changed, waking no one.
+func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Changed, error) {
+	name = strings.TrimPrefix(name, "#")
+	command := strings.TrimSpace(c.Command)
+	if !c.SetAgents && command == "" {
+		return Changed{}, store.Refuse(store.ErrInvalid, "nothing to change: give agents or a command")
+	}
+	var out Changed
+	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+			return err
+		}
+		for _, a := range c.Agents {
+			if err := agents.ExistsTx(ctx, tx, a); err != nil {
+				return err
+			}
+		}
+		var old string
+		err := tx.QueryRowContext(ctx, `SELECT command FROM bridges WHERE name = ?`, name).Scan(&old)
+		if errors.Is(err, sql.ErrNoRows) {
+			return store.Refuse(ErrNotFound, "no bridge %s; see `agora bridge list`", name)
+		}
+		if err != nil {
+			return err
+		}
+		before, err := store.Strings(ctx, tx, `SELECT agent FROM bridge_agents WHERE bridge = ? ORDER BY agent`, name)
+		if err != nil {
+			return err
+		}
+		out.Agents = before
+		var said []string
+		if c.SetAgents {
+			now := slices.Clone(c.Agents)
+			slices.Sort(now)
+			now = slices.Compact(now)
+			if _, err := tx.ExecContext(ctx, `DELETE FROM bridge_agents WHERE bridge = ?`, name); err != nil {
+				return err
+			}
+			for _, a := range now {
+				if _, err := tx.ExecContext(ctx, `INSERT INTO bridge_agents (bridge, agent) VALUES (?, ?)`, name, a); err != nil {
+					return err
+				}
+				if slices.Contains(before, a) {
+					continue // keeps the mode it follows the room with
+				}
+				if err := rooms.SubscribeTx(ctx, tx, a, name, rooms.ModeWake); err != nil {
+					return err
+				}
+			}
+			for _, a := range before {
+				if !slices.Contains(now, a) {
+					out.Dropped = append(out.Dropped, a)
+				}
+			}
+			out.Agents = now
+			list := "none"
+			if len(now) > 0 {
+				list = strings.Join(now, ", ")
+			}
+			said = append(said, "set the bridge's agents: "+list)
+		}
+		if command != "" && command != old {
+			if _, err := tx.ExecContext(ctx, `UPDATE bridges SET command = ? WHERE name = ?`, command, name); err != nil {
+				return err
+			}
+			out.Restart = true
+			said = append(said, "changed the bridge's command; the hub runs the new one")
+		}
+		if len(said) == 0 {
+			return nil
+		}
+		return b.rooms.NoticeTx(ctx, tx, name, agent+" "+strings.Join(said, " and ")+".")
+	})
+	if err != nil {
+		return Changed{}, err
+	}
+	return out, nil
+}
+
 // List returns every bridge in name order.
 func (b *Bridges) List(ctx context.Context) ([]Bridge, error) {
 	rows, err := b.db.QueryContext(ctx, `SELECT b.name, b.command, b.policy, b.created_by, b.created_at, b.cursor,

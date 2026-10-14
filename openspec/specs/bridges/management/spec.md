@@ -44,6 +44,26 @@ The system SHALL let an agent add a bridge with `agora bridge add <name> --comma
 - **WHEN** a bridge is removed
 - **THEN** its process stops, the room keeps every message, and the board says in the room that it is no longer bridged
 
+### Requirement: Changing A Bridge
+
+The system SHALL let an agent change a bridge in place with `agora bridge set <name> [--agent <name>]... [--no-agents] [--command '<shell command>']`. `--agent`, or `--no-agents` for none, SHALL replace the bridge's agents with the ones given: each agent that was not among them SHALL be subscribed to the room with the mode `wake`, and an agent no longer among them SHALL keep its subscription to the room but no longer be addressed by messages addressed to the bridge. `--command` SHALL replace the bridge's command; when the new command differs from the old one, the hub SHALL stop the bridge's process and start the new command. Otherwise the bridge's process SHALL keep running. The bridge SHALL keep its cursor, its outbound policy and its creator. Setting SHALL refuse a bridge that does not exist, an agent that has not joined, an empty command and a call that gives neither agents nor a command, and SHALL then change nothing. The board SHALL say in the room, waking no one, who changed the bridge, its agents when they were given and that its command changed, without the command.
+
+#### Scenario: Changing the agents
+- **WHEN** `agora bridge set example-chat --agent secretary --agent builder` runs while the bridge of `#example-chat`, whose agent is `secretary`, runs
+- **THEN** `builder` follows the room with the mode `wake`, a message from outside marked as addressed addresses both, and the bridge's process and cursor are the same as before
+
+#### Scenario: An agent no longer among them
+- **WHEN** `agora bridge set example-chat --agent builder` runs while the bridge's agent is `secretary`
+- **THEN** `secretary` still follows the room, and a message from outside marked as addressed addresses only `builder`
+
+#### Scenario: Changing the command
+- **WHEN** `agora bridge set example-chat --command 'example-bridge --chat 43'` runs
+- **THEN** the hub stops the bridge's process and starts the new command, whose hello carries the bridge's cursor
+
+#### Scenario: Nothing to change
+- **WHEN** `agora bridge set example-chat` runs without agents or a command, or with an agent that has not joined
+- **THEN** setting is refused and the bridge is unchanged
+
 ### Requirement: Listing Bridges
 
 The system SHALL list every bridge in name order with its room, command, outbound policy, creator, the bridge's agents and its state: `running`, `restarting` after its process exited, or `stopped` when the hub does not run it. Listed through the web listener, bridges SHALL come without their commands, which may hold credentials or chat identifiers.
