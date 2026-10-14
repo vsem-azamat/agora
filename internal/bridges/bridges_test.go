@@ -1063,6 +1063,37 @@ func msgIDs(msgs []rooms.Message) []int64 {
 	return out
 }
 
+func TestATopicRenamedOutsideRetitlesItsThread(t *testing.T) {
+	e := newEnv(t)
+	title := func(root int64) string {
+		t.Helper()
+		msgs, err := e.r.ThreadHistory(ctx, root, 0, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return msgs[0].ThreadTitle
+	}
+	root := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release"})
+	e.receive(t, bridges.In{ID: "2", AuthorName: "Bob", Text: "when?", ThreadKey: "77", ThreadTitle: "Release 2.4"})
+	if got := title(root); got != "Release 2.4" {
+		t.Fatalf("renamed outside: %q", got)
+	}
+	e.receive(t, bridges.In{ID: "3", AuthorName: "Bob", Text: "five", ThreadKey: "77"})
+	if got := title(root); got != "Release 2.4" {
+		t.Fatalf("a line without a title keeps it: %q", got)
+	}
+	// a title an agent or the operator gave stays
+	for _, who := range []string{"builder", "owner"} {
+		if err := e.r.SetThreadTitle(ctx, who, root, "By "+who); err != nil {
+			t.Fatal(err)
+		}
+		e.receive(t, bridges.In{ID: "4" + who, AuthorName: "Bob", Text: "again", ThreadKey: "77", ThreadTitle: "Release 2.5"})
+		if got := title(root); got != "By "+who {
+			t.Fatalf("a title of %s was replaced from outside: %q", who, got)
+		}
+	}
+}
+
 func TestMessagesOfAThreadOutside(t *testing.T) {
 	e := newEnv(t)
 	root := e.receive(t, bridges.In{ID: "1", AuthorID: "42", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release\n2.4"})
