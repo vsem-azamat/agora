@@ -167,6 +167,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
           for await (const m of api.web.watch({}, { signal: abort.signal })) {
             revision.current = m.revision;
             await load();
+            if (abort.signal.aborted) return; // a restart replaced this stream while it loaded
             setStatus('live');
           }
         } catch (err) {
