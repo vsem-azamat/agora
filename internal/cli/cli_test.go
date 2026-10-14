@@ -504,6 +504,10 @@ func TestJoiningFollowsTheProjectRoom(t *testing.T) {
 		t.Fatalf("join with a project that has no room name: %+v", r)
 	}
 	agora(ctx, socket, "tester", "room-create", "my-app", "work on my.app")
+	// the hub stores the project trimmed, and join follows the room it derives for it
+	if r := agora(ctx, socket, "padded", "join", "padded", "--project", "my.app\n"); r.code != 0 || !strings.Contains(r.stdout, "following #my-app, your project's room") {
+		t.Fatalf("join with a padded project: %+v", r)
+	}
 	if r := agora(ctx, socket, "second", "join", "second", "--project", "my.app"); r.code != 0 || !strings.Contains(r.stdout, "following #my-app, your project's room") {
 		t.Fatalf("join with a project whose room exists: %+v", r)
 	}

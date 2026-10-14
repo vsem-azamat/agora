@@ -18,7 +18,6 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
-	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/version"
 )
 
@@ -116,7 +115,8 @@ func joinCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := o.agents().UpdateProfile(cmd.Context(), connect.NewRequest(req)); err != nil {
+			updated, err := o.agents().UpdateProfile(cmd.Context(), connect.NewRequest(req))
+			if err != nil {
 				return err
 			}
 			if resp.Msg.GetBound() {
@@ -125,7 +125,7 @@ func joinCmd(o *options) *cobra.Command {
 				fmt.Fprintf(o.out, "joined as %s; no session found, so pass --as %s or set AGORA_NAME=%s\n", name, name, name)
 			}
 			if req.Project != nil {
-				o.followProject(cmd.Context(), name, *req.Project)
+				o.followProject(cmd.Context(), name, updated.Msg.GetProfile().GetProjectRoom())
 			}
 			return nil
 		},
@@ -135,11 +135,10 @@ func joinCmd(o *options) *cobra.Command {
 	return cmd
 }
 
-// followProject makes name follow its project's room (see rooms.ProjectRoom), keeping the
-// mode it may have there, or says how to create the room. It reports a failure without failing
-// the join.
-func (o *options) followProject(ctx context.Context, name, project string) {
-	room := rooms.ProjectRoom(project)
+// followProject makes name follow its project's room, as the hub derives it for the profile
+// (rooms.ProjectRoom of the stored project), keeping the mode it may have there, or says how
+// to create the room. It reports a failure without failing the join.
+func (o *options) followProject(ctx context.Context, name, room string) {
 	if room == "" {
 		return
 	}

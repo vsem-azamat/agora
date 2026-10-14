@@ -449,15 +449,16 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 // exampleRepo returns a directory inside a git repository named example-app.
 func exampleRepo(t *testing.T) string { return repoNamed(t, "example-app") }
 
-// repoNamed returns a directory inside a git repository named name.
 // cwdOf is a repository named name, or a directory outside any repository for "".
 func cwdOf(t *testing.T, name string) string {
+	t.Helper()
 	if name == "" {
 		return t.TempDir()
 	}
 	return repoNamed(t, name)
 }
 
+// repoNamed returns a directory inside a git repository named name.
 func repoNamed(t *testing.T, name string) string {
 	t.Helper()
 	repo := filepath.Join(t.TempDir(), name)
