@@ -76,6 +76,10 @@ The Claude Code connector SHALL wait in an asynchronous hook that runs when a se
 - **WHEN** a session's turn ended 5 seconds ago, its process went away without ending the session, a message addressed to its agent is unread, and the session is resumed with the hook that runs at the start opening its wait before the resume is reported
 - **THEN** the wait does not wake the session until the resume is reported
 
+#### Scenario: Older Claude Code fails
+- **WHEN** the waiting hook of a `StopFailure` runs under a Claude Code process older than 2.1.267, which reports a failure to load credentials as an error the session can work again from
+- **THEN** the hook ends at once with code 0 and prints nothing, so the session is not woken
+
 #### Scenario: Hub unavailable
 - **WHEN** the hub cannot be reached while the hook waits
 - **THEN** the hook ends with code 0 and prints nothing

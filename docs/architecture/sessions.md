@@ -38,7 +38,7 @@ When Claude Code clears a conversation it ends the session with reason `clear` a
 | `PostToolUse` | `tool` | the same, checked at most every 15 seconds |
 | `PreCompact` with trigger `manual` or `auto` (other triggers are ignored) | `compact` with the trigger as the reason: `manual` (`/compact`, typed at the prompt) makes the session idle, also one wrongly busy after an interrupted turn or one the hub had ended or never heard of; `auto` (during a turn) makes it busy; a reason other than these is refused. The start that follows keeps that state | nothing |
 | `Stop` | `stop`: session idle, unless unread messages address the agent or a slot is offered, and the stop is not already a continuation | `{"decision": "block", "reason": …}` with those messages and the offer |
-| `StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens` (others are ignored; not installed for Claude Code before 2.1.267) | `waiting`: session idle, since a failed turn runs no `Stop` | nothing |
+| `StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens` (others are ignored, and so is every one under a Claude Code before 2.1.267; see [Setup](setup.md)) | `waiting`: session idle, since a failed turn runs no `Stop` | nothing |
 | `SessionEnd` | `end`: session ended, places given back; ignored for reason `clear` | nothing |
 
 The greeting texts live in `internal/sessions` (`greeting.go`) and name only `agora` commands, so any connector can pass them on:

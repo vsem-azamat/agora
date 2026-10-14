@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -137,6 +140,37 @@ func TestWaitingAtThePromptIsReported(t *testing.T) {
 		if out != "" || err != nil || hub.got.GetEvent() != agorav1.SessionEvent_SESSION_EVENT_WAITING {
 			t.Errorf("%s: out %q err %v report %v", input, out, err, hub.got)
 		}
+	}
+}
+
+func TestFailureUnderAnOlderClaudeCodeIsIgnored(t *testing.T) {
+	const in = `{"session_id":"session-1","hook_event_name":"StopFailure","error":"server_error"}`
+	for version, reported := range map[string]bool{"2.1.250": false, "2.1.266": false, "2.1.267": true, "2.1.299": true, "": true} {
+		t.Cleanup(claudecode.SetInvokingVersion(func(context.Context) string { return version }))
+		hub := &fakeHub{reply: &agorav1.ReportResponse{}}
+		if out, err := run(t, hub, in); out != "" || err != nil || (hub.got != nil) != reported {
+			t.Errorf("version %q: out %q err %v report %v", version, out, err, hub.got)
+		}
+		if reported {
+			continue
+		}
+		// the wait must end at once, without asking the hub (which would answer with an error)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		text, err := claudecode.Wait(ctx, hub, strings.NewReader(in))
+		cancel()
+		if text != "" || err != nil {
+			t.Errorf("version %q: wait gave %q, %v", version, text, err)
+		}
+	}
+}
+
+func TestVersionOfTheClaudeCodeProcessIsRead(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'Update available'\necho '2.1.250 (Claude Code)'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := claudecode.VersionOf(context.Background(), script); err != nil || got != "2.1.250" {
+		t.Fatalf("%q %v", got, err)
 	}
 }
 

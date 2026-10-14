@@ -72,6 +72,30 @@ const TransientFailures = "overloaded|server_error|unknown|max_output_tokens"
 // for with /compact, and one Claude Code starts by itself.
 const CompactTriggers = "manual|auto"
 
+// invokingVersion returns the version of the Claude Code process that runs the hook, or "" when
+// it cannot be told: every Claude Code on a machine reads the same settings file, so the hook
+// asks the process it runs under, not the first `claude` on the PATH.
+var invokingVersion = func(ctx context.Context) string {
+	exe := proc.Executable(agentPID())
+	if exe == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
+	defer cancel()
+	v, err := VersionOf(ctx, exe)
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// runsBeforeCredentialErrors reports whether a StopFailure hook runs under a Claude Code before
+// StopFailureSince, which reports a failure to load credentials as a transient error: the
+// hooks then leave the session alone.
+func runsBeforeCredentialErrors(ctx context.Context, h hookInput) bool {
+	return h.HookEventName == "StopFailure" && !ReportsCredentials(invokingVersion(ctx))
+}
+
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
 // never disturbs the session.
@@ -84,6 +108,9 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) ||
 		h.HookEventName == "PreCompact" && !slices.Contains(strings.Split(CompactTriggers, "|"), h.Trigger) {
 		return nil // an event the connector does not handle
+	}
+	if runsBeforeCredentialErrors(ctx, h) {
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
 	defer cancel()
@@ -153,6 +180,9 @@ func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	var h hookInput
 	if err := json.NewDecoder(in).Decode(&h); err != nil {
 		return "", fmt.Errorf("read hook input: %w", err)
+	}
+	if runsBeforeCredentialErrors(ctx, h) {
+		return "", nil
 	}
 	reached := time.Now() // the last time the hub answered
 	for {

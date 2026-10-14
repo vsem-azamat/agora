@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/install"
 )
 
@@ -140,7 +141,7 @@ func TestStopFailureNeedsClaudeCode2_1_267(t *testing.T) {
 		"":                        true, // unknown: the hooks are added
 		"Claude Code":             true,
 	} {
-		if got := install.StopFailureReportsCredentials(out); got != want {
+		if got := claudecode.ReportsCredentials(out); got != want {
 			t.Errorf("%q: %v, want %v", out, got, want)
 		}
 	}
