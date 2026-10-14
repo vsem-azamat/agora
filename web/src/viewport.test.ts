@@ -26,6 +26,20 @@ function touch(type: 'touchstart' | 'touchend' | 'touchcancel', n: number) {
   document.dispatchEvent(e);
 }
 
+/** A touch event dispatched on `target`, with `n` fingers still on the screen. */
+function touchAt(target: EventTarget, type: string, n: number) {
+  const e = new Event(type, { bubbles: true });
+  Object.defineProperty(e, 'touches', { value: new Array(n).fill({}) });
+  target.dispatchEvent(e);
+}
+
+/** The page goes to the background, or comes back. */
+function visibility(state: 'hidden' | 'visible') {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+  document.dispatchEvent(new Event('visibilitychange'));
+  vi.restoreAllMocks();
+}
+
 const root = document.documentElement;
 // every watcher stops after its test, also a failed one, so it cannot break the next
 const stops: (() => void)[] = [];
@@ -138,30 +152,152 @@ describe('the part of the screen the app may use', () => {
       top.mockClear();
       touch('touchstart', 1);
       vv.listeners.get('scroll')?.();
-      vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
+      visibility('hidden');
       vi.advanceTimersByTime(SETTLE_MS);
       expect(top).toHaveBeenCalledOnce();
-      vi.restoreAllMocks();
+      // back again, the finger that was down is gone: a pan with none settles
+      top.mockClear();
+      visibility('visible');
+      vv.listeners.get('scroll')?.();
+      vi.advanceTimersByTime(SETTLE_MS);
+      expect(top).toHaveBeenCalledOnce();
     });
 
-    it('never scrolls back while a finger is down, even one held still', () => {
+    it('is not held by the last of two fingers on an element removed between the lifts', () => {
       vi.useFakeTimers();
       const vv = fakeViewport(480);
       const top = vi.fn();
       watch(document, vv, top);
       top.mockClear();
-      touch('touchstart', 1);
+      const el = document.createElement('div');
+      document.body.append(el);
+      touchAt(el, 'touchstart', 1);
+      touchAt(el, 'touchstart', 2);
+      touchAt(el, 'touchend', 1);
+      el.remove();
+      touchAt(el, 'touchend', 0);
       vv.listeners.get('scroll')?.();
-      vi.advanceTimersByTime(5000); // held still for far longer than the settle time
-      expect(top).not.toHaveBeenCalled();
-      touch('touchstart', 2);
-      touch('touchend', 1); // one of two fingers lifts: the pan goes on
-      expect(top).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(5000);
-      expect(top).not.toHaveBeenCalled();
-      touch('touchend', 0);
+      vi.advanceTimersByTime(SETTLE_MS);
       expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('is not held by a touch cancelled on an element that left the page', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      const el = document.createElement('div');
+      document.body.append(el);
+      touchAt(el, 'touchstart', 1);
+      el.remove();
+      touchAt(el, 'touchcancel', 0);
+      vv.listeners.get('scroll')?.();
+      vi.advanceTimersByTime(SETTLE_MS);
+      expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('settles once when the target and the document both hear the lift', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      const el = document.createElement('div');
+      document.body.append(el);
+      touchAt(el, 'touchstart', 1);
+      vv.listeners.get('scroll')?.();
+      touchAt(el, 'touchend', 0);
+      vi.advanceTimersByTime(1000);
+      expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('settles once when the page goes to the background with a scroll pending', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      vv.listeners.get('scroll')?.();
+      visibility('hidden');
+      vi.advanceTimersByTime(1000);
+      expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('stops listening on the elements touched once the last finger lifts, and when it stops', () => {
+      const vv = fakeViewport(480);
+      const stop = watch(document, vv, vi.fn());
+      const [a, b] = [document.createElement('div'), document.createElement('div')];
+      document.body.append(a, b);
+      const removed = (el: HTMLElement) => vi.spyOn(el, 'removeEventListener');
+      const [ra, rb] = [removed(a), removed(b)];
+      touchAt(a, 'touchstart', 1);
+      touchAt(b, 'touchstart', 2);
+      touchAt(b, 'touchend', 1);
+      expect(ra).not.toHaveBeenCalled(); // a finger is still down
+      touchAt(a, 'touchend', 0);
+      expect(ra.mock.calls.map((c) => c[0]).sort()).toEqual(['touchcancel', 'touchend']);
+      expect(rb.mock.calls.map((c) => c[0]).sort()).toEqual(['touchcancel', 'touchend']);
+      ra.mockClear();
+      touchAt(a, 'touchstart', 1);
+      stop();
+      expect(ra.mock.calls.map((c) => c[0]).sort()).toEqual(['touchcancel', 'touchend']);
+    });
+
+    it('stops listening on the elements touched when the page goes to the background', () => {
+      watch(document, fakeViewport(480), vi.fn());
+      const el = document.createElement('div');
+      document.body.append(el);
+      const removed = vi.spyOn(el, 'removeEventListener');
+      touchAt(el, 'touchstart', 1);
+      visibility('hidden');
+      expect(removed).toHaveBeenCalledTimes(2);
+    });
+
+    describe('after the watch stopped', () => {
+      it('ignores a touch that ends on an element that left the page', () => {
+        vi.useFakeTimers();
+        const vv = fakeViewport(480);
+        const top = vi.fn();
+        const stop = watch(document, vv, top);
+        top.mockClear();
+        const el = document.createElement('div');
+        document.body.append(el);
+        touchAt(el, 'touchstart', 1);
+        vv.listeners.get('scroll')?.();
+        stop();
+        el.remove();
+        touchAt(el, 'touchend', 0);
+        vi.advanceTimersByTime(1000);
+        expect(top).not.toHaveBeenCalled();
+      });
+
+      it('ignores the page going to the background, and a timer that was pending', () => {
+        vi.useFakeTimers();
+        const vv = fakeViewport(480);
+        const top = vi.fn();
+        const stop = watch(document, vv, top);
+        top.mockClear();
+        touch('touchstart', 1);
+        vv.listeners.get('scroll')?.();
+        stop();
+        visibility('hidden');
+        vi.advanceTimersByTime(1000);
+        expect(top).not.toHaveBeenCalled();
+      });
+
+      it('has no timer left from a scroll and the page going to the background', () => {
+        vi.useFakeTimers();
+        const vv = fakeViewport(480);
+        const top = vi.fn();
+        const stop = watch(document, vv, top);
+        top.mockClear();
+        vv.listeners.get('scroll')?.();
+        visibility('hidden'); // a second timer replaces the first
+        stop();
+        vi.advanceTimersByTime(1000);
+        expect(top).not.toHaveBeenCalled();
+      });
     });
 
     it('does not scroll while zoomed in, nor after the watch stopped', () => {

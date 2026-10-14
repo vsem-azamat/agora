@@ -48,27 +48,41 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
     clearTimeout(settling);
     settling = touching ? undefined : setTimeout(settle, SETTLE_MS);
   };
-  let stopped = false;
   // the last finger lifting ends the pan: no need to wait for more events
   const lifted = (e: TouchEvent) => {
-    if (stopped) return;
     touching = e.touches.length > 0;
-    if (!touching && moved) settle();
+    if (touching) return;
+    forget();
+    if (moved) settle();
+  };
+  // touchend and touchcancel go to the element the touch began on and reach the document only
+  // while it is in the page: the elements touches began on are listened to as well, until the last
+  // finger lifts, in case one is removed under a finger
+  const targets = new Set<EventTarget>();
+  const forget = () => {
+    for (const t of targets) {
+      t.removeEventListener('touchend', lifted as EventListener);
+      t.removeEventListener('touchcancel', lifted as EventListener);
+    }
+    targets.clear();
   };
   const touched = (e: TouchEvent) => {
     touching = e.touches.length > 0;
-    // touchend and touchcancel go to the element the touch began on and reach the document only
-    // while it is in the page: listen there too, in case it is removed under the finger
-    if (e.target) {
-      e.target.addEventListener('touchend', lifted as EventListener, { once: true });
-      e.target.addEventListener('touchcancel', lifted as EventListener, { once: true });
+    if (e.target && e.target !== doc && !targets.has(e.target)) {
+      targets.add(e.target);
+      e.target.addEventListener('touchend', lifted as EventListener);
+      e.target.addEventListener('touchcancel', lifted as EventListener);
     }
   };
   // a page sent to the background gets no touchend: no finger is down any more
   const visibility = () => {
     if (doc.visibilityState !== 'hidden') return;
     touching = false;
-    if (moved) settling = setTimeout(settle, SETTLE_MS);
+    forget();
+    if (moved) {
+      clearTimeout(settling);
+      settling = setTimeout(settle, SETTLE_MS);
+    }
   };
   // typing starts in a text field; where it ends is decided when the focus leaves one, and again
   // when the focus lands outside a form, in case a removed field's focusout never came
@@ -95,7 +109,7 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
   return () => {
     vv?.removeEventListener('resize', size);
     vv?.removeEventListener('scroll', scrolled);
-    stopped = true;
+    forget();
     clearTimeout(settling);
     settling = undefined;
     doc.removeEventListener('visibilitychange', visibility);
