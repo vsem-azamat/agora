@@ -514,7 +514,8 @@ func TestJoiningExpected(t *testing.T) {
 	// the project's room is named in lowercase; a project that is no room name has none
 	for i, c := range []struct{ repo, want, not string }{
 		{"Example-App", "#example-app (your project's room)", "room-create"},
-		{"my.app", "Rooms: #example-app, #general.", "room-create"},
+		{"my.app", "No room #my-app for your project yet; create it with agora room-create my-app '<purpose>'.", "(your project's room)"},
+		{"2048-game", "agora room-create p-2048-game '<purpose>'", "(your project's room)"},
 	} {
 		r, err := e.s.Report(ctx, sessions.Report{SessionID: fmt.Sprintf("session-%d", i+3), Kind: "claude-code", Event: sessions.Start, PID: 4250 + i, PIDStart: 120, CWD: repoNamed(t, c.repo)})
 		if err != nil {

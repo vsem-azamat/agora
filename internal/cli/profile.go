@@ -135,12 +135,12 @@ func joinCmd(o *options) *cobra.Command {
 	return cmd
 }
 
-// followProject makes name follow its project's room, the room named like the project in
-// lowercase, keeping the mode it may have there, or says how to create the room. It reports a
-// failure without failing the join.
+// followProject makes name follow its project's room (see rooms.ProjectRoom), keeping the
+// mode it may have there, or says how to create the room. It reports a failure without failing
+// the join.
 func (o *options) followProject(ctx context.Context, name, project string) {
-	room := strings.ToLower(strings.TrimSpace(project))
-	if !rooms.ValidName(room) {
+	room := rooms.ProjectRoom(project)
+	if room == "" {
 		return
 	}
 	_, err := o.rooms().Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Agent: name, Rooms: []string{room}, Follow: true}))

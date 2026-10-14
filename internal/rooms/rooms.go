@@ -44,6 +44,40 @@ var nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 // ValidName reports whether s may name a room or an agent.
 func ValidName(s string) bool { return nameRE.MatchString(s) }
 
+// ProjectRoom returns the name of the room of a project, or "" when it has none: the project
+// in lowercase with `.`, `_` and spaces mapped to `-`, repeated dashes collapsed, dashes
+// trimmed from both ends, `p-` put in front when it does not start with a letter, and cut to
+// MaxName characters without a dash at its end. A name that is still no room name (another
+// character, or one letter) has no project room.
+func ProjectRoom(project string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(project)) {
+		switch r {
+		case '.', '_', ' ':
+			r = '-'
+		}
+		if r == '-' && strings.HasSuffix(b.String(), "-") {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	name := strings.Trim(b.String(), "-")
+	if name == "" {
+		return ""
+	}
+	if name[0] < 'a' || name[0] > 'z' {
+		name = "p-" + name
+	}
+	if len(name) > MaxName {
+		name = name[:MaxName]
+	}
+	name = strings.TrimRight(name, "-")
+	if !ValidName(name) {
+		return ""
+	}
+	return name
+}
+
 var (
 	// ErrNotFound means the room does not exist.
 	ErrNotFound = errors.New("not found")

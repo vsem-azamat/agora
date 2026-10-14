@@ -48,7 +48,7 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 	// out and points to `agora rooms`
 	var list []string
 	var total int
-	room := strings.ToLower(project)
+	room := rooms.ProjectRoom(project)
 	if s.rooms != nil {
 		var err error
 		if list, total, err = s.rooms.Names(ctx, GreetingRooms, room); err != nil {
@@ -72,7 +72,7 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 			line += fmt.Sprintf(", and %d more; agora rooms lists them", more)
 		}
 		lines = append(lines, line+".")
-		if !found && rooms.ValidName(room) {
+		if !found && room != "" {
 			lines = append(lines, fmt.Sprintf("No room #%s for your project yet; create it with agora room-create %s '<purpose>'.", room, room))
 		}
 	}

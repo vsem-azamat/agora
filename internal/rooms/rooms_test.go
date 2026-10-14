@@ -1293,3 +1293,38 @@ func TestListingUnreadThreadsWithoutTitles(t *testing.T) {
 		t.Fatalf("titled only: %+v", list)
 	}
 }
+
+func TestProjectRoomIsDerivedFromTheProjectName(t *testing.T) {
+	for project, want := range map[string]string{
+		"example-app":                  "example-app",
+		"Example-App":                  "example-app",
+		" example-app ":                "example-app",
+		"my.app":                       "my-app",
+		"my_app":                       "my-app",
+		"my app":                       "my-app",
+		"my._ app":                     "my-app", // repeats collapse
+		"my--app":                      "my-app",
+		"-my-app-":                     "my-app",
+		".hidden":                      "hidden",
+		"2048-game":                    "p-2048-game",
+		"1":                            "p-1",
+		"3d.viewer":                    "p-3d-viewer",
+		"ab":                           "ab",
+		strings.Repeat("a", 40):        strings.Repeat("a", 32),
+		strings.Repeat("a", 31) + "-b": strings.Repeat("a", 31), // no trailing dash after the cut
+		strings.Repeat("a", 30) + ".b": strings.Repeat("a", 30) + "-b",
+		"1" + strings.Repeat("a", 40):  "p-1" + strings.Repeat("a", 29), // the prefix counts toward 32
+		"":                             "",
+		"a":                            "", // too short for a room name
+		"---":                          "",
+		"naïve":                        "", // not a room name once mapped
+		"my/app":                       "",
+	} {
+		if got := rooms.ProjectRoom(project); got != want {
+			t.Errorf("ProjectRoom(%q) = %q, want %q", project, got, want)
+		}
+		if want != "" && !rooms.ValidName(want) {
+			t.Errorf("%q is no valid room name", want)
+		}
+	}
+}

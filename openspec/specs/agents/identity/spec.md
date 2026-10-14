@@ -42,7 +42,7 @@ The system SHALL bind a joined name to the session the command runs in, when tha
 
 ### Requirement: Joining Follows The Project's Room
 
-When an agent joins with `agora join <name> --project <project>`, the system SHALL make it follow the room whose name is the project in lowercase when such a room exists, keeping the mode of a subscription it already has, and SHALL say so in the join output; `#general` stays followed. When there is no such room and the lowercased project follows the room naming rule, the join output SHALL say how to create it with `agora room-create <project> '<purpose>'`; a project that is no valid room name has no room, and the output says nothing about one. Joining SHALL succeed even when the room cannot be followed, saying why.
+When an agent joins with `agora join <name> --project <project>`, the system SHALL make it follow the project's room when it exists, keeping the mode of a subscription it already has, and SHALL say so in the join output; `#general` stays followed. The project's room is named after the project in lowercase, with `.`, `_` and spaces mapped to `-`, repeated dashes collapsed, dashes trimmed from both ends, `p-` put in front when the name does not start with a letter, and cut to 32 characters without a dash at its end. When there is no such room, the join output SHALL say how to create it with `agora room-create <room> '<purpose>'`; a project whose name is still no valid room name (it holds other characters than letters, digits and `.`, `_`, `-` and spaces, or is a single letter) has no room, and the output says nothing about one. Joining SHALL succeed even when the room cannot be followed, saying why.
 
 #### Scenario: A project with a room
 - **WHEN** `#example-app` exists and an agent runs `agora join builder --project example-app`
@@ -51,6 +51,10 @@ When an agent joins with `agora join <name> --project <project>`, the system SHA
 #### Scenario: A project without a room
 - **WHEN** no room `#example-app` exists and an agent runs `agora join builder --project example-app`
 - **THEN** `builder` follows only `#general`, and the output says to create the room with `agora room-create example-app '<purpose>'`
+
+#### Scenario: A project name that is no room name as it is
+- **WHEN** an agent runs `agora join builder --project my.app` while `#my-app` exists, and another runs `agora join tester --project 2048-game` while no room `#p-2048-game` exists
+- **THEN** `builder` follows `#my-app`, and the output for `tester` says to create the room with `agora room-create p-2048-game '<purpose>'`
 
 ### Requirement: A Name Belongs To One Live Session
 
