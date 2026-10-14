@@ -281,8 +281,11 @@ export function mentionNames(body: string): string[] {
   return [...new Set(names)];
 }
 
-/** A room's counts for the operator: unread, addressed to it, and its messages waiting for it to send. */
-export type RoomCount = { unread: number; addressed: number; scheduled?: number };
+/**
+ * A room's counts for the operator: unread, addressed to it, its messages waiting for it to send,
+ * and the unread replies in its threads, which the room's unread leaves out.
+ */
+export type RoomCount = { unread: number; addressed: number; scheduled?: number; threads?: number };
 
 /** How the operator follows a room: every message, only those addressed to it, or every message with a notification. */
 export type Mode = 'all' | 'mentions' | 'wake';
@@ -307,12 +310,18 @@ export function subscriptionMode(m: Mode): SubscriptionMode {
  * so the two are not added.
  */
 export function roomsTabCount(counts: Map<string, RoomCount>): number {
-  return [...counts.values()].reduce((n, c) => n + Math.max(c.unread, c.scheduled ?? 0), 0);
+  return [...counts.values()].reduce((n, c) => n + Math.max(c.unread, c.scheduled ?? 0) + (c.threads ?? 0), 0);
 }
 
-/** What a room shows in the list: `@n` for messages addressed to the operator, else the unread count. */
-export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean } | undefined {
-  if (!c || c.unread === 0) return undefined;
+/**
+ * What a room shows in the list: `@n` for messages addressed to the operator, else the unread count;
+ * with nothing unread in the room itself, `↳n` for the unread replies of its threads, which are the
+ * operator's as a participant.
+ */
+export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean; title?: string } | undefined {
+  if (!c) return undefined;
+  if (c.unread === 0)
+    return c.threads ? { text: `↳${c.threads}`, mention: true, title: `${c.threads} unread in threads` } : undefined;
   return c.addressed > 0 ? { text: `@${c.addressed}`, mention: true } : { text: String(c.unread), mention: false };
 }
 

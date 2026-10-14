@@ -9,7 +9,7 @@ import type { Profile } from './gen/agora/v1/agents_pb';
 import type { Bridge } from './gen/agora/v1/bridges_pb';
 import type { GetCharterResponse, Proposal } from './gen/agora/v1/governance_pb';
 import type { Resource } from './gen/agora/v1/resources_pb';
-import type { Message, Room } from './gen/agora/v1/rooms_pb';
+import type { Message, Room, Thread } from './gen/agora/v1/rooms_pb';
 
 export type Status = 'connecting' | 'live' | 'offline';
 
@@ -32,6 +32,11 @@ type HubData = {
   /** The bridges by the name of their room. */
   bridges: Map<string, Bridge>;
   followed: Set<string>;
+  /**
+   * The titled threads of the rooms that are not archived, and the untitled ones with unread
+   * replies for the operator, the most recently active first.
+   */
+  threads: Thread[];
   /** The mode of each followed room. */
   modes: Map<string, Mode>;
   resources: Resource[];
@@ -51,12 +56,14 @@ export function forgetLoadedBuild() {
   loadedWith = undefined;
 }
 
-/** The counts per room: unread and addressed from the hub's unread counts, scheduled from the rooms. */
+/** The counts per room: unread, addressed and thread replies from the hub's unread counts, scheduled from the rooms. */
 export function roomCounts(
-  unread: { room: string; unread: number; addressed: number }[],
+  unread: { room: string; unread: number; addressed: number; threads?: number }[],
   rooms: Pick<Room, 'name' | 'scheduled'>[],
 ): Map<string, RoomCount> {
-  const out = new Map<string, RoomCount>(unread.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }]));
+  const out = new Map<string, RoomCount>(
+    unread.map((r) => [r.room, { unread: r.unread, addressed: r.addressed, threads: r.threads || undefined }]),
+  );
   for (const r of rooms) {
     if (r.scheduled > 0)
       out.set(r.name, { ...(out.get(r.name) ?? { unread: 0, addressed: 0 }), scheduled: r.scheduled });
@@ -81,7 +88,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
   );
 
   const loadOnce = useCallback(async () => {
-    const [who, agents, rooms, unread, followed, resources, proposals, charter, bridges] = await Promise.all([
+    const [who, agents, rooms, unread, followed, resources, proposals, charter, bridges, threads] = await Promise.all([
       api.web.whoami({}),
       api.agents.listAgents({}),
       api.rooms.listRooms({ all: true }),
@@ -91,6 +98,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.governance.listProposals({ all: true }),
       api.governance.getCharter({}),
       api.bridges.listBridges({}),
+      api.rooms.listThreads({ unread: true }),
     ]);
     const build = `${who.version} ${who.commit}`;
     loadedWith ??= build;
@@ -109,6 +117,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       unread: roomCounts(unread.rooms, active),
       bridges: new Map(bridges.bridges.map((b) => [b.name, b])),
       followed: new Set(followed.rooms),
+      threads: threads.threads,
       modes: new Map(followed.subscriptions.map((s) => [s.room, modeOf(s.mode)])),
       resources: resources.resources,
       proposals: proposals.proposals,
@@ -227,6 +236,75 @@ export function useRoom(api: Api, room: string | undefined, revision: bigint | u
   }, [api, room, through, shown, fail]);
 
   const mine = room !== undefined && loaded?.room === room ? loaded : undefined;
+  return { messages: mine?.messages, error: mine?.error, markSeen };
+}
+
+/**
+ * The thread of root in room: its root and last replies, reloaded with every board revision. The
+ * panel reports the newest reply it shows with `markSeen`; the room is marked read up to it, which
+ * reads the thread's replies up to it, while the page is visible. Each thread keeps its own mark,
+ * and a hidden page marks nothing until it is shown. A root of another room is refused.
+ */
+export function useThread(
+  api: Api,
+  room: string | undefined,
+  root: bigint | undefined,
+  revision: bigint | undefined,
+  fail: (e: unknown) => void,
+) {
+  const [loaded, setLoaded] = useState<{ root: bigint; messages?: Message[]; error?: string }>();
+  const [seen, setSeen] = useState<{ root: bigint; id: bigint }>();
+  const [shown, setShown] = useState(visible);
+  const marked = useRef(new Map<bigint, bigint>());
+
+  useEffect(() => {
+    const onChange = () => setShown(visible());
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new board revision reloads the thread
+  useEffect(() => {
+    if (!room || root === undefined) return;
+    let current = true;
+    api.rooms
+      .history({ room, thread: root, last: 100 })
+      .then((h) => {
+        if (!current) return;
+        // the hub reads a thread by its root alone; one of another room is not this room's
+        const first = h.messages[0];
+        if (first && first.room !== room) setLoaded({ root, error: `message ${root} is not in #${room}` });
+        else setLoaded({ root, messages: h.messages });
+      })
+      .catch((err) => {
+        if (!current) return;
+        if (unauthenticated(err)) fail(err);
+        else setLoaded({ root, error: ConnectError.from(err).rawMessage });
+      });
+    return () => {
+      current = false;
+    };
+  }, [api, room, root, revision, fail]);
+
+  const markSeen = useCallback(
+    (id: bigint) => {
+      if (root !== undefined) setSeen((s) => (s?.root === root && s.id >= id ? s : { root, id }));
+    },
+    [root],
+  );
+
+  const through = root !== undefined && seen?.root === root ? seen.id : undefined;
+  useEffect(() => {
+    if (!room || root === undefined || !shown || through === undefined) return;
+    if (through <= (marked.current.get(root) ?? 0n)) return;
+    marked.current.set(root, through);
+    api.rooms.markRoomRead({ room, throughId: through }).catch((err) => {
+      marked.current.delete(root); // tried again with the next report
+      if (unauthenticated(err)) fail(err);
+    });
+  }, [api, room, root, through, shown, fail]);
+
+  const mine = root !== undefined && loaded?.root === root ? loaded : undefined;
   return { messages: mine?.messages, error: mine?.error, markSeen };
 }
 

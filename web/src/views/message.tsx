@@ -10,6 +10,7 @@ import { Icon } from '../icons';
 import type { TapeItem } from '../tape';
 import { AgentLink, Avatar, MessageBody, usePg } from './common';
 import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
+import { rootOf, ThreadStrip } from './thread';
 
 type Context = { known: Names; operator: string };
 
@@ -60,7 +61,7 @@ export const BoardLine = memo(function BoardLine({ m, dim, ...ctx }: Context & {
 });
 
 /** Where a message that goes out stands, next to its time: sending, sent or not sent. */
-function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
+export function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
   switch (d) {
     case 'sending':
       return <span className="dl sending">sending…</span>;
@@ -84,7 +85,7 @@ function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
  * operator cancels it, or at once when the operator sends it. While the room is read only it is
  * held and cannot be sent, only cancelled.
  */
-function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: Held }) {
+export function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: Held }) {
   const [busy, setBusy] = useState(false);
   const decide = (send: boolean) => {
     setBusy(true);
@@ -112,7 +113,7 @@ function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: 
  * Send out on a note: off while the call runs, on again when the hub refused it. Inline, it is the
  * phone's, next to its inline reply.
  */
-function SendOutButton({ m, onSendOut, inline }: { m: Message; onSendOut: SendOut; inline?: boolean }) {
+export function SendOutButton({ m, onSendOut, inline }: { m: Message; onSendOut: SendOut; inline?: boolean }) {
   const [busy, setBusy] = useState(false);
   return (
     <button
@@ -147,6 +148,7 @@ export const Tablet = memo(function Tablet({
   onDecide,
   onSendOut,
   held,
+  onThread,
   ...ctx
 }: Context & {
   item: Extract<TapeItem, { kind: 'message' }>;
@@ -160,6 +162,8 @@ export const Tablet = memo(function Tablet({
   onSendOut?: SendOut;
   /** Why nothing goes out of the room now, if nothing does. */
   held?: Held;
+  /** Opens the thread of a root. */
+  onThread?: (root: bigint) => void;
 }) {
   const pg = usePg();
   const { message: m, parent, to } = item;
@@ -220,6 +224,11 @@ export const Tablet = memo(function Tablet({
           )}
           <DeliveryMark d={d} room={m.room} />
           {item.toYou && <span className="tag">TO YOU</span>}
+          {m.thread !== 0n && onThread && (
+            <button type="button" className="inthread" onClick={() => onThread(m.thread)}>
+              in thread{m.threadTitle ? ` «${m.threadTitle}»` : ''}
+            </button>
+          )}
           {onReply && (
             <button type="button" className="mreply" onClick={() => onReply(m)}>
               reply
@@ -242,6 +251,7 @@ export const Tablet = memo(function Tablet({
         <div className="tx">
           <MessageBody body={m.body} {...ctx} />
         </div>
+        {onThread && <ThreadStrip m={m} onOpen={onThread} />}
         {d === 'scheduled' && <Decision m={m} onDecide={onDecide} held={held} />}
         {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
       </div>
@@ -252,10 +262,16 @@ export const Tablet = memo(function Tablet({
             Reply
           </button>
         )}
-        {first !== undefined && (
-          <button type="button" onClick={() => onFocus([m.author, first])}>
+        {onThread && onReply && (
+          <button type="button" onClick={() => onThread(rootOf(m))}>
             <Icon name="thread" />
             Thread
+          </button>
+        )}
+        {first !== undefined && (
+          <button type="button" title={`Show only ${m.author} ⇄ ${first}`} onClick={() => onFocus([m.author, first])}>
+            <Icon name="agent" />
+            Focus
           </button>
         )}
         {m.note && onSendOut && <SendOutButton m={m} onSendOut={onSendOut} />}

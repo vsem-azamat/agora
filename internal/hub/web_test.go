@@ -763,3 +763,62 @@ func TestThePageIsNeverKept(t *testing.T) {
 		}
 	}
 }
+
+func TestTheAppTitlesListsAndReadsThreadsAsTheOperator(t *testing.T) {
+	w := startWeb(t, "owner")
+	token := w.token(t, false)
+	ctx := context.Background()
+	if _, err := w.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	rooms := agorav1connect.NewRoomServiceClient(w.client(token), w.base)
+	root, err := rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Room: "general", Body: "the export is broken"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "general", Body: "which one?", Thread: root.Msg.GetId()})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rooms.SetThreadTitle(ctx, connect.NewRequest(&agorav1.SetThreadTitleRequest{MessageId: root.Msg.GetId(), Title: "Export"})); err != nil {
+		t.Fatal(err)
+	}
+	list, err := rooms.ListThreads(ctx, connect.NewRequest(&agorav1.ListThreadsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ts := list.Msg.GetThreads(); len(ts) != 1 || ts[0].GetTitle() != "Export" || ts[0].GetUnread() != 1 {
+		t.Fatalf("threads for the operator: %v", ts)
+	}
+	hist, err := rooms.History(ctx, connect.NewRequest(&agorav1.HistoryRequest{Room: "general"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ms := hist.Msg.GetMessages(); len(ms) != 1 || ms[0].GetThreadSummary().GetUnread() != 1 {
+		t.Fatalf("history for the operator: %v", ms)
+	}
+	// the web leaves as the operator, whatever agent the request names
+	if _, err := rooms.LeaveThread(ctx, connect.NewRequest(&agorav1.LeaveThreadRequest{Agent: "builder", MessageId: root.Msg.GetId()})); err != nil {
+		t.Fatal(err)
+	}
+	unread := func(agent string, list func(context.Context, *connect.Request[agorav1.ListThreadsRequest]) (*connect.Response[agorav1.ListThreadsResponse], error)) int32 {
+		t.Helper()
+		resp, err := list(ctx, connect.NewRequest(&agorav1.ListThreadsRequest{Agent: agent}))
+		if err != nil || len(resp.Msg.GetThreads()) != 1 {
+			t.Fatalf("threads of %s: %v %v", agent, resp, err)
+		}
+		return resp.Msg.GetThreads()[0].GetUnread()
+	}
+	before := unread("", rooms.ListThreads)
+	if _, err := w.rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "general", Body: "the CSV one", Thread: root.Msg.GetId()})); err != nil {
+		t.Fatal(err)
+	}
+	if after := unread("", rooms.ListThreads); after != before {
+		t.Fatalf("the operator left, but a reply is unread for it: %d, was %d", after, before)
+	}
+	if _, err := rooms.Post(ctx, connect.NewRequest(&agorav1.PostRequest{Room: "general", Body: "thanks", Thread: root.Msg.GetId()})); err != nil {
+		t.Fatal(err)
+	}
+	if n := unread("builder", w.rooms.ListThreads); n != 1 {
+		t.Fatalf("builder did not stay in the thread: %d unread", n)
+	}
+}

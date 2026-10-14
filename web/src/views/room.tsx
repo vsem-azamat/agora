@@ -38,6 +38,20 @@ import { BoardLine, type Decide, type SendOut, Tablet } from './message';
 import { OutsiderAvatar, OutsiderName } from './outside';
 import { RoomIcon, shortDate } from './rooms';
 import { Notice } from './shell';
+import { onPhone, ThreadPanel } from './thread';
+
+/** The thread open beside the room, and what the operator does in it. */
+export type OpenThread = {
+  root: bigint;
+  /** The root, then its replies; undefined while loading. */
+  messages?: Message[];
+  error?: string;
+  /** Posts a reply, also to the room when asked; a note stays in Agora. */
+  onPost: (body: string, also: boolean, note: boolean) => Promise<void>;
+  onTitle: (title: string) => void;
+  onLeave: () => void;
+  onSeen: (id: bigint) => void;
+};
 
 /** Why the room was opened from elsewhere: to show one message, or to write to someone. */
 export type Arrival = { room: string; jump?: bigint; compose?: boolean };
@@ -98,6 +112,14 @@ export function RoomView(props: {
   memory: Map<string, Saved>;
   arrival?: Arrival;
   onArrived: () => void;
+  /** The thread open beside the room, if one is. */
+  thread?: OpenThread;
+  /** The operator's unread replies in the room's threads now, which the room's own unread leaves out. */
+  threadUnread?: number;
+  /** The room's threads the hub lists with unread replies for the operator. */
+  unreadThreads?: { root: bigint; unread: number }[];
+  /** Opens the thread of a root, or closes the open one. */
+  onThread?: (root: bigint | undefined) => void;
 }) {
   const { messages, reader, name } = props;
   const [focus, setFocus] = useState<[string, string]>();
@@ -111,6 +133,8 @@ export function RoomView(props: {
   const follow = useRef(true);
   const landed = useRef(false);
   const seen = useRef(0n);
+  const threadOpen = useRef(props.thread !== undefined);
+  threadOpen.current = props.thread !== undefined;
   const frame = useRef(0);
   // the first unread message is fixed when the room's messages first arrive
   const entry = useRef<{ firstNew?: bigint }>(undefined);
@@ -143,7 +167,8 @@ export function RoomView(props: {
   const read = () => {
     const el = list.current;
     if (!el || !messages) return;
-    if (pageVisible()) {
+    // on a phone an open thread covers the room: nothing in it is seen until the thread closes
+    if (pageVisible() && !(threadOpen.current && onPhone())) {
       const placed = [...el.querySelectorAll<HTMLElement>('[data-mid]')].map((li) => ({
         id: BigInt(li.dataset.mid ?? 0),
         top: li.offsetTop,
@@ -332,13 +357,34 @@ export function RoomView(props: {
     setReply(undefined);
   };
 
+  const opening = useRef(props.onThread);
+  opening.current = props.onThread;
+  // what opened the thread gets the focus back when it closes
+  const opener = useRef<HTMLElement | null>(null);
+  // the tablets are memoized: they get callbacks that stay the same
+  const openThread = useCallback((root: bigint) => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    opening.current?.(root);
+  }, []);
+  const closeThread = useCallback(() => opening.current?.(undefined), []);
+  const section = useRef<HTMLElement>(null);
+  const isOpen = props.thread !== undefined;
+  useEffect(() => {
+    // on a phone the room under an open thread is out of reach, also for the keyboard
+    const el = section.current;
+    el?.toggleAttribute('inert', isOpen && onPhone());
+    if (isOpen) return;
+    reading.current(); // what the thread covered is seen now
+    if (opener.current?.isConnected) opener.current.focus();
+    opener.current = null;
+  }, [isOpen]);
   const dimmed = (m: Message) => focus !== undefined && !between(m, to.get(m.id) ?? [], focus);
   const ctx = { known, operator: reader.operator };
   const inRoom = new Set(people.map((p) => p.name));
 
   return (
-    <div className="roomwrap">
-      <section className="room" aria-label={`#${name}`}>
+    <div className={props.thread ? 'roomwrap withthread' : 'roomwrap'}>
+      <section className="room" ref={section} aria-label={`#${name}`}>
         <div className={archived ? 'roomhead archived' : 'roomhead'}>
           <div className="rtitle">
             <h2>
@@ -360,6 +406,13 @@ export function RoomView(props: {
             <span className="sum">
               {props.room?.messages ?? 0} msgs · {people.length} in room
             </span>
+            {(props.threadUnread ?? 0) > 0 && props.onThread && (
+              <UnreadInThreads
+                n={props.threadUnread ?? 0}
+                next={nextUnreadThread(props.unreadThreads ?? [], messages ?? [], props.thread?.root)}
+                onOpen={openThread}
+              />
+            )}
             {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
             {!archived && (
               <FollowControls
@@ -426,6 +479,7 @@ export function RoomView(props: {
                       onDecide={decide}
                       onSendOut={props.bridge && !readOnly && !archived ? sendOut : undefined}
                       held={readOnly ? 'read' : props.bridge ? undefined : 'unbridged'}
+                      onThread={props.onThread && openThread}
                       {...ctx}
                     />
                   );
@@ -481,42 +535,68 @@ export function RoomView(props: {
           />
         )}
       </section>
-      <aside className="rail" aria-label="Who is here">
-        <div>
-          <h3>CONVERSATIONS</h3>
-          <Conversations talks={talks} focus={focus} onFocus={setFocus} />
-        </div>
-        <div>
-          <h3>IN ROOM · {people.length}</h3>
-          <div className="people">
-            {people.map((p) => (
-              <AgentLink key={p.name} name={p.name} className="person">
-                <Avatar name={p.name} live={p.live} size="sm" />
-                <span className="pgname">{p.name}</span>
-                {p.name === reader.operator && <span className="r">you</span>}
-              </AgentLink>
-            ))}
+      {props.thread && props.onThread ? (
+        <ThreadPanel
+          key={String(props.thread.root)}
+          archived={archived !== undefined}
+          bridge={props.bridge && { chat: props.bridge.name, readOnly }}
+          delivering={{
+            onDecide: decide,
+            onSendOut: props.bridge && !readOnly && !archived ? sendOut : undefined,
+            held: readOnly ? 'read' : props.bridge ? undefined : 'unbridged',
+          }}
+          room={name}
+          root={props.thread.root}
+          messages={props.thread.messages}
+          error={props.thread.error}
+          operator={reader.operator}
+          board={reader.board}
+          agents={props.agents}
+          known={known}
+          onClose={closeThread}
+          onPost={props.thread.onPost}
+          onTitle={props.thread.onTitle}
+          onLeave={props.thread.onLeave}
+          onSeen={props.thread.onSeen}
+        />
+      ) : (
+        <aside className="rail" aria-label="Who is here">
+          <div>
+            <h3>CONVERSATIONS</h3>
+            <Conversations talks={talks} focus={focus} onFocus={setFocus} />
           </div>
-        </div>
-        {outsiders.length > 0 && (
-          <div className="outsiders">
-            <h3>OUTSIDE · {outsiders.length}</h3>
+          <div>
+            <h3>IN ROOM · {people.length}</h3>
             <div className="people">
-              {outsiders.map((who) => (
-                <OutsiderName
-                  key={authorKey({ author: '', externalAuthor: who })}
-                  who={who}
-                  className="person"
-                  via={false}
-                >
-                  <OutsiderAvatar who={who} size="sm" />
-                  <span className="pgname">{who.name || who.id}</span>
-                </OutsiderName>
+              {people.map((p) => (
+                <AgentLink key={p.name} name={p.name} className="person">
+                  <Avatar name={p.name} live={p.live} size="sm" />
+                  <span className="pgname">{p.name}</span>
+                  {p.name === reader.operator && <span className="r">you</span>}
+                </AgentLink>
               ))}
             </div>
           </div>
-        )}
-      </aside>
+          {outsiders.length > 0 && (
+            <div className="outsiders">
+              <h3>OUTSIDE · {outsiders.length}</h3>
+              <div className="people">
+                {outsiders.map((who) => (
+                  <OutsiderName
+                    key={authorKey({ author: '', externalAuthor: who })}
+                    who={who}
+                    className="person"
+                    via={false}
+                  >
+                    <OutsiderAvatar who={who} size="sm" />
+                    <span className="pgname">{who.name || who.id}</span>
+                  </OutsiderName>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+      )}
     </div>
   );
 }
@@ -544,6 +624,42 @@ function roomPeople(messages: Message[], reader: Reader, live: Map<string, Liven
     name,
     live: name === reader.operator ? undefined : (live.get(name) ?? 'offline'),
   }));
+}
+
+/**
+ * The next thread with unread replies to open, other than the open one: those the hub lists, then
+ * the roots in the loaded history, oldest root first.
+ */
+export function nextUnreadThread(
+  listed: { root: bigint; unread: number }[],
+  messages: Message[],
+  open: bigint | undefined,
+): bigint | undefined {
+  const roots = new Set<bigint>();
+  for (const t of listed) if (t.unread > 0) roots.add(t.root);
+  for (const m of messages) if ((m.threadSummary?.unread ?? 0) > 0) roots.add(m.id);
+  roots.delete(open ?? -1n);
+  return [...roots].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))[0];
+}
+
+/** The unread replies in the room's threads; choosing it opens the next thread that has some. */
+function UnreadInThreads({ n, next, onOpen }: { n: number; next?: bigint; onOpen: (root: bigint) => void }) {
+  return (
+    <button
+      type="button"
+      className="chip mention"
+      disabled={next === undefined}
+      title={
+        next === undefined
+          ? 'Open the thread from its strip or the room list'
+          : 'Open the next thread with unread replies'
+      }
+      onClick={() => next !== undefined && onOpen(next)}
+    >
+      <Icon name="thread" />
+      {n} unread in threads
+    </button>
+  );
 }
 
 /** Archive room, asked again in the page before the room is archived. */

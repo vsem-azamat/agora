@@ -5,7 +5,7 @@ import { AVATAR_TYPES } from '../avatars';
 import { projects, type RoomCount } from '../board';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Bridge } from '../gen/agora/v1/bridges_pb';
-import type { Room } from '../gen/agora/v1/rooms_pb';
+import type { Room, Thread } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import type { Theme } from '../theme';
 import type { Status } from '../useHub';
@@ -186,6 +186,10 @@ export function Sidebar(props: {
   unread: Map<string, RoomCount>;
   followed: Set<string>;
   bridges: Map<string, Bridge>;
+  /** The titled threads, listed under their rooms. */
+  threads?: Thread[];
+  /** The open thread's root, if one is open. */
+  thread?: bigint;
   counts: { active: number; turns: number; open: number };
   onProject: (p: string | undefined) => void;
 }) {
@@ -221,7 +225,9 @@ export function Sidebar(props: {
           unread={props.unread}
           followed={props.followed}
           bridges={props.bridges}
+          threads={props.threads}
           current={props.room}
+          currentThread={props.thread}
         />
       </div>
       <div>

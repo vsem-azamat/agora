@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App, page, parseRoute } from './App';
+import { App, moveThread, page, parseRoute } from './App';
 import type { Api } from './api';
-import { forgetLoadedBuild, useRoom } from './useHub';
+import { forgetLoadedBuild, roomCounts, useRoom, useThread } from './useHub';
 
 afterEach(() => {
   cleanup();
@@ -893,6 +893,53 @@ describe('useRoom', () => {
   });
 });
 
+const thread = (root: bigint, room = 'example-app') => ({
+  messages: [
+    { id: root, room, author: 'builder', body: 'root' },
+    { id: root + 10n, room, author: 'reviewer', body: 'reply', thread: root },
+  ],
+});
+
+describe('useThread', () => {
+  it('marks each thread read up to its own newest reply', async () => {
+    const markRoomRead = vi.fn(async () => ({}));
+    const history = vi.fn(async ({ thread: root }: { thread: bigint }) => thread(root));
+    const api = { rooms: { history, markRoomRead } } as unknown as Api;
+    const { result, rerender } = renderHook(({ root }) => useThread(api, 'example-app', root, 1n, vi.fn()), {
+      initialProps: { root: 490n },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    act(() => result.current.markSeen(500n));
+    await waitFor(() => expect(markRoomRead).toHaveBeenCalledWith({ room: 'example-app', throughId: 500n }));
+    // another thread whose newest reply is older is still marked
+    rerender({ root: 440n });
+    await waitFor(() => expect(result.current.messages?.[0]?.id).toBe(440n));
+    act(() => result.current.markSeen(450n));
+    await waitFor(() => expect(markRoomRead).toHaveBeenCalledWith({ room: 'example-app', throughId: 450n }));
+  });
+
+  it('marks a reply seen while the page was hidden once the page is shown', async () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const markRoomRead = vi.fn(async () => ({}));
+    const api = { rooms: { history: vi.fn(async () => thread(40n)), markRoomRead } } as unknown as Api;
+    const { result } = renderHook(() => useThread(api, 'example-app', 40n, 1n, vi.fn()));
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    act(() => result.current.markSeen(50n));
+    expect(markRoomRead).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(markRoomRead).toHaveBeenCalledWith({ room: 'example-app', throughId: 50n }));
+  });
+
+  it('refuses a thread of another room instead of showing it under this one', async () => {
+    const markRoomRead = vi.fn(async () => ({}));
+    const api = { rooms: { history: vi.fn(async () => thread(41n, 'dev')), markRoomRead } } as unknown as Api;
+    const { result } = renderHook(() => useThread(api, 'general', 41n, 1n, vi.fn()));
+    await waitFor(() => expect(result.current.error).toBe('message 41 is not in #general'));
+    expect(result.current.messages).toBeUndefined();
+  });
+});
+
 describe('archived rooms', () => {
   function archivedHub(calls: [string, unknown][]) {
     const hub = fakeHub([]);
@@ -1027,5 +1074,77 @@ describe('App', () => {
     expect(screen.getByText(/did not accept that token/)).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
     expect(location.href).not.toContain('rotated-away');
+  });
+});
+
+describe('threads in the app', () => {
+  it('moves in the history so that Back from a thread opened in its room returns to the room once', () => {
+    const t = '#/rooms/example-app/thread/40';
+    // opened from the room: a new entry
+    expect(moveThread('#/rooms/example-app', undefined, 'example-app', undefined, 40n)).toEqual({ push: t, pushed: t });
+    // closed: back to the room's entry instead of a new one
+    expect(moveThread(t, t, 'example-app', 40n, undefined)).toEqual({ back: true });
+    // reached by its address: closing replaces it with the room
+    expect(moveThread(t, undefined, 'example-app', 40n, undefined)).toEqual({ replace: '#/rooms/example-app' });
+    // another thread from an open one: in place, still over the room
+    expect(moveThread(t, t, 'example-app', 40n, 42n)).toEqual({
+      replace: '#/rooms/example-app/thread/42',
+      pushed: '#/rooms/example-app/thread/42',
+    });
+  });
+
+  it('posts a reply in the thread, also to the room, and leaves the thread back to the room', async () => {
+    const calls: [string, unknown][] = [];
+    const hub = fakeHub([]);
+    const reply = (json: unknown) =>
+      new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const proc = String(input).replace(/^.*\/agora\.v1\./, '');
+        const raw = typeof init?.body === 'string' ? init.body : new TextDecoder().decode(init?.body as Uint8Array);
+        switch (proc) {
+          case 'RoomService/History':
+            return reply({
+              messages: [
+                { id: '1', room: 'general', author: 'builder', body: 'hello' },
+                { id: '3', room: 'general', author: 'reviewer', body: 'hi', thread: '1' },
+              ],
+            });
+          case 'RoomService/Post':
+          case 'RoomService/LeaveThread':
+            calls.push([proc, JSON.parse(raw)]);
+            return reply({ id: '4' });
+          default:
+            return hub(input, init);
+        }
+      }),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    render(<App />);
+    location.hash = '#/rooms/general/thread/1';
+    const box = (await screen.findByRole('combobox', { name: 'Reply in the thread #general' })) as HTMLTextAreaElement;
+    fireEvent.click(screen.getByLabelText('Also to the room'));
+    fireEvent.change(box, { target: { value: 'the CSV one' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() =>
+      expect(calls).toContainEqual([
+        'RoomService/Post',
+        { room: 'general', body: 'the CSV one', thread: '1', also: true },
+      ]),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    await waitFor(() => expect(calls).toContainEqual(['RoomService/LeaveThread', { messageId: '1' }]));
+    await waitFor(() => expect(location.hash).toBe('#/rooms/general'));
+    // an address naming a reply opens its thread under the root's address
+    location.hash = '#/rooms/general/thread/3';
+    await waitFor(() => expect(location.hash).toBe('#/rooms/general/thread/1'));
+  });
+});
+
+describe('roomCounts', () => {
+  it('keeps the unread replies of threads apart from the room’s unread', () => {
+    const counts = roomCounts([{ room: 'example-app', unread: 1, addressed: 0, threads: 2 }], []);
+    expect(counts.get('example-app')).toEqual({ unread: 1, addressed: 0, threads: 2 });
   });
 });

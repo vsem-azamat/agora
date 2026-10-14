@@ -23,7 +23,7 @@ import { applySize, NOTIFY_KEY, type Notify, resolveNotify, resolveSize, SIZE_KE
 import type { Saved } from './tape';
 import { applyTheme, resolveTheme, THEME_KEY } from './theme';
 import { forgetToken, saveToken, takeTokenFromLocation, tokenFromHash } from './token';
-import { useAgentMessages, useHub, useRoom } from './useHub';
+import { useAgentMessages, useHub, useRoom, useThread } from './useHub';
 import { Board } from './views/board';
 import { Charter } from './views/charter';
 import { Avatar, OpenAgent, Profiles } from './views/common';
@@ -34,19 +34,45 @@ import { Rooms, roomHref } from './views/rooms';
 import { Settings } from './views/settings';
 import { AccountMenu, Bar, Palette, type PaletteItem, Sidebar, Tabs, type View } from './views/shell';
 import { SignIn } from './views/signin';
+import { threadHref } from './views/thread';
 import { Turns } from './views/turns';
 
-// --- routes: #/ board, #/rooms, #/archive, #/rooms/<name>, #/turns, #/charter, #/settings ---
+// --- routes: #/ board, #/rooms, #/archive, #/rooms/<name>[/thread/<root>], #/turns, #/charter, #/settings ---
 
 /** Where the app is; the Rooms view is on its archived rooms at #/archive, a name no room can clash with. */
-type Route = { view: View; room?: string; archived?: true };
+type Route = { view: View; room?: string; archived?: true; thread?: bigint };
+
+/**
+ * How opening or closing a thread moves in the browser's history. A thread opened from its room is
+ * a new entry, so the phone's Back returns to the room; closing it goes back to that room's entry
+ * instead of adding one. Moving to another thread, or closing a thread reached by its address,
+ * replaces the entry. `pushed` is the address of the thread opened over its room, kept between calls.
+ */
+export function moveThread(
+  hash: string,
+  pushed: string | undefined,
+  room: string,
+  open: bigint | undefined,
+  root: bigint | undefined,
+): { push?: string; replace?: string; back?: true; pushed?: string } {
+  if (root === undefined) {
+    if (open === undefined) return { pushed };
+    return pushed === hash ? { back: true } : { replace: roomHref(room) };
+  }
+  const to = threadHref(room, root);
+  if (open === undefined) return { push: to, pushed: to };
+  return { replace: to, pushed: pushed === hash ? to : pushed };
+}
 
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#\/?/, '');
-  const [first, second] = path.split('/');
+  const [first, second, third, fourth] = path.split('/');
   switch (first) {
     case 'rooms':
-      return second ? { view: 'room', room: decodeURIComponent(second) } : { view: 'rooms' };
+      if (!second) return { view: 'rooms' };
+      if (third === 'thread' && fourth && /^\d+$/.test(fourth))
+        return { view: 'room', room: decodeURIComponent(second), thread: BigInt(fourth) };
+      return { view: 'room', room: decodeURIComponent(second) };
     case 'archive':
       return { view: 'rooms', archived: true };
     case 'turns':
@@ -233,6 +259,16 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       setDrafts((d) => (d[roomName]?.note && !d[roomName].text.trim() ? redraft(d, roomName, { note: false }) : d));
   }, [roomName]);
   const { messages, error: roomError, markSeen } = useRoom(api, roomName, data?.revision, fail);
+  const threadRoot = route.view === 'room' ? route.thread : undefined;
+  // the address of the thread this app opened over its room, as a history entry of its own
+  const pushedThread = useRef<string>(undefined);
+  const thread = useThread(api, roomName, threadRoot, data?.revision, fail);
+  // an address that names a reply opens its thread: the address is put right to the root's
+  const loadedRoot = thread.messages?.[0]?.id;
+  useEffect(() => {
+    if (roomName && threadRoot !== undefined && loadedRoot !== undefined && loadedRoot !== threadRoot)
+      location.replace(threadHref(roomName, loadedRoot));
+  }, [roomName, threadRoot, loadedRoot]);
   const listed = useMemo(() => (data ? boardAgents(data.agents, data.operator) : undefined), [data]);
   const recent = useAgentMessages(api, drawer, data?.rooms ?? [], fail);
   const modes = data?.modes;
@@ -397,6 +433,38 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       .setBridgePolicy({ name: roomName, policy: bridgePolicy(policy) })
       .catch(refused('The policy did not change'));
   };
+  const openThread = (root: bigint | undefined) => {
+    if (!roomName) return;
+    const to = moveThread(location.hash, pushedThread.current, roomName, threadRoot, root);
+    pushedThread.current = to.pushed;
+    if (to.back) history.back();
+    else if (to.replace) location.replace(to.replace);
+    else if (to.push) location.hash = to.push;
+  };
+  const openThreadProps = roomName &&
+    threadRoot !== undefined && {
+      root: threadRoot,
+      messages: thread.messages,
+      error: thread.error,
+      onPost: async (body: string, also: boolean, note: boolean) => {
+        try {
+          await api.rooms.post({ room: roomName, body, thread: threadRoot, also, note });
+        } catch (err) {
+          if (unauthenticated(err)) fail(err);
+          throw err;
+        }
+      },
+      onTitle: (title: string) => {
+        api.rooms.setThreadTitle({ messageId: threadRoot, title }).catch(refused('The thread was not titled'));
+      },
+      onLeave: () => {
+        api.rooms
+          .leaveThread({ messageId: threadRoot })
+          .then(() => openThread(undefined))
+          .catch(refused('The thread was not left'));
+      },
+      onSeen: thread.markSeen,
+    };
   const pickProject = (p: string | undefined) => {
     setProject(p);
     if (route.view !== 'board') location.hash = '#/';
@@ -445,6 +513,10 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           memory={memory}
           arrival={arrival}
           onArrived={() => setArrival(undefined)}
+          thread={openThreadProps || undefined}
+          threadUnread={data.unread.get(roomName ?? '')?.threads}
+          unreadThreads={data.threads.filter((t) => t.room === roomName)}
+          onThread={openThread}
         />
       );
       break;
@@ -458,6 +530,7 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           unread={data.unread}
           followed={data.followed}
           bridges={data.bridges}
+          threads={data.threads}
           now={now}
           notice={shown}
           onCloseNotice={closeNotice}
@@ -509,6 +582,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
                 unread={data.unread}
                 followed={data.followed}
                 bridges={data.bridges}
+                threads={data.threads}
+                thread={threadRoot}
                 counts={{ active: active ?? 0, turns: heldTurns(data.resources), open: openProposals(data.proposals) }}
                 onProject={pickProject}
               />

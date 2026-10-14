@@ -78,6 +78,10 @@ export function Composer(props: {
   inputRef: RefObject<HTMLTextAreaElement | null>;
   /** In a bridged room: where the message goes. */
   outbound?: Outbound;
+  /** The compose box's name; `Message #room` when not given. */
+  label?: string;
+  /** What the empty box says instead of the room's own text. */
+  hint?: string;
 }) {
   const [mention, setMention] = useState<string>();
   const [picked, setPicked] = useState(0);
@@ -173,11 +177,13 @@ export function Composer(props: {
 
   const out = props.outbound;
   const note = out?.note === true;
-  const placeholder = !out
-    ? `Message #${props.room} · @ to address someone`
-    : note
-      ? `Note for agents · not sent to ${out.chat} · @ to address someone`
-      : `To ${out.chat} · @ to address someone`;
+  const placeholder = props.hint
+    ? props.hint
+    : !out
+      ? `Message #${props.room} · @ to address someone`
+      : note
+        ? `Note for agents · not sent to ${out.chat} · @ to address someone`
+        : `To ${out.chat} · @ to address someone`;
   return (
     <form className={['compose', out && (note ? 'note' : 'out')].filter(Boolean).join(' ')} onSubmit={send}>
       {out && <Destination {...out} />}
@@ -223,7 +229,7 @@ export function Composer(props: {
           onKeyDown={onKey}
           onBlur={() => setMention(undefined)}
           placeholder={placeholder}
-          aria-label={`Message #${props.room}`}
+          aria-label={props.label ?? `Message #${props.room}`}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={candidates.length > 0}

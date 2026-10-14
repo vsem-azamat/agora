@@ -151,6 +151,13 @@ describe('messages', () => {
     expect(roomBadge({ unread: 7, addressed: 2 })).toEqual({ text: '@2', mention: true });
     expect(roomBadge({ unread: 5, addressed: 0 })).toEqual({ text: '5', mention: false });
     expect(roomBadge({ unread: 0, addressed: 0 })).toBeUndefined();
+    // unread thread replies are the operator's as a participant; the room's own count goes first
+    expect(roomBadge({ unread: 0, addressed: 0, threads: 2 })).toEqual({
+      text: '↳2',
+      mention: true,
+      title: '2 unread in threads',
+    });
+    expect(roomBadge({ unread: 3, addressed: 0, threads: 2 })).toEqual({ text: '3', mention: false });
   });
 });
 

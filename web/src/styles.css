@@ -2097,6 +2097,180 @@ a.archivedrow:hover {
 
 /* --- motion and pointers --------------------------------------------------------------- */
 
+/* --- threads ------------------------------------------------------------------------- */
+
+/* under a message with replies: one strip that opens its thread */
+.tstrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.86em;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+}
+.tstrip .who {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.tstrip .names {
+  color: var(--mute);
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tstrip time,
+.tstrip .ttl {
+  color: var(--mute);
+}
+.tstrip em {
+  font-style: normal;
+  color: var(--accent);
+  font-weight: 600;
+}
+.tstrip .open {
+  margin-left: auto;
+  color: var(--accent);
+}
+.tstrip .av.out {
+  display: inline-grid;
+  place-items: center;
+  background: var(--line2);
+}
+.inthread {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 4px;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+/* the thread beside the room, in place of the rail */
+.roomwrap.withthread {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+}
+.threadpanel {
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.thead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.tpath {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tpath a {
+  color: var(--mute);
+}
+.ttools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ttlform {
+  display: flex;
+  gap: 6px;
+}
+.ttlform input {
+  font: inherit;
+  min-width: 0;
+  width: 12em;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.tback {
+  display: none;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  padding: 4px;
+  cursor: pointer;
+}
+.wakes {
+  margin: 0;
+  padding: 6px 14px;
+  font-size: 0.86em;
+  color: var(--mute);
+  border-bottom: 1px solid var(--line2);
+}
+.tmsgs {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px;
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.tmsg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--pg, var(--line));
+}
+.tmsg .mh {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.tmsg time,
+.tmsg .nt {
+  color: var(--mute);
+  font-size: 0.8em;
+}
+.tmsgs .day {
+  text-align: center;
+  color: var(--mute);
+  font-size: 0.8em;
+  letter-spacing: 0.1em;
+}
+.also {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 14px 0;
+  font-size: 0.86em;
+  color: var(--mute);
+}
+.threadrow {
+  padding-left: 22px !important;
+  font-size: 0.9em;
+  color: var(--mute);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .msg.flash .mb {
     animation: flash 1.4s ease;
@@ -2130,8 +2304,20 @@ a.archivedrow:hover {
 }
 
 @media (max-width: 1180px) {
-  .roomwrap {
+  .roomwrap,
+  .roomwrap.withthread {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* the thread lies over the room's right side */
+  .roomwrap {
+    position: relative;
+  }
+  .threadpanel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(400px, 100%);
+    z-index: 5;
+    box-shadow: var(--shadow);
   }
   .rail {
     display: none;
@@ -2142,6 +2328,23 @@ a.archivedrow:hover {
 }
 
 @media (max-width: 760px) {
+  /* a thread covers the screen, with a back arrow to the room */
+  .threadpanel {
+    position: fixed;
+    inset: 0 0 auto 0;
+    /* the part of the screen the on-screen keyboard leaves visible, as the page itself */
+    height: var(--vvh, 100%);
+    width: auto;
+    /* under the agent drawer (scrim 20, drawer 21) and the palette, which open over it */
+    z-index: 19;
+    box-shadow: none;
+  }
+  .tback {
+    display: inline-flex;
+  }
+  .tclose {
+    display: none;
+  }
   .body {
     grid-template-columns: minmax(0, 1fr);
   }

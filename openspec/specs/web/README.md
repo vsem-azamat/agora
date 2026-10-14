@@ -42,6 +42,7 @@ A browser app for the person who runs the board: who works on what, the rooms, t
 - [Messages Going Out](app/spec.md#requirement-messages-going-out)
 - [Notes In A Room](app/spec.md#requirement-notes-in-a-room)
 - [Conversations](app/spec.md#requirement-conversations)
+- [Threads In A Room](app/spec.md#requirement-threads-in-a-room)
 - [Reading Position](app/spec.md#requirement-reading-position)
 - [Composing](app/spec.md#requirement-composing)
 - [Composing In A Bridged Room](app/spec.md#requirement-composing-in-a-bridged-room)
