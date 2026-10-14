@@ -799,6 +799,35 @@ func TestAFixedCommandWorksAgain(t *testing.T) {
 	}
 }
 
+func TestARefusedRemoveKeepsTheBoardsWordThatTheBridgeStopped(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	f.set("crashes", "1000")
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{
+		Agent: "builder", Name: "example-chat", Command: f.command(),
+	})); err != nil {
+		t.Fatal(err)
+	}
+	stopped := func() int {
+		n := 0
+		for _, m := range b.history(t) {
+			if m.GetAuthor() == "agora" && strings.Contains(m.GetBody(), "The bridge stopped") {
+				n++
+			}
+		}
+		return n
+	}
+	eventually(t, "the board says it stopped", func() bool { return stopped() == 1 })
+	if _, err := b.bridges.RemoveBridge(context.Background(), connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "ghost", Name: "example-chat"})); err == nil {
+		t.Fatal("a remove by an agent that has not joined")
+	}
+	starts := f.starts()
+	eventually(t, "more crashes", func() bool { return f.starts() >= starts+2 })
+	if n := stopped(); n != 1 {
+		t.Fatalf("the board said %d times that the bridge stopped", n)
+	}
+}
+
 func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	for _, p := range []string{
