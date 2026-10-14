@@ -208,6 +208,17 @@ describe('messages in a room', () => {
     expect(props.onFollow).toHaveBeenCalledWith(true, 'wake');
   });
 
+  it('closes the mode menu when the room changes', () => {
+    const { props, rerender } = room(ms, { mode: 'all' });
+    fireEvent.click(screen.getByRole('button', { name: 'Follow mode: Every message' }));
+    expect(screen.getByRole('menu', { name: 'Follow mode' })).toBeTruthy();
+    rerender(<RoomView {...props} name="other-app" room={create(RoomSchema, { name: 'other-app', messages: 3 })} />);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Follow mode: Every message' }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+  });
+
   it('counts back only mentions in a room followed for mentions', () => {
     const msgs = [message(1, 'builder', 'chatter', 3), message(2, 'reviewer', '@operator look', 2)];
     const { container } = room(msgs, { mode: 'mentions', unread: { unread: 1, addressed: 1 } });

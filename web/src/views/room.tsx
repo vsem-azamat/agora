@@ -416,6 +416,7 @@ export function RoomView(props: {
             {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
             {!archived && (
               <FollowControls
+                key={name}
                 room={name}
                 always={name === props.general}
                 followed={props.followed}

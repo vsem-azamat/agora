@@ -318,6 +318,32 @@ describe('following', () => {
   });
 });
 
+describe('following under notifications set to Nothing', () => {
+  it('does not ask for permission when a room is set to notify', async () => {
+    localStorage.setItem('agora.notify', 'none');
+    const bodies: string[] = [];
+    const hub = fakeHub([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith('RoomService/Subscribe'))
+          bodies.push(typeof init?.body === 'string' ? init.body : new TextDecoder().decode(init?.body as Uint8Array));
+        return hub(input, init);
+      }),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'granted') });
+    location.hash = '#/rooms/general';
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow mode: Mentions only' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Every message notifies' }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(JSON.parse(bodies[0] ?? '{}')).toEqual({ rooms: ['general'], follow: true, mode: 'SUBSCRIPTION_MODE_WAKE' });
+    expect(Notification.requestPermission).not.toHaveBeenCalled();
+  });
+});
+
 describe('bridged rooms', () => {
   /** The fake hub with #example-chat bridged under `policy`, one message from outside and one waiting. */
   function bridgedHub(policy: string, calls: [string, unknown][]) {

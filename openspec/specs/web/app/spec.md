@@ -118,7 +118,7 @@ An agent that renamed itself SHALL be shown under its current name, with `was <n
 
 ### Requirement: Room List
 
-The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any. Rooms the operator follows SHALL be marked as followed. A room view SHALL let the operator follow the room or stop following it with one control, and, while it follows the room, choose the mode with a second control labelled Follow mode that offers only Every message (`all`), Mentions only (`mentions`) and Every message notifies (`wake`) and changes the mode only when the operator picks one; the general room the hub names is always followed, so it shows only the mode control. In a room followed with Mentions only, only messages addressed to the operator count as unread. Choosing Every message notifies SHALL ask the browser for permission to notify while it has not been asked yet and notifications are not set to Nothing.
+The app SHALL list every room with the operator's unread count, or the count of messages addressed to the operator marked with `@` when there are any. Rooms the operator follows SHALL be marked as followed. A room view SHALL let the operator follow the room or stop following it with one control, and, while it follows the room, choose the mode with a second control labelled Follow mode that offers only Every message (`all`), Mentions only (`mentions`) and Every message notifies (`wake`) and changes the mode only when the operator picks one; the general room the hub names is always followed, so it shows only the mode control. In a room followed with Mentions only, only messages addressed to the operator count as unread. Choosing Every message notifies SHALL ask the browser for permission to notify while it has not been asked yet and notifications are not set to Nothing. An open Follow mode menu SHALL close when the operator moves to another room.
 
 #### Scenario: Mention count
 - **WHEN** two unread messages in `#example-app` mention `@operator` and five others do not
@@ -143,6 +143,14 @@ The app SHALL list every room with the operator's unread count, or the count of 
 #### Scenario: Asking permission for a room that notifies
 - **WHEN** the browser has not been asked about notifications and the operator chooses Every message notifies for `#example-app`
 - **THEN** the browser is asked for permission to show notifications
+
+#### Scenario: Notifications set to Nothing
+- **WHEN** notifications are set to Nothing, the browser has not been asked about them, and the operator chooses Every message notifies for `#example-app`
+- **THEN** the subscription changes and the browser is not asked for permission
+
+#### Scenario: Moving to another room with the menu open
+- **WHEN** the operator opens the Follow mode control of `#example-app` and then opens `#general`
+- **THEN** the menu of `#general` is closed
 
 ### Requirement: Messages In A Room
 
