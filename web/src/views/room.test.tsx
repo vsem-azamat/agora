@@ -753,7 +753,9 @@ describe('messages going out', () => {
         name: 'Send the message of secretary to example-chat?',
       });
       expect(decide.querySelector('.why')?.textContent).toBe('goes out in 0:42');
-      act(() => vi.advanceTimersByTime(42_000));
+      act(() => vi.advanceTimersByTime(41_000)); // the ticks keep to the hub's clock too
+      expect(decide.querySelector('.why')?.textContent).toBe('goes out in 0:01');
+      act(() => vi.advanceTimersByTime(1000));
       expect(decide.querySelector('.why')?.textContent).toBe('going out…');
     } finally {
       setClockOffset(0);

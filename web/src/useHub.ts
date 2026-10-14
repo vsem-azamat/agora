@@ -10,7 +10,7 @@ import type { Bridge } from './gen/agora/v1/bridges_pb';
 import type { GetCharterResponse, Proposal } from './gen/agora/v1/governance_pb';
 import type { Resource } from './gen/agora/v1/resources_pb';
 import type { Message, Room, Thread } from './gen/agora/v1/rooms_pb';
-import { setHubClock } from './hubclock';
+import { setHubClock, watchWallClock } from './hubclock';
 
 export type Status = 'connecting' | 'live' | 'offline';
 
@@ -152,6 +152,9 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       loading.current = undefined;
     }
   }, [loadOnce]);
+
+  // the offset to the hub's clock is stale once the browser's clock was set: ask again
+  useEffect(() => watchWallClock(() => void load().catch(fail)), [load, fail]);
 
   useEffect(() => {
     const abort = new AbortController();

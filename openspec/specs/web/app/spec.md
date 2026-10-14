@@ -292,6 +292,10 @@ In a bridged room, every message that goes out or waits to (see [Outbound](../..
 - **WHEN** the browser's clock runs 20 seconds ahead of the hub's and the hub gives a scheduled message 42 seconds more
 - **THEN** its tablet says `goes out in 0:42`, and `going out…` only after those 42 seconds
 
+#### Scenario: Browser clock set while open
+- **WHEN** the browser's clock is corrected by 30 seconds while the board is open and a message is scheduled
+- **THEN** the app asks the hub for its time again within a second, and the countdown keeps to the hub's clock
+
 #### Scenario: One message after another
 - **WHEN** `secretary` posts two messages a minute apart in `#example-chat`, the first sent and the second being handed out
 - **THEN** each has its own header, the second saying `sending…`

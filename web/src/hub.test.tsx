@@ -3,10 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, moveThread, page, parseRoute } from './App';
 import type { Api } from './api';
 import { hubNow, setClockOffset } from './hubclock';
-import { forgetLoadedBuild, roomCounts, useRoom, useThread } from './useHub';
+import { forgetLoadedBuild, roomCounts, useHub, useRoom, useThread } from './useHub';
 
 afterEach(() => {
   cleanup();
+  setClockOffset(0);
   forgetLoadedBuild();
   vi.unstubAllGlobals();
   localStorage.clear();
@@ -145,7 +146,57 @@ describe('the hub clock', () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
     expect(Math.abs(Date.now() - hubNow() - 20_000)).toBeLessThan(2000); // the browser is 20 s ahead
-    setClockOffset(0);
+  });
+});
+
+// flush lets the promises that are ready run; the timers waitFor polls with are faked here
+const flush = async () => {
+  for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r));
+};
+
+describe('the hub clock after the browser clock was set', () => {
+  it('asks the hub for its time again', async () => {
+    const whoami = vi.fn(async () => ({ name: 'operator', version: 'dev', commit: 'x', time: undefined }));
+    const none = vi.fn(async () => ({
+      agents: [],
+      rooms: [],
+      bridges: [],
+      threads: [],
+      resources: [],
+      proposals: [],
+      subscriptions: [],
+    }));
+    const api = {
+      web: {
+        whoami,
+        watch: () =>
+          (async function* () {
+            yield { revision: 1n };
+            await new Promise(() => {});
+          })(),
+      },
+      agents: { listAgents: none },
+      rooms: { listRooms: none, unreadByRoom: none, listSubscriptions: none, listThreads: none },
+      resources: { listResources: none },
+      governance: { listProposals: none, getCharter: vi.fn(async () => ({})) },
+      bridges: { listBridges: none },
+    } as unknown as Api;
+    vi.useFakeTimers({ toFake: ['Date', 'performance', 'setInterval', 'clearInterval'] });
+    try {
+      const unauthenticated = vi.fn(); // stable, as App's is
+      renderHook(() => useHub(api, unauthenticated));
+      await flush();
+      expect(whoami).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(3000); // time passing is no reason to ask again
+      await flush();
+      expect(whoami).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(Date.now() + 30_000); // the browser clock is corrected
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(whoami).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

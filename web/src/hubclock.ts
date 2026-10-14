@@ -22,3 +22,24 @@ export function hubNow(): number {
 export function setClockOffset(ms: number) {
   offset = ms;
 }
+
+/** How much the wall clock may differ from the monotonic one between two ticks before it counts as set. */
+const JUMP_MS = 1000;
+
+/**
+ * Calls `onJump` when the browser's clock was set while the page stayed open (the time service
+ * correcting it after the machine slept, or the user changing it): between two ticks the wall
+ * clock moved differently from the monotonic one. The offset to the hub's clock is stale then.
+ */
+export function watchWallClock(onJump: () => void, every = 1000): () => void {
+  let wall = Date.now();
+  let mono = performance.now();
+  const t = setInterval(() => {
+    const dw = Date.now() - wall;
+    const dm = performance.now() - mono;
+    wall = Date.now();
+    mono = performance.now();
+    if (Math.abs(dw - dm) > JUMP_MS) onJump();
+  }, every);
+  return () => clearInterval(t);
+}
