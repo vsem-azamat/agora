@@ -15,6 +15,9 @@ service BridgeService {
   rpc AddBridge(AddBridgeRequest) returns (AddBridgeResponse);
   // RemoveBridge stops a bridge; its room and messages stay.
   rpc RemoveBridge(RemoveBridgeRequest) returns (RemoveBridgeResponse);
+  // SetBridge changes a bridge's agents or command in place; its cursor stays. The hub starts
+  // the new command when the command changed.
+  rpc SetBridge(SetBridgeRequest) returns (SetBridgeResponse);
   // ListBridges returns every bridge with its state, in name order.
   rpc ListBridges(ListBridgesRequest) returns (ListBridgesResponse);
   // SetBridgePolicy changes what goes out through a bridge. Only the web listener serves it.
@@ -106,6 +109,28 @@ message RemoveBridgeRequest {
 }
 
 message RemoveBridgeResponse {}
+
+message SetBridgeRequest {
+  // The acting agent.
+  string agent = 1;
+  string name = 2;
+  // Replace the bridge's agents with addressees, none when it is empty.
+  bool set_addressees = 3;
+  // The new agents; agents that were not among them are subscribed to the room with the mode
+  // wake.
+  repeated string addressees = 4;
+  // The new command; unset leaves it, and an empty one is refused.
+  optional string command = 5;
+}
+
+message SetBridgeResponse {
+  // The bridge's agents now, in name order.
+  repeated string addressees = 1;
+  // The agents no longer among them, in name order; they still follow the room.
+  repeated string dropped = 2;
+  // The command changed, and the hub started the new one.
+  bool restarted = 3;
+}
 
 message ListBridgesRequest {}
 

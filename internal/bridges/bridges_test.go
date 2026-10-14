@@ -833,3 +833,112 @@ func TestARepliesToAnAgentsMessageAddressesIt(t *testing.T) {
 		t.Fatalf("builder addressed by a reply to Ada: %+v", msgs)
 	}
 }
+
+func TestChangingABridgesAgents(t *testing.T) {
+	e := newEnv(t)
+	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "hi", Cursor: "1"})
+	// secretary chose to follow the room with the mode mentions; staying an agent keeps it
+	if _, err := e.r.Subscribe(ctx, "secretary", []string{"example-chat"}, true, rooms.ModeMentions); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"secretary", "builder", "builder"}})
+	if err != nil || got.Restart || len(got.Dropped) != 0 || !slices.Equal(got.Agents, []string{"builder", "secretary"}) {
+		t.Fatalf("set: %+v %v", got, err)
+	}
+	if !slices.Contains(e.subscriptions(t, "builder"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeWake}) {
+		t.Fatal("builder does not follow the room with the mode wake")
+	}
+	if !slices.Contains(e.subscriptions(t, "secretary"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeMentions}) {
+		t.Fatalf("secretary's mode changed: %+v", e.subscriptions(t, "secretary"))
+	}
+	id := e.receive(t, bridges.In{ID: "2", AuthorName: "Ada", Text: "for you", Addressed: true})
+	for _, a := range []string{"secretary", "builder"} {
+		if msgs, _, _ := e.r.Unread(ctx, a, rooms.Addressed, 0); !slices.ContainsFunc(msgs, func(m rooms.Message) bool { return m.ID == id }) {
+			t.Fatalf("%s is not addressed: %+v", a, msgs)
+		}
+	}
+	// secretary is dropped: it keeps following the room but is no longer addressed
+	got, err = e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"builder"}})
+	if err != nil || !slices.Equal(got.Dropped, []string{"secretary"}) {
+		t.Fatalf("set: %+v %v", got, err)
+	}
+	if !slices.Contains(e.subscriptions(t, "secretary"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeMentions}) {
+		t.Fatal("secretary's subscription dropped")
+	}
+	id = e.receive(t, bridges.In{ID: "3", AuthorName: "Ada", Text: "again", Addressed: true})
+	if msgs, _, _ := e.r.Unread(ctx, "secretary", rooms.Addressed, 0); slices.ContainsFunc(msgs, func(m rooms.Message) bool { return m.ID == id }) {
+		t.Fatalf("secretary is still addressed: %+v", msgs)
+	}
+	if msgs, _, _ := e.r.Unread(ctx, "builder", rooms.Addressed, 0); !slices.ContainsFunc(msgs, func(m rooms.Message) bool { return m.ID == id }) {
+		t.Fatalf("builder is not addressed: %+v", msgs)
+	}
+	list, _ := e.b.List(ctx)
+	if len(list) != 1 || !slices.Equal(list[0].Addressees, []string{"builder"}) || list[0].Cursor != "1" ||
+		list[0].Command != "example-bridge --chat 42" || list[0].CreatedBy != "builder" || list[0].Policy != bridges.Delay {
+		t.Fatalf("bridge: %+v", list)
+	}
+	h := e.history(t)
+	said := 0
+	for _, m := range h {
+		if m.Author == rooms.Board && strings.HasPrefix(m.Body, "builder set the bridge's agents: ") {
+			said++
+		}
+	}
+	if said != 2 || h[len(h)-2].Body != "builder set the bridge's agents: builder." {
+		t.Fatalf("history: %+v", h)
+	}
+	// the notices wake no one: only the addressed messages from outside do
+	if msgs, _, _ := e.r.Unread(ctx, "builder", rooms.Waking, 0); slices.ContainsFunc(msgs, func(m rooms.Message) bool { return m.Author == rooms.Board }) {
+		t.Fatalf("a notice wakes: %+v", msgs)
+	}
+	// none
+	got, err = e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetAgents: true})
+	if err != nil || len(got.Agents) != 0 || !slices.Equal(got.Dropped, []string{"builder"}) {
+		t.Fatalf("no agents: %+v %v", got, err)
+	}
+}
+
+func TestChangingABridgesCommand(t *testing.T) {
+	e := newEnv(t)
+	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "hi", Cursor: "1"})
+	got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "  example-bridge --chat 43 "})
+	if err != nil || !got.Restart || !slices.Equal(got.Agents, []string{"secretary"}) {
+		t.Fatalf("set: %+v %v", got, err)
+	}
+	b, err := e.b.Get(ctx, "example-chat")
+	if err != nil || b.Command != "example-bridge --chat 43" || b.Cursor != "1" || !slices.Equal(b.Addressees, []string{"secretary"}) {
+		t.Fatalf("bridge: %+v %v", b, err)
+	}
+	h := e.history(t)
+	if last := h[len(h)-1]; last.Author != rooms.Board || !strings.Contains(last.Body, "builder changed the bridge's command") || strings.Contains(last.Body, "--chat") {
+		t.Fatalf("notice: %+v", last)
+	}
+	// the same command again restarts nothing
+	if got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "example-bridge --chat 43"}); err != nil || got.Restart {
+		t.Fatalf("same command: %+v %v", got, err)
+	}
+}
+
+func TestChangingABridgeIsRefused(t *testing.T) {
+	e := newEnv(t)
+	cases := []struct {
+		name, agent, bridge string
+		change              bridges.Change
+		want                error
+	}{
+		{"nothing to change", "builder", "example-chat", bridges.Change{}, store.ErrInvalid},
+		{"no such bridge", "builder", "other-chat", bridges.Change{SetCommand: true, Command: "x"}, bridges.ErrNotFound},
+		{"an agent that has not joined", "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"ghost"}, SetCommand: true, Command: "y"}, agents.ErrUnknown},
+		{"an acting agent that has not joined", "ghost", "example-chat", bridges.Change{SetCommand: true, Command: "y"}, agents.ErrUnknown},
+		{"an empty command", "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"builder"}, SetCommand: true, Command: "  "}, store.ErrInvalid},
+	}
+	for _, c := range cases {
+		if _, err := e.b.Set(ctx, c.agent, c.bridge, c.change); !errors.Is(err, c.want) {
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+	b, _ := e.b.Get(ctx, "example-chat")
+	if b.Command != "example-bridge --chat 42" || !slices.Equal(b.Addressees, []string{"secretary"}) {
+		t.Fatalf("bridge changed: %+v", b)
+	}
+}

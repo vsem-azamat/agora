@@ -6,6 +6,7 @@ How the hub implements [`openspec/specs/bridges/`](../../openspec/specs/bridges/
 
 ```sh
 agora bridge add example-chat --command 'example-bridge --chat 42' --agent secretary [--purpose '…']
+agora bridge set example-chat --agent secretary --agent builder [--command '…']
 agora bridge list
 agora bridge remove example-chat
 ```
@@ -19,7 +20,7 @@ The bridge's tables and the columns of `messages` for bridged rooms:
 | Table or column | Holds |
 | --- | --- |
 | `bridges` | Name (also its room's; references `rooms`), command, `policy` (`open`, `delay`, `read`), creator, creation time, the latest `cursor` |
-| `bridge_agents` | The agents a bridge was added with; deleted with the bridge |
+| `bridge_agents` | The bridge's agents, set when it is added or changed; deleted with the bridge |
 | `messages.ext_id` | The message's identifier outside: of a message that came in, or the one the bridge answered `sent` with; unique per room (`messages_ext`) |
 | `messages.ext_author_id`, `ext_author_name` | Set for a message from outside, whose `author` is then `''`; its bridge is its room |
 | `messages.delivery`, `delivery_error`, `scheduled_at` | `scheduled`, `sending`, `sent`, `cancelled` or `failed` (with the reason) for a message that goes out; `NULL` for one that stays here. `scheduled_at` is when a message was scheduled: its posting time, or when its room was bridged again |
@@ -33,15 +34,19 @@ The bridge's tables and the columns of `messages` for bridged rooms:
 
 `internal/bridges.Add` validates the name with the room rule (refusing `general`), then in one transaction creates the room (`rooms.CreateTx`, the default purpose when none is given) or attaches the existing one, inserts the bridge and its agents, and subscribes each with `wake` (`rooms.SubscribeTx`). The hub then starts it. `Remove` stops the process first, then deletes the row (the room, subscriptions and messages stay) and the board posts that the room is no longer bridged; when deleting fails for another reason than the bridge being gone already, a bridge that ran is started again. A supervisor that finds its bridge gone (before a start, or after its command exited) drops itself from the running bridges without a notice, so concurrent removals leave nothing running.
 
+## Changing
+
+`internal/bridges.Set` changes a bridge in one transaction: with agents given, it replaces the rows of `bridge_agents`, subscribes the agents that were not among them with `wake` (the others keep the mode they follow the room with) and leaves the dropped agents' subscriptions; with a command that differs from the stored one, it updates `bridges.command`. The cursor, policy and creator are not touched. The board posts a notice (`rooms.NoticeTx`, waking no one) saying who changed what, without the command, which may hold credentials. `SetBridge` then stops the bridge's run and starts a new one only when the command changed, so the new run's hello carries the stored cursor; the new run takes over the old one's `down` flag (`stopBridge` returns it, `startBridge` takes it, as does a failed `RemoveBridge` that starts the bridge again), so a broken command that is replaced gets one "works again" and no second "stopped"; a change of agents needs no restart, since `Receive` reads `bridge_agents` for every addressed line.
+
 ## Running
 
-`Serve` starts every stored bridge after its loops; `AddBridge` starts a new one. Each bridge has a supervising goroutine (`superviseBridge`), counted in a wait group that shutdown waits for:
+`Serve` starts every stored bridge after its loops; `AddBridge` starts a new one, and `SetBridge` starts a bridge again when its command changed. Each bridge has a supervising goroutine (`superviseBridge`), counted in a wait group that shutdown waits for:
 
 - The command runs with `sh -c` in its own process group, with `AGORA_BRIDGE` and `AGORA_ROOM` in its environment. Its standard output and error are `os.Pipe`s the hub reads to their end, so lines written just before an exit are not lost. When the leader exits, the hub kills what is left of its group; a process that left the group (`setsid`) can still hold the pipes open. So from the exit on, the outputs are read through a `drainReader`: every read, and a read already waiting at the exit, may wait at most 2 seconds (`bridgeDrain`) for data. Output still buffered or written is read to its end however long storing it takes, since the deadline is set when a read starts; output held open and silent ends the reading after 2 seconds, which is logged, and the hub goes on to the restart. Such a process keeps running; the hub cannot find it.
 - Standard error is logged line by line at `INFO`, at most 100 lines a minute per bridge (`logLimit`); the rest are counted and logged as one `WARN` summary, and a line longer than `maxLogLine` is skipped with a `WARN`. A bridge program marks its own errors in its text.
 - After an exit the hub waits 1 s, doubling after every exit up to 60 s; a run of a minute (`bridgeSteady`) resets the delay. The state is in memory: `running`, `restarting` (with how it last exited), `stopped` when the hub does not run it (`ListBridges`).
 - The board posts once when the bridge stops (`The bridge stopped (exit status 1). …`) and once when it works again, which is when a run has lasted a minute. Both are quiet messages (`rooms.NoticeTx`): a crash does not wake the bridge's agents, who follow the room with `wake`.
-- On shutdown, and when a bridge is removed, the hub sends `SIGTERM` to the group, then `SIGKILL` after 5 seconds, and waits for the supervisor before the database is closed. Lines read during that time are still stored.
+- On shutdown, when a bridge is removed and when its command changed, the hub sends `SIGTERM` to the group, then `SIGKILL` after 5 seconds, and waits for the supervisor before the database is closed. Lines read during that time are still stored.
 
 ## Protocol
 

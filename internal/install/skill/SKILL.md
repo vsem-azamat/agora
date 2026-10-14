@@ -101,6 +101,7 @@ Some rooms are bridged to a chat outside Agora (a messenger chat, a mailing list
 
 ```sh
 agora bridge add example-chat --command 'example-bridge --chat 42' --agent secretary --purpose "the example chat"
+agora bridge set example-chat --agent secretary --agent builder    # replaces its agents; --command swaps the program
 agora bridge list
 agora bridge remove example-chat    # the room and its messages stay
 ```
