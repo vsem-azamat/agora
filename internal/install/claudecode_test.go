@@ -1,7 +1,9 @@
 package install_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,9 +61,94 @@ func commands(t *testing.T, settings map[string]any, event string) []string {
 	return out
 }
 
+func TestOlderClaudeCodeGetsNoStopFailureHooks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if _, err := install.InstallClaudeCode(path, bin, "", false, now); err != nil {
+		t.Fatal(err)
+	}
+	hooks := readJSON(t, path)["hooks"].(map[string]any)
+	if _, ok := hooks["StopFailure"]; ok {
+		t.Fatalf("StopFailure installed: %v", hooks["StopFailure"])
+	}
+	if got := commands(t, readJSON(t, path), "Stop"); !reflect.DeepEqual(got, []string{bin + " hook claude-code", bin + " hook claude-code-wait async"}) {
+		t.Errorf("Stop: %q", got)
+	}
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil { // after an update
+		t.Fatal(err)
+	}
+	if got := commands(t, readJSON(t, path), "StopFailure"); len(got) != 2 {
+		t.Errorf("StopFailure after the update: %q", got)
+	}
+}
+
+// fakeClaude puts a claude that runs script first and alone on the PATH.
+func fakeClaude(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestClaudeCodeVersionIsRead(t *testing.T) {
+	path := os.Getenv("PATH")
+	t.Setenv("PATH", t.TempDir())
+	if _, err := install.ClaudeCodeVersion(context.Background()); !errors.Is(err, install.ErrNoClaude) {
+		t.Fatalf("no claude: %v", err)
+	}
+	t.Setenv("PATH", path) // for sleep; each fake claude comes first
+	for script, want := range map[string]string{
+		"echo '2.1.299 (Claude Code)'\n":                            "2.1.299",
+		"echo 'Auto-update failed'\necho '2.1.250 (Claude Code)'\n": "2.1.250",
+		// claude exits after printing; a child it left keeps the output open
+		"(sleep 20) &\necho '2.1.250 (Claude Code)'\n": "2.1.250",
+	} {
+		fakeClaude(t, script)
+		began := time.Now()
+		if got, err := install.ClaudeCodeVersion(context.Background()); err != nil || got != want || time.Since(began) > 5*time.Second {
+			t.Errorf("%q: %q %v after %s, want %q", script, got, err, time.Since(began), want)
+		}
+	}
+	fakeClaude(t, "(sleep 20)\necho 2.1.250\n") // does not answer; a child of it waits too
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	began := time.Now()
+	if _, err := install.ClaudeCodeVersion(ctx); err == nil || !strings.Contains(err.Error(), "did not answer") || time.Since(began) > 5*time.Second {
+		t.Errorf("hanging claude: %v after %s", err, time.Since(began))
+	}
+	fakeClaude(t, "echo boom >&2\nexit 1\n")
+	if _, err := install.ClaudeCodeVersion(context.Background()); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("failing claude: %v", err)
+	}
+	fakeClaude(t, "echo nothing\n")
+	if _, err := install.ClaudeCodeVersion(context.Background()); err == nil {
+		t.Fatal("no error for an output without a version")
+	}
+}
+
+func TestStopFailureNeedsClaudeCode2_1_267(t *testing.T) {
+	for out, want := range map[string]bool{
+		"2.1.250 (Claude Code)\n": false,
+		"2.1.266 (Claude Code)":   false,
+		"2.0.999 (Claude Code)":   false,
+		"1.9.400":                 false,
+		"2.1.267 (Claude Code)":   true,
+		"2.1.299 (Claude Code)\n": true,
+		"2.2.0 (Claude Code)":     true,
+		"3.0.0":                   true,
+		"":                        true, // unknown: the hooks are added
+		"Claude Code":             true,
+	} {
+		if got := install.StopFailureReportsCredentials(out); got != want {
+			t.Errorf("%q: %v, want %v", out, got, want)
+		}
+	}
+}
+
 func TestInstallIntoMissingSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config", "settings.json")
-	ch, err := install.InstallClaudeCode(path, bin, "", now)
+	ch, err := install.InstallClaudeCode(path, bin, "", true, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,12 +192,12 @@ func TestInstallIntoMissingSettings(t *testing.T) {
 func TestInstallTwiceChangesNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	write(t, path, `{"model": "x"}`)
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(path)
 	entries, _ := os.ReadDir(filepath.Dir(path))
-	ch, err := install.InstallClaudeCode(path, bin, "", now.Add(time.Hour))
+	ch, err := install.InstallClaudeCode(path, bin, "", true, now.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +230,7 @@ const foreign = `{
 func TestInstallPreservesForeignSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	write(t, path, foreign)
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
@@ -179,7 +266,7 @@ func TestInstallPreservesForeignSettings(t *testing.T) {
 func TestInstallBacksUpTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	write(t, path, foreign)
-	ch, err := install.InstallClaudeCode(path, bin, "", now)
+	ch, err := install.InstallClaudeCode(path, bin, "", true, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +288,7 @@ func TestInstallReplacesOutdatedEntries(t *testing.T) {
 	  ],
 	  "PreCompact": [{"hooks": [{"type": "command", "command": "/usr/local/bin/agora hook claude-code"}]}]
 	}}`)
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	s := readJSON(t, path)
@@ -215,7 +302,7 @@ func TestInstallReplacesOutdatedEntries(t *testing.T) {
 
 func TestTerminalEnv(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if _, err := install.InstallClaudeCode(path, bin, "TERM_HANDLE", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "TERM_HANDLE", true, now); err != nil {
 		t.Fatal(err)
 	}
 	s := readJSON(t, path)
@@ -226,7 +313,7 @@ func TestTerminalEnv(t *testing.T) {
 	if got := commands(t, s, "SessionStart"); !reflect.DeepEqual(got, []string{hooked, bin + " hook claude-code-wait async"}) {
 		t.Errorf("SessionStart: %q", got)
 	}
-	ch, err := install.InstallClaudeCode(path, bin, "", now)
+	ch, err := install.InstallClaudeCode(path, bin, "", true, now)
 	if err != nil || ch.Outcome != install.Updated {
 		t.Fatalf("reinstall without terminal env: %+v %v", ch, err)
 	}
@@ -239,7 +326,7 @@ func TestInvalidTerminalEnv(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	write(t, path, `{}`)
 	for _, v := range []string{"1BAD;rm", "A-B", "$X", "A B"} {
-		if _, err := install.InstallClaudeCode(path, bin, v, now); err == nil {
+		if _, err := install.InstallClaudeCode(path, bin, v, true, now); err == nil {
 			t.Errorf("%q accepted", v)
 		}
 	}
@@ -251,13 +338,13 @@ func TestInvalidTerminalEnv(t *testing.T) {
 func TestBinaryPathIsQuotedForTheShell(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	odd := "/opt/my tools/agora"
-	if _, err := install.InstallClaudeCode(path, odd, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, odd, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	if got := commands(t, readJSON(t, path), "SessionEnd"); !reflect.DeepEqual(got, []string{"'/opt/my tools/agora' hook claude-code"}) {
 		t.Errorf("SessionEnd: %q", got)
 	}
-	ch, err := install.InstallClaudeCode(path, odd, "", now)
+	ch, err := install.InstallClaudeCode(path, odd, "", true, now)
 	if err != nil || ch.Outcome != install.Unchanged {
 		t.Fatalf("quoted path not recognised as installed: %+v %v", ch, err)
 	}
@@ -267,7 +354,7 @@ func TestInvalidSettingsAreRefused(t *testing.T) {
 	for _, content := range []string{`{"hooks": `, `[1, 2]`, `{"hooks": []}`, `{} {}`} {
 		path := filepath.Join(t.TempDir(), "settings.json")
 		write(t, path, content)
-		_, err := install.InstallClaudeCode(path, bin, "", now)
+		_, err := install.InstallClaudeCode(path, bin, "", true, now)
 		if err == nil || !strings.Contains(err.Error(), path) {
 			t.Errorf("%q: error %v", content, err)
 		}
@@ -283,7 +370,7 @@ func TestInvalidSettingsAreRefused(t *testing.T) {
 func TestUninstallRestores(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	write(t, path, foreign)
-	if _, err := install.InstallClaudeCode(path, bin, "X", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "X", true, now); err != nil {
 		t.Fatal(err)
 	}
 	ch, err := install.UninstallClaudeCode(path, bin, now.Add(time.Second))
@@ -310,7 +397,7 @@ func TestUninstallRestores(t *testing.T) {
 func TestUninstallRemovesEmptyHooks(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	write(t, path, `{"model": "opus"}`)
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := install.UninstallClaudeCode(path, bin, now); err != nil {
@@ -335,7 +422,7 @@ func TestSymlinkedSettingsStayALink(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := install.InstallClaudeCode(link, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(link, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
@@ -394,7 +481,7 @@ func TestDanglingSymlinkIsFollowed(t *testing.T) {
 	if err := os.Symlink("../dotfiles/claude/settings.json", link); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := install.InstallClaudeCode(link, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(link, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
@@ -415,7 +502,7 @@ func TestConcurrentChange(t *testing.T) {
 			write(t, path, `{"model": "opus", "theme": "dark"}`)
 		}
 	})()
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err != nil {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil {
 		t.Fatal(err)
 	}
 	s := readJSON(t, path)
@@ -425,7 +512,7 @@ func TestConcurrentChange(t *testing.T) {
 
 	write(t, path, `{"model": "opus"}`)
 	defer install.BeforeWrite(func() { write(t, path, fmt.Sprintf(`{"n": %d}`, time.Now().UnixNano())) })()
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err == nil || !strings.Contains(err.Error(), "changed while editing") {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err == nil || !strings.Contains(err.Error(), "changed while editing") {
 		t.Fatalf("error: %v", err)
 	}
 }
@@ -436,13 +523,13 @@ func TestReadOnlyAndDuplicateKeysAreRefused(t *testing.T) {
 	if err := os.Chmod(path, 0o444); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := install.InstallClaudeCode(path, bin, "", now); err == nil || !strings.Contains(err.Error(), "read-only") {
+	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err == nil || !strings.Contains(err.Error(), "read-only") {
 		t.Errorf("read-only file: %v", err)
 	}
 	for _, content := range []string{`{"hooks": {}, "hooks": {}}`, `{"hooks": {"Stop": [], "Stop": []}}`} {
 		path := filepath.Join(t.TempDir(), "settings.json")
 		write(t, path, content)
-		if _, err := install.InstallClaudeCode(path, bin, "", now); err == nil || !strings.Contains(err.Error(), "more than one") {
+		if _, err := install.InstallClaudeCode(path, bin, "", true, now); err == nil || !strings.Contains(err.Error(), "more than one") {
 			t.Errorf("%s: %v", content, err)
 		}
 	}
