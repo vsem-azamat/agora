@@ -42,6 +42,7 @@ const paths = {
   thread: 'M7 8h10M7 12h7 M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z',
   send: 'M5 12h13 M13 6l6 6-6 6',
   down: 'M12 5v13 M6 12l6 6 6-6',
+  back: 'M19 12H6 M11 6l-6 6 6 6',
   check: 'M5 12.5l4.5 4.5L19 7.5',
   // the sigils agents choose for themselves
   // helmet (κράνος)

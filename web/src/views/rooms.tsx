@@ -2,9 +2,10 @@
 import { type RoomCount, roomBadge, toDate } from '../board';
 import { runningOf, runningText } from '../bridges';
 import type { Bridge } from '../gen/agora/v1/bridges_pb';
-import type { Room } from '../gen/agora/v1/rooms_pb';
+import type { Room, Thread } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
 import { Notice } from './shell';
+import { threadHref } from './thread';
 
 export const roomHref = (room: string) => `#/rooms/${encodeURIComponent(room)}`;
 /** The Rooms view on its archived rooms. */
@@ -26,7 +27,31 @@ type RoomsProps = {
   bridges?: Map<string, Bridge>;
   /** The archived rooms, listed apart. */
   archived?: Room[];
+  /** The titled threads, listed under their rooms. */
+  threads?: Thread[];
 };
+
+/** The titled threads of a room, under it in the room list. */
+function ThreadLinks({ room, threads, current }: { room: string; threads?: Thread[]; current?: bigint }) {
+  const mine = (threads ?? []).filter((t) => t.room === room);
+  if (mine.length === 0) return null;
+  return (
+    <>
+      {mine.map((t) => (
+        <a
+          key={String(t.root)}
+          className="threadrow"
+          href={threadHref(room, t.root)}
+          aria-current={t.root === current ? 'page' : undefined}
+        >
+          <Icon name="thread" />
+          <span className="n">{t.title}</span>
+          {t.unread > 0 && <em>{t.unread}</em>}
+        </a>
+      ))}
+    </>
+  );
+}
 
 function Badge({ count }: { count: RoomCount | undefined }) {
   const badge = roomBadge(count);
@@ -54,7 +79,9 @@ export function RoomIcon({ bridge }: { bridge?: Bridge }) {
 }
 
 /** The rooms in the sidebar; followed rooms are set apart, and a row at the end leads to the archived ones. */
-export function RoomNav(props: Omit<RoomsProps, 'archived'> & { current?: string; archived?: number }) {
+export function RoomNav(
+  props: Omit<RoomsProps, 'archived'> & { current?: string; currentThread?: bigint; archived?: number },
+) {
   return (
     <>
       <RoomLinks {...props} />
@@ -71,24 +98,30 @@ export function RoomNav(props: Omit<RoomsProps, 'archived'> & { current?: string
   );
 }
 
-function RoomLinks(props: Omit<RoomsProps, 'archived'> & { current?: string }) {
+function RoomLinks(props: Omit<RoomsProps, 'archived'> & { current?: string; currentThread?: bigint }) {
   return (
     <div className="nav rooms">
       {props.rooms.map((r) => {
         const count = props.unread.get(r.name);
-        return (
+        return [
           <a
             key={r.name}
             href={roomHref(r.name)}
             className={props.followed.has(r.name) ? 'followed' : undefined}
-            aria-current={r.name === props.current ? 'page' : undefined}
+            aria-current={r.name !== props.current ? undefined : props.currentThread === undefined ? 'page' : 'true'}
           >
             <RoomIcon bridge={props.bridges?.get(r.name)} />
             <span className="n">#{r.name}</span>
             <Waiting count={count} />
             <Badge count={count} />
-          </a>
-        );
+          </a>,
+          <ThreadLinks
+            key={`${r.name} threads`}
+            room={r.name}
+            threads={props.threads}
+            current={r.name === props.current ? props.currentThread : undefined}
+          />,
+        ];
       })}
     </div>
   );
@@ -166,7 +199,7 @@ function ActiveRooms(props: RoomsProps) {
         const count = props.unread.get(r.name);
         const bridge = props.bridges?.get(r.name);
         const down = bridge && runningOf(bridge) !== 'running';
-        return (
+        return [
           <a key={r.name} href={roomHref(r.name)} className={props.followed.has(r.name) ? 'followed' : undefined}>
             <RoomIcon bridge={bridge} />
             <span className="n">
@@ -177,8 +210,9 @@ function ActiveRooms(props: RoomsProps) {
               <Waiting count={count} />
               {roomBadge(count) ? <Badge count={count} /> : <span className="c">{r.messages}</span>}
             </span>
-          </a>
-        );
+          </a>,
+          <ThreadLinks key={`${r.name} threads`} room={r.name} threads={props.threads} />,
+        ];
       })}
     </div>
   );

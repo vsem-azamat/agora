@@ -100,6 +100,7 @@ export function tape(
       authorKey(prev) === authorKey(m) &&
       prev.note === m.note &&
       prev.incoming === m.incoming &&
+      prev.thread === m.thread &&
       m.replyTo === 0n &&
       mto.length === 0 &&
       deliveryOf(m) === undefined &&

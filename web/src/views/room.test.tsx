@@ -5,7 +5,7 @@ import { type ComponentProps, type ReactNode, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agent, bridge, goingOut, message, NOW, note, outside } from '../fixtures';
 import type { Message } from '../gen/agora/v1/rooms_pb';
-import { RoomSchema } from '../gen/agora/v1/rooms_pb';
+import { RoomSchema, ThreadSummarySchema } from '../gen/agora/v1/rooms_pb';
 import type { Saved } from '../tape';
 import { OpenAgent } from './common';
 import { RoomView } from './room';
@@ -1042,5 +1042,94 @@ describe('archived rooms', () => {
     );
     fireEvent.click(within(row).getByRole('button', { name: 'Unarchive #old-app' }));
     expect(onUnarchive).toHaveBeenCalledWith('old-app');
+  });
+});
+
+describe('threads in the room', () => {
+  const ms = [
+    message(40, 'builder', 'the export is broken', 30),
+    message(42, 'reviewer', 'fixed in #57', 10, { thread: 40n, also: true, threadTitle: 'Release 2.4' }),
+  ];
+
+  it('opens the thread of a message, and of a reply also posted to the room', () => {
+    const onThread = vi.fn();
+    const { container } = room(ms, { onThread });
+    fireEvent.click(within(tablet(container, 40)).getByRole('button', { name: 'Thread' }));
+    expect(onThread).toHaveBeenLastCalledWith(40n);
+    fireEvent.click(within(tablet(container, 42)).getByRole('button', { name: 'in thread «Release 2.4»' }));
+    expect(onThread).toHaveBeenLastCalledWith(40n);
+  });
+
+  it('shows the open thread in place of the conversations', () => {
+    room(ms, {
+      onThread: vi.fn(),
+      thread: {
+        root: 40n,
+        messages: ms.slice(0, 1),
+        onPost: vi.fn(),
+        onTitle: vi.fn(),
+        onLeave: vi.fn(),
+        onSeen: vi.fn(),
+      },
+    });
+    expect(screen.getByRole('complementary', { name: 'Thread' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Who is here' })).toBeNull();
+  });
+
+  const open = (root: bigint, messages = ms.slice(0, 1)) => ({
+    root,
+    messages,
+    onPost: vi.fn(),
+    onTitle: vi.fn(),
+    onLeave: vi.fn(),
+    onSeen: vi.fn(),
+  });
+
+  it('starts another thread empty: its draft and title box are its own', () => {
+    const { props, rerender } = room(ms, { onThread: vi.fn(), thread: open(40n) });
+    const box = () => screen.getByRole('combobox', { name: 'Reply in the thread #example-app' }) as HTMLTextAreaElement;
+    fireEvent.change(box(), { target: { value: 'for the first thread' } });
+    rerender(<RoomView {...props} thread={open(42n, [message(42, 'reviewer', 'another', 5)])} />);
+    expect(box().value).toBe('');
+  });
+
+  it('counts nothing in the room as seen while a thread covers it on a phone, and catches up when it closes', () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('max-width: 760px') }));
+    const { props, rerender } = room(ms.slice(0, 1), { onThread: vi.fn(), thread: open(40n) });
+    expect(props.onSeen).not.toHaveBeenCalled();
+    rerender(<RoomView {...props} messages={ms} />);
+    expect(props.onSeen).not.toHaveBeenCalled();
+    expect(document.querySelector('section.room')?.hasAttribute('inert')).toBe(true);
+    rerender(<RoomView {...props} messages={ms} thread={undefined} />);
+    expect(props.onSeen).toHaveBeenCalledWith(42n);
+    expect(document.querySelector('section.room')?.hasAttribute('inert')).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('gives the focus back to what opened the thread when it closes', () => {
+    const onThread = vi.fn();
+    const { props, container, rerender } = room(ms, { onThread });
+    const action = within(tablet(container, 40)).getByRole('button', { name: 'Thread' });
+    action.focus();
+    fireEvent.click(action);
+    rerender(<RoomView {...props} thread={open(40n)} />);
+    (screen.getByRole('button', { name: 'Close the thread' }) as HTMLElement).focus();
+    rerender(<RoomView {...props} thread={undefined} />);
+    expect(document.activeElement).toBe(within(tablet(container, 40)).getByRole('button', { name: 'Thread' }));
+  });
+
+  it('offers no new thread in an archived room, but opens the ones it has, read only', () => {
+    const archived = create(RoomSchema, { name: 'example-app', archivedBy: 'builder' });
+    const withReplies = [
+      message(40, 'builder', 'the export is broken', 30, {
+        threadSummary: create(ThreadSummarySchema, { replies: 1, repliers: ['reviewer'] }),
+      }),
+    ];
+    const onThread = vi.fn();
+    const { container } = room(withReplies, { room: archived, onThread, thread: open(40n) });
+    expect(within(tablet(container, 40)).queryByRole('button', { name: 'Thread' })).toBeNull();
+    fireEvent.click(within(tablet(container, 40)).getByRole('button', { name: /Open the thread/ }));
+    expect(onThread).toHaveBeenCalledWith(40n);
+    expect(screen.queryByRole('combobox', { name: 'Reply in the thread #example-app' })).toBeNull();
   });
 });

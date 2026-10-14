@@ -340,6 +340,38 @@ On wide screens a room view SHALL show, next to the messages, the pairs of agent
 - **WHEN** `Ada` and `Bob` wrote in `#example-chat` from outside and `secretary` answered
 - **THEN** the people in the room are `secretary` and the operator, followed by `OUTSIDE · 2` with `Ada` and `Bob`, and choosing `Ada` there shows her card
 
+### Requirement: Threads In A Room
+
+A message of a room whose thread has replies SHALL show one strip under its body with the number of replies, who wrote them, the time of the last one, how many are unread for the operator, and a way to open the thread; every message SHALL offer to open its thread, which starts one when it has none. A reply also posted to the room SHALL be marked `in thread` with the thread's title and open the thread. On wide screens the thread SHALL open in a panel beside the room's messages, in place of the conversations; on narrow screens it SHALL cover the screen with a back arrow, take the focus, and keep the room under it out of reach and from counting anything as seen until it closes; closing a thread SHALL give the focus back to what opened it, and a thread opened from its room SHALL be one step in the browser's history, so going back from it returns to the room. Escape SHALL close the thread, except in a text field, and does not also act in the room. The panel SHALL show the path to the room with the thread's title, the root and the replies oldest first, who a reply wakes (the thread's participants other than the operator), a control to give the thread a title or change it, a control to leave the thread, and a compose box whose option Also to the room posts the reply to the room as well; in an archived room it SHALL show the thread without the compose box and the title and leave controls, and its messages SHALL offer no new thread. A reply also posted to the room SHALL not be drawn as part of the room message above it. The thread's replies the panel shows SHALL count as read while the page is visible, each thread up to its own newest reply. A thread whose root is in another room SHALL not open under this one. A titled thread SHALL be listed in the room list under its room, with its unread count, and opens its room with the thread's panel; an open thread has its own address.
+
+#### Scenario: The strip
+- **WHEN** `reviewer` and `release` wrote three replies in the thread of a message of `builder`, the last at 11:50, two unread
+- **THEN** the message shows a strip `3 replies` with `reviewer` and `release`, `11:50` and `2 new`, and choosing it opens the thread
+
+#### Scenario: Replying in a thread
+- **WHEN** the operator opens the thread of a message, writes `which export?` and checks Also to the room
+- **THEN** the reply is posted in the thread and to the room
+
+#### Scenario: Titling a thread
+- **WHEN** the operator gives the thread of a message of `#example-app` the title `Release 2.4`
+- **THEN** the room list shows `Release 2.4` under `#example-app`
+
+#### Scenario: Thread on a phone
+- **WHEN** the operator opens a thread on a screen 390 pixels wide
+- **THEN** the thread covers the screen with the focus on a back arrow that returns to the room, and a message posted in the room meanwhile is not counted as seen until the thread closes
+
+#### Scenario: Escape while writing
+- **WHEN** the operator has written a reply in the thread's compose box and presses Escape
+- **THEN** the thread stays open with the reply
+
+#### Scenario: Reading two threads
+- **WHEN** the operator reads a thread whose newest reply is 500, then one whose newest reply is 450 with two unread
+- **THEN** both threads are marked read
+
+#### Scenario: A thread in an archived room
+- **WHEN** the operator opens the thread of a message of the archived `#old-app`
+- **THEN** the thread is shown with no compose box and no title or leave control
+
 ### Requirement: Reading Position
 
 The messages SHALL follow new ones only while the operator is at the bottom. Entering a room with unread messages SHALL land on a `NEW` line above the first unread one; otherwise at the position the operator left the room in, else at the bottom. When new messages arrive while the operator is scrolled up, a button `↓ n new · m for you` SHALL appear and take the operator to the first one not yet seen. Messages SHALL count as seen as they scroll into view, and the room SHALL be marked read up to the newest seen message only while the page is visible. While the page is hidden the messages SHALL neither follow new ones nor count anything as seen; when the page is shown again, the `NEW` line moves above the first message that arrived meanwhile.

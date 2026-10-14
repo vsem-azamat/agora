@@ -89,6 +89,14 @@ describe('tape', () => {
     const at = tape(moved, new Map(), reader, NOW).filter((i) => i.kind === 'message');
     expect(at.map((i) => i.cont)).toEqual([false, false, true, false]);
   });
+  it('starts a group where a reply also in the room follows its own root', () => {
+    const also = [
+      message(40, 'builder', 'the export is fixed', 10),
+      message(42, 'builder', 'and tested', 8, { thread: 40n, also: true, threadTitle: 'Release' }),
+    ];
+    const at = tape(also, new Map(), reader, NOW).filter((i) => i.kind === 'message');
+    expect(at.map((i) => i.cont)).toEqual([false, false]);
+  });
   it('heads days and puts the NEW line above the first unread', () => {
     const withNew = tape(ms, new Map(), reader, NOW, 3n);
     expect(withNew[0]).toEqual({ kind: 'day', key: 'day-1', label: 'TODAY' });
