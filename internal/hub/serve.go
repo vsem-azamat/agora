@@ -79,6 +79,7 @@ func (h *Hub) Serve(ctx context.Context, l net.Listener) error {
 			}
 		}()
 	}
+	loops.Go(func() { h.controlLoop(loopCtx) })
 	if h.WakeCommand != "" {
 		loops.Go(func() { h.wakeLoop(loopCtx) })
 	}

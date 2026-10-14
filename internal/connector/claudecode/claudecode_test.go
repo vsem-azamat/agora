@@ -49,6 +49,14 @@ func (f *fakeHub) WaitWake(context.Context, *connect.Request[agorav1.WaitWakeReq
 	return nil, errors.New("unused")
 }
 
+func (f *fakeHub) Compact(context.Context, *connect.Request[agorav1.CompactRequest]) (*connect.Response[agorav1.CompactResponse], error) {
+	return nil, errors.New("unused")
+}
+
+func (f *fakeHub) Interrupt(context.Context, *connect.Request[agorav1.InterruptRequest]) (*connect.Response[agorav1.InterruptResponse], error) {
+	return nil, errors.New("unused")
+}
+
 var _ agorav1connect.SessionServiceClient = (*fakeHub)(nil)
 
 func run(t *testing.T, hub *fakeHub, input string) (string, error) {

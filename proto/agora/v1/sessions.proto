@@ -20,6 +20,10 @@ service SessionService {
   // one message with the wake text when something needs the agent, or ends without it when the
   // session gets busy, ends, or a newer wait for it starts.
   rpc WaitWake(WaitWakeRequest) returns (stream WaitWakeResponse);
+  // Compact queues a compaction of an agent's conversation; it runs when the session is idle.
+  rpc Compact(CompactRequest) returns (CompactResponse);
+  // Interrupt stops the turn of a busy session at once.
+  rpc Interrupt(InterruptRequest) returns (InterruptResponse);
 }
 
 enum SessionEvent {
@@ -56,6 +60,25 @@ message Session {
   int32 pid = 7;
   string cwd = 8;
   string terminal = 9;
+  SessionCapabilities capabilities = 10;
+}
+
+// SessionMechanism is how the hub does an action for a session.
+enum SessionMechanism {
+  SESSION_MECHANISM_UNSPECIFIED = 0;
+  // The session cannot do it.
+  SESSION_MECHANISM_NONE = 1;
+  // The session's connector does it.
+  SESSION_MECHANISM_HOOK = 2;
+  // The hub runs its command for the session's terminal.
+  SESSION_MECHANISM_TERMINAL = 3;
+}
+
+// SessionCapabilities says how the hub can do each action for a session.
+message SessionCapabilities {
+  SessionMechanism wake = 1;
+  SessionMechanism compact = 2;
+  SessionMechanism interrupt = 3;
 }
 
 message ReportRequest {
@@ -120,4 +143,30 @@ message WaitWakeResponse {
   string text = 1;
   // The wait is registered; sent once, first.
   bool armed = 2;
+}
+
+message CompactRequest {
+  // The agent that asks.
+  string agent = 1;
+  // The agent whose conversation is compacted.
+  string target = 2;
+  // What the compacted conversation should keep; may be empty.
+  string focus = 3;
+}
+
+message CompactResponse {
+  // How the compaction will be done.
+  SessionMechanism mechanism = 1;
+}
+
+message InterruptRequest {
+  // The agent that asks.
+  string agent = 1;
+  // The agent whose turn is interrupted.
+  string target = 2;
+}
+
+message InterruptResponse {
+  // How the turn was interrupted.
+  SessionMechanism mechanism = 1;
 }

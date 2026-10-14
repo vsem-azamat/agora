@@ -283,7 +283,7 @@ func printSystemctl(w io.Writer, cmds [][]string) {
 }
 
 func installServiceCmd(o *options) *cobra.Command {
-	var dbPath, wakeCommand, webFlag, webAs, join, bridgePolicy, bridgeDelay, binFlag string
+	var dbPath, wakeCommand, compactCommand, interruptCommand, webFlag, webAs, join, bridgePolicy, bridgeDelay, binFlag string
 	var now bool
 	cmd := &cobra.Command{
 		Use:   "service",
@@ -314,6 +314,12 @@ func installServiceCmd(o *options) *cobra.Command {
 			}
 			if wakeCommand != "" {
 				argv = append(argv, "--wake-command", wakeCommand)
+			}
+			if compactCommand != "" {
+				argv = append(argv, "--compact-command", compactCommand)
+			}
+			if interruptCommand != "" {
+				argv = append(argv, "--interrupt-command", interruptCommand)
 			}
 			if webFlag != "" {
 				if _, err := webAddress(webFlag); err != nil {
@@ -369,6 +375,8 @@ func installServiceCmd(o *options) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dbPath, "db", os.Getenv("AGORA_DB"), "database file for the hub (default $AGORA_DB, else the hub's default)")
 	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"), "the hub's wake command (default $AGORA_WAKE_COMMAND)")
+	cmd.Flags().StringVar(&compactCommand, "compact-command", os.Getenv("AGORA_COMPACT_COMMAND"), "the hub's compact command (default $AGORA_COMPACT_COMMAND)")
+	cmd.Flags().StringVar(&interruptCommand, "interrupt-command", os.Getenv("AGORA_INTERRUPT_COMMAND"), "the hub's interrupt command (default $AGORA_INTERRUPT_COMMAND)")
 	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"), "serve the web app on host:port or a port (default $AGORA_WEB)")
 	cmd.Flags().StringVar(&webAs, "web-as", os.Getenv("AGORA_WEB_AS"), "the name the web app acts under (default $AGORA_WEB_AS)")
 	cmd.Flags().StringVar(&join, "join", os.Getenv("AGORA_JOIN"), "how the hub invites sessions that have not joined: offer (joining is optional) or expect (every session joins before it works) (default $AGORA_JOIN)")

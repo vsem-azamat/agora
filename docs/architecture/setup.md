@@ -7,9 +7,9 @@ How `agora install` and `agora uninstall` (`internal/install`, commands in `inte
 ```sh
 agora install                                   # lists the targets
 agora install claude-code [--settings <file>] [--terminal-env <VAR>] [--bin <agora>]
-agora install service [--db <file>] [--wake-command <cmd>] [--web <addr>] [--web-as <name>] [--join offer|expect] [--bridge-policy open|delay|read] [--bridge-delay <duration>] [--now] [--bin <agora>]
+agora install service [--db <file>] [--wake-command <cmd>] [--compact-command <cmd>] [--interrupt-command <cmd>] [--web <addr>] [--web-as <name>] [--join offer|expect] [--bridge-policy open|delay|read] [--bridge-delay <duration>] [--now] [--bin <agora>]
 agora install skill [--dir <skills-dir>]...
-agora uninstall claude-code|service|skill       # same options; --terminal-env, --db, --wake-command, --web, --web-as, --join, --bridge-policy and --bridge-delay do not apply
+agora uninstall claude-code|service|skill       # same options; --terminal-env, --db, --wake-command, --compact-command, --interrupt-command, --web, --web-as, --join, --bridge-policy and --bridge-delay do not apply
 ```
 
 Every target is idempotent: it computes what it would write, compares it with what is there, and writes only when they differ.
@@ -55,7 +55,7 @@ Description=Agora hub
 Documentation=https://github.com/vsem-azamat/agora
 
 [Service]
-ExecStart=<agora> hub [--socket <path>] [--db <path>] [--wake-command <cmd>] [--web <addr>] [--web-as <name>] [--join <mode>] [--bridge-policy <policy>] [--bridge-delay <duration>]
+ExecStart=<agora> hub [--socket <path>] [--db <path>] [--wake-command <cmd>] [--compact-command <cmd>] [--interrupt-command <cmd>] [--web <addr>] [--web-as <name>] [--join <mode>] [--bridge-policy <policy>] [--bridge-delay <duration>]
 Restart=on-failure
 RestartSec=2
 
@@ -63,7 +63,7 @@ RestartSec=2
 WantedBy=default.target
 ```
 
-`--socket` is added when given or `$AGORA_SOCKET` is set, `--db` when given or `$AGORA_DB` is set, `--wake-command` when given or `$AGORA_WAKE_COMMAND` is set, `--web` and `--web-as` when given or `$AGORA_WEB` / `$AGORA_WEB_AS` are set, `--join` when given or `$AGORA_JOIN` is set (`offer`: joining is offered as an option; `expect`: every session is told to join before it starts working and pointed at its project's room; see [Sessions](sessions.md)), `--bridge-policy` and `--bridge-delay` when given or `$AGORA_BRIDGE_POLICY` / `$AGORA_BRIDGE_DELAY` are set (and valid), because a systemd user service does not see the shell's environment. Paths are made absolute. Each argument that is not a plain word is double-quoted with `\\`, `\"`, `\n` and `\t` escapes, and `$` and `%` are doubled, so systemd passes it unchanged instead of expanding variables or specifiers.
+`--socket` is added when given or `$AGORA_SOCKET` is set, `--db` when given or `$AGORA_DB` is set, `--wake-command`, `--compact-command` and `--interrupt-command` when given or `$AGORA_WAKE_COMMAND`, `$AGORA_COMPACT_COMMAND` and `$AGORA_INTERRUPT_COMMAND` are set, `--web` and `--web-as` when given or `$AGORA_WEB` / `$AGORA_WEB_AS` are set, `--join` when given or `$AGORA_JOIN` is set (`offer`: joining is offered as an option; `expect`: every session is told to join before it starts working and pointed at its project's room; see [Sessions](sessions.md)), `--bridge-policy` and `--bridge-delay` when given or `$AGORA_BRIDGE_POLICY` / `$AGORA_BRIDGE_DELAY` are set (and valid), because a systemd user service does not see the shell's environment. Paths are made absolute. Each argument that is not a plain word is double-quoted with `\\`, `\"`, `\n` and `\t` escapes, and `$` and `%` are doubled, so systemd passes it unchanged instead of expanding variables or specifiers.
 
 The first line marks the unit as Agora's: install and uninstall refuse an `agora-hub.service` without it, naming the file.
 

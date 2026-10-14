@@ -44,6 +44,11 @@ const (
 	SessionServiceListSessionsProcedure = "/agora.v1.SessionService/ListSessions"
 	// SessionServiceWaitWakeProcedure is the fully-qualified name of the SessionService's WaitWake RPC.
 	SessionServiceWaitWakeProcedure = "/agora.v1.SessionService/WaitWake"
+	// SessionServiceCompactProcedure is the fully-qualified name of the SessionService's Compact RPC.
+	SessionServiceCompactProcedure = "/agora.v1.SessionService/Compact"
+	// SessionServiceInterruptProcedure is the fully-qualified name of the SessionService's Interrupt
+	// RPC.
+	SessionServiceInterruptProcedure = "/agora.v1.SessionService/Interrupt"
 )
 
 // SessionServiceClient is a client for the agora.v1.SessionService service.
@@ -60,6 +65,10 @@ type SessionServiceClient interface {
 	// one message with the wake text when something needs the agent, or ends without it when the
 	// session gets busy, ends, or a newer wait for it starts.
 	WaitWake(context.Context, *connect.Request[v1.WaitWakeRequest]) (*connect.ServerStreamForClient[v1.WaitWakeResponse], error)
+	// Compact queues a compaction of an agent's conversation; it runs when the session is idle.
+	Compact(context.Context, *connect.Request[v1.CompactRequest]) (*connect.Response[v1.CompactResponse], error)
+	// Interrupt stops the turn of a busy session at once.
+	Interrupt(context.Context, *connect.Request[v1.InterruptRequest]) (*connect.Response[v1.InterruptResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the agora.v1.SessionService service. By default,
@@ -103,6 +112,18 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("WaitWake")),
 			connect.WithClientOptions(opts...),
 		),
+		compact: connect.NewClient[v1.CompactRequest, v1.CompactResponse](
+			httpClient,
+			baseURL+SessionServiceCompactProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("Compact")),
+			connect.WithClientOptions(opts...),
+		),
+		interrupt: connect.NewClient[v1.InterruptRequest, v1.InterruptResponse](
+			httpClient,
+			baseURL+SessionServiceInterruptProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("Interrupt")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -113,6 +134,8 @@ type sessionServiceClient struct {
 	resolve      *connect.Client[v1.ResolveRequest, v1.ResolveResponse]
 	listSessions *connect.Client[v1.ListSessionsRequest, v1.ListSessionsResponse]
 	waitWake     *connect.Client[v1.WaitWakeRequest, v1.WaitWakeResponse]
+	compact      *connect.Client[v1.CompactRequest, v1.CompactResponse]
+	interrupt    *connect.Client[v1.InterruptRequest, v1.InterruptResponse]
 }
 
 // Report calls agora.v1.SessionService.Report.
@@ -140,6 +163,16 @@ func (c *sessionServiceClient) WaitWake(ctx context.Context, req *connect.Reques
 	return c.waitWake.CallServerStream(ctx, req)
 }
 
+// Compact calls agora.v1.SessionService.Compact.
+func (c *sessionServiceClient) Compact(ctx context.Context, req *connect.Request[v1.CompactRequest]) (*connect.Response[v1.CompactResponse], error) {
+	return c.compact.CallUnary(ctx, req)
+}
+
+// Interrupt calls agora.v1.SessionService.Interrupt.
+func (c *sessionServiceClient) Interrupt(ctx context.Context, req *connect.Request[v1.InterruptRequest]) (*connect.Response[v1.InterruptResponse], error) {
+	return c.interrupt.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the agora.v1.SessionService service.
 type SessionServiceHandler interface {
 	// Report records one connector event and returns what the connector should tell the agent.
@@ -154,6 +187,10 @@ type SessionServiceHandler interface {
 	// one message with the wake text when something needs the agent, or ends without it when the
 	// session gets busy, ends, or a newer wait for it starts.
 	WaitWake(context.Context, *connect.Request[v1.WaitWakeRequest], *connect.ServerStream[v1.WaitWakeResponse]) error
+	// Compact queues a compaction of an agent's conversation; it runs when the session is idle.
+	Compact(context.Context, *connect.Request[v1.CompactRequest]) (*connect.Response[v1.CompactResponse], error)
+	// Interrupt stops the turn of a busy session at once.
+	Interrupt(context.Context, *connect.Request[v1.InterruptRequest]) (*connect.Response[v1.InterruptResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -193,6 +230,18 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("WaitWake")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceCompactHandler := connect.NewUnaryHandler(
+		SessionServiceCompactProcedure,
+		svc.Compact,
+		connect.WithSchema(sessionServiceMethods.ByName("Compact")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sessionServiceInterruptHandler := connect.NewUnaryHandler(
+		SessionServiceInterruptProcedure,
+		svc.Interrupt,
+		connect.WithSchema(sessionServiceMethods.ByName("Interrupt")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceReportProcedure:
@@ -205,6 +254,10 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceListSessionsHandler.ServeHTTP(w, r)
 		case SessionServiceWaitWakeProcedure:
 			sessionServiceWaitWakeHandler.ServeHTTP(w, r)
+		case SessionServiceCompactProcedure:
+			sessionServiceCompactHandler.ServeHTTP(w, r)
+		case SessionServiceInterruptProcedure:
+			sessionServiceInterruptHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -232,4 +285,12 @@ func (UnimplementedSessionServiceHandler) ListSessions(context.Context, *connect
 
 func (UnimplementedSessionServiceHandler) WaitWake(context.Context, *connect.Request[v1.WaitWakeRequest], *connect.ServerStream[v1.WaitWakeResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.SessionService.WaitWake is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) Compact(context.Context, *connect.Request[v1.CompactRequest]) (*connect.Response[v1.CompactResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.SessionService.Compact is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) Interrupt(context.Context, *connect.Request[v1.InterruptRequest]) (*connect.Response[v1.InterruptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.SessionService.Interrupt is not implemented"))
 }

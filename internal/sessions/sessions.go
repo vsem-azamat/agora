@@ -175,8 +175,22 @@ func New(db *sql.DB, q *queue.Queue, r *rooms.Rooms, now func() time.Time) *Sess
 	return &Sessions{db: db, queue: q, rooms: r, now: now}
 }
 
-// Report records one connector event and returns what to tell the agent.
+// Report records one connector event and returns what to tell the agent: also, with a prompt, a
+// tool use or a start, what happened to its session that it has not been told (see Compact).
 func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
+	reply, err := s.report(ctx, r)
+	if err != nil || (r.Event != Prompt && r.Event != Tool && r.Event != Start) {
+		return reply, err
+	}
+	notes, err := s.controlNotes(ctx, r.SessionID)
+	if err != nil || notes == "" {
+		return reply, err
+	}
+	reply.Context = strings.TrimSpace(reply.Context + "\n\n" + notes)
+	return reply, nil
+}
+
+func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 	if err := checkSession(r.SessionID); err != nil {
 		return Reply{}, err
 	}

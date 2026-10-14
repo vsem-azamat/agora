@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agora/v1/sessions.proto.
  */
 export const file_agora_v1_sessions: GenFile = /*@__PURE__*/
-  fileDesc("ChdhZ29yYS92MS9zZXNzaW9ucy5wcm90bxIIYWdvcmEudjEi4wEKB1Nlc3Npb24SCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRINCgVhZ2VudBgDIAEoCRIlCgVzdGF0ZRgEIAEoDjIWLmFnb3JhLnYxLlNlc3Npb25TdGF0ZRIsCghzdGF0ZV9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKc3RhcnRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASCwoDcGlkGAcgASgFEgsKA2N3ZBgIIAEoCRIQCgh0ZXJtaW5hbBgJIAEoCSK8AQoNUmVwb3J0UmVxdWVzdBISCgpzZXNzaW9uX2lkGAEgASgJEgwKBGtpbmQYAiABKAkSJQoFZXZlbnQYAyABKA4yFi5hZ29yYS52MS5TZXNzaW9uRXZlbnQSCwoDcGlkGAQgASgFEgsKA2N3ZBgFIAEoCRIQCgh0ZXJtaW5hbBgGIAEoCRITCgtzdG9wX2FjdGl2ZRgHIAEoCBIRCglwaWRfc3RhcnQYCCABKAMSDgoGcmVhc29uGAkgASgJIkYKDlJlcG9ydFJlc3BvbnNlEg8KB2NvbnRleHQYASABKAkSDQoFYmxvY2sYAiABKAgSFAoMYmxvY2tfcmVhc29uGAMgASgJIkIKD0pvaW5OYW1lUmVxdWVzdBIMCgRuYW1lGAEgASgJEhIKCnNlc3Npb25faWQYAiABKAkSDQoFZm9yY2UYAyABKAgiIQoQSm9pbk5hbWVSZXNwb25zZRINCgVib3VuZBgBIAEoCCIkCg5SZXNvbHZlUmVxdWVzdBISCgpzZXNzaW9uX2lkGAEgASgJIiAKD1Jlc29sdmVSZXNwb25zZRINCgVhZ2VudBgBIAEoCSIVChNMaXN0U2Vzc2lvbnNSZXF1ZXN0IjsKFExpc3RTZXNzaW9uc1Jlc3BvbnNlEiMKCHNlc3Npb25zGAEgAygLMhEuYWdvcmEudjEuU2Vzc2lvbiI0Cg9XYWl0V2FrZVJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCRINCgVzdGFydBgCIAEoCCIvChBXYWl0V2FrZVJlc3BvbnNlEgwKBHRleHQYASABKAkSDQoFYXJtZWQYAiABKAgq3QEKDFNlc3Npb25FdmVudBIdChlTRVNTSU9OX0VWRU5UX1VOU1BFQ0lGSUVEEAASFwoTU0VTU0lPTl9FVkVOVF9TVEFSVBABEhgKFFNFU1NJT05fRVZFTlRfUFJPTVBUEAISFgoSU0VTU0lPTl9FVkVOVF9UT09MEAMSFgoSU0VTU0lPTl9FVkVOVF9TVE9QEAQSFQoRU0VTU0lPTl9FVkVOVF9FTkQQBRIZChVTRVNTSU9OX0VWRU5UX1dBSVRJTkcQBhIZChVTRVNTSU9OX0VWRU5UX0NPTVBBQ1QQByqRAQoMU2Vzc2lvblN0YXRlEh0KGVNFU1NJT05fU1RBVEVfVU5TUEVDSUZJRUQQABIWChJTRVNTSU9OX1NUQVRFX0JVU1kQARIWChJTRVNTSU9OX1NUQVRFX0lETEUQAhIXChNTRVNTSU9OX1NUQVRFX0VOREVEEAMSGQoVU0VTU0lPTl9TVEFURV9PRkZMSU5FEAQy5AIKDlNlc3Npb25TZXJ2aWNlEjsKBlJlcG9ydBIXLmFnb3JhLnYxLlJlcG9ydFJlcXVlc3QaGC5hZ29yYS52MS5SZXBvcnRSZXNwb25zZRJBCghKb2luTmFtZRIZLmFnb3JhLnYxLkpvaW5OYW1lUmVxdWVzdBoaLmFnb3JhLnYxLkpvaW5OYW1lUmVzcG9uc2USPgoHUmVzb2x2ZRIYLmFnb3JhLnYxLlJlc29sdmVSZXF1ZXN0GhkuYWdvcmEudjEuUmVzb2x2ZVJlc3BvbnNlEk0KDExpc3RTZXNzaW9ucxIdLmFnb3JhLnYxLkxpc3RTZXNzaW9uc1JlcXVlc3QaHi5hZ29yYS52MS5MaXN0U2Vzc2lvbnNSZXNwb25zZRJDCghXYWl0V2FrZRIZLmFnb3JhLnYxLldhaXRXYWtlUmVxdWVzdBoaLmFnb3JhLnYxLldhaXRXYWtlUmVzcG9uc2UwAUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChdhZ29yYS92MS9zZXNzaW9ucy5wcm90bxIIYWdvcmEudjEimAIKB1Nlc3Npb24SCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRINCgVhZ2VudBgDIAEoCRIlCgVzdGF0ZRgEIAEoDjIWLmFnb3JhLnYxLlNlc3Npb25TdGF0ZRIsCghzdGF0ZV9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKc3RhcnRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASCwoDcGlkGAcgASgFEgsKA2N3ZBgIIAEoCRIQCgh0ZXJtaW5hbBgJIAEoCRIzCgxjYXBhYmlsaXRpZXMYCiABKAsyHS5hZ29yYS52MS5TZXNzaW9uQ2FwYWJpbGl0aWVzIpsBChNTZXNzaW9uQ2FwYWJpbGl0aWVzEigKBHdha2UYASABKA4yGi5hZ29yYS52MS5TZXNzaW9uTWVjaGFuaXNtEisKB2NvbXBhY3QYAiABKA4yGi5hZ29yYS52MS5TZXNzaW9uTWVjaGFuaXNtEi0KCWludGVycnVwdBgDIAEoDjIaLmFnb3JhLnYxLlNlc3Npb25NZWNoYW5pc20ivAEKDVJlcG9ydFJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCRIMCgRraW5kGAIgASgJEiUKBWV2ZW50GAMgASgOMhYuYWdvcmEudjEuU2Vzc2lvbkV2ZW50EgsKA3BpZBgEIAEoBRILCgNjd2QYBSABKAkSEAoIdGVybWluYWwYBiABKAkSEwoLc3RvcF9hY3RpdmUYByABKAgSEQoJcGlkX3N0YXJ0GAggASgDEg4KBnJlYXNvbhgJIAEoCSJGCg5SZXBvcnRSZXNwb25zZRIPCgdjb250ZXh0GAEgASgJEg0KBWJsb2NrGAIgASgIEhQKDGJsb2NrX3JlYXNvbhgDIAEoCSJCCg9Kb2luTmFtZVJlcXVlc3QSDAoEbmFtZRgBIAEoCRISCgpzZXNzaW9uX2lkGAIgASgJEg0KBWZvcmNlGAMgASgIIiEKEEpvaW5OYW1lUmVzcG9uc2USDQoFYm91bmQYASABKAgiJAoOUmVzb2x2ZVJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCSIgCg9SZXNvbHZlUmVzcG9uc2USDQoFYWdlbnQYASABKAkiFQoTTGlzdFNlc3Npb25zUmVxdWVzdCI7ChRMaXN0U2Vzc2lvbnNSZXNwb25zZRIjCghzZXNzaW9ucxgBIAMoCzIRLmFnb3JhLnYxLlNlc3Npb24iNAoPV2FpdFdha2VSZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkSDQoFc3RhcnQYAiABKAgiLwoQV2FpdFdha2VSZXNwb25zZRIMCgR0ZXh0GAEgASgJEg0KBWFybWVkGAIgASgIIj4KDkNvbXBhY3RSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEg4KBnRhcmdldBgCIAEoCRINCgVmb2N1cxgDIAEoCSJACg9Db21wYWN0UmVzcG9uc2USLQoJbWVjaGFuaXNtGAEgASgOMhouYWdvcmEudjEuU2Vzc2lvbk1lY2hhbmlzbSIxChBJbnRlcnJ1cHRSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEg4KBnRhcmdldBgCIAEoCSJCChFJbnRlcnJ1cHRSZXNwb25zZRItCgltZWNoYW5pc20YASABKA4yGi5hZ29yYS52MS5TZXNzaW9uTWVjaGFuaXNtKt0BCgxTZXNzaW9uRXZlbnQSHQoZU0VTU0lPTl9FVkVOVF9VTlNQRUNJRklFRBAAEhcKE1NFU1NJT05fRVZFTlRfU1RBUlQQARIYChRTRVNTSU9OX0VWRU5UX1BST01QVBACEhYKElNFU1NJT05fRVZFTlRfVE9PTBADEhYKElNFU1NJT05fRVZFTlRfU1RPUBAEEhUKEVNFU1NJT05fRVZFTlRfRU5EEAUSGQoVU0VTU0lPTl9FVkVOVF9XQUlUSU5HEAYSGQoVU0VTU0lPTl9FVkVOVF9DT01QQUNUEAcqkQEKDFNlc3Npb25TdGF0ZRIdChlTRVNTSU9OX1NUQVRFX1VOU1BFQ0lGSUVEEAASFgoSU0VTU0lPTl9TVEFURV9CVVNZEAESFgoSU0VTU0lPTl9TVEFURV9JRExFEAISFwoTU0VTU0lPTl9TVEFURV9FTkRFRBADEhkKFVNFU1NJT05fU1RBVEVfT0ZGTElORRAEKo0BChBTZXNzaW9uTWVjaGFuaXNtEiEKHVNFU1NJT05fTUVDSEFOSVNNX1VOU1BFQ0lGSUVEEAASGgoWU0VTU0lPTl9NRUNIQU5JU01fTk9ORRABEhoKFlNFU1NJT05fTUVDSEFOSVNNX0hPT0sQAhIeChpTRVNTSU9OX01FQ0hBTklTTV9URVJNSU5BTBADMuoDCg5TZXNzaW9uU2VydmljZRI7CgZSZXBvcnQSFy5hZ29yYS52MS5SZXBvcnRSZXF1ZXN0GhguYWdvcmEudjEuUmVwb3J0UmVzcG9uc2USQQoISm9pbk5hbWUSGS5hZ29yYS52MS5Kb2luTmFtZVJlcXVlc3QaGi5hZ29yYS52MS5Kb2luTmFtZVJlc3BvbnNlEj4KB1Jlc29sdmUSGC5hZ29yYS52MS5SZXNvbHZlUmVxdWVzdBoZLmFnb3JhLnYxLlJlc29sdmVSZXNwb25zZRJNCgxMaXN0U2Vzc2lvbnMSHS5hZ29yYS52MS5MaXN0U2Vzc2lvbnNSZXF1ZXN0Gh4uYWdvcmEudjEuTGlzdFNlc3Npb25zUmVzcG9uc2USQwoIV2FpdFdha2USGS5hZ29yYS52MS5XYWl0V2FrZVJlcXVlc3QaGi5hZ29yYS52MS5XYWl0V2FrZVJlc3BvbnNlMAESPgoHQ29tcGFjdBIYLmFnb3JhLnYxLkNvbXBhY3RSZXF1ZXN0GhkuYWdvcmEudjEuQ29tcGFjdFJlc3BvbnNlEkQKCUludGVycnVwdBIaLmFnb3JhLnYxLkludGVycnVwdFJlcXVlc3QaGy5hZ29yYS52MS5JbnRlcnJ1cHRSZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Session
@@ -62,6 +62,11 @@ export type Session = Message<"agora.v1.Session"> & {
    * @generated from field: string terminal = 9;
    */
   terminal: string;
+
+  /**
+   * @generated from field: agora.v1.SessionCapabilities capabilities = 10;
+   */
+  capabilities?: SessionCapabilities | undefined;
 };
 
 /**
@@ -70,6 +75,35 @@ export type Session = Message<"agora.v1.Session"> & {
  */
 export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
   messageDesc(file_agora_v1_sessions, 0);
+
+/**
+ * SessionCapabilities says how the hub can do each action for a session.
+ *
+ * @generated from message agora.v1.SessionCapabilities
+ */
+export type SessionCapabilities = Message<"agora.v1.SessionCapabilities"> & {
+  /**
+   * @generated from field: agora.v1.SessionMechanism wake = 1;
+   */
+  wake: SessionMechanism;
+
+  /**
+   * @generated from field: agora.v1.SessionMechanism compact = 2;
+   */
+  compact: SessionMechanism;
+
+  /**
+   * @generated from field: agora.v1.SessionMechanism interrupt = 3;
+   */
+  interrupt: SessionMechanism;
+};
+
+/**
+ * Describes the message agora.v1.SessionCapabilities.
+ * Use `create(SessionCapabilitiesSchema)` to create a new message.
+ */
+export const SessionCapabilitiesSchema: GenMessage<SessionCapabilities> = /*@__PURE__*/
+  messageDesc(file_agora_v1_sessions, 1);
 
 /**
  * @generated from message agora.v1.ReportRequest
@@ -133,7 +167,7 @@ export type ReportRequest = Message<"agora.v1.ReportRequest"> & {
  * Use `create(ReportRequestSchema)` to create a new message.
  */
 export const ReportRequestSchema: GenMessage<ReportRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 1);
+  messageDesc(file_agora_v1_sessions, 2);
 
 /**
  * @generated from message agora.v1.ReportResponse
@@ -164,7 +198,7 @@ export type ReportResponse = Message<"agora.v1.ReportResponse"> & {
  * Use `create(ReportResponseSchema)` to create a new message.
  */
 export const ReportResponseSchema: GenMessage<ReportResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 2);
+  messageDesc(file_agora_v1_sessions, 3);
 
 /**
  * @generated from message agora.v1.JoinNameRequest
@@ -191,7 +225,7 @@ export type JoinNameRequest = Message<"agora.v1.JoinNameRequest"> & {
  * Use `create(JoinNameRequestSchema)` to create a new message.
  */
 export const JoinNameRequestSchema: GenMessage<JoinNameRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 3);
+  messageDesc(file_agora_v1_sessions, 4);
 
 /**
  * @generated from message agora.v1.JoinNameResponse
@@ -210,7 +244,7 @@ export type JoinNameResponse = Message<"agora.v1.JoinNameResponse"> & {
  * Use `create(JoinNameResponseSchema)` to create a new message.
  */
 export const JoinNameResponseSchema: GenMessage<JoinNameResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 4);
+  messageDesc(file_agora_v1_sessions, 5);
 
 /**
  * @generated from message agora.v1.ResolveRequest
@@ -227,7 +261,7 @@ export type ResolveRequest = Message<"agora.v1.ResolveRequest"> & {
  * Use `create(ResolveRequestSchema)` to create a new message.
  */
 export const ResolveRequestSchema: GenMessage<ResolveRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 5);
+  messageDesc(file_agora_v1_sessions, 6);
 
 /**
  * @generated from message agora.v1.ResolveResponse
@@ -246,7 +280,7 @@ export type ResolveResponse = Message<"agora.v1.ResolveResponse"> & {
  * Use `create(ResolveResponseSchema)` to create a new message.
  */
 export const ResolveResponseSchema: GenMessage<ResolveResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 6);
+  messageDesc(file_agora_v1_sessions, 7);
 
 /**
  * @generated from message agora.v1.ListSessionsRequest
@@ -259,7 +293,7 @@ export type ListSessionsRequest = Message<"agora.v1.ListSessionsRequest"> & {
  * Use `create(ListSessionsRequestSchema)` to create a new message.
  */
 export const ListSessionsRequestSchema: GenMessage<ListSessionsRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 7);
+  messageDesc(file_agora_v1_sessions, 8);
 
 /**
  * @generated from message agora.v1.ListSessionsResponse
@@ -276,7 +310,7 @@ export type ListSessionsResponse = Message<"agora.v1.ListSessionsResponse"> & {
  * Use `create(ListSessionsResponseSchema)` to create a new message.
  */
 export const ListSessionsResponseSchema: GenMessage<ListSessionsResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 8);
+  messageDesc(file_agora_v1_sessions, 9);
 
 /**
  * @generated from message agora.v1.WaitWakeRequest
@@ -301,7 +335,7 @@ export type WaitWakeRequest = Message<"agora.v1.WaitWakeRequest"> & {
  * Use `create(WaitWakeRequestSchema)` to create a new message.
  */
 export const WaitWakeRequestSchema: GenMessage<WaitWakeRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 9);
+  messageDesc(file_agora_v1_sessions, 10);
 
 /**
  * @generated from message agora.v1.WaitWakeResponse
@@ -327,7 +361,104 @@ export type WaitWakeResponse = Message<"agora.v1.WaitWakeResponse"> & {
  * Use `create(WaitWakeResponseSchema)` to create a new message.
  */
 export const WaitWakeResponseSchema: GenMessage<WaitWakeResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_sessions, 10);
+  messageDesc(file_agora_v1_sessions, 11);
+
+/**
+ * @generated from message agora.v1.CompactRequest
+ */
+export type CompactRequest = Message<"agora.v1.CompactRequest"> & {
+  /**
+   * The agent that asks.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * The agent whose conversation is compacted.
+   *
+   * @generated from field: string target = 2;
+   */
+  target: string;
+
+  /**
+   * What the compacted conversation should keep; may be empty.
+   *
+   * @generated from field: string focus = 3;
+   */
+  focus: string;
+};
+
+/**
+ * Describes the message agora.v1.CompactRequest.
+ * Use `create(CompactRequestSchema)` to create a new message.
+ */
+export const CompactRequestSchema: GenMessage<CompactRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_sessions, 12);
+
+/**
+ * @generated from message agora.v1.CompactResponse
+ */
+export type CompactResponse = Message<"agora.v1.CompactResponse"> & {
+  /**
+   * How the compaction will be done.
+   *
+   * @generated from field: agora.v1.SessionMechanism mechanism = 1;
+   */
+  mechanism: SessionMechanism;
+};
+
+/**
+ * Describes the message agora.v1.CompactResponse.
+ * Use `create(CompactResponseSchema)` to create a new message.
+ */
+export const CompactResponseSchema: GenMessage<CompactResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_sessions, 13);
+
+/**
+ * @generated from message agora.v1.InterruptRequest
+ */
+export type InterruptRequest = Message<"agora.v1.InterruptRequest"> & {
+  /**
+   * The agent that asks.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * The agent whose turn is interrupted.
+   *
+   * @generated from field: string target = 2;
+   */
+  target: string;
+};
+
+/**
+ * Describes the message agora.v1.InterruptRequest.
+ * Use `create(InterruptRequestSchema)` to create a new message.
+ */
+export const InterruptRequestSchema: GenMessage<InterruptRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_sessions, 14);
+
+/**
+ * @generated from message agora.v1.InterruptResponse
+ */
+export type InterruptResponse = Message<"agora.v1.InterruptResponse"> & {
+  /**
+   * How the turn was interrupted.
+   *
+   * @generated from field: agora.v1.SessionMechanism mechanism = 1;
+   */
+  mechanism: SessionMechanism;
+};
+
+/**
+ * Describes the message agora.v1.InterruptResponse.
+ * Use `create(InterruptResponseSchema)` to create a new message.
+ */
+export const InterruptResponseSchema: GenMessage<InterruptResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_sessions, 15);
 
 /**
  * @generated from enum agora.v1.SessionEvent
@@ -425,6 +556,45 @@ export const SessionStateSchema: GenEnum<SessionState> = /*@__PURE__*/
   enumDesc(file_agora_v1_sessions, 1);
 
 /**
+ * SessionMechanism is how the hub does an action for a session.
+ *
+ * @generated from enum agora.v1.SessionMechanism
+ */
+export enum SessionMechanism {
+  /**
+   * @generated from enum value: SESSION_MECHANISM_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * The session cannot do it.
+   *
+   * @generated from enum value: SESSION_MECHANISM_NONE = 1;
+   */
+  NONE = 1,
+
+  /**
+   * The session's connector does it.
+   *
+   * @generated from enum value: SESSION_MECHANISM_HOOK = 2;
+   */
+  HOOK = 2,
+
+  /**
+   * The hub runs its command for the session's terminal.
+   *
+   * @generated from enum value: SESSION_MECHANISM_TERMINAL = 3;
+   */
+  TERMINAL = 3,
+}
+
+/**
+ * Describes the enum agora.v1.SessionMechanism.
+ */
+export const SessionMechanismSchema: GenEnum<SessionMechanism> = /*@__PURE__*/
+  enumDesc(file_agora_v1_sessions, 2);
+
+/**
  * SessionService keeps agent names and the agent sessions that connectors report.
  *
  * @generated from service agora.v1.SessionService
@@ -481,6 +651,26 @@ export const SessionService: GenService<{
     methodKind: "server_streaming";
     input: typeof WaitWakeRequestSchema;
     output: typeof WaitWakeResponseSchema;
+  },
+  /**
+   * Compact queues a compaction of an agent's conversation; it runs when the session is idle.
+   *
+   * @generated from rpc agora.v1.SessionService.Compact
+   */
+  compact: {
+    methodKind: "unary";
+    input: typeof CompactRequestSchema;
+    output: typeof CompactResponseSchema;
+  },
+  /**
+   * Interrupt stops the turn of a busy session at once.
+   *
+   * @generated from rpc agora.v1.SessionService.Interrupt
+   */
+  interrupt: {
+    methodKind: "unary";
+    input: typeof InterruptRequestSchema;
+    output: typeof InterruptResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_agora_v1_sessions, 0);

@@ -1575,3 +1575,19 @@ func TestTheProjectRoomFollowsTheCurrentProjectWhateverTheOrderOfCalls(t *testin
 		t.Fatalf("follows %v, want only gamma", f)
 	}
 }
+
+func TestMessageMustBeValidUTF8(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.s.Join(ctx, "builder", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Post(ctx, "builder", "general", "cut in the middle of é: \xc3", 0); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("invalid text: %v", err)
+	}
+	if msgs, _ := e.r.History(ctx, "general", 10); len(msgs) != 0 {
+		t.Fatalf("stored %+v", msgs)
+	}
+	if _, err := e.r.Post(ctx, "builder", "general", "é ok", 0); err != nil {
+		t.Fatal(err)
+	}
+}

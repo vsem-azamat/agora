@@ -25,7 +25,7 @@ import (
 )
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
-	var dbPath, wakeCommand, webFlag, webAs, join, bridgePolicy string
+	var dbPath, wakeCommand, compactCommand, interruptCommand, webFlag, webAs, join, bridgePolicy string
 	bridgeDelay, delayErr := bridges.DefaultDelay, error(nil)
 	if env := os.Getenv("AGORA_BRIDGE_DELAY"); env != "" {
 		if bridgeDelay, delayErr = time.ParseDuration(env); delayErr != nil {
@@ -112,10 +112,10 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				webAttrs = append(webAttrs, "web_as", webAs)
 			}
 			log.Info("hub listening", append([]any{
-				"socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "", "watch_prs", slices.Sorted(maps.Keys(forges)),
+				"socket", o.socket, "db", dbPath, "wake_command", wakeCommand != "", "compact_command", compactCommand != "", "interrupt_command", interruptCommand != "", "watch_prs", slices.Sorted(maps.Keys(forges)),
 				"join", join, "bridge_policy", policy, "bridge_delay", bridgeDelay,
 			}, webAttrs...)...)
-			h.WakeCommand = wakeCommand
+			h.WakeCommand, h.CompactCommand, h.InterruptCommand = wakeCommand, compactCommand, interruptCommand
 			h.Forges = forges
 			return h.Serve(ctx, l)
 		},
@@ -123,6 +123,10 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
 	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"),
 		"shell command that wakes an idle session without a waiting connector; gets $AGORA_TERMINAL and $AGORA_WAKE_TEXT (default $AGORA_WAKE_COMMAND)")
+	cmd.Flags().StringVar(&compactCommand, "compact-command", os.Getenv("AGORA_COMPACT_COMMAND"),
+		"shell command that compacts a session with a terminal when it is idle; gets $AGORA_TERMINAL and the text to type, /compact and a focus, in $AGORA_WAKE_TEXT (default $AGORA_COMPACT_COMMAND)")
+	cmd.Flags().StringVar(&interruptCommand, "interrupt-command", os.Getenv("AGORA_INTERRUPT_COMMAND"),
+		"shell command that interrupts the turn of a busy session with a terminal; gets $AGORA_TERMINAL (default $AGORA_INTERRUPT_COMMAND)")
 	cmd.Flags().BoolVar(&watchPRs, "watch-prs", watchPRs,
 		"follow agents' pull requests and report when CI turns green or red; GitHub needs gh; --watch-prs=false turns it off (default $AGORA_WATCH_PRS)")
 	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"),

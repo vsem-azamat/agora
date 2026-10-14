@@ -98,7 +98,7 @@ The system SHALL, when a session ends, remove the agent bound to it from every r
 
 ### Requirement: Listing Sessions
 
-The system SHALL list sessions that have not ended with identifier, kind, bound agent, state, time of the last change and working directory.
+The system SHALL list sessions that have not ended with identifier, kind, bound agent, state, time of the last change, working directory and what each can do (see [Session Control](../session-control/spec.md#requirement-sessions-have-capabilities)).
 
 #### Scenario: Listing
 - **WHEN** an agent lists sessions

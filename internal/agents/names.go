@@ -47,6 +47,8 @@ var renames = []string{
 	"UPDATE agents SET name = :new WHERE name = :old",
 	"UPDATE former_names SET agent = :new WHERE agent = :old",
 	"UPDATE sessions SET agent = :new WHERE agent = :old",
+	"UPDATE session_controls SET agent = :new WHERE agent = :old",
+	"UPDATE session_controls SET requested_by = :new WHERE requested_by = :old",
 	"UPDATE entries SET agent = :new WHERE agent = :old",
 	"UPDATE removals SET agent = :new WHERE agent = :old",
 	"UPDATE removals SET actor = :new WHERE actor = :old",

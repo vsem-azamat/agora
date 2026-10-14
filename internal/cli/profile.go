@@ -458,11 +458,23 @@ func sessionsCmd(o *options) *cobra.Command {
 				if !ok {
 					state = "-"
 				}
-				fmt.Fprintf(o.out, "%-16s %-5s since %s  %-12s %s  %s\n", agent, state, clock(x.GetStateAt().AsTime()), x.GetKind(), x.GetId(), x.GetCwd())
+				fmt.Fprintf(o.out, "%-16s %-5s since %s  %-12s %s  %s  [%s]\n", agent, state, clock(x.GetStateAt().AsTime()), x.GetKind(), x.GetId(), x.GetCwd(), capabilityLine(x.GetCapabilities()))
 			}
 			return nil
 		},
 	}
+}
+
+// capabilityLine is how a session can be woken, compacted and interrupted, like
+// "wake hook, compact terminal, interrupt none".
+func capabilityLine(c *agorav1.SessionCapabilities) string {
+	return fmt.Sprintf("wake %s, compact %s, interrupt %s", mechanismNames[c.GetWake()], mechanismNames[c.GetCompact()], mechanismNames[c.GetInterrupt()])
+}
+
+var mechanismNames = map[agorav1.SessionMechanism]string{
+	agorav1.SessionMechanism_SESSION_MECHANISM_NONE:     "none",
+	agorav1.SessionMechanism_SESSION_MECHANISM_HOOK:     "hook",
+	agorav1.SessionMechanism_SESSION_MECHANISM_TERMINAL: "terminal",
 }
 
 var sessionStateNames = map[agorav1.SessionState]string{

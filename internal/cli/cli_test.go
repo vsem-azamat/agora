@@ -1299,3 +1299,27 @@ func TestThreadsFromTheCommandLine(t *testing.T) {
 		t.Fatalf("a left thread is unread:\n%s", r.stdout)
 	}
 }
+
+func TestCompactAndInterruptSayWhatIsMissing(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "") // the test may itself run inside Claude Code
+	t.Setenv("AGORA_NAME", "")
+	t.Setenv("AGORA_SESSION", "session-123")
+	if r := agora(ctx, socket, "", "join", "builder"); r.code != 0 {
+		t.Fatalf("join: %+v", r)
+	}
+	t.Setenv("AGORA_SESSION", "")
+	if r := agora(ctx, socket, "reviewer", "join", "reviewer"); r.code != 0 {
+		t.Fatalf("join: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "compact", "builder", "keep the schema"); r.code == 0 || !strings.Contains(r.stderr, "cannot compact") || !strings.Contains(r.stderr, "--compact-command") {
+		t.Fatalf("compact: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "interrupt", "@builder"); r.code == 0 || !strings.Contains(r.stderr, "--interrupt-command") {
+		t.Fatalf("interrupt: %+v", r)
+	}
+	if r := agora(ctx, socket, "reviewer", "sessions"); !strings.Contains(r.stdout, "[wake none, compact none, interrupt none]") {
+		t.Fatalf("sessions: %+v", r)
+	}
+}

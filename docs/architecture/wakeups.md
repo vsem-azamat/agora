@@ -39,3 +39,5 @@ agora install service --wake-command 'tmux send-keys -t "$AGORA_TERMINAL" "$AGOR
 `agora install service` writes the wake command into the hub's systemd user unit (see [Setup](setup.md)); `agora hub --wake-command '<cmd>'` does the same for a hub started by hand.
 
 The command runs as the hub's user with a one-minute timeout; only the hub's owner sets it.
+
+A session whose compact command ran in the last 2 minutes is not woken by the command, since `/compact` leaves it `idle` for the hub while it compacts (see [Session control](session-control.md)). `--compact-command` and `--interrupt-command` take templates like this one.

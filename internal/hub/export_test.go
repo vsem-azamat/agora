@@ -11,7 +11,7 @@ func WakeByCommand(ctx context.Context, h *Hub) error { return h.wakeByCommand(c
 
 // RunWakeCommand runs one wake command, for tests.
 func RunWakeCommand(ctx context.Context, command string) (string, bool) {
-	return runWakeCommand(ctx, command, "pane", "text")
+	return runTerminalCommand(ctx, command, "pane", "text")
 }
 
 // SetWebFiles makes the web listener serve files instead of the built app, for tests; call it
@@ -57,3 +57,38 @@ func RunsBridge(h *Hub, name string) bool {
 
 // SweepEvery is how often the hub sweeps, which bounds how soon a writer looks again without a signal.
 const SweepEvery = sweepEvery
+
+// RunCompacts runs one round of the control loop, for tests.
+func RunCompacts(ctx context.Context, h *Hub) error { return h.runCompacts(ctx) }
+
+// SetControlEvery changes how often the control loop runs, for tests.
+func SetControlEvery(h *Hub, d time.Duration) { h.controlEvery = d }
+
+// SetAlive replaces the process check, for tests.
+func SetAlive(h *Hub, f func(pid int, start int64) bool) { h.alive = f }
+
+// TerminalHeld reports whether a command holds the terminal's lock, for tests.
+func TerminalHeld(h *Hub, name string) bool {
+	h.termMu.Lock()
+	t := h.terminals[name]
+	h.termMu.Unlock()
+	if t == nil {
+		return false
+	}
+	if t.mu.TryLock() {
+		t.mu.Unlock()
+		return false
+	}
+	return true
+}
+
+// TerminalWaiting is how many commands wait for the terminal's lock, for tests.
+func TerminalWaiting(h *Hub, name string) int {
+	h.termMu.Lock()
+	t := h.terminals[name]
+	h.termMu.Unlock()
+	if t == nil {
+		return 0
+	}
+	return int(t.waiting.Load())
+}
