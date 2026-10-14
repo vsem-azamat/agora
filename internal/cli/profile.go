@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -124,9 +123,7 @@ func joinCmd(o *options) *cobra.Command {
 			} else {
 				fmt.Fprintf(o.out, "joined as %s; no session found, so pass --as %s or set AGORA_NAME=%s\n", name, name, name)
 			}
-			if req.Project != nil {
-				o.followProject(cmd.Context(), name, updated.Msg.GetProfile().GetProjectRoom())
-			}
+			o.reportProjectRoom(updated.Msg.GetProjectRoom())
 			return nil
 		},
 	}
@@ -135,21 +132,23 @@ func joinCmd(o *options) *cobra.Command {
 	return cmd
 }
 
-// followProject makes name follow its project's room, as the hub derives it for the profile
-// (rooms.ProjectRoom of the stored project), keeping the mode it may have there, or says how
-// to create the room. It reports a failure without failing the join.
-func (o *options) followProject(ctx context.Context, name, room string) {
-	if room == "" {
+// reportProjectRoom says what setting the project did to the agent's subscriptions, which the
+// hub changes itself.
+func (o *options) reportProjectRoom(pr *agorav1.ProjectRoom) {
+	if pr == nil {
 		return
 	}
-	_, err := o.rooms().Subscribe(ctx, connect.NewRequest(&agorav1.SubscribeRequest{Agent: name, Rooms: []string{room}, Follow: true}))
-	switch {
-	case err == nil:
+	room := pr.GetRoom()
+	if old := pr.GetUnfollowed(); old != "" {
+		fmt.Fprintf(o.out, "no longer following #%s, the room of your old project\n", old)
+	}
+	switch pr.GetState() {
+	case agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FOLLOWING:
 		fmt.Fprintf(o.out, "following #%s, your project's room\n", room)
-	case connect.CodeOf(err) == connect.CodeNotFound:
+	case agorav1.ProjectRoomState_PROJECT_ROOM_STATE_MISSING:
 		fmt.Fprintf(o.out, "no room #%s for your project yet; create it with agora room-create %s '<purpose>'\n", room, room)
-	default:
-		fmt.Fprintf(o.out, "not following #%s, your project's room: %s\n", room, message(err))
+	case agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED:
+		fmt.Fprintf(o.out, "%s\n", pr.GetDetail())
 	}
 }
 
@@ -178,6 +177,7 @@ func setCmd(o *options) *cobra.Command {
 				return err
 			}
 			printProfile(o.out, resp.Msg.GetProfile())
+			o.reportProjectRoom(resp.Msg.GetProjectRoom())
 			return nil
 		},
 	}

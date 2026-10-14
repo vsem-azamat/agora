@@ -102,6 +102,30 @@ message UpdateProfileRequest {
 
 message UpdateProfileResponse {
   Profile profile = 1;
+  // Set when the request set the project: what became of the project's room.
+  ProjectRoom project_room = 2;
+}
+
+enum ProjectRoomState {
+  PROJECT_ROOM_STATE_UNSPECIFIED = 0;
+  // The project has no room name, so it has no room.
+  PROJECT_ROOM_STATE_NONE = 1;
+  // The agent follows the project's room.
+  PROJECT_ROOM_STATE_FOLLOWING = 2;
+  // The project has a room name, but no such room exists yet.
+  PROJECT_ROOM_STATE_MISSING = 3;
+  // The room exists but cannot be followed; detail says why.
+  PROJECT_ROOM_STATE_FAILED = 4;
+}
+
+// What setting the agent's project did to its subscriptions.
+message ProjectRoom {
+  // The new project's room name; empty when the project has no room name.
+  string room = 1;
+  ProjectRoomState state = 2;
+  // The old project's room the agent stopped following; empty when it kept it.
+  string unfollowed = 3;
+  string detail = 4;
 }
 
 message LeaveRequest {

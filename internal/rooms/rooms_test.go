@@ -1393,3 +1393,185 @@ func TestProjectRoomIsDerivedFromTheProjectName(t *testing.T) {
 		}
 	}
 }
+
+// follows lists the rooms agent follows besides #general, with their modes, as "room" or "room(mode)".
+func (e env) follows(t *testing.T, agent string) []string {
+	t.Helper()
+	subs, err := e.r.Subscriptions(ctx, agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, s := range subs {
+		if s.Room == rooms.General && s.Mode == rooms.ModeAll {
+			continue // followed implicitly
+		}
+		if s.Mode == rooms.ModeAll {
+			out = append(out, s.Room)
+		} else {
+			out = append(out, fmt.Sprintf("%s(%s)", s.Room, s.Mode))
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// setProject sets the profile project of agent, as an update of the profile does before the
+// project room follows it.
+func (e env) setProject(t *testing.T, agent, project string) {
+	t.Helper()
+	if _, err := e.db.ExecContext(ctx, `UPDATE agents SET project = ? WHERE name = ?`, project, agent); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// followProject sets the project, then follows its room.
+func (e env) followProject(t *testing.T, agent, project string) rooms.ProjectFollow {
+	t.Helper()
+	e.setProject(t, agent, project)
+	got, err := e.r.FollowProject(ctx, agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestChangingTheProjectMovesTheProjectRoom(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "owner")
+	for _, room := range []string{"alpha", "beta"} {
+		if err := e.r.Create(ctx, room, "work", "owner"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := e.followProject(t, "builder", "alpha")
+	if got != (rooms.ProjectFollow{Room: "alpha", State: rooms.ProjectFollowing}) {
+		t.Fatalf("first project: %+v", got)
+	}
+	got = e.followProject(t, "builder", "alpha")
+	if got != (rooms.ProjectFollow{Room: "alpha", State: rooms.ProjectFollowing}) || !slices.Equal(e.follows(t, "builder"), []string{"alpha"}) {
+		t.Fatalf("the same project: %+v %v", got, e.follows(t, "builder"))
+	}
+	got = e.followProject(t, "builder", "Beta")
+	if got != (rooms.ProjectFollow{Room: "beta", State: rooms.ProjectFollowing, Unfollowed: "alpha"}) {
+		t.Fatalf("another project: %+v", got)
+	}
+	if f := e.follows(t, "builder"); !slices.Equal(f, []string{"beta"}) {
+		t.Fatalf("follows %v", f)
+	}
+	// a project without a room gives up the old one and says there is none
+	got = e.followProject(t, "builder", "gamma")
+	if got != (rooms.ProjectFollow{Room: "gamma", State: rooms.ProjectNoRoom, Unfollowed: "beta"}) || len(e.follows(t, "builder")) != 0 {
+		t.Fatalf("project without a room: %+v %v", got, e.follows(t, "builder"))
+	}
+	// a project with no room name only gives up the old one
+	e.followProject(t, "builder", "alpha")
+	got = e.followProject(t, "builder", "my/app")
+	if got != (rooms.ProjectFollow{Unfollowed: "alpha"}) || len(e.follows(t, "builder")) != 0 {
+		t.Fatalf("project without a room name: %+v %v", got, e.follows(t, "builder"))
+	}
+}
+
+func TestTheAgentsOwnSubscriptionsAreNotMovedWithTheProject(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "owner")
+	for _, room := range []string{"alpha", "beta"} {
+		if err := e.r.Create(ctx, room, "work", "owner"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, touch := range map[string]func(){
+		"followed before": func() {},
+		"mode changed": func() {
+			if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha"}, true, rooms.ModeWake); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"followed again by hand": func() {
+			if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha"}, true, ""); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"unfollowed and followed by hand": func() {
+			for _, follow := range []bool{false, true} {
+				if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha"}, follow, ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+	} {
+		if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha", "beta"}, false, ""); err != nil {
+			t.Fatal(err)
+		}
+		if name == "followed before" {
+			if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha"}, true, ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+		e.followProject(t, "builder", "alpha")
+		touch()
+		got := e.followProject(t, "builder", "beta")
+		if got.Unfollowed != "" {
+			t.Fatalf("%s: %+v", name, got)
+		}
+		if f := e.follows(t, "builder"); !slices.Contains(f, "beta") || !slices.ContainsFunc(f, func(s string) bool { return strings.HasPrefix(s, "alpha") }) {
+			t.Fatalf("%s: follows %v", name, f)
+		}
+	}
+}
+
+func TestAnArchivedProjectRoomIsNotFollowed(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder")
+	if err := e.r.Create(ctx, "alpha", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "alpha", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha"}, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	got := e.followProject(t, "builder", "alpha")
+	if got.State != rooms.ProjectFailed || got.Detail == "" || len(e.follows(t, "builder")) != 0 {
+		t.Fatalf("%+v %v", got, e.follows(t, "builder"))
+	}
+}
+
+func TestAnArchivedProjectRoomAlreadyFollowedIsNotReportedAsFollowed(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder")
+	if err := e.r.Create(ctx, "alpha", "work", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"alpha"}, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.Archive(ctx, "builder", "alpha", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.followProject(t, "builder", "alpha"); got.State != rooms.ProjectFailed || got.Detail == "" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+// Two updates of the profile can reach the rooms in the other order than they were stored; the
+// follow converges on the project the profile has now.
+func TestTheProjectRoomFollowsTheCurrentProjectWhateverTheOrderOfCalls(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "owner")
+	for _, room := range []string{"alpha", "beta", "gamma"} {
+		if err := e.r.Create(ctx, room, "work", "owner"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.followProject(t, "builder", "alpha")
+	e.setProject(t, "builder", "beta") // the update to beta is stored, its follow has not run
+	e.followProject(t, "builder", "gamma")
+	if _, err := e.r.FollowProject(ctx, "builder"); err != nil { // the late follow of the update to beta
+		t.Fatal(err)
+	}
+	if f := e.follows(t, "builder"); !slices.Equal(f, []string{"gamma"}) {
+		t.Fatalf("follows %v, want only gamma", f)
+	}
+}
