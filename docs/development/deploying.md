@@ -17,24 +17,25 @@
    - It copies the database with `VACUUM INTO` to `<database>.bak-<time>`, readable by its owner only, so a migration can be undone. The copy is consistent while the hub writes.
    - It says so when there is no database at `DB`.
 6. **Install.** It renames the new binary over the old one within one directory, so the binary is always either the old one or the new one.
-7. **Restart.** It runs `systemctl --user restart <service>`, waits up to 10 seconds for the unit to be active, and checks that the running process is the new binary.
+7. **Restart.** With `RESTART` set it runs that command with `bash -c`, with `BIN` and `DB` in its environment, and stops when it fails. Else it runs `systemctl --user restart <service>`. With a service it then waits up to 10 seconds for the unit to be active, and checks that the running process is the new binary.
 8. **Verify.**
    - It checks that the installed binary's `agora version` is the build's.
-   - It checks that `agora status` reaches the hub. Like every `agora` command, it finds the socket through `AGORA_SOCKET` or `XDG_RUNTIME_DIR`, so they must match what the service uses.
+   - When the hub was restarted (`SERVICE` or `RESTART`), it checks that `agora status` reaches the hub. Like every `agora` command, it finds the socket through `AGORA_SOCKET` or `XDG_RUNTIME_DIR`, so they must match what the service or the command uses.
    - It checks that the version `agora status` shows for the running hub (its `HUB` line, which the hub reports itself) is the build's, so a hub still running an older build fails the deploy even when the process looks right.
    - When `WEB_URL` is given, it checks that the web app answers 200; a binary without the web app answers 503 there.
    - It reinstalls the agent skill into `SKILL_DIRS`.
 
 When anything fails after the install, the script prints the commands that go back to what ran before, from the backups it took:
-1. stop the service;
+1. stop the service, or the hub the way you do when `RESTART` is set;
 2. restore the database and remove its `-wal` and `-shm` files, since an older binary refuses a database migrated by a newer one;
 3. restore the binary, or remove it when there was none before;
-4. start the service.
+4. start the service, or run `RESTART` again, printed with the `BIN` and `DB` it needs.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BIN` | the path in the service's `ExecStart`, else `agora` on `PATH` | The binary to replace |
-| `SERVICE` | `agora-hub` | The systemd user unit of the hub (see [Setup](../architecture/setup.md)); empty when the hub does not run as one: then it is neither restarted nor checked |
+| `SERVICE` | `agora-hub` | The systemd user unit of the hub (see [Setup](../architecture/setup.md)); empty when the hub does not run as one: then no unit is restarted or checked |
+| `RESTART` | empty | A shell command that restarts the hub, in place of `systemctl`; for a hub that runs under launchd, or is started by hand. Set `SERVICE=` with it when there is no systemd unit |
 | `DB` | `$AGORA_DB`, else `$XDG_STATE_HOME/agora/agora.db`, else `~/.local/state/agora/agora.db` | The hub's database, backed up when it exists; set it to the service's `--db` when the service has one |
 | `WEB_URL` | empty | The web app's address, checked for 200; empty: not checked |
 | `CHECK` | `check` | The make target run before building; empty: none |
@@ -42,6 +43,12 @@ When anything fails after the install, the script prints the commands that go ba
 | `PULL` | `1` | `0`: deploy the checkout as it is, without pulling |
 | `BACKUP` | `1` | `0`: no backups, and nothing to go back to |
 | `SKILL_DIRS` | empty | Directories, separated by spaces, to reinstall the agent skill into |
+
+For a hub under launchd on macOS, which the script does not drive itself:
+
+```sh
+make deploy SERVICE= RESTART='launchctl kickstart -k "gui/$(id -u)/<label>"'
+```
 
 For example:
 
@@ -53,5 +60,5 @@ Backups are kept; remove old ones by hand. `make test-deploy`, part of `make tes
 - the installed version;
 - the backups, with a quote and a space in the database's path;
 - the way back after a failed check;
-- a restart that starts the new build and one that leaves the old hub running, through a stub `systemctl`;
+- a restart that starts the new build and one that leaves the old hub running, through a stub `systemctl` and through a `RESTART` command, and the way back after a command that fails;
 - the refusal of a tree with an untracked file, of a symbolic link and of a missing service.

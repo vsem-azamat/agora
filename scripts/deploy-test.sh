@@ -22,7 +22,8 @@ git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commi
 head=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
 state="$tmp/it's state" # a quote and a space in the database's path
 # WEB=0: the clone has no web dependencies installed; building the app is make build-web's own job
-export BIN="$tmp/bin/agora" DB="$state/agora.db" SERVICE= CHECK= WEB=0 PULL=0 WEB_URL= SKILL_DIRS= BACKUP=1
+export BIN="$tmp/bin/agora" DB="$state/agora.db" SERVICE= CHECK= WEB=0 PULL=0 WEB_URL= SKILL_DIRS= BACKUP=1 RESTART=
+unset AGORA_SOCKET AGORA_DB # the environment of a make deploy must not reach the hub the test starts
 run() { "$tmp/repo/scripts/deploy.sh" >"$tmp/out" 2>&1; }
 
 run || { cat "$tmp/out"; fail "the first deploy failed"; }
@@ -78,6 +79,7 @@ case "$1" in
       MainPID) echo 0 ;;
     esac ;;
   restart)
+    echo "systemctl restart" >>"$SYSTEMCTL_LOG"
     [ "$FAKE_RESTART" = 1 ] || exit 0
     if [ -f "$FAKE_PID" ]; then
       kill "$(cat "$FAKE_PID")" 2>/dev/null || true
@@ -90,7 +92,7 @@ case "$1" in
 esac
 STUB
 chmod +x "$tmp/fake/systemctl"
-export HUB_LOG="$tmp/hub.log" AGORA_SOCKET="$tmp/hub.sock" FAKE_PID="$tmp/hub.pid"
+export SYSTEMCTL_LOG="$tmp/systemctl.log" HUB_LOG="$tmp/hub.log" AGORA_SOCKET="$tmp/hub.sock" FAKE_PID="$tmp/hub.pid"
 svc() { PATH="$tmp/fake:$PATH" SERVICE=agora-fake BACKUP=0 FAKE_RESTART="$1" run; }
 
 svc 1 || { cat "$tmp/out"; fail "a deploy that restarts the hub failed"; }
@@ -108,4 +110,46 @@ svc 0 && fail "a deploy whose hub still runs the old build succeeded"
 grep -q "the hub that answers is 'agora .*($head)', not 'agora .*($new)'" "$tmp/out" || { cat "$tmp/out"; fail "the stale hub is not named"; }
 svc 1 || { cat "$tmp/out"; fail "the deploy that restarts the hub failed on the new commit"; }
 grep -q "the running hub is agora .*($new)" "$tmp/out" || { cat "$tmp/out"; fail "the new hub's version is not reported"; }
+# RESTART replaces systemctl: the command runs after the install and sees BIN and DB, the hub it
+# starts is the one checked, a command that leaves the old hub serving fails the deploy, and the
+# way back says to run it again. Without a service.
+mkdir -p "$tmp/hook" "$tmp/xdg/agora"
+cat >"$tmp/hook/restart.sh" <<'HOOK'
+#!/usr/bin/env bash
+echo "restarted with $BIN $DB" >>"$HOOK_LOG"
+[ "$FAKE_RESTART" = 1 ] || exit 0
+if [ -f "$FAKE_PID" ]; then
+  kill "$(cat "$FAKE_PID")" 2>/dev/null || true
+  while kill -0 "$(cat "$FAKE_PID")" 2>/dev/null; do sleep 0.1; done
+fi
+rm -f "$AGORA_SOCKET"
+env -u AGORA_WEB -u AGORA_WEB_AS -u AGORA_JOIN -u AGORA_WAKE_COMMAND -u AGORA_WAKE_TEXT -u AGORA_TERMINAL \
+  -u AGORA_BRIDGE_POLICY -u AGORA_BRIDGE_DELAY -u AGORA_DB "$BIN" hub --db "$DB" --watch-prs=false >>"$HUB_LOG" 2>&1 &
+echo $! >"$FAKE_PID"
+HOOK
+chmod +x "$tmp/hook/restart.sh"
+export HOOK_LOG="$tmp/hook.log"
+# BIN and DB are not given: the script finds them, as it does for a user, and passes them on
+hook() ( unset BIN DB; export PATH="$tmp/bin:$PATH" XDG_STATE_HOME="$tmp/xdg"; RESTART="$tmp/hook/restart.sh" BACKUP=0 FAKE_RESTART="$1" run )
+# the hub that serves before the command runs is another build, so only the command can change it
+git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null \
+  commit -q --allow-empty -m later --no-verify
+later=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
+hook 1 || { cat "$tmp/out"; fail "a deploy with a restart command failed"; }
+grep -q "restarted with $BIN $tmp/xdg/agora/agora.db" "$HOOK_LOG" || fail "the restart command did not run with BIN and DB"
+grep -q "the running hub is agora .*($later)" "$tmp/out" || { cat "$tmp/out"; fail "the hub started by the command was not checked"; }
+git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null \
+  commit -q --allow-empty -m last --no-verify
+last=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
+hook 0 && fail "a restart command that leaves the old hub serving succeeded"
+grep -q "the hub that answers is 'agora .*($later)', not 'agora .*($last)'" "$tmp/out" || { cat "$tmp/out"; fail "the old hub is not named"; }
+# with a service as well, the command restarts the hub, not systemctl
+: >"$SYSTEMCTL_LOG"
+runs=$(wc -l <"$HOOK_LOG")
+PATH="$tmp/fake:$PATH" SERVICE=agora-fake RESTART="$tmp/hook/restart.sh" BACKUP=0 FAKE_RESTART=1 run || { cat "$tmp/out"; fail "a deploy with a service and a restart command failed"; }
+[ ! -s "$SYSTEMCTL_LOG" ] || fail "systemctl restarted the service although RESTART is set"
+[ "$(wc -l <"$HOOK_LOG")" -eq $((runs + 1)) ] || fail "the restart command did not run next to a service"
+sleep 1 # a new backup name
+RESTART=false BACKUP=1 run && fail "a deploy whose restart command fails succeeded"
+grep -q "the restart command failed" "$tmp/out" && grep -q "^  BIN=.* DB=.* bash -c false\$" "$tmp/out" || { cat "$tmp/out"; fail "a failed restart command does not say how to go back"; }
 echo "deploy-test: ok"
