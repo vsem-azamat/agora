@@ -208,6 +208,8 @@ func TestSVGRefusals(t *testing.T) {
 		{"comment marks in attribute strings", `<text style='font-family: "/*"; text-shadow: 0 0 50px red; font-family: "*/"'/>`, "uses the property text-shadow"},
 		{"comment marks in a url", `<style>text { fill: url(#a/*); text-shadow: 0 0 50px red; fill: url(#b*/) }</style>`, "uses the property text-shadow"},
 		{"quote in a url", `<style>text { fill: url(#a"); text-shadow: 0 0 50px red; fill: "x" }</style>`, "uses the property text-shadow"},
+		{"carriage return ends a string", `<style>text { font-family: "a&#13;; text-shadow: 0 0 50px red; font-family: " }</style>`, "uses the property text-shadow"},
+		{"carriage return ends an attribute string", `<text style='font-family: "a&#13;; text-shadow: 0 0 50px red; font-family: "'/>`, "uses the property text-shadow"},
 		{"non-ASCII custom property", `<style>rect { --é: 1px }</style>`, "uses the property --é"},
 		{"element in a style", `<style>text { fill: red }<g/></style>`, "the style element holds an element"},
 		{"nested", `<style>g { fill: red; &amp; text { text-shadow: 0 0 9px red } }</style>`, "uses the property text-shadow"},

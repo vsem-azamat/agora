@@ -66,7 +66,7 @@ var cssFunction = regexp.MustCompile(`(?i)([a-z-]*)\s*\(\s*['"]?\s*(.?)`)
 // them: a comment is read as nothing, so it cannot hide a property, and a url or a string as an
 // empty one, so comment marks or quotes in it hide nothing. An unquoted url runs to its `)`, a
 // comment left open to the end, a string to the end of its line; escapes are refused.
-var cssSkipped = regexp.MustCompile(`(?is)url\(\s*[^\s"')][^)]*\)?|"[^"\n]*"?|'[^'\n]*'?|/\*.*?(\*/|$)`)
+var cssSkipped = regexp.MustCompile(`(?is)url\(\s*[^\s"')][^)]*\)?|"[^"\r\n\f]*"?|'[^'\r\n\f]*'?|/\*.*?(\*/|$)`)
 
 func skipped(m string) string {
 	switch {
