@@ -99,6 +99,7 @@ export function tape(
       prev !== undefined &&
       authorKey(prev) === authorKey(m) &&
       prev.note === m.note &&
+      prev.incoming === m.incoming &&
       m.replyTo === 0n &&
       mto.length === 0 &&
       deliveryOf(m) === undefined &&

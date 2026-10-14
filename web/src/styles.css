@@ -1719,7 +1719,8 @@ button.pgname:hover {
 .outsider .card .xid {
   color: var(--mute);
 }
-.dl {
+.dl,
+.wi {
   color: var(--mute);
   font-size: 0.8em;
 }
