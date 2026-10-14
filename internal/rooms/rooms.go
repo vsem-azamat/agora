@@ -1277,13 +1277,18 @@ func unread(ctx context.Context, tx *sql.Tx, agent, room string, filter Filter, 
 		return nil, 0, err
 	}
 	args := unreadArgs(agent, room, filter)
-	sqlLimit := -1 // no limit
-	if limit > 0 {
-		sqlLimit = limit
+	if limit <= 0 {
+		rows, err := tx.QueryContext(ctx, `SELECT * FROM (`+unreadQuery+`) WHERE `+unreadFilter+` ORDER BY 1`, args...)
+		if err != nil {
+			return nil, 0, err
+		}
+		out, err := scanMessages(rows)
+		return out, len(out), err
 	}
-	// the window counts the rows that pass the filter before the limit cuts them
-	rows, err := tx.QueryContext(ctx, `SELECT *, COUNT(*) OVER () FROM (`+unreadQuery+`) WHERE `+unreadFilter+` ORDER BY 1 LIMIT :limit`,
-		append(args, sql.Named("limit", sqlLimit))...)
+	// The limit is written into the statement, as a bound one makes SQLite prepare it again on
+	// every call, which costs more than the query when the board is quiet. The window counts the
+	// rows that pass the filter before the limit cuts them.
+	rows, err := tx.QueryContext(ctx, `SELECT *, COUNT(*) OVER () FROM (`+unreadQuery+`) WHERE `+unreadFilter+` ORDER BY 1 LIMIT `+strconv.Itoa(limit), args...) //nolint:gosec // the limit is a Go int, not input text
 	if err != nil {
 		return nil, 0, err
 	}
