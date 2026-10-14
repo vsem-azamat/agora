@@ -107,6 +107,9 @@ message ListSessionsResponse {
 
 message WaitWakeRequest {
   string session_id = 1;
+  // The wait begins at a session start, whose report may reach the hub after the wait: the hub
+  // waits a short while for the session to be bound to an agent before it gives up.
+  bool start = 2;
 }
 
 message WaitWakeResponse {

@@ -73,11 +73,13 @@ func claudeCodeHooks(bin, terminalEnv string) []eventGroup {
 		Type: "command", Command: shellQuote(bin) + " hook claude-code-wait",
 		Async: true, AsyncRewake: true, Timeout: WaitTimeout,
 	}}}
+	// A start runs no turn: the wait wakes the agent for messages that were unread at the start.
 	// A turn that fails runs no Stop hook; StopFailure tells the hub that the session waits at
 	// its prompt, and waits for it, after errors the session can work again from.
 	failed := func(g hookGroup) hookGroup { g.Matcher = claudecode.TransientFailures; return g }
 	return []eventGroup{
 		{"SessionStart", plain},
+		{"SessionStart", wait},
 		{"UserPromptSubmit", plain},
 		{"PostToolUse", hookGroup{Matcher: "*", Hooks: plain.Hooks}},
 		{"Stop", plain},

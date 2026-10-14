@@ -51,16 +51,38 @@ func (h *Hub) currentWait(sessionID string) (gen, active int) {
 	return 0, 0
 }
 
+// startGrace is how long a wait that begins at a session start waits for the start's report to
+// bind the session to an agent: Claude Code runs the start's hooks at the same time. A report
+// up to startGrace before the wait counts as the start's, so an older one (a session resumed
+// that the hub still lists) is not taken for it.
+const startGrace = 10 * time.Second
+
 func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agorav1.WaitWakeRequest], stream *connect.ServerStream[agorav1.WaitWakeResponse]) error {
 	id := req.Msg.GetSessionId()
-	turn, err := s.h.sessions.Turn(ctx, id)
-	if err != nil {
-		return toConnect(err)
+	start := req.Msg.GetStart()
+	var turn int64
+	if !start {
+		var err error
+		if turn, err = s.h.sessions.Turn(ctx, id); err != nil {
+			return toConnect(err)
+		}
 	}
 	gen, done := s.h.startWait(id)
 	defer done()
 	if err := stream.Send(&agorav1.WaitWakeResponse{Armed: true}); err != nil {
 		return err
+	}
+	if start {
+		bound, err := s.awaitBound(ctx, id)
+		if err != nil {
+			return toConnect(err)
+		}
+		if !bound {
+			return nil // the session got no agent: the wait ends quietly
+		}
+		if turn, err = s.h.sessions.Turn(ctx, id); err != nil {
+			return toConnect(err)
+		}
 	}
 	for {
 		changed := s.h.changes.wait()
@@ -88,6 +110,29 @@ func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agor
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-changed:
+		case <-time.After(sweepEvery):
+		}
+	}
+}
+
+// awaitBound waits up to startGrace for the start's report: the session live, bound to an agent
+// and reported since startGrace before the wait began.
+func (s *sessionService) awaitBound(ctx context.Context, id string) (bool, error) {
+	began := s.h.sessions.Now()
+	deadline := began.Add(startGrace)
+	for {
+		changed := s.h.changes.wait()
+		bound, err := s.h.sessions.Reported(ctx, id, began.Add(-startGrace))
+		if err != nil || bound {
+			return bound, err
+		}
+		if !s.h.sessions.Now().Before(deadline) {
+			return false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
 		case <-changed:
 		case <-time.After(sweepEvery):
 		}

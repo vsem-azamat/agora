@@ -10,29 +10,25 @@ import (
 	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
-// deliver returns the agent's oldest unread messages as context text and marks the ones shown
-// as read; it also returns how many of them address the agent.
-func (s *Sessions) deliver(ctx context.Context, agent string) (string, int, error) {
+// deliver returns the agent's oldest unread messages that pass filter as context text and
+// marks the ones shown as read.
+func (s *Sessions) deliver(ctx context.Context, agent string, filter rooms.Filter) (string, error) {
 	if s.rooms == nil {
-		return "", 0, nil
+		return "", nil
 	}
-	msgs, total, err := s.rooms.Take(ctx, agent, rooms.Everything, DeliverAtOnce)
+	msgs, total, err := s.rooms.Take(ctx, agent, filter, DeliverAtOnce)
 	if err != nil || len(msgs) == 0 {
-		return "", 0, err
+		return "", err
 	}
 	lines := []string{fmt.Sprintf("Agora: new board messages for you (%s). Act on what is addressed to you "+
 		"(reply: agora post <room> '...' --reply <id>); otherwise note them and carry on.", agent)}
-	addressed := 0
 	for _, m := range msgs {
 		lines = append(lines, rooms.Format(m, DeliverChars))
-		if m.Addressed {
-			addressed++
-		}
 	}
 	if more := total - len(msgs); more > 0 {
 		lines = append(lines, fmt.Sprintf("... %d more: run `agora unread`.", more))
 	}
-	return strings.Join(lines, "\n"), addressed, nil
+	return strings.Join(lines, "\n"), nil
 }
 
 // waiting returns the text for what needs the agent now (unread messages that wake it, which

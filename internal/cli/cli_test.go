@@ -667,6 +667,44 @@ func TestWaitHookWakesWithExitCodeTwo(t *testing.T) {
 	}
 }
 
+func TestStartWaitHookWakesForAMentionUnreadAtTheStart(t *testing.T) {
+	socket := startHub(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("AGORA_SESSION", "")
+	agora(ctx, socket, "builder", "join", "builder")
+	agora(ctx, socket, "reviewer", "join", "reviewer")
+	agora(ctx, socket, "reviewer", "post", "general", "@builder", "please", "review")
+	type result struct {
+		code   int
+		stderr string
+	}
+	done := make(chan result, 1)
+	go func() { // Claude Code runs the start's hooks at the same time: the wait may come first
+		var out, errOut bytes.Buffer
+		code := cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code-wait"},
+			strings.NewReader(`{"session_id":"session-start","hook_event_name":"SessionStart","source":"resume"}`), &out, &errOut)
+		done <- result{code, errOut.String()}
+	}()
+	time.Sleep(300 * time.Millisecond)
+	var out, errOut bytes.Buffer
+	if code := cli.RunWithInput(ctx, []string{"--socket", socket, "hook", "claude-code"},
+		strings.NewReader(`{"session_id":"session-start","hook_event_name":"SessionStart","source":"resume"}`), &out, &errOut); code != 0 {
+		t.Fatalf("start hook: %d %s", code, errOut.String())
+	}
+	t.Setenv("AGORA_SESSION", "session-start")
+	agora(ctx, socket, "", "join", "builder")
+	select {
+	case r := <-done:
+		if r.code != 2 || !strings.Contains(r.stderr, "please review") {
+			t.Fatalf("%+v", r)
+		}
+	case <-ctx.Done():
+		t.Fatal("hook did not wake")
+	}
+}
+
 func TestWaitHookIsQuietWithoutAHub(t *testing.T) {
 	var out, errOut bytes.Buffer
 	t.Setenv("AGORA_DEBUG", "")

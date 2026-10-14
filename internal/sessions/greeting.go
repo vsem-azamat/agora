@@ -74,8 +74,8 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 
 // reminder is the context for a starting session bound to agent: who it is on the board, what
 // it published, where it listens, what waits for it and its places in queues. addressed is how
-// many unread messages address the agent, shown how many of them are delivered below it.
-func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.Entry, lost []string, addressed, shown int) (string, error) {
+// many unread messages address the agent; a start leaves them unread.
+func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.Entry, lost []string, addressed int) (string, error) {
 	var task, status string
 	if err := s.db.QueryRowContext(ctx, `SELECT task, status FROM agents WHERE name = ?`, agent).Scan(&task, &status); err != nil {
 		return "", err
@@ -103,18 +103,9 @@ func (s *Sessions) reminder(ctx context.Context, agent string, entries []queue.E
 	case 0:
 		waiting = "No unread message addresses you."
 	case 1:
-		waiting = "1 unread message addresses you"
+		waiting = "1 unread message addresses you (delivered next)."
 	default:
-		waiting = fmt.Sprintf("%d unread messages address you", addressed)
-	}
-	switch {
-	case addressed == 0:
-	case shown >= addressed:
-		waiting += " (below)."
-	case shown > 0:
-		waiting += fmt.Sprintf(" (%d below).", shown)
-	default:
-		waiting += "."
+		waiting = fmt.Sprintf("%d unread messages address you (delivered next).", addressed)
 	}
 	lines := []string{
 		fmt.Sprintf("Agora: you are %s on the Agora board.", agent),

@@ -604,6 +604,12 @@ func TestWakeModeMessagesWake(t *testing.T) {
 	if n, _ := e.r.UnreadCount(ctx, "builder", rooms.Addressed); n != 1 {
 		t.Fatalf("addressed count %d", n)
 	}
+	if got, total, _ := e.r.Unread(ctx, "builder", rooms.Quiet, 0); total != 1 || got[0].Body != "chatter in general" {
+		t.Fatalf("quiet %+v total %d", got, total)
+	}
+	if n, _ := e.r.UnreadCount(ctx, "builder", rooms.Quiet); n != 1 {
+		t.Fatalf("quiet count %d", n)
+	}
 	if got, _, _ := e.r.Take(ctx, "builder", rooms.Waking, 0); len(got) != 2 {
 		t.Fatalf("take %+v", got)
 	}

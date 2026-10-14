@@ -317,6 +317,127 @@ func TestMentionWakesAWaitingSession(t *testing.T) {
 	}
 }
 
+// startWake starts the WaitWake stream of a hook that runs at a session start and returns a
+// channel with its wake text ("" for a quiet end).
+func (r *running) startWake(t *testing.T, session string) <-chan string {
+	t.Helper()
+	out := make(chan string, 1)
+	stream, err := r.sessions.WaitWake(context.Background(), connect.NewRequest(&agorav1.WaitWakeRequest{SessionId: session, Start: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		defer stream.Close()
+		text := ""
+		for stream.Receive() {
+			if !stream.Msg().GetArmed() {
+				text = stream.Msg().GetText()
+				break
+			}
+		}
+		out <- text
+	}()
+	return out
+}
+
+func TestStartWakesForAMentionUnreadAtTheStart(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	r.post(t, "reviewer", "@builder can you take #57?")
+	if _, err := r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{
+		SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_START, Reason: "resume",
+	})); err != nil {
+		t.Fatal(err)
+	}
+	r.clock.add(5 * time.Second) // the start's report reached the hub before its wait
+	text, ended := within(t, r.startWake(t, "session-1"), 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func TestStartWaitOpenedBeforeTheStartIsReported(t *testing.T) {
+	r := start(t)
+	woke := r.startWake(t, "session-2") // the hub has not heard of the session yet
+	if _, ended := within(t, woke, 300*time.Millisecond); ended {
+		t.Fatal("wait ended before the session was reported")
+	}
+	r.idleAgent(t, "builder", "session-2", "")
+	r.post(t, "reviewer", "@builder can you take #57?")
+	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func TestStartWaitWaitsForTheResumeOfAStaleSession(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	r.clock.add(11 * time.Second) // the process went away without an end; the hub still lists it
+	r.post(t, "reviewer", "@builder can you take #57?")
+	woke := r.startWake(t, "session-1")
+	if _, ended := within(t, woke, 300*time.Millisecond); ended {
+		t.Fatal("woke before the resume was reported")
+	}
+	r.resume(t, "session-1")
+	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+	deadline := time.Now().Add(2 * time.Second) // the wake is confirmed right after it is sent
+	for r.state(t, "session-1") != agorav1.SessionState_SESSION_STATE_BUSY {
+		if time.Now().After(deadline) {
+			t.Fatalf("woken session is %v", r.state(t, "session-1"))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestStartWaitWaitsForTheResumeOfAnEndedSession(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	if _, err := r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{
+		SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_END,
+	})); err != nil {
+		t.Fatal(err)
+	}
+	r.post(t, "reviewer", "@builder can you take #57?")
+	woke := r.startWake(t, "session-1")
+	if _, ended := within(t, woke, 300*time.Millisecond); ended {
+		t.Fatal("wait ended before the resume was reported")
+	}
+	r.resume(t, "session-1")
+	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func (r *running) resume(t *testing.T, session string) {
+	t.Helper()
+	if _, err := r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{
+		SessionId: session, Event: agorav1.SessionEvent_SESSION_EVENT_START, Reason: "resume",
+	})); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStartWaitGivesUpOnASessionWithoutAgent(t *testing.T) {
+	r := start(t)
+	woke := r.startWake(t, "session-3")
+	if _, ended := within(t, woke, 300*time.Millisecond); ended {
+		t.Fatal("wait ended at once")
+	}
+	r.clock.add(9 * time.Second)
+	if _, ended := within(t, woke, 1500*time.Millisecond); ended {
+		t.Fatal("wait ended within 10 seconds")
+	}
+	r.clock.add(2 * time.Second)
+	if text, ended := within(t, woke, 3*time.Second); !ended || text != "" {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
 func TestNewPromptEndsTheWaitQuietly(t *testing.T) {
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
@@ -863,4 +984,19 @@ func TestArchivingARoomOverTheAPI(t *testing.T) {
 	if err := archive("example-chat", true); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("archiving with a message waiting: %v", err)
 	}
+}
+
+func (r *running) state(t *testing.T, session string) agorav1.SessionState {
+	t.Helper()
+	list, err := r.sessions.ListSessions(context.Background(), connect.NewRequest(&agorav1.ListSessionsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range list.Msg.GetSessions() {
+		if s.GetId() == session {
+			return s.GetState()
+		}
+	}
+	t.Fatalf("no session %s", session)
+	return 0
 }
