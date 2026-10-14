@@ -1191,6 +1191,28 @@ func TestAThreadStartedInAgoraGoesOutAsReplies(t *testing.T) {
 	}
 }
 
+func TestAReplyInAThreadWaitsForItsRootToBeSent(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	f.set("mode", "silent") // the bridge answers nothing by itself
+	b.add(t, f)
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_OPEN)
+	root := b.post(t, "secretary", "release today")
+	if _, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "builder", Room: "example-chat", Body: "at five", Thread: root})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the root", func() bool { return len(f.outs()) == 1 })
+	time.Sleep(500 * time.Millisecond) // more than a sweep
+	if outs := f.outs(); len(outs) != 1 || outs[0] != root {
+		t.Fatalf("the reply went out before its root was answered: %v", outs)
+	}
+	f.send(fmt.Sprintf(`{"type":"sent","id":%d,"ext_id":"900"}`, root))
+	eventually(t, "the reply", func() bool { return f.lastOut() != nil && len(f.outs()) == 2 })
+	if out := f.lastOut(); out["reply_to"] != "900" {
+		t.Fatalf("out line: %v", out)
+	}
+}
+
 func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)

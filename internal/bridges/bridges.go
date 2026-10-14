@@ -562,7 +562,10 @@ func (b *Bridges) Unanswered(ctx context.Context, name string) ([]int64, error) 
 }
 
 // Outgoing returns the messages ids of the bridge's room that the bridge has to send, in
-// posting order; ids no longer to send are left out.
+// posting order; ids no longer to send are left out. A message waits, and is left out too, while
+// the message it replies to, or for a reply that falls back on it the root of its thread, is
+// still going out without an identifier outside: it goes once that message was answered, so it
+// can name it.
 func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -578,7 +581,10 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 		LEFT JOIN messages AS r ON r.id = m.reply_to AND r.room = m.room
 		LEFT JOIN messages AS t ON t.id = m.thread
 		LEFT JOIN thread_keys AS k ON k.room = m.room AND k.root = m.thread
-		WHERE m.id IN (SELECT value FROM json_each(?)) AND m.room = ? AND m.delivery = 'sending' ORDER BY m.id`, string(list), name)
+		WHERE m.id IN (SELECT value FROM json_each(?)) AND m.room = ? AND m.delivery = 'sending'
+			AND NOT (COALESCE(r.delivery, '') = 'sending' AND r.ext_id IS NULL
+				OR r.ext_id IS NULL AND COALESCE(t.delivery, '') = 'sending' AND t.ext_id IS NULL)
+		ORDER BY m.id`, string(list), name)
 	if err != nil {
 		return nil, err
 	}
