@@ -230,6 +230,21 @@ func TestResumedSessionStartsIdle(t *testing.T) {
 	}
 }
 
+func TestCompactionOfASessionNotLiveStartsIdle(t *testing.T) {
+	e := newEnv(t)
+	e.compact(t, "session-1") // the first event the hub hears of the session
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after a first compaction: %s", st)
+	}
+	e.report(t, "session-2", sessions.Start)
+	e.report(t, "session-2", sessions.Prompt)
+	e.report(t, "session-2", sessions.End) // ended by the hub or its connector while busy
+	e.compact(t, "session-2")              // /compact at the prompt revives it
+	if st := e.state(t, "session-2"); st != sessions.Idle {
+		t.Fatalf("after compacting an ended session: %s", st)
+	}
+}
+
 func TestCompactionDuringATurnKeepsItBusy(t *testing.T) {
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
