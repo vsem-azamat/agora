@@ -227,6 +227,12 @@ func TestActingUnderAFormerNameNamesTheNewOne(t *testing.T) {
 	refused("releasing", err)
 	_, err = e.q.Release(ctx, "example-app/db", "builder", "fixer", true)
 	refused("force-releasing", err)
+	// another agent releasing the former holder's place by the old name is told the new one, as
+	// the name is not its own to act under
+	_, err = e.q.Release(ctx, "example-app/merge", "fixer", "builder", true)
+	if want := `"fixer" is now called "docs-writer"; use docs-writer`; err == nil || err.Error() != want {
+		t.Errorf("force-releasing the holder by its old name: %v, want %q", err, want)
+	}
 	if p := e.places(t, "docs-writer"); len(p) != 1 || p[0].State != queue.Held {
 		t.Errorf("places after the refusals: %+v", p)
 	}

@@ -269,10 +269,13 @@ func (q *Queue) Release(ctx context.Context, key, agent, actor string, force boo
 	}
 	released := false
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {
-		for _, name := range []string{agent, actor} {
-			if err := agents.NotFormerTx(ctx, tx, name); err != nil {
+		if agent != actor { // the holder's name is given for someone else
+			if err := agents.NotFormerNamedTx(ctx, tx, agent); err != nil {
 				return err
 			}
+		}
+		if err := agents.NotFormerTx(ctx, tx, actor); err != nil {
+			return err
 		}
 		if err := settle(ctx, tx, key, now); err != nil {
 			return err

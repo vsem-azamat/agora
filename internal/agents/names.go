@@ -126,6 +126,17 @@ func NotFormerTx(ctx context.Context, tx *sql.Tx, name string) error {
 	return nowCalled(ErrTaken, name, owner)
 }
 
+// NotFormerNamedTx is NotFormerTx for a name given for someone else, such as the holder of a place
+// in a queue named by the agent releasing it: the message says what the agent is called now, as the
+// name is not the caller's to act under.
+func NotFormerNamedTx(ctx context.Context, tx *sql.Tx, name string) error {
+	owner, err := formerOwner(ctx, tx, name)
+	if err != nil || owner == "" {
+		return err
+	}
+	return &FormerNameError{Name: name, Current: owner, sentinel: ErrTaken, named: true}
+}
+
 // formerOwner returns the agent that gave up name, or "".
 func formerOwner(ctx context.Context, tx *sql.Tx, name string) (string, error) {
 	var owner string
@@ -141,10 +152,11 @@ func formerOwner(ctx context.Context, tx *sql.Tx, name string) (string, error) {
 type FormerNameError struct {
 	Name, Current string
 	sentinel      error
+	named         bool // the name was given for someone else, not taken or acted under by the caller
 }
 
 func (e *FormerNameError) Error() string {
-	if errors.Is(e.sentinel, ErrTaken) { // a name to take, or to rename to: the request is refused
+	if errors.Is(e.sentinel, ErrTaken) && !e.named { // a name to take, or to rename to: the request is refused
 		return fmt.Sprintf("%q is the former name of %s; pick another name, or act as %s if that is you", e.Name, e.Current, e.Current)
 	}
 	return fmt.Sprintf("%q is now called %q; use %s", e.Name, e.Current, e.Current)
