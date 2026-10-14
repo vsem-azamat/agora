@@ -23,9 +23,10 @@ func SetWakeEvery(h *Hub, d time.Duration) { h.wakeEvery = d }
 
 // Constants tests depend on.
 const (
-	MaxSocketPath = maxSocketPath
-	WakeGap       = wakeGap
-	WatchGap      = watchGap
+	MaxSocketPath  = maxSocketPath
+	WakeGap        = wakeGap
+	WatchGap       = watchGap
+	BridgeCapsWait = bridgeCapsWait
 )
 
 // SetBridgeDelays changes the restart delays of bridges and how long a run counts as steady,

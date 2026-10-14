@@ -621,11 +621,13 @@ func rootTx(ctx context.Context, tx *sql.Tx, id int64) (int64, error) {
 }
 
 // participantsTx returns the participants of the thread of root other than except: the root's
-// author, the authors of its replies and the agents mentioned in any of them (replies address
-// participants through mentions too), without those that left it.
+// author, the authors of its replies, the agents mentioned in any of them (replies address
+// participants through mentions too) and, in a bridged room, the bridge's agents, without those
+// that left it.
 func participantsTx(ctx context.Context, tx *sql.Tx, root int64, except string) ([]string, error) {
 	return store.Strings(ctx, tx, `SELECT author FROM messages WHERE (id = :root OR thread = :root) AND author NOT IN ('', :board)
 		UNION SELECT mm.agent FROM mentions AS mm JOIN messages AS m ON m.id = mm.message_id WHERE m.id = :root OR m.thread = :root
+		UNION SELECT agent FROM bridge_agents WHERE bridge = (SELECT room FROM messages WHERE id = :root)
 		EXCEPT SELECT agent FROM thread_leaves WHERE root = :root
 		EXCEPT SELECT :except
 		ORDER BY 1`, sql.Named("root", root), sql.Named("board", Board), sql.Named("except", except))
@@ -716,6 +718,10 @@ type Incoming struct {
 	ReplyExtID string // the identifier outside of the message it replies to, if stored
 	At         time.Time
 	Addressees []string // agents the message addresses besides its mentions
+	// ThreadKey names the thread outside the message belongs to, such as a forum topic; the
+	// first message with a new key becomes the root of a thread titled ThreadTitle, later ones
+	// are replies in it. "" for a message of the room.
+	ThreadKey, ThreadTitle string
 }
 
 // PostIncomingTx stores in inside the caller's transaction and returns its identifier, or 0 when
@@ -745,7 +751,62 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 		}
 		m.ReplyTo = reply
 	}
-	return insert(ctx, tx, m, in.ExtID, in.Addressees)
+	if in.ThreadKey == "" {
+		return insert(ctx, tx, m, in.ExtID, in.Addressees)
+	}
+	var root int64
+	err := tx.QueryRowContext(ctx, `SELECT root FROM thread_keys WHERE room = ? AND key = ?`, in.Room, in.ThreadKey).Scan(&root)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// a new key: on a platform whose thread key names its root (the root's identifier
+		// outside), a message replying in that root's thread joins it, as the root came in before
+		// the key did; otherwise the message is the root of the thread outside
+		if m.ReplyTo != 0 {
+			var replied int64
+			var named bool
+			if err := tx.QueryRowContext(ctx, `SELECT r.id, r.ext_id = :key AND NOT EXISTS (SELECT 1 FROM thread_keys WHERE root = r.id)
+				FROM messages AS m JOIN messages AS r ON r.id = COALESCE(m.thread, m.id) WHERE m.id = :reply`,
+				sql.Named("key", in.ThreadKey), sql.Named("reply", m.ReplyTo)).Scan(&replied, &named); err != nil {
+				return 0, err
+			}
+			if named {
+				root = replied
+			}
+		}
+		id := root
+		if root == 0 {
+			if id, err = insert(ctx, tx, m, in.ExtID, in.Addressees); err != nil {
+				return 0, err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO thread_keys (room, key, root) VALUES (?, ?, ?)`, in.Room, in.ThreadKey, id); err != nil {
+			return 0, err
+		}
+		// the title the thread gets from outside is its first; later ones are ignored
+		if title := in.ThreadTitle; title != "" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO threads (root, title, titled_by, titled_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+				id, title, Board, r.now().UnixMilli()); err != nil {
+				return 0, err
+			}
+		}
+		if root == 0 {
+			return id, nil
+		}
+	case err != nil:
+		return 0, err
+	}
+	m.Thread = root
+	if in.Author != "" {
+		// the operator writing in the thread outside takes part in it again, as posting here does
+		if _, err := tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE root = ? AND agent = ?`, root, in.Author); err != nil {
+			return 0, err
+		}
+	}
+	participants, err := participantsTx(ctx, tx, root, in.Author)
+	if err != nil {
+		return 0, err
+	}
+	return insert(ctx, tx, m, in.ExtID, append(in.Addressees, participants...))
 }
 
 // SettleTx moves message id, in room (any room when ""), from the delivery state from to to,
@@ -803,6 +864,8 @@ func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, 
 			`UPDATE OR IGNORE threads SET root = :root WHERE root = :echo`,
 			`DELETE FROM threads WHERE root = :echo`,
 			`UPDATE OR IGNORE thread_leaves SET root = :root WHERE root = :echo`,
+			`UPDATE OR IGNORE thread_keys SET root = :root WHERE root = :echo`,
+			`DELETE FROM thread_keys WHERE root = :echo`,
 			`DELETE FROM thread_leaves WHERE root = :echo`,
 			`DELETE FROM thread_reads WHERE root = :echo`,
 			`DELETE FROM mentions WHERE message_id = :echo`,

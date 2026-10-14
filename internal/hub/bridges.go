@@ -179,6 +179,12 @@ func (h *Hub) bridgeCaps(name string) *agorav1.BridgeCaps {
 	return &agorav1.BridgeCaps{Personas: r.caps.Personas, Threads: r.caps.Threads}
 }
 
+// declaresThreads reports whether the bridge name said in its current run that it keeps threads.
+func (h *Hub) declaresThreads(name string) bool {
+	caps := h.bridgeCaps(name)
+	return caps != nil && caps.GetThreads() != ""
+}
+
 // setBridgeCaps keeps what the bridge name says its platform can do.
 func (h *Hub) setBridgeCaps(name string, caps bridges.Caps) {
 	br := &h.bridgeRuns
@@ -473,6 +479,7 @@ type outLine struct {
 	Author  outAuthor `json:"author"`
 	Text    string    `json:"text"`
 	ReplyTo string    `json:"reply_to,omitempty"`
+	Thread  string    `json:"thread,omitempty"` // the key outside of its thread, for a bridge that keeps threads
 }
 
 // outAuthor is who wrote a message going out.
@@ -499,6 +506,7 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 		return
 	}
 	handed := map[int64]bool{} // handed in this run and still unanswered
+	started := time.Now()
 	for {
 		changed := h.changes.wait()
 		if due, err := h.bridges.SendDue(ctx, b.Name); err != nil {
@@ -508,7 +516,10 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 		} else if due {
 			h.changes.fire()
 		}
-		if err := h.handOut(ctx, enc, b.Name, handed); err != nil {
+		// a bridge answers hello with what it can do; until it has, or bridgeCapsWait passed,
+		// replies in threads wait, so they do not go out without their thread's key
+		hold := !h.declaresThreads(b.Name) && time.Since(started) < bridgeCapsWait
+		if err := h.handOut(ctx, enc, b.Name, handed, hold); err != nil {
 			var encErr *outWriteError
 			if errors.As(err, &encErr) {
 				return
@@ -531,9 +542,14 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 // outWriteError is a failed write to a bridge, which ends its writer.
 type outWriteError struct{ error }
 
+// bridgeCapsWait is how long after hello a bridge's writer holds back replies in threads that
+// have a key outside, waiting for the bridge to say it keeps threads.
+const bridgeCapsWait = 3 * time.Second
+
 // handOut writes an out line for every unanswered message of the bridge's room not in handed,
 // adds them to it and drops the answered ones from it, so it holds only unanswered messages.
-func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, handed map[int64]bool) error {
+// With holdThreaded, replies in threads with a key outside are left for a later call.
+func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, handed map[int64]bool, holdThreaded bool) error {
 	ids, err := h.bridges.Unanswered(ctx, name)
 	if err != nil {
 		return err
@@ -556,12 +572,19 @@ func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, hande
 		return err
 	}
 	for _, o := range outs {
+		if holdThreaded && o.Thread != "" {
+			continue
+		}
 		kind := authorAgent
 		if o.Author == h.webAs {
 			kind = authorHuman
 		}
 		author := outAuthor{Name: o.Author, Kind: kind, Display: o.Author, Sigil: o.Sigil}
-		if err := enc.Encode(outLine{Type: "out", ID: o.ID, Author: author, Text: o.Text, ReplyTo: o.ReplyTo}); err != nil {
+		line := outLine{Type: "out", ID: o.ID, Author: author, Text: o.Text, ReplyTo: o.ReplyTo}
+		if h.declaresThreads(name) {
+			line.Thread = o.Thread
+		}
+		if err := enc.Encode(line); err != nil {
 			return &outWriteError{err}
 		}
 		handed[o.ID] = true
@@ -585,6 +608,25 @@ type bridgeInput struct {
 	MIME      string                     `json:"mime"`
 	Data      string                     `json:"data"`
 	Rev       json.RawMessage            `json:"rev"`
+	// Thread is read only for a bridge that declared threads, and leniently (see lineThread),
+	// so a thread of the wrong shape never costs the rest of the line.
+	Thread json.RawMessage `json:"thread"`
+}
+
+// lineThread reads an in line's thread, {"key": <string or number>, "title": <string>}: its key
+// and title, "" for what is missing or of another type.
+func lineThread(raw json.RawMessage) (key, title string) {
+	var t struct {
+		Key   json.RawMessage `json:"key"`
+		Title json.RawMessage `json:"title"`
+	}
+	if json.Unmarshal(raw, &t) != nil {
+		return "", ""
+	}
+	if json.Unmarshal(t.Title, &title) != nil {
+		title = ""
+	}
+	return extString(t.Key), title
 }
 
 // extString reads an identifier given as a JSON string or number; anything else is "".
@@ -619,6 +661,9 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 		in := bridges.In{
 			ID: extString(l.ID), AuthorID: extString(l.Author.ID), AuthorName: l.Author.Name, Self: l.Author.Self,
 			Text: l.Text, ReplyTo: extString(l.ReplyTo), Cursor: extString(l.Cursor), Addressed: l.Addressed,
+		}
+		if h.declaresThreads(name) { // a bridge that did not say it keeps threads has its lines in the room
+			in.ThreadKey, in.ThreadTitle = lineThread(l.Thread)
 		}
 		if l.At != "" {
 			at, err := time.Parse(time.RFC3339Nano, l.At)
