@@ -119,8 +119,8 @@ message SetBridgeRequest {
   // The new agents; agents that were not among them are subscribed to the room with the mode
   // wake.
   repeated string addressees = 4;
-  // The new command; empty leaves it.
-  string command = 5;
+  // The new command; unset leaves it, and an empty one is refused.
+  optional string command = 5;
 }
 
 message SetBridgeResponse {

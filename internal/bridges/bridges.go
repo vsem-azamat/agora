@@ -142,7 +142,7 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 			return err
 		}
 		if n > 0 {
-			return store.Refuse(ErrExists, "#%s already has a bridge; remove it first with `agora bridge remove %s`", name, name)
+			return store.Refuse(ErrExists, "#%s already has a bridge; change it with `agora bridge set %s`, or remove it first with `agora bridge remove %s`", name, name, name)
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM rooms WHERE name = ?`, name).Scan(&n); err != nil {
 			return err
@@ -204,9 +204,10 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 
 // Change is what Set changes in a bridge.
 type Change struct {
-	SetAgents bool     // replace the bridge's agents with Agents
-	Agents    []string // the new agents; none when empty
-	Command   string   // the new command; "" leaves it
+	SetAgents  bool     // replace the bridge's agents with Agents
+	Agents     []string // the new agents; none when empty
+	SetCommand bool     // replace the bridge's command with Command, which may not be empty
+	Command    string   // the new command
 }
 
 // Changed is what Set did.
@@ -223,8 +224,11 @@ type Changed struct {
 func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Changed, error) {
 	name = strings.TrimPrefix(name, "#")
 	command := strings.TrimSpace(c.Command)
-	if !c.SetAgents && command == "" {
+	if !c.SetAgents && !c.SetCommand {
 		return Changed{}, store.Refuse(store.ErrInvalid, "nothing to change: give agents or a command")
+	}
+	if c.SetCommand && command == "" {
+		return Changed{}, store.Refuse(store.ErrInvalid, "a bridge needs a command")
 	}
 	var out Changed
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
@@ -280,7 +284,7 @@ func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Change
 			}
 			said = append(said, "set the bridge's agents: "+list)
 		}
-		if command != "" && command != old {
+		if c.SetCommand && command != old {
 			if _, err := tx.ExecContext(ctx, `UPDATE bridges SET command = ? WHERE name = ?`, command, name); err != nil {
 				return err
 			}

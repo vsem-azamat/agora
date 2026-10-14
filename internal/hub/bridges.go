@@ -95,7 +95,7 @@ func (h *Hub) serveBridges(ctx context.Context) {
 		return
 	}
 	for _, b := range list {
-		h.startBridge(b.Name) //nolint:contextcheck // bridges run under the context serveBridges stored, which is ctx
+		h.startBridge(b.Name, false) //nolint:contextcheck // bridges run under the context serveBridges stored, which is ctx
 	}
 }
 
@@ -110,7 +110,9 @@ func (h *Hub) stopBridges() {
 	h.bridgeRuns.wg.Wait()
 }
 
-func (h *Hub) startBridge(name string) {
+// startBridge runs the bridge name unless it runs already; down carries over that the board said
+// it stopped and has not said it works again, from a run stopped to be started again.
+func (h *Hub) startBridge(name string, down bool) {
 	br := &h.bridgeRuns
 	br.mu.Lock()
 	defer br.mu.Unlock()
@@ -118,7 +120,7 @@ func (h *Hub) startBridge(name string) {
 		return
 	}
 	ctx, cancel := context.WithCancel(br.ctx)
-	r := &bridgeRun{name: name, cancel: cancel, done: make(chan struct{}), state: agorav1.BridgeState_BRIDGE_STATE_RUNNING}
+	r := &bridgeRun{name: name, cancel: cancel, done: make(chan struct{}), state: agorav1.BridgeState_BRIDGE_STATE_RUNNING, down: down}
 	br.runs[name] = r
 	br.wg.Add(1)
 	go func() {
@@ -128,19 +130,22 @@ func (h *Hub) startBridge(name string) {
 	}()
 }
 
-// stopBridge stops the bridge name, if it runs, and waits for it; it reports whether it ran.
-func (h *Hub) stopBridge(name string) bool {
+// stopBridge stops the bridge name, if it runs, and waits for it; it reports whether it ran, and
+// whether the board had said it stopped and not yet that it works again.
+func (h *Hub) stopBridge(name string) (ran, down bool) {
 	br := &h.bridgeRuns
 	br.mu.Lock()
 	r := br.runs[name]
 	delete(br.runs, name)
 	br.mu.Unlock()
 	if r == nil {
-		return false
+		return false, false
 	}
 	r.cancel()
 	<-r.done
-	return true
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return true, r.down
 }
 
 func (h *Hub) bridgeState(name string) (agorav1.BridgeState, string) {
@@ -678,7 +683,7 @@ func (s *bridgeService) AddBridge(ctx context.Context, req *connect.Request[agor
 		return nil, toConnect(err)
 	}
 	s.h.changes.fire()
-	s.h.startBridge(m.GetName()) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
+	s.h.startBridge(m.GetName(), false) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
 	b, err := s.h.bridges.Get(ctx, m.GetName())
 	if err != nil {
 		return nil, toConnect(err)
@@ -688,10 +693,10 @@ func (s *bridgeService) AddBridge(ctx context.Context, req *connect.Request[agor
 
 func (s *bridgeService) RemoveBridge(ctx context.Context, req *connect.Request[agorav1.RemoveBridgeRequest]) (*connect.Response[agorav1.RemoveBridgeResponse], error) {
 	name := req.Msg.GetName()
-	ran := s.h.stopBridge(name) // first, so a stopping bridge does not find itself gone
+	ran, down := s.h.stopBridge(name) // first, so a stopping bridge does not find itself gone
 	if err := s.h.bridges.Remove(ctx, req.Msg.GetAgent(), name); err != nil {
 		if ran && !errors.Is(err, bridges.ErrNotFound) {
-			s.h.startBridge(name) //nolint:contextcheck // not removed: it keeps running, under Serve's context
+			s.h.startBridge(name, down) //nolint:contextcheck // not removed: it keeps running, under Serve's context
 		}
 		return nil, toConnect(err)
 	}
@@ -779,13 +784,21 @@ func (h *Hub) SetBridgeDefaults(policy bridges.Policy, delay time.Duration) erro
 func (s *bridgeService) SetBridge(ctx context.Context, req *connect.Request[agorav1.SetBridgeRequest]) (*connect.Response[agorav1.SetBridgeResponse], error) {
 	m := req.Msg
 	name := strings.TrimPrefix(m.GetName(), "#")
-	got, err := s.h.bridges.Set(ctx, m.GetAgent(), name, bridges.Change{SetAgents: m.GetSetAddressees(), Agents: m.GetAddressees(), Command: m.GetCommand()})
+	got, err := s.h.bridges.Set(ctx, m.GetAgent(), name, bridges.Change{
+		SetAgents: m.GetSetAddressees(), Agents: m.GetAddressees(), SetCommand: m.Command != nil, Command: m.GetCommand(),
+	})
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	if got.Restart && s.h.stopBridge(name) {
-		s.h.startBridge(name) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
+	restarted := false
+	if got.Restart {
+		// the new run reads the new command; the board's word that the bridge stopped carries over,
+		// so it says once that a fixed command works again
+		if ran, down := s.h.stopBridge(name); ran {
+			s.h.startBridge(name, down) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
+			restarted = true
+		}
 	}
 	s.h.changes.fire()
-	return connect.NewResponse(&agorav1.SetBridgeResponse{Addressees: got.Agents, Dropped: got.Dropped, Restarted: got.Restart}), nil
+	return connect.NewResponse(&agorav1.SetBridgeResponse{Addressees: got.Agents, Dropped: got.Dropped, Restarted: restarted}), nil
 }

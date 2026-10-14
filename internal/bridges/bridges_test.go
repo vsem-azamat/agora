@@ -837,12 +837,19 @@ func TestARepliesToAnAgentsMessageAddressesIt(t *testing.T) {
 func TestChangingABridgesAgents(t *testing.T) {
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "hi", Cursor: "1"})
+	// secretary chose to follow the room with the mode mentions; staying an agent keeps it
+	if _, err := e.r.Subscribe(ctx, "secretary", []string{"example-chat"}, true, rooms.ModeMentions); err != nil {
+		t.Fatal(err)
+	}
 	got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"secretary", "builder", "builder"}})
 	if err != nil || got.Restart || len(got.Dropped) != 0 || !slices.Equal(got.Agents, []string{"builder", "secretary"}) {
 		t.Fatalf("set: %+v %v", got, err)
 	}
 	if !slices.Contains(e.subscriptions(t, "builder"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeWake}) {
 		t.Fatal("builder does not follow the room with the mode wake")
+	}
+	if !slices.Contains(e.subscriptions(t, "secretary"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeMentions}) {
+		t.Fatalf("secretary's mode changed: %+v", e.subscriptions(t, "secretary"))
 	}
 	id := e.receive(t, bridges.In{ID: "2", AuthorName: "Ada", Text: "for you", Addressed: true})
 	for _, a := range []string{"secretary", "builder"} {
@@ -855,7 +862,7 @@ func TestChangingABridgesAgents(t *testing.T) {
 	if err != nil || !slices.Equal(got.Dropped, []string{"secretary"}) {
 		t.Fatalf("set: %+v %v", got, err)
 	}
-	if !slices.Contains(e.subscriptions(t, "secretary"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeWake}) {
+	if !slices.Contains(e.subscriptions(t, "secretary"), rooms.Subscription{Room: "example-chat", Mode: rooms.ModeMentions}) {
 		t.Fatal("secretary's subscription dropped")
 	}
 	id = e.receive(t, bridges.In{ID: "3", AuthorName: "Ada", Text: "again", Addressed: true})
@@ -894,7 +901,7 @@ func TestChangingABridgesAgents(t *testing.T) {
 func TestChangingABridgesCommand(t *testing.T) {
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "hi", Cursor: "1"})
-	got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{Command: "  example-bridge --chat 43 "})
+	got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "  example-bridge --chat 43 "})
 	if err != nil || !got.Restart || !slices.Equal(got.Agents, []string{"secretary"}) {
 		t.Fatalf("set: %+v %v", got, err)
 	}
@@ -907,7 +914,7 @@ func TestChangingABridgesCommand(t *testing.T) {
 		t.Fatalf("notice: %+v", last)
 	}
 	// the same command again restarts nothing
-	if got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{Command: "example-bridge --chat 43"}); err != nil || got.Restart {
+	if got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "example-bridge --chat 43"}); err != nil || got.Restart {
 		t.Fatalf("same command: %+v %v", got, err)
 	}
 }
@@ -920,9 +927,10 @@ func TestChangingABridgeIsRefused(t *testing.T) {
 		want                error
 	}{
 		{"nothing to change", "builder", "example-chat", bridges.Change{}, store.ErrInvalid},
-		{"no such bridge", "builder", "other-chat", bridges.Change{Command: "x"}, bridges.ErrNotFound},
-		{"an agent that has not joined", "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"ghost"}, Command: "y"}, agents.ErrUnknown},
-		{"an acting agent that has not joined", "ghost", "example-chat", bridges.Change{Command: "y"}, agents.ErrUnknown},
+		{"no such bridge", "builder", "other-chat", bridges.Change{SetCommand: true, Command: "x"}, bridges.ErrNotFound},
+		{"an agent that has not joined", "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"ghost"}, SetCommand: true, Command: "y"}, agents.ErrUnknown},
+		{"an acting agent that has not joined", "ghost", "example-chat", bridges.Change{SetCommand: true, Command: "y"}, agents.ErrUnknown},
+		{"an empty command", "builder", "example-chat", bridges.Change{SetAgents: true, Agents: []string{"builder"}, SetCommand: true, Command: "  "}, store.ErrInvalid},
 	}
 	for _, c := range cases {
 		if _, err := e.b.Set(ctx, c.agent, c.bridge, c.change); !errors.Is(err, c.want) {

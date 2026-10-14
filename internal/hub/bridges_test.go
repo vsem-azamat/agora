@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
@@ -736,7 +737,7 @@ func TestChangingABridge(t *testing.T) {
 		return resp.Msg
 	}
 	// not over the web
-	if _, err := b.webBridges.SetBridge(context.Background(), connect.NewRequest(&agorav1.SetBridgeRequest{Name: "example-chat", Command: "x"})); connect.CodeOf(err) != connect.CodeNotFound {
+	if _, err := b.webBridges.SetBridge(context.Background(), connect.NewRequest(&agorav1.SetBridgeRequest{Name: "example-chat", Command: proto.String("x")})); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Fatalf("set over the web: %v", err)
 	}
 	// agents only: the same process goes on
@@ -754,7 +755,7 @@ func TestChangingABridge(t *testing.T) {
 	// a new command: the old process stops and the new one starts with the cursor
 	pid := f.pid(0)
 	g := newFake(t)
-	if got := set(&agorav1.SetBridgeRequest{Command: g.command()}); !got.GetRestarted() {
+	if got := set(&agorav1.SetBridgeRequest{Command: proto.String(g.command())}); !got.GetRestarted() {
 		t.Fatalf("set command: %v", got)
 	}
 	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
@@ -766,6 +767,35 @@ func TestChangingABridge(t *testing.T) {
 	}
 	if f.starts() != 1 {
 		t.Fatalf("the old command started %d times", f.starts())
+	}
+}
+
+func TestAFixedCommandWorksAgain(t *testing.T) {
+	b := startBridgeHub(t, 300*time.Millisecond)
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{
+		Agent: "builder", Name: "example-chat", Command: "exit 3",
+	})); err != nil {
+		t.Fatal(err)
+	}
+	said := func(text string) int {
+		n := 0
+		for _, m := range b.history(t) {
+			if m.GetAuthor() == "agora" && strings.Contains(m.GetBody(), text) {
+				n++
+			}
+		}
+		return n
+	}
+	eventually(t, "the board says it stopped", func() bool { return said("The bridge stopped") == 1 })
+	f := newFake(t)
+	if _, err := b.bridges.SetBridge(context.Background(), connect.NewRequest(&agorav1.SetBridgeRequest{
+		Agent: "builder", Name: "example-chat", Command: proto.String(f.command()),
+	})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the board says it works again", func() bool { return said("The bridge works again.") == 1 })
+	if n := said("The bridge stopped"); n != 1 {
+		t.Fatalf("the board said %d times that it stopped", n)
 	}
 }
 

@@ -73,17 +73,16 @@ func bridgeSetCmd(o *options) *cobra.Command {
 			if !setAgents && !none && !cmd.Flags().Changed("command") {
 				return errors.New("nothing to change: give --agent, --no-agents or --command")
 			}
-			if cmd.Flags().Changed("command") && strings.TrimSpace(command) == "" {
-				return errors.New("a bridge needs a command")
-			}
 			name, err := o.agent(cmd.Context())
 			if err != nil {
 				return err
 			}
 			bridge := roomArg(args[0])
-			resp, err := o.bridges().SetBridge(cmd.Context(), connect.NewRequest(&agorav1.SetBridgeRequest{
-				Agent: name, Name: bridge, SetAddressees: setAgents || none, Addressees: addressees, Command: command,
-			}))
+			req := &agorav1.SetBridgeRequest{Agent: name, Name: bridge, SetAddressees: setAgents || none, Addressees: addressees}
+			if cmd.Flags().Changed("command") {
+				req.Command = &command
+			}
+			resp, err := o.bridges().SetBridge(cmd.Context(), connect.NewRequest(req))
 			if err != nil {
 				return err
 			}
@@ -93,7 +92,7 @@ func bridgeSetCmd(o *options) *cobra.Command {
 			}
 			fmt.Fprintf(o.out, "#%s: agents %s\n", bridge, agents)
 			if d := resp.Msg.GetDropped(); len(d) > 0 {
-				fmt.Fprintf(o.out, "%s still follows #%s; to stop, run `agora --as <name> unsubscribe %s`\n", strings.Join(d, ", "), bridge, bridge)
+				fmt.Fprintf(o.out, "no longer the bridge's agents, still subscribed to #%s: %s; each stops with `agora --as <name> unsubscribe %s`\n", bridge, strings.Join(d, ", "), bridge)
 			}
 			if resp.Msg.GetRestarted() {
 				fmt.Fprintln(o.out, "the hub restarted the bridge with the new command; it keeps its cursor")

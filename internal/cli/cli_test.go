@@ -972,9 +972,12 @@ func TestBridges(t *testing.T) {
 	if r := agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--agent", "builder", "--no-agents"); r.code == 0 || !strings.Contains(r.stderr, "--agent or --no-agents") {
 		t.Fatalf("set agents and none: %+v", r)
 	}
+	if r := agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--agent", "builder", "--command", " "); r.code == 0 || !strings.Contains(r.stderr, "a bridge needs a command") {
+		t.Fatalf("set an empty command: %+v", r)
+	}
 	r = agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--agent", "builder")
 	if r.code != 0 || !strings.Contains(r.stdout, "#example-chat: agents builder") ||
-		!strings.Contains(r.stdout, "secretary still follows #example-chat") || strings.Contains(r.stdout, "restarted") {
+		!strings.Contains(r.stdout, "still subscribed to #example-chat: secretary") || strings.Contains(r.stdout, "restarted") {
 		t.Fatalf("set agents: %+v", r)
 	}
 	r = agora(ctx, socket, "builder", "bridge", "set", "example-chat", "--command", "exec sleep 601", "--no-agents")

@@ -46,7 +46,7 @@ The system SHALL let an agent add a bridge with `agora bridge add <name> --comma
 
 ### Requirement: Changing A Bridge
 
-The system SHALL let an agent change a bridge in place with `agora bridge set <name> [--agent <name>]... [--no-agents] [--command '<shell command>']`. `--agent`, or `--no-agents` for none, SHALL replace the bridge's agents with the ones given: each agent that was not among them SHALL be subscribed to the room with the mode `wake`, and an agent no longer among them SHALL keep its subscription to the room but no longer be addressed by messages addressed to the bridge. `--command` SHALL replace the bridge's command; when the new command differs from the old one, the hub SHALL stop the bridge's process and start the new command. Otherwise the bridge's process SHALL keep running. The bridge SHALL keep its cursor, its outbound policy and its creator. Setting SHALL refuse a bridge that does not exist, an agent that has not joined, an empty command and a call that gives neither agents nor a command, and SHALL then change nothing. The board SHALL say in the room, waking no one, who changed the bridge, its agents when they were given and that its command changed, without the command.
+The system SHALL let an agent change a bridge in place with `agora bridge set <name> [--agent <name>]... [--no-agents] [--command '<shell command>']`. `--agent`, or `--no-agents` for none, SHALL replace the bridge's agents with the ones given: each agent that was not among them SHALL be subscribed to the room with the mode `wake`, an agent that stays among them SHALL keep the mode it follows the room with, and an agent no longer among them SHALL keep its subscription to the room but no longer be addressed by messages addressed to the bridge. `--command` SHALL replace the bridge's command; when the new command differs from the old one, the hub SHALL stop the bridge's process and start the new command, and a bridge the board said had stopped counts as the same bridge, so the board says once that it works again when the new command has run for a minute. Otherwise the bridge's process SHALL keep running. The bridge SHALL keep its cursor, its outbound policy and its creator. Setting SHALL refuse a bridge that does not exist, an agent that has not joined, an empty command and a call that gives neither agents nor a command, and SHALL then change nothing. The board SHALL say in the room, waking no one, who changed the bridge, its agents when they were given and that its command changed, without the command.
 
 #### Scenario: Changing the agents
 - **WHEN** `agora bridge set example-chat --agent secretary --agent builder` runs while the bridge of `#example-chat`, whose agent is `secretary`, runs
@@ -59,6 +59,10 @@ The system SHALL let an agent change a bridge in place with `agora bridge set <n
 #### Scenario: Changing the command
 - **WHEN** `agora bridge set example-chat --command 'example-bridge --chat 43'` runs
 - **THEN** the hub stops the bridge's process and starts the new command, whose hello carries the bridge's cursor
+
+#### Scenario: A broken command replaced
+- **WHEN** the board said the bridge of `#example-chat` stopped, and `agora bridge set example-chat --command '<a working command>'` runs
+- **THEN** the new command runs, and once it has run for a minute the board says once that the bridge works again, without saying again that it stopped
 
 #### Scenario: Nothing to change
 - **WHEN** `agora bridge set example-chat` runs without agents or a command, or with an agent that has not joined

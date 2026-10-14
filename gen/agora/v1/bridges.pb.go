@@ -537,8 +537,8 @@ type SetBridgeRequest struct {
 	// The new agents; agents that were not among them are subscribed to the room with the mode
 	// wake.
 	Addressees []string `protobuf:"bytes,4,rep,name=addressees,proto3" json:"addressees,omitempty"`
-	// The new command; empty leaves it.
-	Command       string `protobuf:"bytes,5,opt,name=command,proto3" json:"command,omitempty"`
+	// The new command; unset leaves it, and an empty one is refused.
+	Command       *string `protobuf:"bytes,5,opt,name=command,proto3,oneof" json:"command,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -602,8 +602,8 @@ func (x *SetBridgeRequest) GetAddressees() []string {
 }
 
 func (x *SetBridgeRequest) GetCommand() string {
-	if x != nil {
-		return x.Command
+	if x != nil && x.Command != nil {
+		return *x.Command
 	}
 	return ""
 }
@@ -1125,15 +1125,17 @@ const file_agora_v1_bridges_proto_rawDesc = "" +
 	"\x13RemoveBridgeRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"\x16\n" +
-	"\x14RemoveBridgeResponse\"\x9d\x01\n" +
+	"\x14RemoveBridgeResponse\"\xae\x01\n" +
 	"\x10SetBridgeRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
 	"\x0eset_addressees\x18\x03 \x01(\bR\rsetAddressees\x12\x1e\n" +
 	"\n" +
 	"addressees\x18\x04 \x03(\tR\n" +
-	"addressees\x12\x18\n" +
-	"\acommand\x18\x05 \x01(\tR\acommand\"k\n" +
+	"addressees\x12\x1d\n" +
+	"\acommand\x18\x05 \x01(\tH\x00R\acommand\x88\x01\x01B\n" +
+	"\n" +
+	"\b_command\"k\n" +
 	"\x11SetBridgeResponse\x12\x1e\n" +
 	"\n" +
 	"addressees\x18\x01 \x03(\tR\n" +
@@ -1253,6 +1255,7 @@ func file_agora_v1_bridges_proto_init() {
 	if File_agora_v1_bridges_proto != nil {
 		return
 	}
+	file_agora_v1_bridges_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
