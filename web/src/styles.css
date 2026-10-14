@@ -1688,7 +1688,7 @@ button.pgname:hover {
   color: var(--bad);
 }
 .brwarn {
-  color: var(--warn);
+  color: var(--warn-text);
   font-size: 0.8em;
   white-space: nowrap;
 }
