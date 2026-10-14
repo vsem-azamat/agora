@@ -1291,6 +1291,25 @@ func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
 }
 
 func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.T) {
+	// the test proves something only when a line of the old process is handled after the change
+	// and makes key 77 again; that window depends on scheduling, so a run without it is tried
+	// again on a fresh hub, and only one that never gets it fails
+	const attempts = 5
+	for i := range attempts {
+		if givenUpCallStartsTheNewOne(t) {
+			return
+		}
+		t.Logf("attempt %d: no line of the old process made key 77 again after the change", i+1)
+	}
+	t.Fatalf("in %d attempts no line of the old process made key 77 again after the change", attempts)
+}
+
+// givenUpCallStartsTheNewOne changes the command of a bridge whose old process ignores TERM with
+// a call that gives up after a second, checks that the new command runs and that a line of the
+// new chat's topic 77 is a root, and reports whether the old process made key 77 again after the
+// change, the case the forgetting is for.
+func givenUpCallStartsTheNewOne(t *testing.T) bool {
+	t.Helper()
 	b := startBridgeHub(t, time.Hour)
 	// ignores TERM, so it stops only when killed, and floods lines of topic 77 until then; the
 	// trap is set before the first line, and lines of about 4 KB keep the backlog the stop has to
@@ -1312,8 +1331,8 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 	if st := b.state(t); st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || len(g.received()) == 0 {
 		t.Fatalf("bridge left %v, the new command never ran", st.GetState())
 	}
-	// a line of the old process handled after the change made key 77 again (a second thread
-	// titled Old): without it the test would prove nothing about forgetting the keys
+	// a line of the old process handled after the change made key 77 again: a second thread
+	// titled Old
 	lt, err := b.rooms.ListThreads(context.Background(), connect.NewRequest(&agorav1.ListThreadsRequest{Room: "example-chat"}))
 	if err != nil {
 		t.Fatal(err)
@@ -1323,9 +1342,6 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 		if th.GetTitle() == "Old" {
 			olds++
 		}
-	}
-	if olds < 2 {
-		t.Fatalf("no line of the old process made key 77 again after the change (%d threads titled Old)", olds)
 	}
 	// the keys the old process wrote while it stopped are forgotten although the call gave up
 	g.send(`{"type":"in","id":"n1","author":{"name":"Bob"},"text":"NEWCHAT","thread":{"key":"77","title":"New"}}`)
@@ -1338,6 +1354,7 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 		}
 		return false
 	})
+	return olds >= 2
 }
 
 func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
