@@ -175,6 +175,10 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	now := s.now()
 	var agent string
 	err := store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		wasLive, err := live(ctx, tx, r.SessionID)
+		if err != nil {
+			return err
+		}
 		if err := register(ctx, tx, r, now); err != nil {
 			return err
 		}
@@ -203,8 +207,9 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 		case Start:
 			// A new, resumed or cleared session starts at the prompt. A compaction starts the
 			// session again with no turn and, when it runs while idle or on /compact, no stop
-			// after it: the session keeps its state, and a connector waiting on it keeps waiting.
-			if r.Reason == StartReasonCompact {
+			// after it: a live session keeps its state, and a connector waiting on it keeps
+			// waiting. One the hub did not know or had ended has no state to keep.
+			if r.Reason == StartReasonCompact && wasLive {
 				return nil
 			}
 			return setState(ctx, tx, r.SessionID, Idle, now)
@@ -579,6 +584,18 @@ func register(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 		sql.Named("cwd", r.CWD), sql.Named("terminal", r.Terminal), sql.Named("t", t),
 		sql.Named("busy", Busy), sql.Named("ended", Ended), sql.Named("unknown", UnknownKind))
 	return err
+}
+
+// live reports whether the session is known and has not ended.
+func live(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
+	var state string
+	switch err := tx.QueryRowContext(ctx, `SELECT state FROM sessions WHERE id = ?`, id).Scan(&state); {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	return state != string(Ended), nil
 }
 
 // takeOver moves the name of a live session in the same process (same pid and start time) to

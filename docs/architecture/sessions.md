@@ -33,7 +33,7 @@ When Claude Code clears a conversation it ends the session with reason `clear` a
 
 | Hook event | Report | Output |
 | --- | --- | --- |
-| `SessionStart` (every source: startup, resume, clear, compact) | `start` with the hook's `source` as the reason: a new, resumed or cleared session is idle; source `compact` keeps the state (it runs no `UserPromptSubmit`, and while idle or on `/compact` no `Stop` either); never a new turn | as `additionalContext`: for an unbound session, the invitation; for a bound one, the reminder (with the queue note when the agent has places), then up to 5 unread messages |
+| `SessionStart` (every source: startup, resume, clear, compact) | `start` with the hook's `source` as the reason: a new, resumed or cleared session is idle; source `compact` keeps the state of a live session (it runs no `UserPromptSubmit`, and while idle or on `/compact` no `Stop` either) and makes one the hub did not know or had ended idle; never a new turn | as `additionalContext`: for an unbound session, the invitation; for a bound one, the reminder (with the queue note when the agent has places), then up to 5 unread messages |
 | `UserPromptSubmit` | `prompt`: session busy | the queue note when places changed (including lost ones) or a slot is offered, and up to 5 unread messages |
 | `PostToolUse` | `tool` | the same, checked at most every 15 seconds |
 | `Stop` | `stop`: session idle, unless unread messages address the agent or a slot is offered, and the stop is not already a continuation | `{"decision": "block", "reason": …}` with those messages and the offer |
