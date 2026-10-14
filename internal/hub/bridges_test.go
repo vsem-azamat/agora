@@ -1219,6 +1219,32 @@ func TestAReplyInAThreadWaitsForItsRootToBeSent(t *testing.T) {
 	}
 }
 
+func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	// the old command floods lines of topic 77 until it is stopped
+	old := `echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old","thread":{"key":"77","title":"Old"}}'; done`
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: old})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the flood", func() bool { return len(b.history(t)) >= 1 })
+	g := newFake(t)
+	g.set("caps", `{"type":"hello","caps":{"threads":"topic"}}`)
+	if _, err := b.bridges.SetBridge(context.Background(), connect.NewRequest(&agorav1.SetBridgeRequest{Agent: "builder", Name: "example-chat", Command: proto.String(g.command())})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the new bridge", func() bool { return b.state(t).GetCaps().GetThreads() == "topic" && len(g.received()) > 0 })
+	g.send(`{"type":"in","id":"n1","author":{"name":"Bob"},"text":"NEWCHAT","thread":{"key":"77","title":"New"}}`)
+	// a root shows in the room's history; a reply in the old chat's thread would not
+	eventually(t, "the new chat's line as a root", func() bool {
+		for _, m := range b.history(t) {
+			if m.GetBody() == "NEWCHAT" {
+				return m.GetThread() == 0 && m.GetThreadTitle() == "New"
+			}
+		}
+		return false
+	})
+}
+
 func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)

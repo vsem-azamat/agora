@@ -222,6 +222,14 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 	})
 }
 
+// ForgetThreadKeys deletes the thread keys of the bridge's room. The hub calls it once a bridge
+// whose command changed has stopped: lines its old process wrote after Set committed made keys
+// of the old chat again.
+func (b *Bridges) ForgetThreadKeys(ctx context.Context, name string) error {
+	_, err := b.db.ExecContext(ctx, `DELETE FROM thread_keys WHERE room = ?`, strings.TrimPrefix(name, "#"))
+	return err
+}
+
 // Change is what Set changes in a bridge.
 type Change struct {
 	SetAgents  bool     // replace the bridge's agents with Agents
