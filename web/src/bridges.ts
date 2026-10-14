@@ -18,6 +18,15 @@ export function runningText(b: Pick<Bridge, 'state' | 'lastExit'>): string {
   return r === 'restarting' && b.lastExit ? `${r} · ${b.lastExit}` : r;
 }
 
+/**
+ * The warning for a bridge that reported a protocol version other than the hub's, such as
+ * `protocol v2, hub v3`; undefined when it reported the hub's version or none.
+ */
+export function protocolMismatch(b: Pick<Bridge, 'protocolVersion' | 'hubProtocolVersion'>): string | undefined {
+  if (b.protocolVersion === 0 || b.protocolVersion === b.hubProtocolVersion) return undefined;
+  return `protocol v${b.protocolVersion}, hub v${b.hubProtocolVersion}`;
+}
+
 /** What goes out of a bridged room. */
 export type Policy = 'delay' | 'open' | 'read';
 

@@ -178,9 +178,22 @@ func bridgeListCmd(o *options) *cobra.Command {
 				if len(pairs) > 0 {
 					caps = "  caps " + strings.Join(pairs, " ")
 				}
-				fmt.Fprintf(o.out, "#%-20s %-12s policy %-8s agents %s%s\n  %s\n", b.GetName(), state, bridgePolicyNames[b.GetPolicy()], agents, caps, b.GetCommand())
+				fmt.Fprintf(o.out, "#%-20s %-12s policy %-8s agents %s%s  %s\n  %s\n", b.GetName(), state, bridgePolicyNames[b.GetPolicy()], agents, caps, protocolText(b), b.GetCommand())
 			}
 			return nil
 		},
+	}
+}
+
+// protocolText says which protocol version the bridge reported next to the hub's: `protocol v3`
+// when they match, `protocol v2, hub v3 (mismatch)` when they differ and `protocol not reported`.
+func protocolText(b *agorav1.Bridge) string {
+	switch v := b.GetProtocolVersion(); {
+	case v == 0:
+		return "protocol not reported"
+	case v == b.GetHubProtocolVersion():
+		return fmt.Sprintf("protocol v%d", v)
+	default:
+		return fmt.Sprintf("protocol v%d, hub v%d (mismatch)", v, b.GetHubProtocolVersion())
 	}
 }

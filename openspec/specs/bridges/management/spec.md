@@ -86,7 +86,7 @@ The system SHALL let an agent change a bridge in place with `agora bridge set <n
 
 ### Requirement: Listing Bridges
 
-The system SHALL list every bridge in name order with its room, command, outbound policy, creator, the bridge's agents and its state: `running`, `restarting` after its process exited, or `stopped` when the hub does not run it. Listed through the web listener, bridges SHALL come without their commands, which may hold credentials or chat identifiers.
+The system SHALL list every bridge in name order with its room, command, outbound policy, creator, the bridge's agents and its state: `running`, `restarting` after its process exited, or `stopped` when the hub does not run it, with the protocol version the bridge reported in its current run (or that it did not report one) next to the version the hub speaks. Listed through the web listener, bridges SHALL come without their commands, which may hold credentials or chat identifiers.
 
 #### Scenario: Bridge list
 - **WHEN** `agora bridge list` runs while the bridge of `#example-chat` runs

@@ -186,7 +186,7 @@ A room view SHALL show the room's last 100 messages oldest first, each message o
 
 ### Requirement: Bridged Rooms
 
-A room connected to a chat outside Agora through a bridge (see [Bridges](../../bridges/README.md)) SHALL be marked with a bridge instead of the stoa in the room list, the Rooms view, the palette and its header. A bridge that is restarting after its process exited SHALL be drawn in the color of failure with how it last exited in its title, and the Rooms view SHALL say so in place of the room's purpose; a stopped bridge is drawn muted. Next to its unread count, a room SHALL show how many of its messages are scheduled to go out. The header of a bridged room SHALL show the bridge's state and a control labelled Outbound (the label also shown on it where there is room) that offers only Send after a delay (`delay`), Send at once (`open`) and Read only (`read`) and changes the room's policy only when the operator picks one; when the hub refuses the change, a short notice SHALL say why. The app SHALL offer no way to add or remove a bridge.
+A room connected to a chat outside Agora through a bridge (see [Bridges](../../bridges/README.md)) SHALL be marked with a bridge instead of the stoa in the room list, the Rooms view, the palette and its header. A bridge that is restarting after its process exited SHALL be drawn in the color of failure with how it last exited in its title, and the Rooms view SHALL say so in place of the room's purpose; a stopped bridge is drawn muted. Next to its unread count, a room SHALL show how many of its messages are scheduled to go out. The header of a bridged room SHALL show the bridge's state and a control labelled Outbound (the label also shown on it where there is room) that offers only Send after a delay (`delay`), Send at once (`open`) and Read only (`read`) and changes the room's policy only when the operator picks one; when the hub refuses the change, a short notice SHALL say why. When the bridge reported a protocol version other than the hub's, the header SHALL also show a warning mark naming both, such as `protocol v2, hub v3`; a bridge that reports the hub's version or none shows no mark. The app SHALL offer no way to add or remove a bridge.
 
 #### Scenario: Bridged room in the list
 - **WHEN** `#example-chat` has a running bridge and `#example-app` has none
@@ -195,6 +195,10 @@ A room connected to a chat outside Agora through a bridge (see [Bridges](../../b
 #### Scenario: A failing bridge
 - **WHEN** the bridge of `#example-chat` is restarting after `exit status 1`
 - **THEN** its bridge is drawn as failing and titled `bridge restarting · exit status 1`, the Rooms view says `bridge restarting · exit status 1`, and the room's header says `bridge restarting`
+
+#### Scenario: A bridge on another protocol version
+- **WHEN** the bridge of `#example-chat` reported protocol version 2 and the hub speaks version 3
+- **THEN** the room's header shows a warning mark `protocol v2, hub v3`, and a room whose bridge reported 3 or nothing shows none
 
 #### Scenario: Messages scheduled in the list
 - **WHEN** two messages of `secretary` are scheduled in `#example-chat`

@@ -557,6 +557,18 @@ describe('bridged rooms', () => {
     expect(head.querySelector('.roomhead h2 svg.br.restarting')).not.toBeNull();
   });
 
+  it('warns in the header when the bridge speaks another protocol version', () => {
+    const mark = (version: number) => {
+      const { container } = bridgedRoom([], { bridge: bridge('example-chat', 'running', 'delay', '', version) });
+      const found = container.querySelector('.roomhead .brwarn');
+      cleanup();
+      return found?.textContent ?? null;
+    };
+    expect(mark(2)).toBe('protocol v2, hub v3');
+    expect(mark(3)).toBeNull(); // the hub's own version
+    expect(mark(0)).toBeNull(); // not reported
+  });
+
   it('shows how many messages wait for the operator next to the unread count', () => {
     const unread = new Map([['example-chat', { unread: 3, addressed: 0, scheduled: 2 }]]);
     const { container } = render(<RoomNav rooms={rooms} unread={unread} followed={new Set()} bridges={chat()} />);

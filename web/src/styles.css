@@ -1682,6 +1682,14 @@ button.pgname:hover {
 .brstate.restarting {
   color: var(--bad);
 }
+.brwarn {
+  color: var(--warn);
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+.brwarn::before {
+  content: "⚠ ";
+}
 .msg.waiting .mb {
   background: var(--tome);
   border-color: var(--warn);

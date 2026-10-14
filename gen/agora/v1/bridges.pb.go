@@ -149,9 +149,13 @@ type Bridge struct {
 	// How its process last ended, while restarting.
 	LastExit string `protobuf:"bytes,8,opt,name=last_exit,json=lastExit,proto3" json:"last_exit,omitempty"`
 	// What the bridge said its platform can do in its current run; unset when it said nothing.
-	Caps          *BridgeCaps `protobuf:"bytes,9,opt,name=caps,proto3" json:"caps,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Caps *BridgeCaps `protobuf:"bytes,9,opt,name=caps,proto3" json:"caps,omitempty"`
+	// The protocol version the bridge said it speaks in its current run; 0 when it said none.
+	ProtocolVersion int32 `protobuf:"varint,10,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
+	// The protocol version the hub speaks, to compare with protocol_version.
+	HubProtocolVersion int32 `protobuf:"varint,11,opt,name=hub_protocol_version,json=hubProtocolVersion,proto3" json:"hub_protocol_version,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Bridge) Reset() {
@@ -245,6 +249,20 @@ func (x *Bridge) GetCaps() *BridgeCaps {
 		return x.Caps
 	}
 	return nil
+}
+
+func (x *Bridge) GetProtocolVersion() int32 {
+	if x != nil {
+		return x.ProtocolVersion
+	}
+	return 0
+}
+
+func (x *Bridge) GetHubProtocolVersion() int32 {
+	if x != nil {
+		return x.HubProtocolVersion
+	}
+	return 0
 }
 
 // What a bridge's platform can do, as the bridge says it in short words; empty when unknown.
@@ -1092,7 +1110,7 @@ var File_agora_v1_bridges_proto protoreflect.FileDescriptor
 
 const file_agora_v1_bridges_proto_rawDesc = "" +
 	"\n" +
-	"\x16agora/v1/bridges.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd4\x02\n" +
+	"\x16agora/v1/bridges.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb1\x03\n" +
 	"\x06Bridge\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12.\n" +
@@ -1106,7 +1124,10 @@ const file_agora_v1_bridges_proto_rawDesc = "" +
 	"addressees\x12+\n" +
 	"\x05state\x18\a \x01(\x0e2\x15.agora.v1.BridgeStateR\x05state\x12\x1b\n" +
 	"\tlast_exit\x18\b \x01(\tR\blastExit\x12(\n" +
-	"\x04caps\x18\t \x01(\v2\x14.agora.v1.BridgeCapsR\x04caps\"B\n" +
+	"\x04caps\x18\t \x01(\v2\x14.agora.v1.BridgeCapsR\x04caps\x12)\n" +
+	"\x10protocol_version\x18\n" +
+	" \x01(\x05R\x0fprotocolVersion\x120\n" +
+	"\x14hub_protocol_version\x18\v \x01(\x05R\x12hubProtocolVersion\"B\n" +
 	"\n" +
 	"BridgeCaps\x12\x1a\n" +
 	"\bpersonas\x18\x01 \x01(\tR\bpersonas\x12\x18\n" +

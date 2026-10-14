@@ -65,6 +65,7 @@ type bridgeRun struct {
 	lastExit string
 	down     bool         // the board said it stopped and has not said it works again
 	caps     bridges.Caps // what the bridge said its platform can do, in this run
+	version  int32        // the protocol version the bridge said it speaks, in this run; 0 for none
 }
 
 func (r *bridgeRun) set(state agorav1.BridgeState, lastExit string) {
@@ -179,14 +180,30 @@ func (h *Hub) bridgeCaps(name string) *agorav1.BridgeCaps {
 	return &agorav1.BridgeCaps{Personas: r.caps.Personas, Threads: r.caps.Threads}
 }
 
+// bridgeVersion returns the protocol version the bridge name said it speaks in its current run, 0
+// for none.
+func (h *Hub) bridgeVersion(name string) int32 {
+	br := &h.bridgeRuns
+	br.mu.Lock()
+	r := br.runs[name]
+	br.mu.Unlock()
+	if r == nil {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.version
+}
+
 // declaresThreads reports whether the bridge name said in its current run that it keeps threads.
 func (h *Hub) declaresThreads(name string) bool {
 	caps := h.bridgeCaps(name)
 	return caps != nil && caps.GetThreads() != ""
 }
 
-// setBridgeCaps keeps what the bridge name says its platform can do.
-func (h *Hub) setBridgeCaps(name string, caps bridges.Caps) {
+// setBridgeCaps keeps what the bridge name says its platform can do and the protocol version it
+// speaks.
+func (h *Hub) setBridgeCaps(name string, caps bridges.Caps, version int32) {
 	br := &h.bridgeRuns
 	br.mu.Lock()
 	r := br.runs[name]
@@ -196,6 +213,7 @@ func (h *Hub) setBridgeCaps(name string, caps bridges.Caps) {
 	}
 	r.mu.Lock()
 	r.caps = caps
+	r.version = version
 	r.mu.Unlock()
 }
 
@@ -231,6 +249,7 @@ func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 		r.set(agorav1.BridgeState_BRIDGE_STATE_RESTARTING, exit)
 		r.mu.Lock()
 		r.caps = bridges.Caps{} // a stopped bridge can do nothing
+		r.version = 0
 		first := !r.down
 		r.down = true
 		r.mu.Unlock()
@@ -605,6 +624,7 @@ type bridgeInput struct {
 	ExtID     json.RawMessage            `json:"ext_id"`
 	Error     string                     `json:"error"`
 	Caps      map[string]json.RawMessage `json:"caps"`
+	Version   json.RawMessage            `json:"version"`
 	MIME      string                     `json:"mime"`
 	Data      string                     `json:"data"`
 	Rev       json.RawMessage            `json:"rev"`
@@ -654,8 +674,12 @@ func (h *Hub) bridgeLine(ctx context.Context, name string, raw []byte) {
 	switch l.Type {
 	case "hello":
 		caps := bridges.ReadCaps(l.Caps)
-		h.setBridgeCaps(name, caps)
-		h.log.Info("bridge says what it can do", "bridge", name, "caps", caps)
+		version := bridges.ReadVersion(l.Version)
+		h.setBridgeCaps(name, caps, version)
+		h.log.Info("bridge says what it can do", "bridge", name, "caps", caps, "protocol", version)
+		if version != 0 && version != ProtocolVersion {
+			h.log.Warn("bridge speaks another protocol version", "bridge", name, "bridge_version", version, "hub_version", ProtocolVersion)
+		}
 		h.changes.fire()
 	case "in":
 		in := bridges.In{
@@ -763,6 +787,7 @@ func (s *bridgeService) ListBridges(ctx context.Context, _ *connect.Request[agor
 		out.Bridges = append(out.Bridges, &agorav1.Bridge{
 			Name: b.Name, Command: b.Command, Policy: bridgePolicies[b.Policy], CreatedBy: b.CreatedBy, CreatedAt: timestamppb.New(b.CreatedAt),
 			Addressees: b.Addressees, State: state, LastExit: exit, Caps: s.h.bridgeCaps(b.Name),
+			ProtocolVersion: s.h.bridgeVersion(b.Name), HubProtocolVersion: ProtocolVersion,
 		})
 	}
 	return connect.NewResponse(out), nil
