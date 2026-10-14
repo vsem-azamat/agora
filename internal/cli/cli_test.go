@@ -18,6 +18,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
+	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/store"
 	"github.com/vsem-azamat/agora/internal/version"
 )
@@ -1248,6 +1249,44 @@ func TestBridgeListShowsTheProtocolVersion(t *testing.T) {
 			t.Fatalf("list: %+v", r)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// What `agora read` prints of a room's history is rooms.Format of the stored messages, whatever
+// marks they carry: a reply, a thread with replies and a title, a long body.
+func TestReadPrintsTheHistoryAsRoomsFormat(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	for _, a := range []string{"builder", "reviewer"} {
+		if r := agora(ctx, socket, a, "join", a); r.code != 0 {
+			t.Fatalf("join %s: %+v", a, r)
+		}
+	}
+	root := strings.TrimSpace(agora(ctx, socket, "builder", "post", "general", "the export is broken, @reviewer please look").stdout)
+	agora(ctx, socket, "reviewer", "post", "general", "--thread", root, "which one?")
+	agora(ctx, socket, "reviewer", "post", "general", "--thread", root, "--also", "the CSV one")
+	agora(ctx, socket, "builder", "thread", "title", root, "Release", "2.4")
+	agora(ctx, socket, "reviewer", "post", "general", "--reply", root, "on it")
+	long := strings.Repeat("a long line of text. ", 60) // more than the 700 characters a connector's context takes
+	agora(ctx, socket, "builder", "post", "general", long)
+	db, err := store.Open(ctx, filepath.Join(filepath.Dir(socket), "agora.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	history, err := rooms.New(db, nil).HistoryFor(ctx, "general", 0, "builder")
+	if err != nil || len(history) < 4 {
+		t.Fatalf("history %v %v", history, err)
+	}
+	var want []string
+	for _, m := range history {
+		want = append(want, rooms.Format(m, 0))
+	}
+	got := agora(ctx, socket, "builder", "read", "general").stdout
+	for _, w := range want {
+		if !strings.Contains(got, w+"\n") {
+			t.Fatalf("read lacks\n%s\nin\n%s", w, got)
+		}
 	}
 }
 

@@ -3,10 +3,10 @@ package cli
 import (
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
+	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
 func clock(t time.Time) string { return t.Local().Format("15:04:05") }
@@ -54,70 +54,32 @@ func plural(n int32) string {
 	return "s"
 }
 
-// deliveryLabels follow the head of a message of a bridged room, as in rooms.Format.
-var deliveryLabels = map[agorav1.DeliveryState]string{
-	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED:   " · scheduled",
-	agorav1.DeliveryState_DELIVERY_STATE_SENDING:     " · sending",
-	agorav1.DeliveryState_DELIVERY_STATE_SENT:        " · sent",
-	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED:   " · cancelled",
-	agorav1.DeliveryState_DELIVERY_STATE_FAILED:      " · not sent: ",
-	agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED: " · unconfirmed: ",
+// deliveryStates maps the API's delivery state back to the hub's, for rooms.Format.
+var deliveryStates = map[agorav1.DeliveryState]rooms.Delivery{
+	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED:   rooms.Scheduled,
+	agorav1.DeliveryState_DELIVERY_STATE_SENDING:     rooms.Sending,
+	agorav1.DeliveryState_DELIVERY_STATE_SENT:        rooms.Sent,
+	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED:   rooms.Cancelled,
+	agorav1.DeliveryState_DELIVERY_STATE_FAILED:      rooms.Failed,
+	agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED: rooms.Unconfirmed,
 }
 
-// formatMessage renders a message: room, identifier, author (name@bridge for a message from
-// outside), time, reply reference, whether it came from outside or is a note, delivery state and thread, then the body indented. It is the same
-// layout as rooms.Format, which the hub uses for the messages it delivers into an agent's
-// context; keep the two alike.
+// formatMessage renders a message as the hub does the messages it delivers into an agent's
+// context: it gives the fields of the API message back to rooms.Format, which is the one place
+// that lays out a message's header (room, identifier, author, time, reply, to you, from outside or
+// note, delivery state, thread) and body.
 func formatMessage(m *agorav1.Message) string {
-	author := m.GetAuthor()
+	msg := rooms.Message{
+		ID: m.GetId(), Room: m.GetRoom(), Author: m.GetAuthor(), Body: m.GetBody(), ReplyTo: m.GetReplyTo(),
+		At: m.GetAt().AsTime(), Addressed: m.GetAddressed(), Delivery: deliveryStates[m.GetDeliveryState()],
+		DeliveryError: m.GetDeliveryError(), Note: m.GetNote(), Incoming: m.GetIncoming(), SentOut: m.GetSentOut(),
+		Thread: m.GetThread(), ThreadTitle: m.GetThreadTitle(),
+	}
 	if ext := m.GetExternalAuthor(); ext != nil {
-		author = ext.GetName() + "@" + ext.GetBridge()
+		msg.ExtAuthorID, msg.ExtAuthorName = ext.GetId(), ext.GetName()
 	}
-	head := fmt.Sprintf("#%s [%d] %s · %s", m.GetRoom(), m.GetId(), author, shortClock(m.GetAt().AsTime()))
-	if m.GetReplyTo() != 0 {
-		head += fmt.Sprintf(" · re %d", m.GetReplyTo())
+	if sum := m.GetThreadSummary(); sum != nil {
+		msg.Summary = rooms.ThreadSummary{Replies: int(sum.GetReplies()), Repliers: sum.GetRepliers(), LastAt: sum.GetLastAt().AsTime(), Unread: int(sum.GetUnread())}
 	}
-	if m.GetAddressed() {
-		head += " · to you"
-	}
-	switch {
-	case m.GetIncoming():
-		head += " · from outside"
-	case m.GetNote():
-		head += " · note"
-		if m.GetSentOut() != 0 {
-			head += fmt.Sprintf(" · sent out as %d", m.GetSentOut())
-		}
-	}
-	head += deliveryLabels[m.GetDeliveryState()]
-	if s := m.GetDeliveryState(); s == agorav1.DeliveryState_DELIVERY_STATE_FAILED || s == agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED {
-		head += m.GetDeliveryError()
-	}
-	head += threadLabel(m)
-	return head + "\n  " + strings.ReplaceAll(m.GetBody(), "\n", "\n  ")
-}
-
-// threadLabel follows a message's head as rooms.Format's thread label does: the thread a reply is
-// in, or the thread of a root.
-func threadLabel(m *agorav1.Message) string {
-	title := m.GetThreadTitle()
-	if title != "" {
-		title = " «" + title + "»"
-	}
-	if m.GetThread() != 0 {
-		return fmt.Sprintf(" · in thread %d%s", m.GetThread(), title)
-	}
-	sum := m.GetThreadSummary()
-	if sum.GetReplies() == 0 {
-		if title == "" {
-			return ""
-		}
-		return " · thread" + title
-	}
-	label := fmt.Sprintf(" · thread%s: %d repl%s (%s), last %s", title, sum.GetReplies(), map[bool]string{true: "y", false: "ies"}[sum.GetReplies() == 1],
-		strings.Join(sum.GetRepliers(), ", "), shortClock(sum.GetLastAt().AsTime()))
-	if sum.GetUnread() > 0 {
-		label += fmt.Sprintf(", %d unread", sum.GetUnread())
-	}
-	return label
+	return rooms.Format(msg, 0)
 }
