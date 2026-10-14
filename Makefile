@@ -92,6 +92,7 @@ build-check: build-web
 
 ## repo: repository policy, documentation and spec checks
 repo:
+	scripts/repo-policy-test.sh
 	scripts/repo-policy-check.sh
 	node scripts/docs-check.mjs
 	scripts/spec-layout-check.sh
