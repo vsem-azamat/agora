@@ -23,6 +23,9 @@ export function setClockOffset(ms: number) {
   offset = ms;
 }
 
+/** How often the wall clock is compared with the monotonic one. */
+const TICK_MS = 1000;
+
 /** How much the wall clock may differ from the monotonic one between two ticks before it counts as set. */
 const JUMP_MS = 1000;
 
@@ -31,7 +34,7 @@ const JUMP_MS = 1000;
  * correcting it after the machine slept, or the user changing it): between two ticks the wall
  * clock moved differently from the monotonic one. The offset to the hub's clock is stale then.
  */
-export function watchWallClock(onJump: () => void, every = 1000): () => void {
+export function watchWallClock(onJump: () => void): () => void {
   let wall = Date.now();
   let mono = performance.now();
   const t = setInterval(() => {
@@ -40,6 +43,6 @@ export function watchWallClock(onJump: () => void, every = 1000): () => void {
     wall = Date.now();
     mono = performance.now();
     if (Math.abs(dw - dm) > JUMP_MS) onJump();
-  }, every);
+  }, TICK_MS);
   return () => clearInterval(t);
 }

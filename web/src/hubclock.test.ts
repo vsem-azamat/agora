@@ -26,6 +26,26 @@ describe('the hub clock', () => {
     expect(onJump).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(5000);
     expect(onJump).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() - 30_000); // a clock that was ahead is set back
+    vi.advanceTimersByTime(1000);
+    expect(onJump).toHaveBeenCalledTimes(2);
     stop();
+    vi.setSystemTime(Date.now() + 30_000);
+    vi.advanceTimersByTime(2000);
+    expect(onJump).toHaveBeenCalledTimes(2); // stopped
+  });
+
+  it('does not take a late tick for a set clock', () => {
+    vi.useFakeTimers({ now: new Date('2026-10-09T12:00:00Z') });
+    const onJump = vi.fn();
+    const stop = watchWallClock(onJump);
+    // a sleeping tab ticks a minute late: both clocks moved a minute
+    const mono = performance.now() + 60_000;
+    vi.spyOn(performance, 'now').mockReturnValue(mono);
+    vi.setSystemTime(Date.now() + 60_000);
+    vi.advanceTimersByTime(1000);
+    expect(onJump).not.toHaveBeenCalled();
+    stop();
+    vi.restoreAllMocks();
   });
 });

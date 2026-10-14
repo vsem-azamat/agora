@@ -184,7 +184,7 @@ describe('the hub clock after the browser clock was set', () => {
     vi.useFakeTimers({ toFake: ['Date', 'performance', 'setInterval', 'clearInterval'] });
     try {
       const unauthenticated = vi.fn(); // stable, as App's is
-      renderHook(() => useHub(api, unauthenticated));
+      const view = renderHook(() => useHub(api, unauthenticated));
       await flush();
       expect(whoami).toHaveBeenCalledTimes(1);
       vi.advanceTimersByTime(3000); // time passing is no reason to ask again
@@ -193,7 +193,17 @@ describe('the hub clock after the browser clock was set', () => {
       vi.setSystemTime(Date.now() + 30_000); // the browser clock is corrected
       vi.advanceTimersByTime(1000);
       await flush();
-      expect(whoami).toHaveBeenCalledTimes(2);
+      expect(whoami).toHaveBeenCalledTimes(2); // the watch restarted and loaded the board again
+      vi.setSystemTime(Date.now() - 30_000); // and set back
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(whoami).toHaveBeenCalledTimes(3);
+      expect(unauthenticated).not.toHaveBeenCalled();
+      view.unmount();
+      vi.setSystemTime(Date.now() + 30_000);
+      vi.advanceTimersByTime(2000);
+      await flush();
+      expect(whoami).toHaveBeenCalledTimes(3); // nothing watches after unmount
     } finally {
       vi.useRealTimers();
     }

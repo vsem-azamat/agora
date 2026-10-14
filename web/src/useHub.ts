@@ -153,8 +153,10 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
     }
   }, [loadOnce]);
 
-  // the offset to the hub's clock is stale once the browser's clock was set: ask again
-  useEffect(() => watchWallClock(() => void load().catch(fail)), [load, fail]);
+  // the offset to the hub's clock is stale once the browser's clock was set: restart the watch,
+  // whose first message loads the board again (Whoami included) with the usual status and retry
+  const [restarts, setRestarts] = useState(0);
+  useEffect(() => watchWallClock(() => setRestarts((n) => n + 1)), []);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -176,7 +178,8 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       }
     })();
     return () => abort.abort();
-  }, [api, load, fail]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: a clock set while open restarts the watch
+  }, [api, load, fail, restarts]);
 
   return { data, status, fail, upgraded };
 }
