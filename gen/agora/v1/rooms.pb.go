@@ -528,18 +528,21 @@ func (x *ThreadSummary) GetParticipants() []string {
 	return nil
 }
 
-// A titled thread of a room.
+// A thread of a room, as ListThreads lists it.
 type Thread struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The root message.
-	Root    int64  `protobuf:"varint,1,opt,name=root,proto3" json:"root,omitempty"`
-	Room    string `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
+	Root int64  `protobuf:"varint,1,opt,name=root,proto3" json:"root,omitempty"`
+	Room string `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
+	// Empty for a thread without a title (listed with ListThreadsRequest.unread).
 	Title   string `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
 	Replies int32  `protobuf:"varint,4,opt,name=replies,proto3" json:"replies,omitempty"`
 	// The last reply, or the root or its title when newer.
 	LastAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
 	// Replies unread for the agent the threads were listed for (ListThreadsRequest.agent).
-	Unread        int32 `protobuf:"varint,6,opt,name=unread,proto3" json:"unread,omitempty"`
+	Unread int32 `protobuf:"varint,6,opt,name=unread,proto3" json:"unread,omitempty"`
+	// Who wrote the root: an agent by name, someone outside as name@bridge.
+	Author        string `protobuf:"bytes,7,opt,name=author,proto3" json:"author,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -614,6 +617,13 @@ func (x *Thread) GetUnread() int32 {
 		return x.Unread
 	}
 	return 0
+}
+
+func (x *Thread) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -2080,7 +2090,9 @@ type ListThreadsRequest struct {
 	// The room; every room that is not archived when empty.
 	Room string `protobuf:"bytes,1,opt,name=room,proto3" json:"room,omitempty"`
 	// The agent reading, for the unread counts; none when empty.
-	Agent         string `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Agent string `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	// Also list the threads without a title in which the agent has unread replies.
+	Unread        bool `protobuf:"varint,3,opt,name=unread,proto3" json:"unread,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2127,6 +2139,13 @@ func (x *ListThreadsRequest) GetAgent() string {
 		return x.Agent
 	}
 	return ""
+}
+
+func (x *ListThreadsRequest) GetUnread() bool {
+	if x != nil {
+		return x.Unread
+	}
+	return false
 }
 
 type ListThreadsResponse struct {
@@ -2216,14 +2235,15 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\brepliers\x18\x02 \x03(\tR\brepliers\x123\n" +
 	"\alast_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x16\n" +
 	"\x06unread\x18\x04 \x01(\x05R\x06unread\x12\"\n" +
-	"\fparticipants\x18\x05 \x03(\tR\fparticipants\"\xad\x01\n" +
+	"\fparticipants\x18\x05 \x03(\tR\fparticipants\"\xc5\x01\n" +
 	"\x06Thread\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\x03R\x04root\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x14\n" +
 	"\x05title\x18\x03 \x01(\tR\x05title\x12\x18\n" +
 	"\areplies\x18\x04 \x01(\x05R\areplies\x123\n" +
 	"\alast_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x16\n" +
-	"\x06unread\x18\x06 \x01(\x05R\x06unread\"d\n" +
+	"\x06unread\x18\x06 \x01(\x05R\x06unread\x12\x16\n" +
+	"\x06author\x18\a \x01(\tR\x06author\"d\n" +
 	"\x0eExternalAuthor\x12\x16\n" +
 	"\x06bridge\x18\x01 \x01(\tR\x06bridge\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
@@ -2310,10 +2330,11 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x02 \x01(\x03R\tmessageId\"\x15\n" +
-	"\x13LeaveThreadResponse\">\n" +
+	"\x13LeaveThreadResponse\"V\n" +
 	"\x12ListThreadsRequest\x12\x12\n" +
 	"\x04room\x18\x01 \x01(\tR\x04room\x12\x14\n" +
-	"\x05agent\x18\x02 \x01(\tR\x05agent\"A\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x16\n" +
+	"\x06unread\x18\x03 \x01(\bR\x06unread\"A\n" +
 	"\x13ListThreadsResponse\x12*\n" +
 	"\athreads\x18\x01 \x03(\v2\x10.agora.v1.ThreadR\athreads*\xbb\x01\n" +
 	"\rDeliveryState\x12\x1e\n" +

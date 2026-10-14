@@ -55,7 +55,7 @@ The system SHALL list an agent's unread messages oldest first, each marked as ad
 
 ### Requirement: Unread Counts Per Room
 
-The system SHALL count an agent's unread messages per room, with how many of them are addressed to it, listing only rooms with unread messages, without changing what is read.
+The system SHALL count an agent's unread messages per room, with how many of them are addressed to it, listing only rooms with unread messages, without changing what is read. Replies in threads that are not also posted to the room are counted apart, and a room with only such replies unread is listed too (see [Unread Thread Replies Per Room](../../rooms/threads/spec.md#requirement-unread-thread-replies-per-room)).
 
 #### Scenario: Counting
 - **WHEN** an agent follows `#example-app`, where others posted three messages since it read, one of them mentioning it

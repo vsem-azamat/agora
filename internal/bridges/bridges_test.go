@@ -1029,3 +1029,36 @@ func TestAnEchoOfAThreadReplyKeepsThreadsFlat(t *testing.T) {
 		t.Fatalf("thread %v titled %q", got, thread[0].ThreadTitle)
 	}
 }
+
+func TestMergingAnEchoKeepsUnreadRepliesUnread(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root := e.post(t, "builder", "example-chat", "the export")
+	sent, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "looked, all fine", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "looked, all fine"})
+	under, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "more", Thread: echo, ReplyTo: echo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-chat", under); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _, err := e.b.Sent(ctx, "example-chat", sent, "5515"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	got, _, err := e.r.Unread(ctx, "builder", rooms.Everything, 0)
+	if err != nil || !slices.Contains(msgIDs(got), sent) || slices.Contains(msgIDs(got), under) {
+		t.Fatalf("builder unread %v, want %d unread and %d read", msgIDs(got), sent, under)
+	}
+}
+
+func msgIDs(msgs []rooms.Message) []int64 {
+	var out []int64
+	for _, m := range msgs {
+		out = append(out, m.ID)
+	}
+	return out
+}

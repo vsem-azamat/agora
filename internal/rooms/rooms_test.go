@@ -1060,7 +1060,7 @@ func TestThreadTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.reply(t, "reviewer", root, "newest activity", false) // the clock makes it the newest activity
-	list, err := e.r.Threads(ctx, "example-app", "builder")
+	list, err := e.r.Threads(ctx, "example-app", "builder", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1112,7 +1112,7 @@ func TestThreadsOfEveryRoom(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	list, err := e.r.Threads(ctx, "", "")
+	list, err := e.r.Threads(ctx, "", "", false)
 	if err != nil || len(list) != 2 {
 		t.Fatalf("threads %+v, %v", list, err)
 	}
@@ -1251,11 +1251,45 @@ func TestThreadsOfEveryRoomLeaveOutArchivedRooms(t *testing.T) {
 	if err := e.r.Archive(ctx, "builder", "old-app", true); err != nil {
 		t.Fatal(err)
 	}
-	list, err := e.r.Threads(ctx, "", "")
+	list, err := e.r.Threads(ctx, "", "", false)
 	if err != nil || len(list) != 1 || list[0].Root != root {
 		t.Fatalf("threads %+v, %v", list, err)
 	}
 	if err := e.r.SetThreadTitle(ctx, "builder", old, "Renamed"); !errors.Is(err, rooms.ErrArchived) {
 		t.Fatalf("titling in an archived room: %v", err)
+	}
+}
+
+func TestLeavingAThreadReadsItsRepliesAlsoInTheRoom(t *testing.T) {
+	e, root := threadEnv(t)
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"example-app"}, true, rooms.ModeMentions); err != nil {
+		t.Fatal(err)
+	}
+	e.reply(t, "reviewer", root, "also in the room", true)
+	if err := e.r.LeaveThread(ctx, "builder", root); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("after leaving: %v", ids(got))
+	}
+}
+
+func TestListingUnreadThreadsWithoutTitles(t *testing.T) {
+	clock := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	e, root := threadEnvAt(t, func() time.Time { clock = clock.Add(time.Second); return clock })
+	titled := e.post(t, "tester", "example-app", "docs")
+	if err := e.r.SetThreadTitle(ctx, "tester", titled, "Docs"); err != nil {
+		t.Fatal(err)
+	}
+	e.reply(t, "reviewer", root, "unread for builder", false)
+	list, err := e.r.Threads(ctx, "example-app", "builder", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 || list[0].Root != root || list[0].Title != "" || list[0].Author != "builder" || list[0].Unread != 1 || list[1].Root != titled {
+		t.Fatalf("threads %+v", list)
+	}
+	if list, _ := e.r.Threads(ctx, "example-app", "builder", false); len(list) != 1 {
+		t.Fatalf("titled only: %+v", list)
 	}
 }

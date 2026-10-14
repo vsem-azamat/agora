@@ -162,13 +162,13 @@ func (s *roomService) LeaveThread(ctx context.Context, req *connect.Request[agor
 }
 
 func (s *roomService) ListThreads(ctx context.Context, req *connect.Request[agorav1.ListThreadsRequest]) (*connect.Response[agorav1.ListThreadsResponse], error) {
-	list, err := s.h.rooms.Threads(ctx, req.Msg.GetRoom(), req.Msg.GetAgent())
+	list, err := s.h.rooms.Threads(ctx, req.Msg.GetRoom(), req.Msg.GetAgent(), req.Msg.GetUnread())
 	if err != nil {
 		return nil, toConnect(err)
 	}
 	out := &agorav1.ListThreadsResponse{}
 	for _, t := range list {
-		out.Threads = append(out.Threads, &agorav1.Thread{Root: t.Root, Room: t.Room, Title: t.Title, Replies: int32(t.Replies), LastAt: timestamppb.New(t.LastAt), Unread: int32(t.Unread)})
+		out.Threads = append(out.Threads, &agorav1.Thread{Root: t.Root, Room: t.Room, Author: t.Author, Title: t.Title, Replies: int32(t.Replies), LastAt: timestamppb.New(t.LastAt), Unread: int32(t.Unread)})
 	}
 	return connect.NewResponse(out), nil
 }

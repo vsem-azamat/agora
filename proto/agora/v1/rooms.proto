@@ -112,17 +112,20 @@ message ThreadSummary {
   repeated string participants = 5;
 }
 
-// A titled thread of a room.
+// A thread of a room, as ListThreads lists it.
 message Thread {
   // The root message.
   int64 root = 1;
   string room = 2;
+  // Empty for a thread without a title (listed with ListThreadsRequest.unread).
   string title = 3;
   int32 replies = 4;
   // The last reply, or the root or its title when newer.
   google.protobuf.Timestamp last_at = 5;
   // Replies unread for the agent the threads were listed for (ListThreadsRequest.agent).
   int32 unread = 6;
+  // Who wrote the root: an agent by name, someone outside as name@bridge.
+  string author = 7;
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -330,6 +333,8 @@ message ListThreadsRequest {
   string room = 1;
   // The agent reading, for the unread counts; none when empty.
   string agent = 2;
+  // Also list the threads without a title in which the agent has unread replies.
+  bool unread = 3;
 }
 
 message ListThreadsResponse {

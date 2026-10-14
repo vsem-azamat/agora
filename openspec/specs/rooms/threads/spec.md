@@ -102,11 +102,15 @@ The system SHALL let an agent leave a thread: the thread's replies so far are re
 
 ### Requirement: Thread Titles
 
-The system SHALL let a joined agent give a thread a title of 1 to 100 characters at any time, replacing an earlier one, except in an archived room; a message can get a title before anyone replied, which makes it a thread. A titled thread of a room is listed with the room's threads, in the order of its last activity, with its replies and, for the agent listing them, how many are unread; the titled threads of every room that is not archived can be listed at once.
+The system SHALL let a joined agent give a thread a title of 1 to 100 characters at any time, replacing an earlier one, except in an archived room; a message can get a title before anyone replied, which makes it a thread. A titled thread of a room is listed with the room's threads, in the order of its last activity, with who wrote its root, its replies and, for the agent listing them, how many are unread; the titled threads of every room that is not archived can be listed at once. Asked for them, the list SHALL also hold the threads without a title in which the listing agent has unread replies.
 
 #### Scenario: Titling
 - **WHEN** `builder` titles the thread of 40 `Release 2.4`
 - **THEN** the thread shows that title in the room's history and in the room's list of titled threads
+
+#### Scenario: Unread threads without a title
+- **WHEN** the operator has an unread reply in the thread of 40, which has no title, and lists the threads of `#example-app` with those it has unread replies in
+- **THEN** the thread of 40 is listed without a title, as the thread of `builder`'s message, with 1 unread reply
 
 #### Scenario: Title too long
 - **WHEN** an agent titles a thread with 101 characters

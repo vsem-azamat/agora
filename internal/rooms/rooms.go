@@ -137,11 +137,12 @@ type ThreadSummary struct {
 	Participants []string
 }
 
-// Thread is a titled thread of a room.
+// Thread is a thread of a room, as Threads lists it.
 type Thread struct {
 	Root    int64
 	Room    string
-	Title   string
+	Author  string // who wrote the root, as From names it
+	Title   string // "" for a thread without a title
 	Replies int
 	LastAt  time.Time // the last reply, or the root or its title when newer
 	Unread  int       // replies unread for the agent the threads were listed for
@@ -794,13 +795,15 @@ func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, 
 		}
 		for _, q := range []string{
 			`UPDATE messages SET reply_to = :id WHERE reply_to = :echo`,
+			// what agents read in the echo's thread stays read, reply by reply: the thread it
+			// moves to keeps its own reading positions
+			`INSERT INTO read_marks (agent, message_id) SELECT tr.agent, m.id FROM thread_reads AS tr
+				JOIN messages AS m ON m.thread = :echo AND m.id <= tr.last_id WHERE tr.root = :echo ON CONFLICT DO NOTHING`,
 			`UPDATE messages SET thread = :root WHERE thread = :echo`,
 			`UPDATE OR IGNORE threads SET root = :root WHERE root = :echo`,
 			`DELETE FROM threads WHERE root = :echo`,
 			`UPDATE OR IGNORE thread_leaves SET root = :root WHERE root = :echo`,
 			`DELETE FROM thread_leaves WHERE root = :echo`,
-			`INSERT INTO thread_reads (agent, root, last_id) SELECT agent, :root, last_id FROM thread_reads WHERE root = :echo
-				ON CONFLICT (agent, root) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)`,
 			`DELETE FROM thread_reads WHERE root = :echo`,
 			`DELETE FROM mentions WHERE message_id = :echo`,
 			`DELETE FROM read_marks WHERE message_id = :echo`,
@@ -1025,15 +1028,22 @@ func (r *Rooms) LeaveThread(ctx context.Context, agent string, id int64) error {
 		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(id), 0) FROM messages WHERE thread = ?`, root).Scan(&newest); err != nil || newest == 0 {
 			return err
 		}
-		_, err = readThreadTx(ctx, tx, agent, root, newest)
+		if _, err := readThreadTx(ctx, tx, agent, root, newest); err != nil {
+			return err
+		}
+		// replies also in the room are read by the room's position, so they get read marks
+		_, err = tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id) SELECT :a, id FROM messages AS m
+			WHERE m.thread = :root AND m.also AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room), 0)
+			ON CONFLICT DO NOTHING`, sql.Named("a", agent), sql.Named("root", root))
 		return err
 	})
 }
 
 // Threads returns the titled threads of room, or with room "" of every room that is not archived,
 // the most recently active first; Unread counts the replies unread for reader (none for "" or an
-// agent that has not joined).
-func (r *Rooms) Threads(ctx context.Context, room, reader string) ([]Thread, error) {
+// agent that has not joined). With withUnread, the threads without a title in which reader has
+// unread replies are listed too.
+func (r *Rooms) Threads(ctx context.Context, room, reader string, withUnread bool) ([]Thread, error) {
 	room = strings.TrimPrefix(room, "#")
 	var out []Thread
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
@@ -1042,11 +1052,26 @@ func (r *Rooms) Threads(ctx context.Context, room, reader string) ([]Thread, err
 				return err
 			}
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT t.root, m.room, t.title, COUNT(rp.id), MAX(m.at, t.titled_at, COALESCE(MAX(rp.at), 0)) AS last
-			FROM threads AS t JOIN messages AS m ON m.id = t.root
-			LEFT JOIN messages AS rp ON rp.thread = t.root
-			WHERE CASE :room WHEN '' THEN NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL) ELSE m.room = :room END
-			GROUP BY t.root ORDER BY last DESC, t.root DESC`, sql.Named("room", room))
+		untitled := "[]" // roots of threads without a title with replies unread for reader, as a JSON array
+		if withUnread && reader != "" {
+			var joined bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE name = ?)`, reader).Scan(&joined); err != nil {
+				return err
+			}
+			if joined {
+				if err := tx.QueryRowContext(ctx, `SELECT COALESCE(json_group_array(DISTINCT thread), '[]') FROM (`+unreadQuery+`) WHERE thread != 0`,
+					sql.Named("a", reader), sql.Named("general", General)).Scan(&untitled); err != nil {
+					return err
+				}
+			}
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT m.id, m.room, CASE WHEN m.author != '' THEN m.author ELSE m.ext_author_name || '@' || m.room END,
+				COALESCE(t.title, ''), COUNT(rp.id), MAX(m.at, COALESCE(t.titled_at, 0), COALESCE(MAX(rp.at), 0)) AS last
+			FROM messages AS m LEFT JOIN threads AS t ON t.root = m.id
+			LEFT JOIN messages AS rp ON rp.thread = m.id
+			WHERE (t.root IS NOT NULL OR m.id IN (SELECT value FROM json_each(:untitled)))
+				AND CASE :room WHEN '' THEN NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL) ELSE m.room = :room END
+			GROUP BY m.id ORDER BY last DESC, m.id DESC`, sql.Named("room", room), sql.Named("untitled", untitled))
 		if err != nil {
 			return err
 		}
@@ -1054,7 +1079,7 @@ func (r *Rooms) Threads(ctx context.Context, room, reader string) ([]Thread, err
 		for rows.Next() {
 			var th Thread
 			var last int64
-			if err := rows.Scan(&th.Root, &th.Room, &th.Title, &th.Replies, &last); err != nil {
+			if err := rows.Scan(&th.Root, &th.Room, &th.Author, &th.Title, &th.Replies, &last); err != nil {
 				return err
 			}
 			th.LastAt = time.UnixMilli(last)
