@@ -289,7 +289,8 @@ type Message struct {
 	// The title of the message's thread: the one it is a reply in, or its own as a root; empty
 	// when it has none.
 	ThreadTitle string `protobuf:"bytes,16,opt,name=thread_title,json=threadTitle,proto3" json:"thread_title,omitempty"`
-	// In histories, for a message of the room with replies in its thread; unset otherwise.
+	// In histories, for a message of the room with replies in its thread, and on the root of a
+	// thread read; unset otherwise.
 	ThreadSummary *ThreadSummary `protobuf:"bytes,17,opt,name=thread_summary,json=threadSummary,proto3" json:"thread_summary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -453,7 +454,11 @@ type ThreadSummary struct {
 	Repliers []string               `protobuf:"bytes,2,rep,name=repliers,proto3" json:"repliers,omitempty"`
 	LastAt   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
 	// Replies unread for the agent the history was read for (HistoryRequest.agent).
-	Unread        int32 `protobuf:"varint,4,opt,name=unread,proto3" json:"unread,omitempty"`
+	Unread int32 `protobuf:"varint,4,opt,name=unread,proto3" json:"unread,omitempty"`
+	// Set when a thread is read (HistoryRequest.thread): who a new reply addresses besides its
+	// author (the root's author, the authors of its replies and the agents mentioned in any of
+	// them, without those that left the thread), in name order.
+	Participants  []string `protobuf:"bytes,5,rep,name=participants,proto3" json:"participants,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -514,6 +519,13 @@ func (x *ThreadSummary) GetUnread() int32 {
 		return x.Unread
 	}
 	return 0
+}
+
+func (x *ThreadSummary) GetParticipants() []string {
+	if x != nil {
+		return x.Participants
+	}
+	return nil
 }
 
 // A titled thread of a room.
@@ -1668,7 +1680,9 @@ type RoomUnread struct {
 	// Unread messages in the room.
 	Unread int32 `protobuf:"varint,2,opt,name=unread,proto3" json:"unread,omitempty"`
 	// How many of them are addressed to the agent.
-	Addressed     int32 `protobuf:"varint,3,opt,name=addressed,proto3" json:"addressed,omitempty"`
+	Addressed int32 `protobuf:"varint,3,opt,name=addressed,proto3" json:"addressed,omitempty"`
+	// Unread replies in the room's threads that are not also in the room; unread leaves them out.
+	Threads       int32 `protobuf:"varint,4,opt,name=threads,proto3" json:"threads,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1724,9 +1738,16 @@ func (x *RoomUnread) GetAddressed() int32 {
 	return 0
 }
 
+func (x *RoomUnread) GetThreads() int32 {
+	if x != nil {
+		return x.Threads
+	}
+	return 0
+}
+
 type UnreadByRoomResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Rooms with at least one unread message, in name order.
+	// Rooms with at least one unread message or thread reply, in name order.
 	Rooms         []*RoomUnread `protobuf:"bytes,1,rep,name=rooms,proto3" json:"rooms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2189,12 +2210,13 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x06thread\x18\x0e \x01(\x03R\x06thread\x12\x12\n" +
 	"\x04also\x18\x0f \x01(\bR\x04also\x12!\n" +
 	"\fthread_title\x18\x10 \x01(\tR\vthreadTitle\x12>\n" +
-	"\x0ethread_summary\x18\x11 \x01(\v2\x17.agora.v1.ThreadSummaryR\rthreadSummary\"\x92\x01\n" +
+	"\x0ethread_summary\x18\x11 \x01(\v2\x17.agora.v1.ThreadSummaryR\rthreadSummary\"\xb6\x01\n" +
 	"\rThreadSummary\x12\x18\n" +
 	"\areplies\x18\x01 \x01(\x05R\areplies\x12\x1a\n" +
 	"\brepliers\x18\x02 \x03(\tR\brepliers\x123\n" +
 	"\alast_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x16\n" +
-	"\x06unread\x18\x04 \x01(\x05R\x06unread\"\xad\x01\n" +
+	"\x06unread\x18\x04 \x01(\x05R\x06unread\x12\"\n" +
+	"\fparticipants\x18\x05 \x03(\tR\fparticipants\"\xad\x01\n" +
 	"\x06Thread\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\x03R\x04root\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x14\n" +
@@ -2263,12 +2285,13 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\bmessages\x18\x01 \x03(\v2\x11.agora.v1.MessageR\bmessages\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"+\n" +
 	"\x13UnreadByRoomRequest\x12\x14\n" +
-	"\x05agent\x18\x01 \x01(\tR\x05agent\"V\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\"p\n" +
 	"\n" +
 	"RoomUnread\x12\x12\n" +
 	"\x04room\x18\x01 \x01(\tR\x04room\x12\x16\n" +
 	"\x06unread\x18\x02 \x01(\x05R\x06unread\x12\x1c\n" +
-	"\taddressed\x18\x03 \x01(\x05R\taddressed\"B\n" +
+	"\taddressed\x18\x03 \x01(\x05R\taddressed\x12\x18\n" +
+	"\athreads\x18\x04 \x01(\x05R\athreads\"B\n" +
 	"\x14UnreadByRoomResponse\x12*\n" +
 	"\x05rooms\x18\x01 \x03(\v2\x14.agora.v1.RoomUnreadR\x05rooms\"^\n" +
 	"\x13MarkRoomReadRequest\x12\x14\n" +

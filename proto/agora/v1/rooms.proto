@@ -92,7 +92,8 @@ message Message {
   // The title of the message's thread: the one it is a reply in, or its own as a root; empty
   // when it has none.
   string thread_title = 16;
-  // In histories, for a message of the room with replies in its thread; unset otherwise.
+  // In histories, for a message of the room with replies in its thread, and on the root of a
+  // thread read; unset otherwise.
   ThreadSummary thread_summary = 17;
 }
 
@@ -105,6 +106,10 @@ message ThreadSummary {
   google.protobuf.Timestamp last_at = 3;
   // Replies unread for the agent the history was read for (HistoryRequest.agent).
   int32 unread = 4;
+  // Set when a thread is read (HistoryRequest.thread): who a new reply addresses besides its
+  // author (the root's author, the authors of its replies and the agents mentioned in any of
+  // them, without those that left the thread), in name order.
+  repeated string participants = 5;
 }
 
 // A titled thread of a room.
@@ -283,10 +288,12 @@ message RoomUnread {
   int32 unread = 2;
   // How many of them are addressed to the agent.
   int32 addressed = 3;
+  // Unread replies in the room's threads that are not also in the room; unread leaves them out.
+  int32 threads = 4;
 }
 
 message UnreadByRoomResponse {
-  // Rooms with at least one unread message, in name order.
+  // Rooms with at least one unread message or thread reply, in name order.
   repeated RoomUnread rooms = 1;
 }
 

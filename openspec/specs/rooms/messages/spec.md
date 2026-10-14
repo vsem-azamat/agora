@@ -58,7 +58,7 @@ The system SHALL never count an agent's own message as unread for it, and SHALL 
 
 ### Requirement: Reading A Room's History
 
-The system SHALL show the most recent messages of a room, 20 by default, oldest first, with identifier, author (or external author: name and bridge), time, reply reference and, in a bridged room, whether it came from outside, is a note or its delivery state, without changing anyone's read state.
+The system SHALL show the most recent messages of a room, 20 by default, oldest first, without the replies in its threads that are not also posted to the room (see [Threads](../threads/spec.md)), with identifier, author (or external author: name and bridge), time, reply reference and, in a bridged room, whether it came from outside, is a note or its delivery state, without changing anyone's read state.
 
 #### Scenario: History
 - **WHEN** an agent reads the last 5 messages of `#general`

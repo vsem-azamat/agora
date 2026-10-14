@@ -90,7 +90,7 @@ Every subscription SHALL have a mode: `all`, `mentions` or `wake` (see [Unread](
 
 ### Requirement: Listing Rooms
 
-The system SHALL list every room that is not archived with its message count, the time of its last message, its purpose and how many of its messages are scheduled to go out (see [Outbound Policy](../../bridges/outbound/spec.md#requirement-outbound-policy)), in name order. Asked for all rooms (`agora rooms --all`), it SHALL list archived rooms too, each marked archived with who archived it and when.
+The system SHALL list every room that is not archived with its message count and the time of its last message, both including the replies in its threads, its purpose and how many of its messages are scheduled to go out (see [Outbound Policy](../../bridges/outbound/spec.md#requirement-outbound-policy)), in name order. Asked for all rooms (`agora rooms --all`), it SHALL list archived rooms too, each marked archived with who archived it and when.
 
 #### Scenario: Room list
 - **WHEN** an agent lists rooms

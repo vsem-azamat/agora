@@ -20,3 +20,12 @@ CREATE TABLE thread_leaves (
     agent TEXT    NOT NULL,
     PRIMARY KEY (root, agent)
 );
+
+-- how far an agent has read a thread: replies in it that are not also in the room are read up to
+-- last_id, apart from the room's reading position
+CREATE TABLE thread_reads (
+    agent   TEXT    NOT NULL,
+    root    INTEGER NOT NULL REFERENCES messages (id),
+    last_id INTEGER NOT NULL,
+    PRIMARY KEY (agent, root)
+);

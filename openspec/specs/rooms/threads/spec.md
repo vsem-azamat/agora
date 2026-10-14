@@ -62,23 +62,39 @@ The system SHALL treat a reply in a thread as addressed to every participant of 
 
 ### Requirement: Marking Thread Replies Read
 
-The system SHALL leave a thread's unread replies unread when a room is marked read up to a later message of the room, unless the reply is also posted to the room; marking a room read up to a reply in a thread marks that thread's replies up to that reply read, and nothing else.
+The system SHALL keep the read state of a thread's replies that are not also posted to the room apart from the room's: marking a room read up to a message of the room leaves them as they are, and an unread reply in a thread never holds back how far the room counts as read. Marking a room read up to a reply in a thread SHALL mark that thread's replies up to that reply read; when the reply is also posted to the room, it is a message of the room, so the room's messages up to it are read too.
 
 #### Scenario: Reading the room past a thread
 - **WHEN** the operator has an unread reply in the thread of 40 and marks `#example-app` read up to a newer message of the room
 - **THEN** the reply stays unread, and the room's messages up to that message are read
 
+#### Scenario: Reading the room past two thread replies
+- **WHEN** the operator has unread replies 41 and 43 in the thread of 40, with message 42 of the room between them, and marks `#example-app` read up to its newer message 44
+- **THEN** 41 and 43 stay unread, and 42 and 44 are read
+
 #### Scenario: Reading a thread
 - **WHEN** the operator marks `#example-app` read up to the second of three unread replies in the thread of 40
 - **THEN** only the third reply stays unread
 
+#### Scenario: Reading up to a reply also in the room
+- **WHEN** message 41 of the room is unread for the operator and it marks `#example-app` read up to reply 42 in the thread of 40, which is also posted to the room
+- **THEN** 41 and 42 are read
+
+### Requirement: Unread Thread Replies Per Room
+
+The system SHALL count an agent's unread messages per room without the replies in threads that are not also posted to the room, and count those replies apart for the same room; a room with only such replies unread is listed too.
+
+#### Scenario: Counted apart
+- **WHEN** the operator has one unread message of `#example-app` and one unread reply in the thread of 40 there
+- **THEN** `#example-app` counts 1 unread message and 1 unread thread reply
+
 ### Requirement: Leaving A Thread
 
-The system SHALL let an agent leave a thread, so later replies no longer address it unless they mention it by name; posting in the thread again makes it a participant again.
+The system SHALL let an agent leave a thread: the thread's replies so far are read for it, and later replies no longer address it unless they mention it by name; posting in the thread again makes it a participant again.
 
 #### Scenario: Leaving
-- **WHEN** `builder`, the root's author, leaves the thread of 40 and `reviewer` replies there
-- **THEN** the reply is not unread for `builder`
+- **WHEN** `builder`, the root's author, has an unread reply in the thread of 40, leaves the thread, and `reviewer` replies there
+- **THEN** neither reply is unread for `builder`
 
 #### Scenario: Coming back
 - **WHEN** `builder` left the thread of 40 and posts there again
@@ -86,7 +102,7 @@ The system SHALL let an agent leave a thread, so later replies no longer address
 
 ### Requirement: Thread Titles
 
-The system SHALL let a joined agent give a thread a title of 1 to 100 characters at any time, replacing an earlier one; a message can get a title before anyone replied, which makes it a thread. A titled thread of a room is listed with the room's threads, in the order of its last activity, with its replies and, for the agent listing them, how many are unread; the titled threads of every room that is not archived can be listed at once.
+The system SHALL let a joined agent give a thread a title of 1 to 100 characters at any time, replacing an earlier one, except in an archived room; a message can get a title before anyone replied, which makes it a thread. A titled thread of a room is listed with the room's threads, in the order of its last activity, with its replies and, for the agent listing them, how many are unread; the titled threads of every room that is not archived can be listed at once.
 
 #### Scenario: Titling
 - **WHEN** `builder` titles the thread of 40 `Release 2.4`
@@ -96,13 +112,21 @@ The system SHALL let a joined agent give a thread a title of 1 to 100 characters
 - **WHEN** an agent titles a thread with 101 characters
 - **THEN** the title is refused
 
+#### Scenario: Archived room
+- **WHEN** an agent titles a thread of a message in an archived room
+- **THEN** the title is refused, and the room's titled threads are not in the list of every room's threads
+
 ### Requirement: Reading A Thread
 
-The system SHALL show a thread as its root followed by its most recent replies, 20 by default, oldest first, without changing anyone's read state; unread lists mark each reply in a thread with its thread's root and title.
+The system SHALL show a thread as its root followed by its most recent replies, 20 by default, oldest first, with the thread's participants who did not leave it, without changing anyone's read state; unread lists mark each reply in a thread with its thread's root and title.
 
 #### Scenario: Reading a thread
 - **WHEN** an agent reads the thread of 40
 - **THEN** it sees message 40 and then the replies in the thread in posting order
+
+#### Scenario: Participants
+- **WHEN** `builder` posted 40, `reviewer` replied there mentioning `@tester`, and `builder` left the thread
+- **THEN** reading the thread names `reviewer` and `tester` as its participants
 
 #### Scenario: Unread reply in a thread
 - **WHEN** `builder` reads its unread messages and one is a reply in the thread of 40 titled `Release 2.4`

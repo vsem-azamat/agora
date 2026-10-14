@@ -67,6 +67,7 @@ var renames = []string{
 	"UPDATE bridge_agents SET agent = :new WHERE agent = :old",
 	"UPDATE threads SET titled_by = :new WHERE titled_by = :old",
 	"UPDATE thread_leaves SET agent = :new WHERE agent = :old",
+	"UPDATE thread_reads SET agent = :new WHERE agent = :old",
 }
 
 // RenameTx gives agent the name name inside the caller's transaction: every row that names

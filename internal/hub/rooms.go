@@ -126,7 +126,7 @@ func (s *roomService) UnreadByRoom(ctx context.Context, req *connect.Request[ago
 	}
 	out := &agorav1.UnreadByRoomResponse{}
 	for _, c := range counts {
-		out.Rooms = append(out.Rooms, &agorav1.RoomUnread{Room: c.Room, Unread: int32(c.Unread), Addressed: int32(c.Addressed)})
+		out.Rooms = append(out.Rooms, &agorav1.RoomUnread{Room: c.Room, Unread: int32(c.Unread), Addressed: int32(c.Addressed), Threads: int32(c.Threads)})
 	}
 	return connect.NewResponse(out), nil
 }

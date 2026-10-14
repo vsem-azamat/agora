@@ -993,3 +993,39 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 		}
 	}
 }
+
+func TestAnEchoOfAThreadReplyKeepsThreadsFlat(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root := e.post(t, "builder", "example-chat", "the export")
+	sent, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "looked, all fine", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "looked, all fine"})
+	// someone replies in the echo's thread before the bridge answers sent
+	under, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "thanks", Thread: echo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.SetThreadTitle(ctx, "builder", echo, "Export"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _, err := e.b.Sent(ctx, "example-chat", sent, "5515"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	thread, err := e.r.ThreadHistory(ctx, root, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int64
+	for _, m := range thread {
+		got = append(got, m.ID)
+		if m.ID != root && m.Thread != root {
+			t.Fatalf("message %d is in thread %d, want %d", m.ID, m.Thread, root)
+		}
+	}
+	if !slices.Equal(got, []int64{root, sent, under}) || thread[0].ThreadTitle != "Export" {
+		t.Fatalf("thread %v titled %q", got, thread[0].ThreadTitle)
+	}
+}

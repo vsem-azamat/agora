@@ -2,6 +2,7 @@ package rooms_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -20,18 +21,22 @@ import (
 var ctx = context.Background()
 
 type env struct {
-	r *rooms.Rooms
-	s *sessions.Sessions
+	r  *rooms.Rooms
+	s  *sessions.Sessions
+	db *sql.DB
 }
 
-func newEnv(t *testing.T) env {
+func newEnv(t *testing.T) env { return newEnvAt(t, nil) }
+
+// newEnvAt is newEnv with the clock now (nil for the real one).
+func newEnvAt(t *testing.T, now func() time.Time) env {
 	t.Helper()
 	db, err := store.Open(ctx, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return env{r: rooms.New(db, nil), s: sessions.New(db, queue.New(db, nil), rooms.New(db, nil), nil)}
+	return env{r: rooms.New(db, now), s: sessions.New(db, queue.New(db, nil), rooms.New(db, now), nil), db: db}
 }
 
 func (e env) join(t *testing.T, names ...string) {
@@ -863,9 +868,11 @@ func TestNoticesSkipArchivedRooms(t *testing.T) {
 
 // threadEnv has #example-app, followed by builder, reviewer and tester, and message 40-like
 // root, posted by builder.
-func threadEnv(t *testing.T) (env, int64) {
+func threadEnv(t *testing.T) (env, int64) { return threadEnvAt(t, nil) }
+
+func threadEnvAt(t *testing.T, now func() time.Time) (env, int64) {
 	t.Helper()
-	e := newEnv(t)
+	e := newEnvAt(t, now)
 	e.join(t, "builder", "reviewer", "tester")
 	if err := e.r.Create(ctx, "example-app", "the app", "builder"); err != nil {
 		t.Fatal(err)
@@ -1040,7 +1047,8 @@ func TestLeavingAThread(t *testing.T) {
 }
 
 func TestThreadTitles(t *testing.T) {
-	e, root := threadEnv(t)
+	clock := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	e, root := threadEnvAt(t, func() time.Time { clock = clock.Add(time.Second); return clock })
 	if err := e.r.SetThreadTitle(ctx, "builder", root, strings.Repeat("x", 101)); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("a 101-character title: %v", err)
 	}
@@ -1051,8 +1059,7 @@ func TestThreadTitles(t *testing.T) {
 	if err := e.r.SetThreadTitle(ctx, "tester", other, "Docs"); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(2 * time.Millisecond) // the reply is the newest activity
-	e.reply(t, "reviewer", root, "newest activity", false)
+	e.reply(t, "reviewer", root, "newest activity", false) // the clock makes it the newest activity
 	list, err := e.r.Threads(ctx, "example-app", "builder")
 	if err != nil {
 		t.Fatal(err)
@@ -1120,5 +1127,135 @@ func TestMarkingReadUpToAReplyAlsoInTheRoomReadsItsThread(t *testing.T) {
 	}
 	if got := e.unread(t, "builder"); len(got) != 0 {
 		t.Fatalf("unread %v, want none", ids(got))
+	}
+}
+
+func TestMarkingReadUpToAReplyAlsoInTheRoomReadsTheRoomToo(t *testing.T) {
+	e, root := threadEnv(t)
+	room := e.post(t, "tester", "example-app", "in the room")
+	also := e.reply(t, "reviewer", root, "also in the room", true)
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", also); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("unread %v; message %d of the room should be read", ids(got), room)
+	}
+}
+
+func TestAnUnreadThreadReplyDoesNotHoldTheRoomBack(t *testing.T) {
+	e, root := threadEnv(t)
+	reply := e.reply(t, "reviewer", root, "in the thread", false)
+	var last int64
+	for i := range 200 {
+		last = e.post(t, "tester", "example-app", fmt.Sprintf("room message %d", i))
+		if i%50 == 49 {
+			if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", last); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	var pos int64
+	var marks int
+	if err := e.db.QueryRowContext(ctx, `SELECT (SELECT last_id FROM read_positions WHERE agent = 'builder' AND room = 'example-app'),
+		(SELECT COUNT(*) FROM read_marks WHERE agent = 'builder')`).Scan(&pos, &marks); err != nil {
+		t.Fatal(err)
+	}
+	if pos != last || marks != 0 {
+		t.Fatalf("position %d (want %d), %d read marks", pos, last, marks)
+	}
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{reply}) {
+		t.Fatalf("unread %v, want the reply", ids(got))
+	}
+	if err := e.r.LeaveThread(ctx, "builder", root); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("after leaving the thread: %v", ids(got))
+	}
+}
+
+func TestReadingTheRoomPastTwoThreadReplies(t *testing.T) {
+	e, root := threadEnv(t)
+	r1 := e.reply(t, "reviewer", root, "one", false)
+	e.post(t, "tester", "example-app", "between")
+	r2 := e.reply(t, "reviewer", root, "two", false)
+	later := e.post(t, "tester", "example-app", "later")
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", later); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{r1, r2}) {
+		t.Fatalf("unread %v, want %v", ids(got), []int64{r1, r2})
+	}
+}
+
+func TestUnreadByRoomCountsThreadRepliesApart(t *testing.T) {
+	e, root := threadEnv(t)
+	e.reply(t, "reviewer", root, "in the thread", false)
+	e.reply(t, "reviewer", root, "@builder also here", true)
+	e.post(t, "tester", "example-app", "in the room")
+	counts, err := e.r.UnreadByRoom(ctx, "builder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []rooms.RoomUnread{{Room: "example-app", Unread: 2, Addressed: 1, Threads: 1}}
+	if !slices.Equal(counts, want) {
+		t.Fatalf("counts %+v, want %+v", counts, want)
+	}
+	if _, _, err := e.r.Take(ctx, "builder", rooms.Everything, 0); err != nil {
+		t.Fatal(err)
+	}
+	e.reply(t, "reviewer", root, "only in the thread", false)
+	if counts, _ := e.r.UnreadByRoom(ctx, "builder"); !slices.Equal(counts, []rooms.RoomUnread{{Room: "example-app", Threads: 1}}) {
+		t.Fatalf("a room with only thread replies unread: %+v", counts)
+	}
+}
+
+func TestReadingAThreadNamesItsParticipants(t *testing.T) {
+	e, root := threadEnv(t)
+	e.reply(t, "reviewer", root, "@tester can you check?", false)
+	if err := e.r.LeaveThread(ctx, "builder", root); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := e.r.ThreadHistory(ctx, root, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := msgs[0].Summary.Participants; !slices.Equal(got, []string{"reviewer", "tester"}) {
+		t.Fatalf("participants %v", got)
+	}
+}
+
+func TestAllInAThreadSkipsFollowersForMentions(t *testing.T) {
+	e, root := threadEnv(t)
+	e.join(t, "quiet")
+	if _, err := e.r.Subscribe(ctx, "quiet", []string{"example-app"}, true, rooms.ModeMentions); err != nil {
+		t.Fatal(err)
+	}
+	e.reply(t, "reviewer", root, "@all please check", false)
+	if got := e.unread(t, "quiet"); len(got) != 0 {
+		t.Fatalf("@all in a thread reached a mentions follower outside it: %v", ids(got))
+	}
+}
+
+func TestThreadsOfEveryRoomLeaveOutArchivedRooms(t *testing.T) {
+	e, root := threadEnv(t)
+	if err := e.r.Create(ctx, "old-app", "gone", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	old := e.post(t, "builder", "old-app", "old")
+	for id, title := range map[int64]string{root: "Release", old: "Old"} {
+		if err := e.r.SetThreadTitle(ctx, "builder", id, title); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.r.Archive(ctx, "builder", "old-app", true); err != nil {
+		t.Fatal(err)
+	}
+	list, err := e.r.Threads(ctx, "", "")
+	if err != nil || len(list) != 1 || list[0].Root != root {
+		t.Fatalf("threads %+v, %v", list, err)
+	}
+	if err := e.r.SetThreadTitle(ctx, "builder", old, "Renamed"); !errors.Is(err, rooms.ErrArchived) {
+		t.Fatalf("titling in an archived room: %v", err)
 	}
 }
