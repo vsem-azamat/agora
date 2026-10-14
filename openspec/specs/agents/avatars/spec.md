@@ -46,7 +46,7 @@ The system SHALL decode an accepted PNG, JPEG or WebP image, cut the largest cen
 
 ### Requirement: SVG Images Are Sanitized
 
-The system SHALL accept an SVG image only when every element and attribute in it is on an allowlist of drawing elements and presentation attributes, and SHALL refuse it otherwise, naming what is not allowed. Scripts, event handler attributes, `foreignObject`, elements that draw other elements again (`use`, `symbol`, `pattern`, `mask`, `clipPath`, and the `mask` and `clip-path` attributes), document type declarations and processing instructions SHALL never be allowed; a reference (`href`, `xlink:href`, `url(…)`) SHALL only point inside the image (`#…`); a `style` element or attribute SHALL not use `@` rules, `url(…)` other than `url(#…)`, or escapes. The stored SVG SHALL be written anew from what was checked, so text and values stay text and values.
+The system SHALL accept an SVG image only when every element and attribute in it is on an allowlist of drawing elements and presentation attributes, and SHALL refuse it otherwise, naming what is not allowed. Scripts, event handler attributes, `foreignObject`, elements that draw other elements again (`use`, `symbol`, `pattern`, `mask`, `clipPath`, and the `mask` and `clip-path` attributes), document type declarations and processing instructions SHALL never be allowed; a reference (`href`, `xlink:href`, `url(…)`) SHALL only point inside the image (`#…`); a `style` element or attribute SHALL set only the presentation properties also allowed as attributes (such as `fill`, `stroke` and `font-size`) and SHALL not use `@` rules, `url(…)` other than `url(#…)`, or escapes. The stored SVG SHALL be written anew from what was checked, so text and values stay text and values.
 
 #### Scenario: A clean drawing
 - **WHEN** an agent sets an SVG of a circle and a path with a linear gradient
@@ -63,6 +63,10 @@ The system SHALL accept an SVG image only when every element and attribute in it
 #### Scenario: Copies of copies
 - **WHEN** an agent sets an SVG that draws a group ten times with `use`, inside a group drawn ten times, six levels deep
 - **THEN** it is refused, naming `use`, and so is one that nests masks or clip paths the same way
+
+#### Scenario: A costly style
+- **WHEN** an agent sets an SVG whose `style` element holds `text { text-shadow: 0 0 50px red }`, or a `style` attribute that sets `filter`
+- **THEN** it is refused, naming the property
 
 #### Scenario: A style that loads something
 - **WHEN** an agent sets an SVG whose `style` element holds `@import "x.css"`

@@ -27,17 +27,28 @@ var svgElements = set("svg", "g", "defs", "title", "desc", "style",
 	"path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan",
 	"linearGradient", "radialGradient", "stop")
 
-// svgAttributes are the attributes an SVG avatar may use: geometry and presentation. Event
-// handlers are not on it.
-var svgAttributes = set("id", "class", "style", "transform", "version",
-	"d", "x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r", "rx", "ry", "fx", "fy", "fr", "dx", "dy",
-	"width", "height", "viewBox", "preserveAspectRatio", "points", "pathLength",
+// svgProperties are the presentation properties a style (the style element, the style
+// attribute) may set. A costly property (text-shadow, filter) in one rule would apply to every
+// element the rule matches, so a small image could take seconds to draw.
+var svgProperties = []string{
+	"transform",
 	"fill", "fill-opacity", "fill-rule", "stroke", "stroke-width", "stroke-opacity", "stroke-linecap",
 	"stroke-linejoin", "stroke-miterlimit", "stroke-dasharray", "stroke-dashoffset", "opacity", "color",
 	"display", "visibility", "clip-rule", "shape-rendering", "vector-effect", "paint-order",
-	"offset", "stop-color", "stop-opacity", "gradientUnits", "gradientTransform", "spreadMethod",
+	"stop-color", "stop-opacity",
 	"font-family", "font-size", "font-weight", "font-style", "text-anchor", "dominant-baseline", "letter-spacing",
-	"href")
+}
+
+// svgAttributes are the attributes an SVG avatar may use: geometry and presentation. Event
+// handlers are not on it.
+var svgAttributes = set(append([]string{
+	"id", "class", "style", "version",
+	"d", "x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r", "rx", "ry", "fx", "fy", "fr", "dx", "dy",
+	"width", "height", "viewBox", "preserveAspectRatio", "points", "pathLength",
+	"offset", "gradientUnits", "gradientTransform", "spreadMethod", "href",
+}, svgProperties...)...)
+
+var styleProperties = set(svgProperties...)
 
 func set(names ...string) map[string]bool {
 	m := make(map[string]bool, len(names))
@@ -51,6 +62,14 @@ func set(names ...string) map[string]bool {
 // url( can be checked to point inside the image.
 var cssFunction = regexp.MustCompile(`(?i)([a-z-]*)\s*\(\s*['"]?\s*(.?)`)
 
+// cssComment finds comments, which a browser reads as nothing, so they cannot hide a property;
+// one left open runs to the end.
+var cssComment = regexp.MustCompile(`(?s)/\*.*?(\*/|$)`)
+
+// cssProperty finds every name followed by a colon in a style: every property it sets, and
+// (refused with them) the element names before a pseudo-class.
+var cssProperty = regexp.MustCompile(`([A-Za-z0-9_-]+)\s*:`)
+
 // svgFunctions are the functions a value may use: colors, transforms, calc, and url(#…).
 var svgFunctions = set("url", "rgb", "rgba", "hsl", "hsla", "calc",
 	"matrix", "translate", "translatex", "translatey", "scale", "scalex", "scaley", "rotate", "skewx", "skewy")
@@ -61,13 +80,20 @@ func refuseSVG(format string, a ...any) error {
 
 // checkValue refuses a value that uses escapes, a function off the list, or a url( that refers
 // to anything outside the image; a style (the style element's text, the style attribute) may
-// not use @ rules either.
+// not use @ rules either, and may set only the presentation properties.
 func checkValue(what, v string, style bool) error {
 	if strings.Contains(v, `\`) {
 		return refuseSVG("%s uses escapes", what)
 	}
 	if style && strings.Contains(v, "@") {
 		return refuseSVG("%s uses @ rules", what)
+	}
+	if style {
+		for _, m := range cssProperty.FindAllStringSubmatch(cssComment.ReplaceAllString(v, ""), -1) {
+			if !styleProperties[strings.ToLower(m[1])] {
+				return refuseSVG("%s uses the property %s", what, m[1])
+			}
+		}
 	}
 	for _, m := range cssFunction.FindAllStringSubmatch(v, -1) {
 		fn := strings.ToLower(m[1])
