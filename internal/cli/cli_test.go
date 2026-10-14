@@ -1253,7 +1253,7 @@ func TestBridgeListShowsTheProtocolVersion(t *testing.T) {
 }
 
 // What `agora read` prints of a room's history is rooms.Format of the stored messages, whatever
-// marks they carry: a reply, a mention, a thread with replies and a title, a long body.
+// marks they carry: a reply, a thread with replies and a title, a long body.
 func TestReadPrintsTheHistoryAsRoomsFormat(t *testing.T) {
 	socket := startHub(t)
 	ctx := context.Background()
