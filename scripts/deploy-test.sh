@@ -46,9 +46,9 @@ fi
 
 # a check after the install fails: the message says how to go back, with the backups taken
 sleep 1 # a new backup name
-before=$(ls "$BIN".bak-* | wc -l)
+before=$(ls "$BIN".bak-* | wc -l | tr -d ' ')
 KEEP_BACKUPS=1 WEB_URL=http://127.0.0.1:1/ run && fail "a deploy whose web app does not answer succeeded"
-[ "$(ls "$BIN".bak-* | wc -l)" = $((before + 1)) ] || fail "a failed deploy pruned backups"
+[ "$(ls "$BIN".bak-* | wc -l | tr -d ' ')" = $((before + 1)) ] || fail "a failed deploy pruned backups"
 grep -q "to go back to what ran before" "$tmp/out" && grep -q "mv .*agora.bak-" "$tmp/out" || { cat "$tmp/out"; fail "no way back"; }
 if command -v sqlite3 >/dev/null; then
   grep -q "rm -f .*-wal .*-shm" "$tmp/out" || { cat "$tmp/out"; fail "the way back does not restore the database"; }
@@ -75,14 +75,14 @@ for n in 1 2 3; do
 done
 touch "$BIN.bak-2020-01" "$BIN.bak-notes" "$BIN.bak-20200101-000000"
 bins_list() { ls "$BIN".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*; }
-bins() { ls "$BIN".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l; }
+bins() { ls "$BIN".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l | tr -d ' '; }
 KEEP_BACKUPS=2 run || { cat "$tmp/out"; fail "a deploy that prunes backups failed"; }
 [ "$(bins)" = 2 ] && [ -e "$BIN.bak-29990103-000000" ] && ! ls "$BIN".bak-20200101-* "$BIN".bak-29990101-* >/dev/null 2>&1 \
   || { ls "$tmp/bin"; fail "the binary's backups are not this deploy's and the newest other"; }
 [ "$(bins_list | grep -c "bak-$(date +%Y)")" = 1 ] || fail "this deploy's own backup was removed"
 [ -e "$BIN.bak-notes" ] && [ -e "$BIN.bak-2020-01" ] || fail "pruning removed a file that is not a backup"
 if command -v sqlite3 >/dev/null; then
-  [ "$(ls "$DB".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l)" = 2 ] && [ -e "$DB.bak-29990103-000000" ] || { ls "$state"; fail "the database's backups are not this deploy's and the newest other"; }
+  [ "$(ls "$DB".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l | tr -d ' ')" = 2 ] && [ -e "$DB.bak-29990103-000000" ] || { ls "$state"; fail "the database's backups are not this deploy's and the newest other"; }
 fi
 sleep 1
 # BACKUP=0 takes no backup and prunes none
@@ -107,22 +107,22 @@ if [ -f "$DB" ]; then
   mv "$DB" "$DB.aside"
   sleep 1
   KEEP_BACKUPS=1 run || { cat "$tmp/out"; fail "a deploy without a database failed"; }
-  [ "$(ls "$DB".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l)" = 1 ] || { ls "$state"; fail "a deploy without a database did not keep exactly 1 of its backups"; }
+  [ "$(ls "$DB".bak-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-* | wc -l | tr -d ' ')" = 1 ] || { ls "$state"; fail "a deploy without a database did not keep exactly 1 of its backups"; }
   mv "$DB.aside" "$DB"
 fi
 # a backup that cannot be removed is said, by hand, and the deploy still succeeded
 mkdir -p "$tmp/rmshim"
 cat >"$tmp/rmshim/rm" <<SHIM
 #!/usr/bin/env bash
-case "\$*" in *bak-29990103*) exit 1 ;; esac
+case "\$*" in *bak-29990102*) exit 1 ;; esac
 exec $(command -v rm) "\$@"
 SHIM
 chmod +x "$tmp/rmshim/rm"
 touch "$BIN.bak-29990102-000000" "$BIN.bak-29990103-000000"
 sleep 1
 PATH="$tmp/rmshim:$PATH" KEEP_BACKUPS=1 run || { cat "$tmp/out"; fail "a deploy that could not remove a backup failed"; }
-grep -q "could not remove .*bak-29990103-000000; remove it by hand" "$tmp/out" || { cat "$tmp/out"; fail "the backup that stays is not named"; }
-[ -e "$BIN.bak-29990103-000000" ] && [ ! -e "$BIN.bak-29990102-000000" ] || fail "pruning stopped at the backup it could not remove"
+grep -q "could not remove .*bak-29990102-000000; remove it by hand" "$tmp/out" || { cat "$tmp/out"; fail "the backup that stays is not named"; }
+[ -e "$BIN.bak-29990102-000000" ] && [ ! -e "$BIN.bak-29990103-000000" ] || fail "pruning stopped at the backup it could not remove"
 KEEP_BACKUPS=two run && fail "a KEEP_BACKUPS that is not a number was accepted"
 grep -q "KEEP_BACKUPS=two is not a number" "$tmp/out" || { cat "$tmp/out"; fail "the refusal of KEEP_BACKUPS does not say why"; }
 
