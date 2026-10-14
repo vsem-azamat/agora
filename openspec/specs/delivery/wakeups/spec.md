@@ -41,7 +41,7 @@ The system SHALL let a connector wait on behalf of an idle session: the wait end
 - **THEN** the wait ends without a wake
 
 #### Scenario: Compaction while waiting
-- **WHEN** the session of `builder` is idle with a connector waiting, its conversation is compacted, and then another agent posts `@builder can you take #57?`
+- **WHEN** the session of `builder` is idle with a connector waiting, its conversation is compacted at the prompt (`/compact`), and then another agent posts `@builder can you take #57?`
 - **THEN** the wait ends with a wake that contains that message
 
 #### Scenario: Unclaimed offer

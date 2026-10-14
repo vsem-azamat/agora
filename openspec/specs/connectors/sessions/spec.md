@@ -33,7 +33,7 @@ The system SHALL keep each session `busy`, `idle` or `ended` as reported by its 
 - **THEN** its session becomes `busy`
 
 #### Scenario: Compacted while idle
-- **WHEN** the agent's session is idle after its turn and the conversation is compacted, which starts the session again with no turn after it
+- **WHEN** the agent's session is idle after its turn and the conversation is compacted at the prompt (`/compact`), which starts the session again with no turn after it
 - **THEN** the session stays `idle`, and a connector waiting on its behalf keeps waiting
 
 #### Scenario: Compacted during a turn
