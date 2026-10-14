@@ -1247,14 +1247,15 @@ func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
 
 func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
-	ready := filepath.Join(shortDir(t), "ready")
-	// ignores TERM, so it stops only when killed; the file says the trap is set
-	old := fmt.Sprintf(`trap '' TERM; touch '%s'; echo '{"type":"hello"}'; while :; do sleep 0.1; done`, ready)
+	// ignores TERM, so it stops only when killed, and floods lines of topic 77 until then; the
+	// trap is set before the first line
+	old := `trap '' TERM; echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old","thread":{"key":"77","title":"Old"}}'; sleep 0.01; done`
 	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: old})); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the old command", func() bool { _, err := os.Stat(ready); return err == nil })
+	eventually(t, "the flood", func() bool { return len(b.history(t)) >= 1 })
 	g := newFake(t)
+	g.set("caps", `{"type":"hello","caps":{"threads":"topic"}}`)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_, _ = b.bridges.SetBridge(ctx, connect.NewRequest(&agorav1.SetBridgeRequest{Agent: "builder", Name: "example-chat", Command: proto.String(g.command())}))
@@ -1264,6 +1265,21 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 	}
 	if st := b.state(t); st.GetState() != agorav1.BridgeState_BRIDGE_STATE_RUNNING || len(g.received()) == 0 {
 		t.Fatalf("bridge left %v, the new command never ran", st.GetState())
+	}
+	// the keys the old process wrote while it stopped are forgotten although the call gave up
+	g.send(`{"type":"in","id":"n1","author":{"name":"Bob"},"text":"NEWCHAT","thread":{"key":"77","title":"New"}}`)
+	eventually(t, "the new chat's line", func() bool {
+		for _, m := range b.history(t) {
+			if m.GetBody() == "NEWCHAT" {
+				return true
+			}
+		}
+		return false
+	})
+	for _, m := range b.history(t) {
+		if m.GetBody() == "NEWCHAT" && m.GetThread() != 0 {
+			t.Fatalf("the new chat's line joined the old chat's thread %d", m.GetThread())
+		}
 	}
 }
 
