@@ -2,10 +2,12 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, moveThread, page, parseRoute } from './App';
 import type { Api } from './api';
-import { forgetLoadedBuild, roomCounts, useRoom, useThread } from './useHub';
+import { hubNow, setClockOffset } from './hubclock';
+import { forgetLoadedBuild, roomCounts, useHub, useRoom, useThread } from './useHub';
 
 afterEach(() => {
   cleanup();
+  setClockOffset(0);
   forgetLoadedBuild();
   vi.unstubAllGlobals();
   localStorage.clear();
@@ -123,6 +125,158 @@ describe('App with a hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
+  });
+});
+
+describe('the hub clock', () => {
+  it('is taken from Whoami, so the browser clock may be wrong', async () => {
+    const hub = fakeHub([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input instanceof Request ? input.url : input).endsWith('WebService/Whoami'))
+          return Response.json({
+            ...(answers['WebService/Whoami'] as object),
+            time: new Date(Date.now() - 20_000).toISOString(),
+          });
+        return hub(input, init);
+      }),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    expect(Math.abs(Date.now() - hubNow() - 20_000)).toBeLessThan(2000); // the browser is 20 s ahead
+  });
+});
+
+// flush lets the promises that are ready run; the timers waitFor polls with are faked here
+const flush = async () => {
+  for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r));
+};
+
+// A hub API whose board loads are empty; whoami and the watch stream are the test's own.
+function boardApi(whoami: () => Promise<unknown>, watch: (signal: AbortSignal) => AsyncIterable<unknown>) {
+  const none = vi.fn(async () => ({
+    agents: [],
+    rooms: [],
+    bridges: [],
+    threads: [],
+    resources: [],
+    proposals: [],
+    subscriptions: [],
+  }));
+  return {
+    web: { whoami: vi.fn(whoami), watch: vi.fn((_: unknown, o: { signal: AbortSignal }) => watch(o.signal)) },
+    agents: { listAgents: none },
+    rooms: { listRooms: none, unreadByRoom: none, listSubscriptions: none, listThreads: none },
+    resources: { listResources: none },
+    governance: { listProposals: none, getCharter: vi.fn(async () => ({})) },
+    bridges: { listBridges: none },
+  } as unknown as Api & { web: { whoami: ReturnType<typeof vi.fn>; watch: ReturnType<typeof vi.fn> } };
+}
+
+const hubClockWho = { name: 'operator', version: 'dev', commit: 'x', time: undefined };
+const untilAborted = (signal: AbortSignal) =>
+  new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))));
+async function* liveStream(signal: AbortSignal) {
+  yield { revision: 1n };
+  await untilAborted(signal);
+}
+const realSleep = (ms: number) => new Promise((r) => setTimeout(r, ms)); // setTimeout is not faked below
+const fakeClock = () => vi.useFakeTimers({ toFake: ['Date', 'performance', 'setInterval', 'clearInterval'] });
+
+describe('the hub clock after the browser clock was set', () => {
+  it('asks the hub for its time again, forward and back, and stops with the page', async () => {
+    const api = boardApi(async () => hubClockWho, liveStream);
+    fakeClock();
+    try {
+      const unauthenticated = vi.fn(); // stable, as App's is
+      const view = renderHook(() => useHub(api, unauthenticated));
+      await flush();
+      expect(api.web.whoami).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(3000); // time passing is no reason to ask again
+      await flush();
+      expect(api.web.whoami).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(Date.now() + 30_000); // the browser clock is corrected
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(api.web.whoami).toHaveBeenCalledTimes(2); // the watch restarted and loaded the board again
+      vi.setSystemTime(Date.now() - 30_000); // and set back
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(api.web.whoami).toHaveBeenCalledTimes(3);
+      expect(unauthenticated).not.toHaveBeenCalled();
+      view.unmount();
+      expect(vi.getTimerCount()).toBe(0); // no interval is left
+      vi.setSystemTime(Date.now() + 30_000);
+      vi.advanceTimersByTime(2000);
+      await flush();
+      expect(api.web.whoami).toHaveBeenCalledTimes(3); // nothing watches after unmount
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('goes offline when the reload fails, and is live again after the usual retry', async () => {
+    let calls = 0;
+    const api = boardApi(async () => {
+      if (++calls === 2) throw new Error('transient'); // the reload after the clock was set
+      return hubClockWho;
+    }, liveStream);
+    fakeClock();
+    try {
+      const unauthenticated = vi.fn(); // stable, as App's is
+      const view = renderHook(() => useHub(api, unauthenticated));
+      await flush();
+      expect(view.result.current.status).toBe('live');
+      vi.setSystemTime(Date.now() - 20_000);
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(view.result.current.status).toBe('offline');
+      await realSleep(2300); // RETRY_MS: the watch reconnects, which loads the board again
+      await flush();
+      expect(view.result.current.status).toBe('live');
+      view.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('is not made live by a load that belongs to the stream it replaced', async () => {
+    let release = () => {};
+    let streams = 0;
+    let calls = 0;
+    const api = boardApi(
+      async () => {
+        if (++calls === 2) await new Promise<void>((r) => (release = r)); // the old stream's second load
+        return hubClockWho;
+      },
+      (signal) => {
+        if (++streams === 1)
+          return (async function* () {
+            yield { revision: 1n };
+            yield { revision: 2n };
+            await untilAborted(signal);
+          })();
+        return { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('down')) }) }; // the new stream cannot connect
+      },
+    );
+    fakeClock();
+    try {
+      const unauthenticated = vi.fn(); // stable, as App's is
+      const view = renderHook(() => useHub(api, unauthenticated));
+      await flush(); // the second load of the old stream waits for the hub
+      vi.setSystemTime(Date.now() + 30_000);
+      vi.advanceTimersByTime(1000);
+      await flush();
+      expect(view.result.current.status).toBe('offline');
+      release();
+      await flush();
+      expect(view.result.current.status).toBe('offline'); // the old loop is over
+      view.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

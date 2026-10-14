@@ -4,13 +4,15 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file agora/v1/web.proto.
  */
 export const file_agora_v1_web: GenFile = /*@__PURE__*/
-  fileDesc("ChJhZ29yYS92MS93ZWIucHJvdG8SCGFnb3JhLnYxIh4KDFRva2VuUmVxdWVzdBIOCgZyb3RhdGUYASABKAgiMwoNVG9rZW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRITCgt3ZWJfYWRkcmVzcxgCIAEoCSIPCg1XaG9hbWlSZXF1ZXN0ImQKDldob2FtaVJlc3BvbnNlEgwKBG5hbWUYASABKAkSDQoFYm9hcmQYAiABKAkSFAoMZ2VuZXJhbF9yb29tGAMgASgJEg8KB3ZlcnNpb24YBCABKAkSDgoGY29tbWl0GAUgASgJIg4KDFdhdGNoUmVxdWVzdCIhCg1XYXRjaFJlc3BvbnNlEhAKCHJldmlzaW9uGAEgASgDMr8BCgpXZWJTZXJ2aWNlEjgKBVRva2VuEhYuYWdvcmEudjEuVG9rZW5SZXF1ZXN0GhcuYWdvcmEudjEuVG9rZW5SZXNwb25zZRI7CgZXaG9hbWkSFy5hZ29yYS52MS5XaG9hbWlSZXF1ZXN0GhguYWdvcmEudjEuV2hvYW1pUmVzcG9uc2USOgoFV2F0Y2gSFi5hZ29yYS52MS5XYXRjaFJlcXVlc3QaFy5hZ29yYS52MS5XYXRjaFJlc3BvbnNlMAFCM1oxZ2l0aHViLmNvbS92c2VtLWF6YW1hdC9hZ29yYS9nZW4vYWdvcmEvdjE7YWdvcmF2MWIGcHJvdG8z");
+  fileDesc("ChJhZ29yYS92MS93ZWIucHJvdG8SCGFnb3JhLnYxIh4KDFRva2VuUmVxdWVzdBIOCgZyb3RhdGUYASABKAgiMwoNVG9rZW5SZXNwb25zZRINCgV0b2tlbhgBIAEoCRITCgt3ZWJfYWRkcmVzcxgCIAEoCSIPCg1XaG9hbWlSZXF1ZXN0Io4BCg5XaG9hbWlSZXNwb25zZRIMCgRuYW1lGAEgASgJEg0KBWJvYXJkGAIgASgJEhQKDGdlbmVyYWxfcm9vbRgDIAEoCRIPCgd2ZXJzaW9uGAQgASgJEg4KBmNvbW1pdBgFIAEoCRIoCgR0aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIOCgxXYXRjaFJlcXVlc3QiIQoNV2F0Y2hSZXNwb25zZRIQCghyZXZpc2lvbhgBIAEoAzK/AQoKV2ViU2VydmljZRI4CgVUb2tlbhIWLmFnb3JhLnYxLlRva2VuUmVxdWVzdBoXLmFnb3JhLnYxLlRva2VuUmVzcG9uc2USOwoGV2hvYW1pEhcuYWdvcmEudjEuV2hvYW1pUmVxdWVzdBoYLmFnb3JhLnYxLldob2FtaVJlc3BvbnNlEjoKBVdhdGNoEhYuYWdvcmEudjEuV2F0Y2hSZXF1ZXN0GhcuYWdvcmEudjEuV2F0Y2hSZXNwb25zZTABQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.TokenRequest
@@ -105,6 +107,14 @@ export type WhoamiResponse = Message<"agora.v1.WhoamiResponse"> & {
    * @generated from field: string commit = 5;
    */
   commit: string;
+
+  /**
+   * The hub's clock when it answered, so the app counts down to times the hub gives by the
+   * hub's time, whatever the browser's clock says.
+   *
+   * @generated from field: google.protobuf.Timestamp time = 6;
+   */
+  time?: Timestamp | undefined;
 };
 
 /**
