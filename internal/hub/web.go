@@ -122,7 +122,10 @@ func (h *Hub) WebHandler() http.Handler {
 	api.Handle(agorav1connect.NewGovernanceServiceHandler(&governanceService{h}, opts))
 	api.Handle(agorav1connect.NewWebServiceHandler(&webService{h}, opts))
 	api.Handle(agorav1connect.NewBridgeServiceHandler(&bridgeService{h}, opts))
-	files := web.Handler()
+	files := h.webFiles
+	if files == nil {
+		files = web.Handler()
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := w.Header()
 		hd.Set("Content-Security-Policy", contentSecurityPolicy)

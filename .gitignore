@@ -1,5 +1,8 @@
 # Build output
 /dist/
+# the web app's build; only .keep is tracked, so the embed compiles without a build
+/internal/web/dist/*
+!/internal/web/dist/.keep
 /bin/
 node_modules/
 

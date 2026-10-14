@@ -10,6 +10,7 @@ SERVICE=${SERVICE-agora-hub} # systemd user unit; empty: the hub is not restarte
 DB=${DB:-${AGORA_DB:-${XDG_STATE_HOME:-$HOME/.local/state}/agora/agora.db}}
 WEB_URL=${WEB_URL-}       # checked for 200; empty: not checked
 CHECK=${CHECK-check}      # make target run first; empty: none
+WEB=${WEB-1}              # 1: build the web app into the binary (make build-web); 0: API only
 PULL=${PULL-1}            # 1: git pull --ff-only first
 BACKUP=${BACKUP-1}        # 1: back up the binary and the database
 SKILL_DIRS=${SKILL_DIRS-} # space-separated: agora install skill --dir
@@ -60,6 +61,10 @@ if [ -n "$CHECK" ]; then
 fi
 
 step "build"
+if [ "$WEB" = 1 ]; then
+  make build-web
+  [ -z "$(git status --porcelain)" ] || die "make build-web changed the working tree"
+fi
 mkdir -p "$(dirname "$BIN")"
 new="$BIN.new.$$"
 trap 'rm -f "$new"' EXIT

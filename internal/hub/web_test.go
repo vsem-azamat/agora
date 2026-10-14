@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"connectrpc.com/connect"
@@ -19,6 +20,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
 	"github.com/vsem-azamat/agora/internal/version"
+	"github.com/vsem-azamat/agora/internal/web"
 )
 
 // webHub is a running hub that also serves the web app.
@@ -30,11 +32,20 @@ type webHub struct {
 
 func startWeb(t *testing.T, operator string) *webHub {
 	t.Helper()
+	return startWebWith(t, operator, nil)
+}
+
+// startWebWith starts a web hub serving files, or the built app when files is nil.
+func startWebWith(t *testing.T, operator string, files http.Handler) *webHub {
+	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := startWith(t, func(h *hub.Hub) {
+		if files != nil {
+			hub.SetWebFiles(h, files)
+		}
 		if err := h.EnableWeb(context.Background(), l, operator); err != nil {
 			t.Fatal(err)
 		}
@@ -350,7 +361,32 @@ func get(t *testing.T, url string) (page, string) {
 	return page{resp.StatusCode, resp.Header}, string(body)
 }
 
+// requireApp stops a test that reads the app's own files when they are not built into the test
+// binary; make test-go builds them first.
+func requireApp(t *testing.T) {
+	t.Helper()
+	if !web.Built() {
+		t.Fatal("the web app is not built into internal/web/dist; run make build-web (make test-go does)")
+	}
+}
+
+func TestWithoutTheAppTheAPIStillAnswers(t *testing.T) {
+	w := startWebWith(t, "operator", web.HandlerOf(fstest.MapFS{".keep": {}}))
+	resp, body := get(t, w.base+"/")
+	if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(body, "not built into this binary") {
+		t.Fatalf("page: %d %.200s", resp.StatusCode, body)
+	}
+	if resp.Header.Get("Content-Security-Policy") == "" {
+		t.Fatalf("the page lacks the hub's headers: %v", resp.Header)
+	}
+	who, err := agorav1connect.NewWebServiceClient(w.client(w.token(t, false)), w.base).Whoami(context.Background(), connect.NewRequest(&agorav1.WhoamiRequest{}))
+	if err != nil || who.Msg.GetName() != "operator" {
+		t.Fatalf("whoami: %v %v", who, err)
+	}
+}
+
 func TestThePageLoadsNothingFromElsewhere(t *testing.T) {
+	requireApp(t)
 	w := startWeb(t, "operator")
 	resp, body := get(t, w.base+"/")
 	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "<div id=\"root\">") {
@@ -377,6 +413,7 @@ func TestThePageLoadsNothingFromElsewhere(t *testing.T) {
 }
 
 func TestManifest(t *testing.T) {
+	requireApp(t)
 	w := startWeb(t, "operator")
 	resp, body := get(t, w.base+"/manifest.webmanifest")
 	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get("Content-Type"), "manifest+json") {
@@ -714,6 +751,7 @@ func TestTheAppArchivesAsTheOperator(t *testing.T) {
 }
 
 func TestThePageIsNeverKept(t *testing.T) {
+	requireApp(t)
 	w := startWeb(t, "operator")
 	for path, want := range map[string]string{
 		"/":                     "no-store",

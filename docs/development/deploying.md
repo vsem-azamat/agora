@@ -11,7 +11,7 @@
    - It refuses when `curl` (for `WEB_URL`) or `sqlite3` (for the database backup) is missing.
 2. **Checkout.** It refuses a working tree with changes or untracked files, since Go would mark the build `-dirty`, then runs `git pull --ff-only`. Without an upstream, set `PULL=0`.
 3. **Check.** It runs `make check` and refuses when the check changed the tree.
-4. **Build.** It builds into a temporary file next to the binary, and refuses unless `agora version` of the build names `HEAD`.
+4. **Build.** It runs `make build-web`, so the binary embeds the web app (`internal/web/dist/`, which git ignores), and refuses when that changed the tree. It then builds into a temporary file next to the binary, and refuses unless `agora version` of the build names `HEAD`.
 5. **Backup.**
    - It copies the binary to `<binary>.bak-<time>`.
    - It copies the database with `VACUUM INTO` to `<database>.bak-<time>`, readable by its owner only, so a migration can be undone. The copy is consistent while the hub writes.
@@ -21,7 +21,7 @@
 8. **Verify.**
    - It checks that the installed binary's `agora version` is the build's.
    - It checks that `agora status` reaches the hub. Like every `agora` command, it finds the socket through `AGORA_SOCKET` or `XDG_RUNTIME_DIR`, so they must match what the service uses.
-   - When `WEB_URL` is given, it checks that the web app answers 200.
+   - When `WEB_URL` is given, it checks that the web app answers 200; a binary without the web app answers 503 there.
    - It reinstalls the agent skill into `SKILL_DIRS`.
 
 When anything fails after the install, the script prints the commands that go back to what ran before, from the backups it took:
@@ -37,6 +37,7 @@ When anything fails after the install, the script prints the commands that go ba
 | `DB` | `$AGORA_DB`, else `$XDG_STATE_HOME/agora/agora.db`, else `~/.local/state/agora/agora.db` | The hub's database, backed up when it exists; set it to the service's `--db` when the service has one |
 | `WEB_URL` | empty | The web app's address, checked for 200; empty: not checked |
 | `CHECK` | `check` | The make target run before building; empty: none |
+| `WEB` | `1` | `0`: build without the web app, which serves only the API |
 | `PULL` | `1` | `0`: deploy the checkout as it is, without pulling |
 | `BACKUP` | `1` | `0`: no backups, and nothing to go back to |
 | `SKILL_DIRS` | empty | Directories, separated by spaces, to reinstall the agent skill into |
@@ -47,7 +48,7 @@ For example:
 make deploy WEB_URL=http://127.0.0.1:8484/ SKILL_DIRS="$HOME/.claude/skills $HOME/.agents/skills"
 ```
 
-Backups are kept; remove old ones by hand. `make test-deploy`, part of `make test`, commits the working tree's script into a clone of `HEAD` in a temporary directory and runs it there without a service. It checks:
+Backups are kept; remove old ones by hand. `make test-deploy`, part of `make test`, commits the working tree's script into a clone of `HEAD` in a temporary directory and runs it there without a service and with `WEB=0`, since the clone has no web dependencies installed. It checks:
 - the installed version;
 - the backups, with a quote and a space in the database's path;
 - the way back after a failed check;

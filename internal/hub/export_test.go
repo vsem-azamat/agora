@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"net/http"
 	"time"
 )
 
@@ -12,6 +13,10 @@ func WakeByCommand(ctx context.Context, h *Hub) error { return h.wakeByCommand(c
 func RunWakeCommand(ctx context.Context, command string) (string, bool) {
 	return runWakeCommand(ctx, command, "pane", "text")
 }
+
+// SetWebFiles makes the web listener serve files instead of the built app, for tests; call it
+// before the hub starts.
+func SetWebFiles(h *Hub, files http.Handler) { h.webFiles = files }
 
 // SetWakeEvery changes how often the wake loop runs, for tests.
 func SetWakeEvery(h *Hub, d time.Duration) { h.wakeEvery = d }

@@ -87,6 +87,7 @@ type Hub struct {
 	// webListener, when set, serves the web app acting as webAs (see EnableWeb).
 	webListener net.Listener
 	webAs       string
+	webFiles    http.Handler           // the app's files; web.Handler() unless a test sets them
 	webToken    atomic.Pointer[string] // the current web token; nil until there is one
 	rotated     *signal                // fires when the web token is replaced
 

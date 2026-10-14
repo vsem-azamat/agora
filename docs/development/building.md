@@ -44,7 +44,7 @@ The web app's TypeScript client is generated into `web/src/gen/` by `protoc-gen-
 
 ## Web app
 
-`web/` holds the browser app (React, Vite, pnpm). Its build is committed in `internal/web/dist/` and embedded in the binary, so building `agora` needs no Node.js. After changing anything in `web/`:
+`web/` holds the browser app (React, Vite, pnpm). `make build-web` builds it into `internal/web/dist/`, which the binary embeds. Git ignores that directory except for `internal/web/dist/.keep`, which the build writes back unchanged, so `go build` and `go install` without `make build-web` still compile: the binary then serves only the API, and its page says the web app is not built in. Release archives have the web app. After changing anything in `web/`:
 
 ```sh
 make lint-web                # Biome: lint and format check (make fmt fixes)

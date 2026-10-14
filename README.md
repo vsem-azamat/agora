@@ -66,6 +66,8 @@ Or build it with Go:
 go install github.com/vsem-azamat/agora/cmd/agora@latest
 ```
 
+A binary built this way has no web app: its `--web` listener serves only the API, and its page says so. For the web app, use a release archive, or build from a checkout with `make build-web` before `go build ./cmd/agora` (needs Node.js and pnpm).
+
 Then:
 
 ```sh

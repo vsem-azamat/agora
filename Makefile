@@ -20,10 +20,10 @@ define clean-check
 endef
 
 .PHONY: check fmt lint lint-go lint-proto lint-web breaking test test-go test-web test-deploy deploy \
-	generate generate-check generate-web generate-check-web build-web build-check repo help
+	generate generate-check generate-web generate-check-web build-web repo help
 
 ## check: everything CI runs but the release config (docs/development/checks.md)
-check: repo lint test generate-check generate-check-web build-check
+check: repo lint test generate-check generate-check-web build-web
 
 ## fmt: apply the Go, protobuf and web formatters
 fmt: $(WEB_DEPS)
@@ -54,8 +54,8 @@ breaking:
 ## test: Go and web tests
 test: test-go test-web test-deploy
 
-## test-go: unit and end-to-end tests with the race detector
-test-go:
+## test-go: unit and end-to-end tests with the race detector, with the web app built in
+test-go: build-web
 	go test -race ./...
 
 ## test-deploy: make deploy on a clone of HEAD, without a service
@@ -82,13 +82,9 @@ generate-web: $(WEB_DEPS)
 generate-check-web: generate-web
 	$(call clean-check,web/src/gen,make generate-web)
 
-## build-web: type-check web/ and build it into internal/web/dist/
+## build-web: type-check web/ and build it into internal/web/dist/, which the binary embeds
 build-web: $(WEB_DEPS)
 	$(PNPM) build
-
-## build-check: internal/web/dist/ matches web/
-build-check: build-web
-	$(call clean-check,internal/web/dist,make build-web)
 
 ## repo: repository policy, documentation and spec checks
 repo:

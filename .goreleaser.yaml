@@ -1,7 +1,10 @@
 # Release builds of agora for a v* tag; .github/workflows/release.yml runs it. The web app is built
-# in the workflow before this runs, and must match the committed internal/web/dist/, so the tree
-# stays clean.
+# into internal/web/dist/ first, which git ignores, so the binaries embed it and the tree stays clean.
 version: 2
+
+before:
+  hooks:
+    - make build-web
 
 project_name: agora
 

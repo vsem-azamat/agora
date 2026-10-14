@@ -24,6 +24,14 @@ The hub SHALL listen on the network only when started with `--web <address>` (de
 - **WHEN** the hub starts with `--web 0.0.0.0:8484`
 - **THEN** it serves the app on every interface and logs a warning that the address is not loopback
 
+### Requirement: A Binary Without The Web App
+
+A binary built without the web app, as `go build` or `go install` make it when `make build-web` has not run, SHALL still serve the API on its web listener, and SHALL answer the app's page `/` with status 503 and a short page saying that the web app is not built into this binary and how to get one that has it: a release archive, or `make build-web` before building. Other paths of the app SHALL not be found. The hub SHALL log a warning when it starts its web listener without the web app.
+
+#### Scenario: Built without the web app
+- **WHEN** a binary built without `make build-web` serves `--web 8484` and a browser opens `http://127.0.0.1:8484/`
+- **THEN** the page says the web app is not built into this binary and names the release archives and `make build-web`, and the API calls with the web token still work
+
 ### Requirement: The Web Token
 
 The hub SHALL keep one web token: 32 random bytes, written in unpadded base64url, stored in its database so it survives restarts. `agora web token` SHALL print the token, creating it when there is none, and, when the hub serves the app, the address to open with the token in the URL fragment (`http://127.0.0.1:8484/#token=<token>`); `agora web token --rotate` SHALL replace it, and the old token SHALL stop working at once. Only the hub's socket SHALL serve the token.
