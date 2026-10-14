@@ -33,7 +33,7 @@ func (s *agentService) UpdateProfile(ctx context.Context, req *connect.Request[a
 		switch f, err := s.h.rooms.FollowProject(ctx, m.GetAgent()); {
 		case err != nil: // the profile is updated; the output says why the room is not followed
 			s.h.log.Error("follow the project's room", "agent", m.GetAgent(), "err", err)
-			resp.ProjectRoom = &agorav1.ProjectRoom{Room: rooms.ProjectRoom(p.Project), State: agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED, Detail: err.Error()}
+			resp.ProjectRoom = &agorav1.ProjectRoom{Room: rooms.ProjectRoom(p.Project), State: agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED, Detail: "could not follow it; follow it yourself with `agora subscribe " + rooms.ProjectRoom(p.Project) + "`"}
 		default:
 			resp.ProjectRoom = &agorav1.ProjectRoom{Room: f.Room, State: projectRoomStates[f.State], Unfollowed: f.Unfollowed, Detail: f.Detail}
 		}

@@ -285,6 +285,33 @@ func TestManualCompactionOfABusySessionMakesItIdle(t *testing.T) {
 	}
 }
 
+func TestAFailedProjectRoomFollowLeavesTheProfileUpdatedAndSaysWhatToDo(t *testing.T) {
+	r := start(t)
+	bg := context.Background()
+	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.rooms.CreateRoom(bg, connect.NewRequest(&agorav1.CreateRoomRequest{Agent: "builder", Name: "alpha", Purpose: "work"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.rooms.Subscribe(bg, connect.NewRequest(&agorav1.SubscribeRequest{Agent: "builder", Rooms: []string{"alpha"}, Follow: false})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.db.ExecContext(bg, `CREATE TRIGGER no_subs BEFORE INSERT ON subscriptions BEGIN SELECT RAISE(ABORT, 'disk on fire'); END`); err != nil {
+		t.Fatal(err)
+	}
+	project := "alpha"
+	resp, err := r.agents.UpdateProfile(bg, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Project: &project}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := resp.Msg.GetProjectRoom()
+	if resp.Msg.GetProfile().GetProject() != "alpha" || pr.GetState() != agorav1.ProjectRoomState_PROJECT_ROOM_STATE_FAILED || pr.GetRoom() != "alpha" ||
+		!strings.Contains(pr.GetDetail(), "agora subscribe alpha") || strings.Contains(pr.GetDetail(), "disk on fire") {
+		t.Fatalf("project %q room %v", resp.Msg.GetProfile().GetProject(), pr)
+	}
+}
+
 func TestProfilesCarryTheirProjectRoom(t *testing.T) {
 	r := start(t)
 	bg := context.Background()
