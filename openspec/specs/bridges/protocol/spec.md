@@ -28,6 +28,10 @@ The hub and a bridge SHALL exchange one JSON object per line: the hub writes to 
 - **WHEN** a bridge never answers `hello`, or answers it with a `version` that is not a positive integer written in digits (such as `3.0`, `2e0` or `"3"`)
 - **THEN** its version is not reported: `agora bridge list` says `protocol not reported` and the web app shows no mismatch
 
+#### Scenario: A later hello without a version
+- **WHEN** a bridge answers `hello` with `{"type":"hello","version":2}` and later, in the same run, with `{"type":"hello","caps":{"threads":"topic"}}`
+- **THEN** its version is not reported any more
+
 #### Scenario: A bridge stops
 - **WHEN** a bridge that reported the version 2 exits and the hub starts it again
 - **THEN** its version is not reported until the new run says it
