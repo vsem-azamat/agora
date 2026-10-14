@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/vsem-azamat/agora/internal/bridges"
+	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/install"
 	"github.com/vsem-azamat/agora/internal/sessions"
 )
@@ -174,7 +175,7 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 				return err
 			}
 			version, verErr := claudeVersion(cmd.Context())
-			stopFailure := install.StopFailureReportsCredentials(version)
+			stopFailure := claudecode.ReportsCredentials(version)
 			ch, err := install.InstallClaudeCode(path, bin, terminalEnv, stopFailure, time.Now())
 			if err != nil {
 				return err
@@ -183,13 +184,13 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 			if verErr != nil && !errors.Is(verErr, install.ErrNoClaude) {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read the Claude Code version (%v); added the StopFailure hooks, which Claude Code before %s "+
 					"also fires for credential failures. If yours is older, run `agora install claude-code` again once `claude --version` answers\n",
-					verErr, install.StopFailureSince)
+					verErr, claudecode.StopFailureSince)
 			}
 			if !stopFailure {
 				fmt.Fprintf(o.out, "left out the StopFailure hooks: Claude Code %s reports a failure to load credentials as a transient error, "+
 					"so a session that cannot authenticate would be woken; without them a turn that fails is not woken until the next prompt. "+
 					"Run `agora install claude-code` again after updating Claude Code to %s or later\n",
-					version, install.StopFailureSince)
+					version, claudecode.StopFailureSince)
 			}
 			if ch.Outcome == install.Unchanged {
 				fmt.Fprintf(o.out, "Claude Code hooks already installed in %s\n", path)

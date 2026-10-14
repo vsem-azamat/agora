@@ -53,6 +53,16 @@ func Command(pid int) string {
 	return strings.TrimSpace(string(b))
 }
 
+// Executable returns a path that runs the program that pid runs, even after an update replaced
+// or removed its file, or "" when the platform has none.
+func Executable(pid int) string {
+	path := "/proc/" + strconv.Itoa(pid) + "/exe"
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
+}
+
 // Alive reports whether the process pid that started at start still runs. Without /proc, or
 // with an unknown start time, it only checks that some process has the pid.
 func Alive(pid int, start int64) bool {

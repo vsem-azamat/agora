@@ -58,7 +58,7 @@ The system SHALL let a connector wait on behalf of an idle session: the wait end
 
 ### Requirement: Claude Code Wakes Through An Asynchronous Hook
 
-The Claude Code connector SHALL wait in an asynchronous hook that runs when a session starts, when the agent ends its turn and when a turn ends on an API error the session can work again from, and wakes Claude Code by exiting with code 2 and the wake text, so the agent is woken whatever terminal it runs in. On any failure, including an unreachable hub, the hook SHALL end quietly with code 0.
+The Claude Code connector SHALL wait in an asynchronous hook that runs when a session starts, when the agent ends its turn and when a turn ends on an API error the session can work again from, and wakes Claude Code by exiting with code 2 and the wake text, so the agent is woken whatever terminal it runs in; the hook that runs when a turn ends on an API error SHALL end at once, without waiting, under a Claude Code that is known to be older than 2.1.267 (see the Claude Code connector). On any failure, including an unreachable hub, the hook SHALL end quietly with code 0.
 
 #### Scenario: Wake
 - **WHEN** the waiting hook receives a wake
@@ -75,6 +75,10 @@ The Claude Code connector SHALL wait in an asynchronous hook that runs when a se
 #### Scenario: Resumed soon after another report
 - **WHEN** a session's turn ended 5 seconds ago, its process went away without ending the session, a message addressed to its agent is unread, and the session is resumed with the hook that runs at the start opening its wait before the resume is reported
 - **THEN** the wait does not wake the session until the resume is reported
+
+#### Scenario: Older Claude Code fails
+- **WHEN** the waiting hook of a `StopFailure` runs under a Claude Code process older than 2.1.267, which reports a failure to load credentials as an error the session can work again from
+- **THEN** the hook ends at once with code 0 and prints nothing, so the session is not woken
 
 #### Scenario: Hub unavailable
 - **WHEN** the hub cannot be reached while the hook waits
