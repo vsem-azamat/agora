@@ -134,6 +134,10 @@ body,
   background: var(--bg);
   color: var(--fg);
 }
+html,
+body {
+  overscroll-behavior: none;
+}
 body {
   overflow: hidden;
   font-family: var(--body);

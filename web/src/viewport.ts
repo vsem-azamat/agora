@@ -2,7 +2,9 @@
 // of the screen, and some browsers (Safari) do not shrink the page for it: the app takes the
 // height of the visual viewport (`--vvh`) and stays scrolled to the top, so the compose box sits
 // right above the keyboard. While a text field has the focus the page is marked `data-typing`,
-// which hides the phone's bottom tabs.
+// which hides the phone's bottom tabs. The scroll back to the top comes at once when the viewport
+// resizes, but after a scroll only once it settles, so a drag that pans the page is not snapped
+// back under the finger.
 
 type Viewport = {
   height: number;
@@ -11,6 +13,9 @@ type Viewport = {
   addEventListener: (type: 'resize' | 'scroll', f: () => void) => void;
   removeEventListener: (type: 'resize' | 'scroll', f: () => void) => void;
 };
+
+/** How long without a scroll event the visual viewport counts as settled. */
+export const SETTLE_MS = 150;
 
 const notTyped = new Set(['button', 'checkbox', 'color', 'file', 'image', 'radio', 'range', 'reset', 'submit']);
 
@@ -22,10 +27,25 @@ function textField(el: EventTarget | null): boolean {
 /** Keeps `--vvh` and `data-typing` on the page's root up to date; returns the function that stops it. */
 export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: () => void): () => void {
   const root = doc.documentElement;
+  let settling: ReturnType<typeof setTimeout> | undefined;
+  const settle = () => {
+    clearTimeout(settling);
+    settling = undefined;
+    if (vv && vv.scale <= 1) toTop(); // zoomed in, the operator pans the page
+  };
   const size = () => {
     if (!vv) return;
     root.style.setProperty('--vvh', `${vv.height * vv.scale}px`);
-    if (vv.scale <= 1) toTop(); // zoomed in, the operator pans the page
+    settle();
+  };
+  // the page moved: back to the top when it stops moving, not on every event
+  const scrolled = () => {
+    clearTimeout(settling);
+    settling = setTimeout(settle, SETTLE_MS);
+  };
+  // a lifted finger ends the pan: no need to wait for more events
+  const lifted = () => {
+    if (settling !== undefined) settle();
   };
   // typing starts in a text field; where it ends is decided when the focus leaves one, and again
   // when the focus lands outside a form, in case a removed field's focusout never came
@@ -42,12 +62,17 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
   };
   size();
   vv?.addEventListener('resize', size);
-  vv?.addEventListener('scroll', size);
+  vv?.addEventListener('scroll', scrolled);
+  doc.addEventListener('touchend', lifted);
+  doc.addEventListener('touchcancel', lifted);
   doc.addEventListener('focusin', focusIn);
   doc.addEventListener('focusout', focusOut);
   return () => {
     vv?.removeEventListener('resize', size);
-    vv?.removeEventListener('scroll', size);
+    vv?.removeEventListener('scroll', scrolled);
+    clearTimeout(settling);
+    doc.removeEventListener('touchend', lifted);
+    doc.removeEventListener('touchcancel', lifted);
     doc.removeEventListener('focusin', focusIn);
     doc.removeEventListener('focusout', focusOut);
   };

@@ -57,14 +57,60 @@ describe('the part of the screen the app may use', () => {
     stop();
   });
 
-  it('scrolls back to the top when the visible part moves', () => {
-    const vv = fakeViewport(480);
-    const top = vi.fn();
-    const stop = watch(document, vv, top);
-    top.mockClear();
-    vv.listeners.get('scroll')?.();
-    expect(top).toHaveBeenCalledOnce();
-    stop();
+  describe('when the visible part moves', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('scrolls back to the top only once the scrolling settles, not under the finger', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      for (let i = 0; i < 5; i++) {
+        vv.listeners.get('scroll')?.();
+        vi.advanceTimersByTime(100); // events keep coming within 150 ms of each other
+      }
+      expect(top).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(49);
+      expect(top).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(top).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(1000);
+      expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('scrolls back to the top when the finger lifts, without waiting', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      document.dispatchEvent(new Event('touchend')); // nothing moved: nothing to undo
+      expect(top).not.toHaveBeenCalled();
+      vv.listeners.get('scroll')?.();
+      expect(top).not.toHaveBeenCalled();
+      document.dispatchEvent(new Event('touchend'));
+      expect(top).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(1000);
+      expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('does not scroll while zoomed in, nor after the watch stopped', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      const stop = watch(document, vv, top);
+      top.mockClear();
+      vv.scale = 2;
+      vv.listeners.get('scroll')?.();
+      vi.advanceTimersByTime(1000);
+      expect(top).not.toHaveBeenCalled();
+      vv.scale = 1;
+      vv.listeners.get('scroll')?.();
+      stop();
+      vi.advanceTimersByTime(1000);
+      expect(top).not.toHaveBeenCalled();
+    });
   });
 
   it('keeps typing while the focus moves to the send button of the same form', () => {
