@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 
 import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
@@ -13,8 +14,9 @@ const outDir = fileURLToPath(new URL('../internal/web/dist', import.meta.url));
 const keep = 'The web app is built here by make build-web; git tracks only this file.\n';
 const keepDist: Plugin = {
   name: 'keep-dist',
+  apply: 'build',
   closeBundle() {
-    writeFileSync(`${outDir}/.keep`, keep);
+    writeFileSync(join(outDir, '.keep'), keep);
   },
 };
 

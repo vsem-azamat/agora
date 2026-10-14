@@ -81,8 +81,8 @@ jobs:
         run: make lint-web
       - name: Test
         run: make test-web
-      - name: Build (type check and bundle)
-        run: make build-web
+      - name: Build (type check and bundle), leaving the tracked dist/.keep unchanged
+        run: make build-check
 
   release:
     name: Release config

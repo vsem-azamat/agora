@@ -16,6 +16,14 @@ func SetHubGiveUp(d time.Duration) func() {
 	return func() { hubGiveUp = old }
 }
 
+// SetWebBuilt makes the hub take the web app as built or not, for tests; the returned function
+// restores it.
+func SetWebBuilt(built bool) func() {
+	old := webBuilt
+	webBuilt = func() bool { return built }
+	return func() { webBuilt = old }
+}
+
 // NewRoot builds the agora command tree, for tests that inspect it.
 func NewRoot() *cobra.Command { return newRoot(io.Discard, io.Discard) }
 

@@ -913,6 +913,25 @@ func TestWebSetting(t *testing.T) {
 	}
 }
 
+func TestAHubWithoutTheWebAppSaysSo(t *testing.T) {
+	const warning = "the web app is not built into this binary"
+	for _, built := range []bool{false, true} {
+		restore := cli.SetWebBuilt(built)
+		log, code := hubLog(t, "--web", "0")
+		restore()
+		if code != 0 || strings.Contains(log, warning) == built {
+			t.Fatalf("built %v: exit %d, log: %s", built, code, log)
+		}
+	}
+	// only a web listener serves the app
+	restore := cli.SetWebBuilt(false)
+	defer restore()
+	t.Setenv("AGORA_WEB", "")
+	if log, _ := hubLog(t); strings.Contains(log, warning) {
+		t.Fatalf("warned without a web listener: %s", log)
+	}
+}
+
 func TestBridgeSettings(t *testing.T) {
 	cases := []struct {
 		name, policyEnv, delayEnv string

@@ -30,7 +30,7 @@ A binary built without the web app, as `go build` or `go install` make it when `
 
 #### Scenario: Built without the web app
 - **WHEN** a binary built without `make build-web` serves `--web 8484` and a browser opens `http://127.0.0.1:8484/`
-- **THEN** the page says the web app is not built into this binary and names the release archives and `make build-web`, and the API calls with the web token still work
+- **THEN** the page says the web app is not built into this binary and names the release archives and `make build-web`, the API calls with the web token still work, and the hub logs a warning that the web app is not built in
 
 ### Requirement: The Web Token
 
