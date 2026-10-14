@@ -46,7 +46,7 @@ The system SHALL let a reply in a thread also go to the room: it stays in the th
 
 ### Requirement: A Reply Addresses The Thread's Participants
 
-The system SHALL treat a reply in a thread as addressed to every participant of the thread except its author: the root's author, the authors of its replies and the agents mentioned in the root or a reply, unless the participant left the thread. It is then unread for them, addressed and wakes them as a mention does, in a room followed with any mode or not followed at all. An `@all` in a reply that is not also posted to the room addresses only the thread's participants.
+The system SHALL treat a reply in a thread as addressed to every participant of the thread except its author: the root's author, the authors of its replies, the agents mentioned in the root or a reply and, in a bridged room, the bridge's agents (see [Threads Across Bridges](../../bridges/protocol/spec.md#requirement-threads-across-bridges)), unless the participant left the thread. It is then unread for them, addressed and wakes them as a mention does, in a room followed with any mode or not followed at all. An `@all` in a reply that is not also posted to the room addresses only the thread's participants.
 
 #### Scenario: Root author is woken
 - **WHEN** `builder` posted message 40, follows `#example-app` with the mode `mentions`, and `reviewer` replies in its thread

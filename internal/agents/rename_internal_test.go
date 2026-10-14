@@ -36,6 +36,7 @@ var textColumns = map[string]map[string]bool{
 	"threads":         {"title": false, "titled_by": true},
 	"thread_leaves":   {"agent": true},
 	"thread_reads":    {"agent": true},
+	"thread_keys":     {"room": false, "key": false},
 }
 
 // TestRenameMovesEveryNameColumn keeps the rename statements complete: every TEXT column of

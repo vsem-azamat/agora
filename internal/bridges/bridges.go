@@ -416,6 +416,9 @@ type In struct {
 	At         time.Time // zero for now
 	Cursor     string    // "" leaves the stored cursor
 	Addressed  bool
+	// ThreadKey and ThreadTitle name the thread outside the message is in (see
+	// rooms.Incoming); the hub sets them only for a bridge that declared threads.
+	ThreadKey, ThreadTitle string
 }
 
 // Receive stores a message that came in through the bridge name, once per identifier outside,
@@ -426,7 +429,7 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 	if in.ID == "" && in.Cursor == "" {
 		return 0, store.Refuse(store.ErrInvalid, "an in line needs an id or a cursor")
 	}
-	for _, v := range []string{in.ID, in.ReplyTo, in.Cursor} {
+	for _, v := range []string{in.ID, in.ReplyTo, in.Cursor, in.ThreadKey} {
 		if len(v) > MaxIdentifier {
 			return 0, store.Refuse(store.ErrInvalid, "identifiers and cursors are at most %d bytes", MaxIdentifier)
 		}
@@ -480,6 +483,7 @@ func (b *Bridges) Receive(ctx context.Context, name string, in In, operator stri
 		}
 		msg := rooms.Incoming{
 			Room: name, ExtID: in.ID, AuthorID: authorID, AuthorName: authorName, Body: text, ReplyExtID: in.ReplyTo, At: in.At, Addressees: addressees,
+			ThreadKey: in.ThreadKey, ThreadTitle: clean(in.ThreadTitle, rooms.MaxTitle),
 		}
 		if in.Self && operator != "" {
 			msg.Author = operator
@@ -534,7 +538,8 @@ type Out struct {
 	Author  string
 	Sigil   string // the author's sigil, "" when it chose none
 	Text    string
-	ReplyTo string // the identifier outside of the message of the same room it replies to, if any
+	ReplyTo string // the identifier outside of the message of the same room it replies to, if any; for a reply in a thread whose replied-to message has none, the root's
+	Thread  string // the key outside of the thread the message is a reply in, if it has one
 }
 
 // Unanswered returns the identifiers of the messages of the bridge's room that the bridge has to
@@ -566,9 +571,13 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 	if err != nil {
 		return nil, err
 	}
-	rows, err := b.db.QueryContext(ctx, `SELECT m.id, m.author, COALESCE(a.icon, ''), m.body, COALESCE(r.ext_id, '') FROM messages AS m
+	// a reply in a thread whose replied-to message has no identifier outside (none, a note, a
+	// message that did not go out) replies to the thread's root there
+	rows, err := b.db.QueryContext(ctx, `SELECT m.id, m.author, COALESCE(a.icon, ''), m.body, COALESCE(r.ext_id, t.ext_id, ''), COALESCE(k.key, '') FROM messages AS m
 		LEFT JOIN agents AS a ON a.name = m.author
 		LEFT JOIN messages AS r ON r.id = m.reply_to AND r.room = m.room
+		LEFT JOIN messages AS t ON t.id = m.thread
+		LEFT JOIN thread_keys AS k ON k.room = m.room AND k.root = m.thread
 		WHERE m.id IN (SELECT value FROM json_each(?)) AND m.room = ? AND m.delivery = 'sending' ORDER BY m.id`, string(list), name)
 	if err != nil {
 		return nil, err
@@ -577,7 +586,7 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 	var out []Out
 	for rows.Next() {
 		var o Out
-		if err := rows.Scan(&o.ID, &o.Author, &o.Sigil, &o.Text, &o.ReplyTo); err != nil {
+		if err := rows.Scan(&o.ID, &o.Author, &o.Sigil, &o.Text, &o.ReplyTo, &o.Thread); err != nil {
 			return nil, err
 		}
 		out = append(out, o)

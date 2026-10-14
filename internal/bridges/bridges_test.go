@@ -1062,3 +1062,123 @@ func msgIDs(msgs []rooms.Message) []int64 {
 	}
 	return out
 }
+
+func TestMessagesOfAThreadOutside(t *testing.T) {
+	e := newEnv(t)
+	root := e.receive(t, bridges.In{ID: "1", AuthorID: "42", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release\n2.4"})
+	if _, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "at five", Thread: root, Note: true}); err != nil {
+		t.Fatal(err)
+	}
+	reply := e.receive(t, bridges.In{ID: "2", AuthorID: "43", AuthorName: "Bob", Text: "which time?", ThreadKey: "77"})
+	msgs, err := e.r.ThreadHistory(ctx, root, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 3 || msgs[0].ThreadTitle != "Release 2.4" || msgs[2].ID != reply || msgs[2].Thread != root {
+		t.Fatalf("thread: %+v", msgs)
+	}
+	got, _, err := e.r.Unread(ctx, "builder", rooms.Everything, 0)
+	if err != nil || len(got) != 2 || got[1].ID != reply || !got[1].Addressed { // the root, then the reply
+		t.Fatalf("builder took part, so the reply from outside addresses it: %+v %v", got, err)
+	}
+	if _, err := e.b.Receive(ctx, "example-chat", bridges.In{ID: "3", Text: "x", ThreadKey: strings.Repeat("k", bridges.MaxIdentifier+1)}, "owner"); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("a long thread key: %v", err)
+	}
+}
+
+// threadIn is a line from topic 77 outside.
+func threadIn(id, author, text string) bridges.In {
+	return bridges.In{ID: id, AuthorID: author, AuthorName: author, Text: text, ThreadKey: "77", ThreadTitle: "Release"}
+}
+
+func TestTheBridgesAgentsTakePartInItsThreads(t *testing.T) {
+	e := newEnv(t) // secretary is the bridge's agent and follows the room with the mode wake
+	root := e.receive(t, threadIn("1", "Ada", "release today"))
+	reply := e.receive(t, threadIn("2", "Bob", "which time?"))
+	got, _, err := e.r.Unread(ctx, "secretary", rooms.Waking, 0)
+	if err != nil || !slices.Equal(msgIDs(got), []int64{root, reply}) {
+		t.Fatalf("waking for secretary: %v %v", msgIDs(got), err)
+	}
+}
+
+func TestAKeyThatNamesTheRootJoinsItsThread(t *testing.T) {
+	e := newEnv(t)
+	root := e.receive(t, bridges.In{ID: "100", AuthorID: "42", AuthorName: "Ada", Text: "release today"})
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "at five", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the platform keys the thread by its root: the next line names the key 100 for the first time
+	bob := e.receive(t, bridges.In{ID: "101", AuthorID: "43", AuthorName: "Bob", Text: "five is fine", ReplyTo: "100", ThreadKey: "100", ThreadTitle: "Release"})
+	later := e.receive(t, bridges.In{ID: "102", AuthorID: "42", AuthorName: "Ada", Text: "good", ThreadKey: "100"})
+	msgs, err := e.r.ThreadHistory(ctx, root, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(msgIDs(msgs), []int64{root, reply, bob, later}) || msgs[0].ThreadTitle != "Release" {
+		t.Fatalf("thread %v titled %q", msgIDs(msgs), msgs[0].ThreadTitle)
+	}
+	// a new key replying to a message it does not name starts a thread of its own
+	quote := e.receive(t, bridges.In{ID: "103", AuthorID: "43", AuthorName: "Bob", Text: "as Ada said", ReplyTo: "100", ThreadKey: "77", ThreadTitle: "Other"})
+	if msgs, _ := e.r.ThreadHistory(ctx, quote, 0, ""); len(msgs) != 1 || msgs[0].Thread != 0 || msgs[0].ThreadTitle != "Other" {
+		t.Fatalf("a quote from another topic: %+v", msgs)
+	}
+}
+
+func TestAnEchoHoldingAKeyGivesItToTheSentMessagesThread(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root := e.receive(t, bridges.In{ID: "100", AuthorID: "42", AuthorName: "Ada", Text: "release today"})
+	sent, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "at five", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the copy comes back from topic 77 before sent; it names no message, so it roots the key
+	echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "at five", ThreadKey: "77"})
+	if ok, _, err := e.b.Sent(ctx, "example-chat", sent, "5515"); !ok || err != nil {
+		t.Fatalf("sent: %v %v", ok, err)
+	}
+	bob := e.receive(t, threadIn("5516", "Bob", "which time?"))
+	msgs, err := e.r.ThreadHistory(ctx, root, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(msgIDs(msgs), []int64{root, sent, bob}) {
+		t.Fatalf("thread %v (echo was %d)", msgIDs(msgs), echo)
+	}
+}
+
+func TestTheOperatorWritingInAThreadOutsideTakesPartAgain(t *testing.T) {
+	e := newEnv(t)
+	root := e.receive(t, threadIn("1", "Ada", "release today"))
+	if _, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "noted", Thread: root, Note: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.LeaveThread(ctx, "owner", root); err != nil {
+		t.Fatal(err)
+	}
+	e.receive(t, bridges.In{ID: "2", AuthorName: "Owner", Self: true, Text: "back", ThreadKey: "77"})
+	reply := e.receive(t, threadIn("3", "Bob", "welcome back"))
+	got, _, err := e.r.Unread(ctx, "owner", rooms.Everything, 0)
+	if err != nil || !slices.Contains(msgIDs(got), reply) {
+		t.Fatalf("owner after writing outside: %v %v", msgIDs(got), err)
+	}
+}
+
+func TestAReplyToANoteInAThreadGoesOutUnderTheRoot(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root := e.receive(t, bridges.In{ID: "100", AuthorID: "42", AuthorName: "Ada", Text: "release today"})
+	note, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "ask about times", Thread: root, Note: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "at five?", Thread: root, ReplyTo: note})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outs, err := e.b.Outgoing(ctx, "example-chat", []int64{id})
+	if err != nil || len(outs) != 1 || outs[0].ReplyTo != "100" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}

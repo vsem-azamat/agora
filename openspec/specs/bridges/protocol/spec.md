@@ -26,7 +26,7 @@ The hub and a bridge SHALL exchange one JSON object per line: the hub writes to 
 
 ### Requirement: Messages From Outside
 
-The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…},"text":…}` line as a message of the bridge's room from an external author: the bridge, the author's id and name. The `id` is the message's identifier outside and SHALL be stored once per room: a line whose `id` is already stored, including an `id` the bridge reported in a `sent` line, SHALL be ignored. An optional `reply_to` naming a stored identifier SHALL make the message a reply to that message, and an optional `at` (RFC 3339) SHALL be its time. Text longer than 8000 characters SHALL be shortened to 8000, ending in `[truncated]`; a line with an `id` and no text SHALL be stored with the text `[empty]`, and a line without an `id` SHALL store nothing but its `cursor` (a hub log says so when it carries text or an author). Control characters, line breaks included, line and paragraph separators and bidirectional controls in the author's name and id SHALL be replaced with spaces (joiners in emoji sequences stay), and each SHALL be cut to 100 characters; a line whose `id`, `reply_to` or `cursor` is longer than 256 characters SHALL be ignored. Mentions in the text SHALL address agents as in any message. No agent SHALL post as an external author.
+The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…},"text":…}` line as a message of the bridge's room from an external author: the bridge, the author's id and name. The `id` is the message's identifier outside and SHALL be stored once per room: a line whose `id` is already stored, including an `id` the bridge reported in a `sent` line, SHALL be ignored. An optional `reply_to` naming a stored identifier SHALL make the message a reply to that message, and an optional `at` (RFC 3339) SHALL be its time. Text longer than 8000 characters SHALL be shortened to 8000, ending in `[truncated]`; a line with an `id` and no text SHALL be stored with the text `[empty]`, and a line without an `id` SHALL store nothing but its `cursor` (a hub log says so when it carries text or an author). Control characters, line breaks included, line and paragraph separators and bidirectional controls in the author's name and id SHALL be replaced with spaces (joiners in emoji sequences stay), and each SHALL be cut to 100 characters; a line whose `id`, `reply_to`, `cursor` or thread key (see [Threads Across Bridges](#requirement-threads-across-bridges)) is longer than 256 characters SHALL be ignored. Mentions in the text SHALL address agents as in any message. No agent SHALL post as an external author.
 
 #### Scenario: Stored once
 - **WHEN** the bridge writes the same `in` line twice
@@ -58,7 +58,7 @@ The system SHALL store each `{"type":"in","id":…,"author":{"id":…,"name":…
 
 ### Requirement: What The Platform Can Do
 
-A bridge MAY answer the hub's `hello` with `{"type":"hello","caps":{"personas":…,"threads":…}}`, naming what its platform can do as short words: `personas`, how it shows who wrote a message that goes out (for example `prefix`, a name in front of the text), and `threads`, how it keeps threads (for example `topic`). The system SHALL keep the latest `caps` of a bridge's current run, clear them when the bridge stops, assume none before a bridge sends them or when it never does, ignore other entries and values that are not strings, clean each value like an author's name and cut it to 64 characters, and list them with the bridge (`agora bridge list`).
+A bridge MAY answer the hub's `hello` with `{"type":"hello","caps":{"personas":…,"threads":…}}`, naming what its platform can do as short words: `personas`, how it shows who wrote a message that goes out (for example `prefix`, a name in front of the text), and `threads`, how it keeps threads (for example `topic`). The system SHALL keep the latest `caps` of a bridge's current run, clear them when the bridge stops, assume none before a bridge sends them or when it never does, ignore other entries and values that are not strings, clean each value like an author's name and cut it to 64 characters, and list them with the bridge (`agora bridge list`). A bridge that declares `threads` takes part in threads (see [Threads Across Bridges](#requirement-threads-across-bridges)).
 
 #### Scenario: A bridge that shows names
 - **WHEN** the bridge of `#example-chat` answers `hello` with `{"type":"hello","caps":{"personas":"prefix"}}`
@@ -71,6 +71,34 @@ A bridge MAY answer the hub's `hello` with `{"type":"hello","caps":{"personas":�
 #### Scenario: A restart
 - **WHEN** a bridge that sent capabilities restarts and does not send them again
 - **THEN** it is listed without capabilities
+
+### Requirement: Threads Across Bridges
+
+The system SHALL, for a bridge that declared `threads` in its current run, store an `in` line with `thread: {"key": …, "title": …}` (a key of at most 256 bytes, given as a string or a number) in the room's thread mapped to that key. The first message with a new key SHALL join the thread of the message it replies to when the key is that thread's root's identifier outside and the thread has no key yet (a platform whose thread key names its root), and otherwise becomes the root of a new thread; either way the key is mapped to that thread, which gets the given title (cleaned like an author's name, cut to 100 characters) unless it has one. Later messages with the key are replies in that thread, addressed to its participants like any reply, and a title they carry is ignored. A `thread` of another shape SHALL be ignored, and the rest of the line stored. A bridge that did not declare `threads` has the thread of its lines ignored. The bridge's agents SHALL be participants of every thread of its room, so they are addressed by its replies as by the room's messages. An `out` line of a reply in a thread SHALL carry `thread`, the key, when the thread has one and the bridge declared `threads`; after a bridge starts, such replies wait until it declared `threads` or 3 seconds passed. When the reply replies to no message, or to one without an identifier outside (a note), `reply_to` SHALL name the root's identifier outside, so a thread started in Agora goes out as a chain of replies.
+
+#### Scenario: A forum topic
+- **WHEN** the bridge of `#example-chat` declared `threads` and its first line from topic `77` titled `Release` comes in, then a second
+- **THEN** the first is the root of a thread titled `Release` in `#example-chat`, the second is a reply in it, and an agent's reply in that thread goes out with `thread` `77`
+
+#### Scenario: A key that names the root
+- **WHEN** `secretary` replied in the thread of Ada's message `100`, and the bridge's first line with key `100` replies to `100`
+- **THEN** that line is a reply in the thread of `100`, and later lines with key `100` too
+
+#### Scenario: The bridge's agents
+- **WHEN** `secretary` is the agent of the bridge of `#example-chat` and follows it with the mode `wake`, and two lines of topic `77` come in
+- **THEN** both are unread for `secretary` and wake it
+
+#### Scenario: A restarted bridge
+- **WHEN** a reply in the thread of topic `77` was handed to the bridge and not answered, and the bridge restarts and declares `threads` again
+- **THEN** the reply is handed again with `thread` `77`
+
+#### Scenario: A thread started in Agora
+- **WHEN** `secretary` replies in the thread of a message `Ada` wrote outside, without replying to a message
+- **THEN** the reply goes out with `reply_to` naming Ada's message
+
+#### Scenario: A bridge without threads
+- **WHEN** a bridge that did not declare `threads` sends an `in` line with a `thread`, of any shape
+- **THEN** the message is stored as a message of the room
 
 ### Requirement: Replies To An Agent's Message
 

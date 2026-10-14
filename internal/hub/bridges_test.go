@@ -40,8 +40,9 @@ func TestMain(m *testing.M) {
 // fakeBridge is a bridge driven through files in dir: it appends every line it reads to
 // received, its environment and pid to starts, writes the lines a test appends to send (once,
 // across restarts), exits with code 3 when a file exit appears or at once while the number in
-// crashes is above 0 (counting it down), and answers out lines by the
-// content of mode: sent (the default, with the ext_id e<id>), fail, or silent.
+// crashes is above 0 (counting it down), answers the hub's hello with the line in caps when that
+// file exists, and answers out lines by the content of mode: sent (the default, with the ext_id
+// e<id>), fail, or silent.
 func fakeBridge(dir string) {
 	if err := os.Chdir(dir); err != nil {
 		os.Exit(2)
@@ -85,7 +86,16 @@ func fakeBridge(dir string) {
 			Type string `json:"type"`
 			ID   int64  `json:"id"`
 		}
-		if json.Unmarshal(sc.Bytes(), &l) != nil || l.Type != "out" {
+		if json.Unmarshal(sc.Bytes(), &l) != nil {
+			continue
+		}
+		if l.Type == "hello" {
+			if caps, err := os.ReadFile("caps"); err == nil {
+				write(append(bytes.TrimSpace(caps), '\n'))
+			}
+			continue
+		}
+		if l.Type != "out" {
 			continue
 		}
 		mode, _ := os.ReadFile("mode")
@@ -1121,4 +1131,125 @@ func TestABridgeSaysWhatItsPlatformCanDo(t *testing.T) {
 	f.set("exit", "")
 	eventually(t, "restart", func() bool { return f.starts() == 2 })
 	eventually(t, "caps cleared", func() bool { return b.state(t).GetCaps() == nil })
+}
+
+// lastOut is the last out line the fake bridge received.
+func (f fake) lastOut() map[string]any {
+	var out map[string]any
+	for _, m := range f.received() {
+		if m["type"] == "out" {
+			out = m
+		}
+	}
+	return out
+}
+
+func TestThreadsAcrossABridge(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_OPEN)
+	f.send(`{"type":"hello","caps":{"threads":"topic"}}`)
+	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == "topic" })
+	f.send(`{"type":"in","id":"1","author":{"id":"42","name":"Ada"},"text":"the release is today","thread":{"key":"77","title":"Release"}}`,
+		`{"type":"in","id":"2","author":{"id":"43","name":"Bob"},"text":"which time?","thread":{"key":"77","title":"Release"}}`)
+	eventually(t, "the topic's root", func() bool {
+		h := b.history(t)
+		return len(h) == 1 && h[0].GetThreadSummary().GetReplies() == 1
+	})
+	root := b.history(t)[0]
+	if root.GetThreadTitle() != "Release" || root.GetBody() != "the release is today" {
+		t.Fatalf("root: %v", root)
+	}
+	if _, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "at five", Thread: root.GetId()})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "out", func() bool { return f.lastOut() != nil })
+	if out := f.lastOut(); out["thread"] != "77" || out["reply_to"] != "1" || out["text"] != "at five" {
+		t.Fatalf("out line: %v", out)
+	}
+}
+
+func TestAThreadStartedInAgoraGoesOutAsReplies(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_OPEN)
+	// no threads declared: the thread of an in line is ignored
+	f.send(`{"type":"in","id":"5","author":{"id":"42","name":"Ada"},"text":"one","thread":{"key":"9","title":"T"}}`,
+		`{"type":"in","id":"6","author":{"id":"42","name":"Ada"},"text":"two","thread":{"key":"9","title":"T"}}`)
+	eventually(t, "two messages", func() bool { return len(b.history(t)) == 2 })
+	if h := b.history(t); h[1].GetThread() != 0 || h[0].GetThreadTitle() != "" {
+		t.Fatalf("history: %v", h)
+	}
+	if _, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "on it", Thread: b.history(t)[0].GetId()})); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "out", func() bool { return f.lastOut() != nil })
+	if out := f.lastOut(); out["reply_to"] != "5" || out["thread"] != nil {
+		t.Fatalf("out line: %v", out)
+	}
+}
+
+func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	b.add(t, f)
+	// no threads declared: whatever thread a line carries, the line is the room's
+	f.send(`{"type":"in","id":"1","author":{"id":"42","name":"Ada"},"text":"one","thread":"77"}`,
+		`{"type":"in","id":"2","author":{"id":"42","name":"Ada"},"text":"two","thread":{"key":"7","title":5}}`)
+	eventually(t, "both lines", func() bool { return len(b.history(t)) == 2 })
+	f.send(`{"type":"hello","caps":{"threads":"topic"}}`)
+	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == "topic" })
+	f.send(`{"type":"in","id":"3","author":{"id":"42","name":"Ada"},"text":"three","thread":"77"}`)
+	eventually(t, "a thread of the wrong shape from a bridge that keeps threads", func() bool { return len(b.history(t)) == 3 })
+	if h := b.history(t); h[2].GetThread() != 0 {
+		t.Fatalf("history: %v", h)
+	}
+}
+
+// outsOf returns the out lines of message id the fake received, in order.
+func (f fake) outsOf(id float64) []map[string]any {
+	var out []map[string]any
+	for _, m := range f.received() {
+		if m["type"] == "out" && m["id"] == id {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func TestARestartedBridgeGetsTheThreadKeyAgain(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	f.set("caps", `{"type":"hello","caps":{"threads":"topic"}}`)
+	f.set("mode", "silent")
+	b.add(t, f)
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_OPEN)
+	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == "topic" })
+	f.send(`{"type":"in","id":"1","author":{"id":"42","name":"Ada"},"text":"release today","thread":{"key":"77","title":"Release"}}`)
+	eventually(t, "the root", func() bool { return len(b.history(t)) == 1 })
+	resp, err := b.rooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Agent: "secretary", Room: "example-chat", Body: "at five", Thread: b.history(t)[0].GetId()}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := float64(resp.Msg.GetId())
+	eventually(t, "the first out", func() bool { return len(f.outsOf(id)) == 1 })
+	f.set("exit", "")
+	eventually(t, "handed again after the restart", func() bool { return len(f.outsOf(id)) == 2 })
+	if outs := f.outsOf(id); outs[1]["thread"] != "77" {
+		t.Fatalf("out after the restart: %v", outs[1])
+	}
+	// a run that does not say it keeps threads gets no key, once the wait for its caps is over
+	if err := os.Remove(filepath.Join(f.dir, "caps")); err != nil {
+		t.Fatal(err)
+	}
+	f.set("exit", "")
+	deadline := time.Now().Add(hub.BridgeCapsWait + 5*time.Second)
+	for len(f.outsOf(id)) < 3 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if outs := f.outsOf(id); len(outs) != 3 || outs[2]["thread"] != nil {
+		t.Fatalf("outs %v", outs)
+	}
 }
