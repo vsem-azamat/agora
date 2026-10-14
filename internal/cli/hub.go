@@ -21,6 +21,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
+	"github.com/vsem-azamat/agora/internal/web"
 )
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
@@ -94,6 +95,9 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				if host, _, _ := net.SplitHostPort(webAddr); !loopback(host) {
 					log.Warn("the web app listens on an address that is not a loopback address: its token crosses the network in plain text unless a proxy adds TLS", "web", webAddr)
 				}
+				if !webBuilt() {
+					log.Warn("the web app is not built into this binary: the web listener serves only the API; install a release archive, or run make build-web before building", "web", webAddr)
+				}
 			}
 			forges := forge.Forges{}
 			if watchPRs {
@@ -159,6 +163,9 @@ func webAddress(s string) (string, error) {
 	}
 	return net.JoinHostPort(host, port), nil
 }
+
+// webBuilt reports whether the web app is built into this binary; tests replace it.
+var webBuilt = web.Built
 
 func loopback(host string) bool {
 	if host == "localhost" {

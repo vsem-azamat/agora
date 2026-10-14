@@ -54,8 +54,8 @@ breaking:
 ## test: Go and web tests
 test: test-go test-web test-deploy
 
-## test-go: unit and end-to-end tests with the race detector
-test-go:
+## test-go: unit and end-to-end tests with the race detector, with the web app built in
+test-go: build-web
 	go test -race ./...
 
 ## test-deploy: make deploy on a clone of HEAD, without a service
@@ -82,11 +82,11 @@ generate-web: $(WEB_DEPS)
 generate-check-web: generate-web
 	$(call clean-check,web/src/gen,make generate-web)
 
-## build-web: type-check web/ and build it into internal/web/dist/
+## build-web: type-check web/ and build it into internal/web/dist/, which the binary embeds
 build-web: $(WEB_DEPS)
 	$(PNPM) build
 
-## build-check: internal/web/dist/ matches web/
+## build-check: the web app builds and writes back internal/web/dist/.keep, the one tracked file there
 build-check: build-web
 	$(call clean-check,internal/web/dist,make build-web)
 

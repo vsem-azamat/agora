@@ -16,7 +16,8 @@ git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commi
   commit -qam test --allow-empty --no-verify
 head=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
 state="$tmp/it's state" # a quote and a space in the database's path
-export BIN="$tmp/bin/agora" DB="$state/agora.db" SERVICE= CHECK= PULL=0 WEB_URL= SKILL_DIRS= BACKUP=1
+# WEB=0: the clone has no web dependencies installed; building the app is make build-web's own job
+export BIN="$tmp/bin/agora" DB="$state/agora.db" SERVICE= CHECK= WEB=0 PULL=0 WEB_URL= SKILL_DIRS= BACKUP=1
 run() { "$tmp/repo/scripts/deploy.sh" >"$tmp/out" 2>&1; }
 
 run || { cat "$tmp/out"; fail "the first deploy failed"; }
