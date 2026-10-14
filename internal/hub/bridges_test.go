@@ -828,6 +828,31 @@ func TestARefusedRemoveKeepsTheBoardsWordThatTheBridgeStopped(t *testing.T) {
 	}
 }
 
+func TestRemovingABridgeKeepsWhatItAnsweredWhileStopping(t *testing.T) {
+	b := startBridgeHub(t, time.Hour)
+	dir := shortDir(t)
+	// a bridge that answers sent for what it was handed only when it is told to stop
+	command := `trap 'echo "{\"type\":\"sent\",\"id\":$id,\"ext_id\":\"e$id\"}"; exit 0' TERM
+		while read -r line; do case "$line" in *'"type":"out"'*) id=$(echo "$line" | sed 's/.*"id":\([0-9]*\).*/\1/'); echo "$id" > '` + dir + `/handed';; esac; done`
+	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{
+		Agent: "builder", Name: "example-chat", Command: command,
+	})); err != nil {
+		t.Fatal(err)
+	}
+	b.setPolicy(t, agorav1.BridgePolicy_BRIDGE_POLICY_OPEN)
+	answered := b.post(t, "secretary", "goes out as the bridge stops")
+	eventually(t, "the message handed", func() bool {
+		got, _ := os.ReadFile(filepath.Join(dir, "handed"))
+		return strings.TrimSpace(string(got)) == strconv.FormatInt(answered, 10)
+	})
+	if _, err := b.bridges.RemoveBridge(context.Background(), connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "builder", Name: "example-chat"})); err != nil {
+		t.Fatal(err)
+	}
+	if m := b.message(t, answered); m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_SENT {
+		t.Fatalf("a message the bridge answered while it stopped: %v", m)
+	}
+}
+
 func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
 	b := startBridgeHub(t, time.Hour)
 	for _, p := range []string{

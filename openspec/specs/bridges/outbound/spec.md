@@ -86,7 +86,7 @@ A bridged room SHALL have the outbound policy `open`, `delay` or `read`; a bridg
 
 ### Requirement: Only The Operator Decides
 
-Only the web listener SHALL serve changing a bridge's outbound policy, sending a scheduled message at once, cancelling one and sending a note out; the hub's socket SHALL refuse these calls as not found, whatever name they act as. Sending a scheduled message at once or a note out SHALL be refused while the room's policy is `read` or the room has no bridge; only scheduled messages can be sent at once or cancelled, and only notes can be sent out. A refusal SHALL say only what was refused, without the name of its kind in front.
+Only the web listener SHALL serve changing a bridge's outbound policy, sending a scheduled message at once, cancelling one and sending a note out; the hub's socket SHALL refuse these calls as not found, whatever name they act as. Sending a scheduled message at once or a note out SHALL be refused while the room's policy is `read` or the room has no bridge; only scheduled messages can be sent at once or cancelled, and only notes can be sent out. Sending at once a message that is already sending or sent, as when its delay passed a moment before, SHALL succeed and change nothing. A refusal SHALL say only what was refused, without the name of its kind in front.
 
 #### Scenario: From the socket
 - **WHEN** a command on the socket tries to send a scheduled message at once or cancel it, acting as any name
@@ -95,6 +95,10 @@ Only the web listener SHALL serve changing a bridge's outbound policy, sending a
 #### Scenario: Sending while read only
 - **WHEN** the operator sends a scheduled message of `#example-chat` at once while its policy is `read`
 - **THEN** it is refused with the message `#example-chat is read-only; nothing goes out`, and the message stays scheduled
+
+#### Scenario: Sent at once as the delay passes
+- **WHEN** the operator sends a scheduled message at once just after its delay passed and it went out
+- **THEN** sending it at once succeeds, and the message is handed to the bridge once
 
 #### Scenario: Changing the policy
 - **WHEN** the operator sets the policy of `#example-chat` to `open` in the web app

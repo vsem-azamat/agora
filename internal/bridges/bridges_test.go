@@ -942,3 +942,54 @@ func TestChangingABridgeIsRefused(t *testing.T) {
 		t.Fatalf("bridge changed: %+v", b)
 	}
 }
+
+func TestSendingAtOnceAsTheDelayPasses(t *testing.T) {
+	e := newEnv(t)
+	id := e.post(t, "secretary", "example-chat", "looked, all fine")
+	if err := e.b.SendScheduled(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	// clicked again, or after the delay let it go out: it is going out, so that is no refusal
+	if err := e.b.SendScheduled(ctx, id); err != nil {
+		t.Fatalf("sending a message that is sending: %v", err)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", id, "5515"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.SendScheduled(ctx, id); err != nil {
+		t.Fatalf("sending a sent message: %v", err)
+	}
+	if deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+		t.Fatal("not sent")
+	}
+	if err := e.b.SendScheduled(ctx, id+100); !errors.Is(err, bridges.ErrNotFound) {
+		t.Fatalf("sending a message that does not exist: %v", err)
+	}
+}
+
+func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
+	e := newEnv(t)
+	sending, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if deliveryOf(t, e, "example-chat", sending) != rooms.Failed || deliveryOf(t, e, "example-chat", scheduled) != rooms.Scheduled {
+		t.Fatalf("history: %+v", e.history(t))
+	}
+	h := e.history(t)
+	told := slices.ContainsFunc(h, func(m rooms.Message) bool {
+		return m.Author == rooms.Board && m.Body == "@owner your message "+itoa(sending)+" may not have gone out: the bridge was removed before it answered. Check the chat before you send it again." && m.ReplyTo == sending
+	})
+	if !told {
+		t.Fatalf("the operator is not told: %+v", h)
+	}
+	for _, m := range h {
+		if m.ID == sending && m.DeliveryError != "the bridge was removed before it answered; it may have gone out" {
+			t.Fatalf("reason: %+v", m)
+		}
+	}
+}
