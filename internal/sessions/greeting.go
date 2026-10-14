@@ -14,11 +14,11 @@ import (
 // The texts in this file greet a starting session. They name only `agora` commands, so any
 // connector can add them to its agent's context.
 
-// projectRE limits a project suggested from a repository name to what is safe to paste into a
-// shell command.
 // GreetingRooms is how many rooms the invitation of a session lists at most.
 const GreetingRooms = 20
 
+// projectRE limits a project suggested from a repository name to what is safe to paste into a
+// shell command.
 var projectRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 // invitation is the context for a starting session that no name is bound to: how to take part

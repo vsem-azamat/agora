@@ -341,7 +341,7 @@ func (r *Rooms) List(ctx context.Context, all bool) ([]Room, error) {
 }
 
 // Names returns the names of at most limit rooms that are not archived, in name order, with room
-// keep among them when it is one of them, and how many rooms there are in all. It counts no
+// keep among them when it is one of them, and how many rooms that are not archived there are in all. It counts no
 // messages.
 func (r *Rooms) Names(ctx context.Context, limit int, keep string) (names []string, total int, err error) {
 	if err = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rooms WHERE archived_at IS NULL`).Scan(&total); err != nil {

@@ -421,6 +421,14 @@ func TestJoiningExpected(t *testing.T) {
 	if err := e.r.Archive(ctx, "builder", "old-app", true); err != nil {
 		t.Fatal(err)
 	}
+	// nor is an archived project room listed or marked
+	r, err = e.s.Report(ctx, sessions.Report{SessionID: "session-9", Kind: "claude-code", Event: sessions.Start, PID: 4290, PIDStart: 130, CWD: repoNamed(t, "old-app")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.Context, "Rooms: #example-app, #general.") || strings.Contains(r.Context, "your project's room") {
+		t.Fatalf("invitation with an archived project room: %q", r.Context)
+	}
 	// the project's room is named in lowercase; a project that is no room name has none
 	for i, c := range []struct{ repo, want, not string }{
 		{"Example-App", "#example-app (your project's room)", "room-create"},
