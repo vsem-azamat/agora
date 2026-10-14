@@ -977,7 +977,8 @@ func TestABridgeSaysWhatItsPlatformCanDo(t *testing.T) {
 	if caps := b.state(t).GetCaps(); caps != nil {
 		t.Fatalf("caps before hello: %v", caps)
 	}
-	f.send(`{"type":"hello","caps":{"personas":"prefix","threads":"topic","other":"x"}}`)
+	// a version the hub does not know is ignored like any unknown field
+	f.send(`{"type":"hello","version":99,"caps":{"personas":"prefix","threads":"topic","other":"x"}}`)
 	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetPersonas() == "prefix" })
 	if caps := b.state(t).GetCaps(); caps.GetThreads() != "topic" {
 		t.Fatalf("caps: %v", caps)
