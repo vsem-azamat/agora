@@ -23,7 +23,7 @@ head=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
 state="$tmp/it's state" # a quote and a space in the database's path
 # WEB=0: the clone has no web dependencies installed; building the app is make build-web's own job
 export BIN="$tmp/bin/agora" DB="$state/agora.db" SERVICE= CHECK= WEB=0 PULL=0 WEB_URL= SKILL_DIRS= BACKUP=1 RESTART=
-unset AGORA_SOCKET # the environment of a make deploy must not reach the hub the test starts
+unset AGORA_SOCKET AGORA_DB # the environment of a make deploy must not reach the hub the test starts
 run() { "$tmp/repo/scripts/deploy.sh" >"$tmp/out" 2>&1; }
 
 run || { cat "$tmp/out"; fail "the first deploy failed"; }
@@ -148,7 +148,7 @@ grep -q "the hub that answers is 'agora .*($later)', not 'agora .*($last)'" "$tm
 runs=$(wc -l <"$HOOK_LOG")
 PATH="$tmp/fake:$PATH" SERVICE=agora-fake RESTART="$tmp/hook/restart.sh" BACKUP=0 FAKE_RESTART=1 run || { cat "$tmp/out"; fail "a deploy with a service and a restart command failed"; }
 [ ! -s "$SYSTEMCTL_LOG" ] || fail "systemctl restarted the service although RESTART is set"
-[ "$(wc -l <"$HOOK_LOG")" = $((runs + 1)) ] || fail "the restart command did not run next to a service"
+[ "$(wc -l <"$HOOK_LOG")" -eq $((runs + 1)) ] || fail "the restart command did not run next to a service"
 sleep 1 # a new backup name
 RESTART=false BACKUP=1 run && fail "a deploy whose restart command fails succeeded"
 grep -q "the restart command failed" "$tmp/out" && grep -q "^  BIN=.* DB=.* bash -c false\$" "$tmp/out" || { cat "$tmp/out"; fail "a failed restart command does not say how to go back"; }
