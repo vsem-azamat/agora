@@ -315,12 +315,13 @@ export function roomsTabCount(counts: Map<string, RoomCount>): number {
 
 /**
  * What a room shows in the list: `@n` for messages addressed to the operator, else the unread count;
- * with nothing unread in the room itself, the unread replies of its threads, which are the
+ * with nothing unread in the room itself, `↳n` for the unread replies of its threads, which are the
  * operator's as a participant.
  */
-export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean } | undefined {
+export function roomBadge(c: RoomCount | undefined): { text: string; mention: boolean; title?: string } | undefined {
   if (!c) return undefined;
-  if (c.unread === 0) return c.threads ? { text: `${c.threads} in threads`, mention: true } : undefined;
+  if (c.unread === 0)
+    return c.threads ? { text: `↳${c.threads}`, mention: true, title: `${c.threads} unread in threads` } : undefined;
   return c.addressed > 0 ? { text: `@${c.addressed}`, mention: true } : { text: String(c.unread), mention: false };
 }
 

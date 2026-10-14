@@ -57,7 +57,11 @@ function ThreadLinks({ room, threads, current }: { room: string; threads?: Threa
 function Badge({ count }: { count: RoomCount | undefined }) {
   const badge = roomBadge(count);
   if (!badge) return null;
-  return <em className={badge.mention ? 'mention' : undefined}>{badge.text}</em>;
+  return (
+    <em className={badge.mention ? 'mention' : undefined} title={badge.title}>
+      {badge.text}
+    </em>
+  );
 }
 
 /** How many messages of the room wait for the operator to send them. */
