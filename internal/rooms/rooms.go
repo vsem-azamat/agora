@@ -514,9 +514,11 @@ func (r *Rooms) PostNote(ctx context.Context, author, room, body string, replyTo
 
 // SendOutTx stores a message of author in the bridged room that goes out at once, as the
 // operator's messages do, inside the caller's transaction: the operator sends a note out with it.
-// The caller checks that the room's policy lets it go out.
-func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
-	return r.postTx(ctx, tx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo}, sendAsOperator)
+// The posting names the thread and Also of a note in a thread, which its copy keeps. The caller
+// checks that the room's policy lets it go out.
+func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, p Posting) (int64, error) {
+	p.Note, p.Operator = false, false
+	return r.postTx(ctx, tx, p, sendAsOperator)
 }
 
 // sending is how a new message of a bridged room may leave Agora.
