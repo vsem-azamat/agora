@@ -4,12 +4,13 @@ import { ConnectError } from '@connectrpc/connect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Api } from './api';
 import { unauthenticated } from './api';
-import { type Mode, modeOf, type RoomCount } from './board';
+import { type Mode, modeOf, type RoomCount, toDate } from './board';
 import type { Profile } from './gen/agora/v1/agents_pb';
 import type { Bridge } from './gen/agora/v1/bridges_pb';
 import type { GetCharterResponse, Proposal } from './gen/agora/v1/governance_pb';
 import type { Resource } from './gen/agora/v1/resources_pb';
 import type { Message, Room, Thread } from './gen/agora/v1/rooms_pb';
+import { setHubClock } from './hubclock';
 
 export type Status = 'connecting' | 'live' | 'offline';
 
@@ -88,8 +89,13 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
   );
 
   const loadOnce = useCallback(async () => {
+    const sent = Date.now();
+    let received = sent;
     const [who, agents, rooms, unread, followed, resources, proposals, charter, bridges, threads] = await Promise.all([
-      api.web.whoami({}),
+      api.web.whoami({}).then((w) => {
+        received = Date.now(); // the others take longer: only this call says what the hub's clock read
+        return w;
+      }),
       api.agents.listAgents({}),
       api.rooms.listRooms({ all: true }),
       api.rooms.unreadByRoom({}),
@@ -100,6 +106,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.bridges.listBridges({}),
       api.rooms.listThreads({ unread: true }),
     ]);
+    setHubClock(toDate(who.time), sent, received);
     const build = `${who.version} ${who.commit}`;
     loadedWith ??= build;
     if (build !== loadedWith) setUpgraded(true);

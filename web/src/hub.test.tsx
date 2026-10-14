@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, moveThread, page, parseRoute } from './App';
 import type { Api } from './api';
+import { hubNow, setClockOffset } from './hubclock';
 import { forgetLoadedBuild, roomCounts, useRoom, useThread } from './useHub';
 
 afterEach(() => {
@@ -123,6 +124,28 @@ describe('App with a hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByLabelText('Web token')).toBeTruthy();
     expect(localStorage.getItem('agora.token')).toBeNull();
+  });
+});
+
+describe('the hub clock', () => {
+  it('is taken from Whoami, so the browser clock may be wrong', async () => {
+    const hub = fakeHub([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input instanceof Request ? input.url : input).endsWith('WebService/Whoami'))
+          return Response.json({
+            ...(answers['WebService/Whoami'] as object),
+            time: new Date(Date.now() - 20_000).toISOString(),
+          });
+        return hub(input, init);
+      }),
+    );
+    history.replaceState(null, '', '/#token=good-token');
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector('[data-agent="builder"]')).not.toBeNull());
+    expect(Math.abs(Date.now() - hubNow() - 20_000)).toBeLessThan(2000); // the browser is 20 s ahead
+    setClockOffset(0);
   });
 });
 

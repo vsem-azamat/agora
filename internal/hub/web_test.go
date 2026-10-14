@@ -295,6 +295,9 @@ func TestWhoamiNamesTheOperatorTheBoardAndGeneral(t *testing.T) {
 		who.Msg.GetVersion() != v.Version || who.Msg.GetCommit() != v.Commit {
 		t.Fatalf("whoami: %v", who.Msg)
 	}
+	if d := time.Since(who.Msg.GetTime().AsTime()); !who.Msg.GetTime().IsValid() || d < -5*time.Second || d > 5*time.Second {
+		t.Fatalf("the hub's time is %v, %s from now", who.Msg.GetTime(), d)
+	}
 }
 
 func TestInvalidOperatorNameIsRefused(t *testing.T) {

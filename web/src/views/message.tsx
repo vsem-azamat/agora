@@ -6,6 +6,7 @@ import type { Names } from '../board';
 import { clock, toDate } from '../board';
 import { authorName, type Delivery, deliveryOf } from '../bridges';
 import type { Message } from '../gen/agora/v1/rooms_pb';
+import { hubNow } from '../hubclock';
 import { Icon } from '../icons';
 import type { TapeItem } from '../tape';
 import { AgentLink, Avatar, MessageBody, usePg } from './common';
@@ -27,10 +28,10 @@ export type SendOut = (m: Message) => Promise<boolean>;
 
 /** How long until a scheduled message goes out, counted every second: `goes out in 0:42`. */
 function Countdown({ due }: { due: Date | undefined }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(hubNow);
   useEffect(() => {
     if (!due) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(hubNow()), 1000);
     return () => clearInterval(t);
   }, [due]);
   if (!due) return <span className="why">scheduled</span>;

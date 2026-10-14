@@ -9,6 +9,7 @@ package agorav1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -166,7 +167,10 @@ type WhoamiResponse struct {
 	Version string `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
 	// The commit the hub was built from: a short revision, with -dirty for a tree with changes, or
 	// unknown.
-	Commit        string `protobuf:"bytes,5,opt,name=commit,proto3" json:"commit,omitempty"`
+	Commit string `protobuf:"bytes,5,opt,name=commit,proto3" json:"commit,omitempty"`
+	// The hub's clock when it answered, so the app counts down to times the hub gives by the
+	// hub's time, whatever the browser's clock says.
+	Time          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=time,proto3" json:"time,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -234,6 +238,13 @@ func (x *WhoamiResponse) GetCommit() string {
 		return x.Commit
 	}
 	return ""
+}
+
+func (x *WhoamiResponse) GetTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Time
+	}
+	return nil
 }
 
 type WatchRequest struct {
@@ -321,20 +332,21 @@ var File_agora_v1_web_proto protoreflect.FileDescriptor
 
 const file_agora_v1_web_proto_rawDesc = "" +
 	"\n" +
-	"\x12agora/v1/web.proto\x12\bagora.v1\"&\n" +
+	"\x12agora/v1/web.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"&\n" +
 	"\fTokenRequest\x12\x16\n" +
 	"\x06rotate\x18\x01 \x01(\bR\x06rotate\"F\n" +
 	"\rTokenResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1f\n" +
 	"\vweb_address\x18\x02 \x01(\tR\n" +
 	"webAddress\"\x0f\n" +
-	"\rWhoamiRequest\"\x8f\x01\n" +
+	"\rWhoamiRequest\"\xbf\x01\n" +
 	"\x0eWhoamiResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05board\x18\x02 \x01(\tR\x05board\x12!\n" +
 	"\fgeneral_room\x18\x03 \x01(\tR\vgeneralRoom\x12\x18\n" +
 	"\aversion\x18\x04 \x01(\tR\aversion\x12\x16\n" +
-	"\x06commit\x18\x05 \x01(\tR\x06commit\"\x0e\n" +
+	"\x06commit\x18\x05 \x01(\tR\x06commit\x12.\n" +
+	"\x04time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"\x0e\n" +
 	"\fWatchRequest\"+\n" +
 	"\rWatchResponse\x12\x1a\n" +
 	"\brevision\x18\x01 \x01(\x03R\brevision2\xbf\x01\n" +
@@ -358,25 +370,27 @@ func file_agora_v1_web_proto_rawDescGZIP() []byte {
 
 var file_agora_v1_web_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_agora_v1_web_proto_goTypes = []any{
-	(*TokenRequest)(nil),   // 0: agora.v1.TokenRequest
-	(*TokenResponse)(nil),  // 1: agora.v1.TokenResponse
-	(*WhoamiRequest)(nil),  // 2: agora.v1.WhoamiRequest
-	(*WhoamiResponse)(nil), // 3: agora.v1.WhoamiResponse
-	(*WatchRequest)(nil),   // 4: agora.v1.WatchRequest
-	(*WatchResponse)(nil),  // 5: agora.v1.WatchResponse
+	(*TokenRequest)(nil),          // 0: agora.v1.TokenRequest
+	(*TokenResponse)(nil),         // 1: agora.v1.TokenResponse
+	(*WhoamiRequest)(nil),         // 2: agora.v1.WhoamiRequest
+	(*WhoamiResponse)(nil),        // 3: agora.v1.WhoamiResponse
+	(*WatchRequest)(nil),          // 4: agora.v1.WatchRequest
+	(*WatchResponse)(nil),         // 5: agora.v1.WatchResponse
+	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
 }
 var file_agora_v1_web_proto_depIdxs = []int32{
-	0, // 0: agora.v1.WebService.Token:input_type -> agora.v1.TokenRequest
-	2, // 1: agora.v1.WebService.Whoami:input_type -> agora.v1.WhoamiRequest
-	4, // 2: agora.v1.WebService.Watch:input_type -> agora.v1.WatchRequest
-	1, // 3: agora.v1.WebService.Token:output_type -> agora.v1.TokenResponse
-	3, // 4: agora.v1.WebService.Whoami:output_type -> agora.v1.WhoamiResponse
-	5, // 5: agora.v1.WebService.Watch:output_type -> agora.v1.WatchResponse
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	6, // 0: agora.v1.WhoamiResponse.time:type_name -> google.protobuf.Timestamp
+	0, // 1: agora.v1.WebService.Token:input_type -> agora.v1.TokenRequest
+	2, // 2: agora.v1.WebService.Whoami:input_type -> agora.v1.WhoamiRequest
+	4, // 3: agora.v1.WebService.Watch:input_type -> agora.v1.WatchRequest
+	1, // 4: agora.v1.WebService.Token:output_type -> agora.v1.TokenResponse
+	3, // 5: agora.v1.WebService.Whoami:output_type -> agora.v1.WhoamiResponse
+	5, // 6: agora.v1.WebService.Watch:output_type -> agora.v1.WatchResponse
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_web_proto_init() }

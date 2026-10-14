@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agent, bridge, goingOut, message, NOW, note, outside } from '../fixtures';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { RoomSchema, ThreadSummarySchema } from '../gen/agora/v1/rooms_pb';
+import { setClockOffset } from '../hubclock';
 import type { Saved } from '../tape';
 import { OpenAgent } from './common';
 import { nextUnreadThread, RoomView } from './room';
@@ -740,6 +741,24 @@ describe('messages going out', () => {
     vi.useRealTimers();
     expect(within(decide).getByRole('button', { name: 'Send now' })).toBeTruthy();
     expect(within(decide).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+  });
+
+  it('counts down by the hub clock when the browser clock is 20 seconds ahead', () => {
+    vi.useFakeTimers({ now: NOW });
+    setClockOffset(-20_000); // the hub reads 20 seconds less than this browser
+    try {
+      const due = timestampFromDate(new Date(NOW.getTime() + 22_000)); // 42 seconds ahead by the hub's clock
+      const { container } = chatRoom([goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled', '', due)]);
+      const decide = within(tablet(container, 1)).getByRole('group', {
+        name: 'Send the message of secretary to example-chat?',
+      });
+      expect(decide.querySelector('.why')?.textContent).toBe('goes out in 0:42');
+      act(() => vi.advanceTimersByTime(42_000));
+      expect(decide.querySelector('.why')?.textContent).toBe('going out…');
+    } finally {
+      setClockOffset(0);
+      vi.useRealTimers();
+    }
   });
 
   it('sends a scheduled message at once, then shows a check', async () => {

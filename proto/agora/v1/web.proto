@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package agora.v1;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/vsem-azamat/agora/gen/agora/v1;agorav1";
 
 // WebService supports the web app: its access token, the operator it acts as, and live updates.
@@ -41,6 +43,9 @@ message WhoamiResponse {
   // The commit the hub was built from: a short revision, with -dirty for a tree with changes, or
   // unknown.
   string commit = 5;
+  // The hub's clock when it answered, so the app counts down to times the hub gives by the
+  // hub's time, whatever the browser's clock says.
+  google.protobuf.Timestamp time = 6;
 }
 
 message WatchRequest {}
