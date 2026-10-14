@@ -86,7 +86,7 @@ The Claude Code connector SHALL wait in an asynchronous hook that runs when a se
 
 ### Requirement: A Terminal Command Wakes Other Tools
 
-The system SHALL, when the hub is configured with a wake command, wake a session that has been idle for 10 seconds, has a known terminal and a running process, and no connector waiting, by running that command with the session's terminal and the wake text; it SHALL wake a session at most once for the same newest message that wakes it or offer and at most once every 2 minutes, SHALL retry a failed command after that gap, SHALL stop a command that runs longer than a minute, and SHALL record the outcome. Without a wake command, such sessions are not woken.
+The system SHALL, when the hub is configured with a wake command, wake a session that has been idle for 10 seconds, has a known terminal and a running process, and no connector waiting, by running that command with the session's terminal and the wake text; it SHALL wake a session at most once for the same newest message that wakes it or offer and at most once every 2 minutes, SHALL not wake a session for 2 minutes after the hub's compact command ran for it, SHALL retry a failed command after that gap, SHALL stop a command that runs longer than a minute, and SHALL record the outcome. Without a wake command, such sessions are not woken.
 
 #### Scenario: Idle Codex session
 - **WHEN** the hub runs with a wake command and an idle session with a terminal and no waiting connector is mentioned
@@ -103,6 +103,10 @@ The system SHALL, when the hub is configured with a wake command, wake a session
 #### Scenario: Process gone
 - **WHEN** the process of an idle session no longer runs
 - **THEN** the command does not run for it
+
+#### Scenario: Compact just ran
+- **WHEN** the hub's compact command ran for the session 30 seconds ago and the session is mentioned
+- **THEN** the wake command does not run for it until 2 minutes have passed since the compact command (see [Session Control](../../connectors/session-control/spec.md#requirement-compact-waits-for-an-idle-prompt))
 
 #### Scenario: Burst of mentions
 - **WHEN** the session was woken 30 seconds ago and a new mention arrives

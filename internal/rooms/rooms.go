@@ -633,6 +633,9 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 	author, replyTo := p.Author, p.ReplyTo
 	room := strings.TrimPrefix(p.Room, "#")
 	body := strings.TrimSpace(p.Body)
+	if !utf8.ValidString(body) {
+		return 0, fmt.Errorf("%w: a message is valid UTF-8 text", store.ErrInvalid)
+	}
 	if body == "" || utf8.RuneCountInString(body) > MaxBody {
 		return 0, fmt.Errorf("%w: a message is 1 to %d characters", store.ErrInvalid, MaxBody)
 	}

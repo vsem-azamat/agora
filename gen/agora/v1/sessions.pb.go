@@ -146,6 +146,62 @@ func (SessionState) EnumDescriptor() ([]byte, []int) {
 	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{1}
 }
 
+// SessionMechanism is how the hub does an action for a session.
+type SessionMechanism int32
+
+const (
+	SessionMechanism_SESSION_MECHANISM_UNSPECIFIED SessionMechanism = 0
+	// The session cannot do it.
+	SessionMechanism_SESSION_MECHANISM_NONE SessionMechanism = 1
+	// The session's connector does it.
+	SessionMechanism_SESSION_MECHANISM_HOOK SessionMechanism = 2
+	// The hub runs its command for the session's terminal.
+	SessionMechanism_SESSION_MECHANISM_TERMINAL SessionMechanism = 3
+)
+
+// Enum value maps for SessionMechanism.
+var (
+	SessionMechanism_name = map[int32]string{
+		0: "SESSION_MECHANISM_UNSPECIFIED",
+		1: "SESSION_MECHANISM_NONE",
+		2: "SESSION_MECHANISM_HOOK",
+		3: "SESSION_MECHANISM_TERMINAL",
+	}
+	SessionMechanism_value = map[string]int32{
+		"SESSION_MECHANISM_UNSPECIFIED": 0,
+		"SESSION_MECHANISM_NONE":        1,
+		"SESSION_MECHANISM_HOOK":        2,
+		"SESSION_MECHANISM_TERMINAL":    3,
+	}
+)
+
+func (x SessionMechanism) Enum() *SessionMechanism {
+	p := new(SessionMechanism)
+	*p = x
+	return p
+}
+
+func (x SessionMechanism) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SessionMechanism) Descriptor() protoreflect.EnumDescriptor {
+	return file_agora_v1_sessions_proto_enumTypes[2].Descriptor()
+}
+
+func (SessionMechanism) Type() protoreflect.EnumType {
+	return &file_agora_v1_sessions_proto_enumTypes[2]
+}
+
+func (x SessionMechanism) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SessionMechanism.Descriptor instead.
+func (SessionMechanism) EnumDescriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{2}
+}
+
 type Session struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -157,6 +213,7 @@ type Session struct {
 	Pid           int32                  `protobuf:"varint,7,opt,name=pid,proto3" json:"pid,omitempty"`
 	Cwd           string                 `protobuf:"bytes,8,opt,name=cwd,proto3" json:"cwd,omitempty"`
 	Terminal      string                 `protobuf:"bytes,9,opt,name=terminal,proto3" json:"terminal,omitempty"`
+	Capabilities  *SessionCapabilities   `protobuf:"bytes,10,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -254,6 +311,74 @@ func (x *Session) GetTerminal() string {
 	return ""
 }
 
+func (x *Session) GetCapabilities() *SessionCapabilities {
+	if x != nil {
+		return x.Capabilities
+	}
+	return nil
+}
+
+// SessionCapabilities says how the hub can do each action for a session.
+type SessionCapabilities struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Wake          SessionMechanism       `protobuf:"varint,1,opt,name=wake,proto3,enum=agora.v1.SessionMechanism" json:"wake,omitempty"`
+	Compact       SessionMechanism       `protobuf:"varint,2,opt,name=compact,proto3,enum=agora.v1.SessionMechanism" json:"compact,omitempty"`
+	Interrupt     SessionMechanism       `protobuf:"varint,3,opt,name=interrupt,proto3,enum=agora.v1.SessionMechanism" json:"interrupt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionCapabilities) Reset() {
+	*x = SessionCapabilities{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionCapabilities) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionCapabilities) ProtoMessage() {}
+
+func (x *SessionCapabilities) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionCapabilities.ProtoReflect.Descriptor instead.
+func (*SessionCapabilities) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SessionCapabilities) GetWake() SessionMechanism {
+	if x != nil {
+		return x.Wake
+	}
+	return SessionMechanism_SESSION_MECHANISM_UNSPECIFIED
+}
+
+func (x *SessionCapabilities) GetCompact() SessionMechanism {
+	if x != nil {
+		return x.Compact
+	}
+	return SessionMechanism_SESSION_MECHANISM_UNSPECIFIED
+}
+
+func (x *SessionCapabilities) GetInterrupt() SessionMechanism {
+	if x != nil {
+		return x.Interrupt
+	}
+	return SessionMechanism_SESSION_MECHANISM_UNSPECIFIED
+}
+
 type ReportRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -275,7 +400,7 @@ type ReportRequest struct {
 
 func (x *ReportRequest) Reset() {
 	*x = ReportRequest{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[1]
+	mi := &file_agora_v1_sessions_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -287,7 +412,7 @@ func (x *ReportRequest) String() string {
 func (*ReportRequest) ProtoMessage() {}
 
 func (x *ReportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[1]
+	mi := &file_agora_v1_sessions_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -300,7 +425,7 @@ func (x *ReportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportRequest.ProtoReflect.Descriptor instead.
 func (*ReportRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{1}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ReportRequest) GetSessionId() string {
@@ -379,7 +504,7 @@ type ReportResponse struct {
 
 func (x *ReportResponse) Reset() {
 	*x = ReportResponse{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[2]
+	mi := &file_agora_v1_sessions_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -391,7 +516,7 @@ func (x *ReportResponse) String() string {
 func (*ReportResponse) ProtoMessage() {}
 
 func (x *ReportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[2]
+	mi := &file_agora_v1_sessions_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -404,7 +529,7 @@ func (x *ReportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResponse.ProtoReflect.Descriptor instead.
 func (*ReportResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{2}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ReportResponse) GetContext() string {
@@ -439,7 +564,7 @@ type JoinNameRequest struct {
 
 func (x *JoinNameRequest) Reset() {
 	*x = JoinNameRequest{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[3]
+	mi := &file_agora_v1_sessions_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -451,7 +576,7 @@ func (x *JoinNameRequest) String() string {
 func (*JoinNameRequest) ProtoMessage() {}
 
 func (x *JoinNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[3]
+	mi := &file_agora_v1_sessions_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -464,7 +589,7 @@ func (x *JoinNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinNameRequest.ProtoReflect.Descriptor instead.
 func (*JoinNameRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{3}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *JoinNameRequest) GetName() string {
@@ -498,7 +623,7 @@ type JoinNameResponse struct {
 
 func (x *JoinNameResponse) Reset() {
 	*x = JoinNameResponse{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[4]
+	mi := &file_agora_v1_sessions_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -510,7 +635,7 @@ func (x *JoinNameResponse) String() string {
 func (*JoinNameResponse) ProtoMessage() {}
 
 func (x *JoinNameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[4]
+	mi := &file_agora_v1_sessions_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -523,7 +648,7 @@ func (x *JoinNameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JoinNameResponse.ProtoReflect.Descriptor instead.
 func (*JoinNameResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{4}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *JoinNameResponse) GetBound() bool {
@@ -542,7 +667,7 @@ type ResolveRequest struct {
 
 func (x *ResolveRequest) Reset() {
 	*x = ResolveRequest{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[5]
+	mi := &file_agora_v1_sessions_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -554,7 +679,7 @@ func (x *ResolveRequest) String() string {
 func (*ResolveRequest) ProtoMessage() {}
 
 func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[5]
+	mi := &file_agora_v1_sessions_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -567,7 +692,7 @@ func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{5}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ResolveRequest) GetSessionId() string {
@@ -587,7 +712,7 @@ type ResolveResponse struct {
 
 func (x *ResolveResponse) Reset() {
 	*x = ResolveResponse{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[6]
+	mi := &file_agora_v1_sessions_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +724,7 @@ func (x *ResolveResponse) String() string {
 func (*ResolveResponse) ProtoMessage() {}
 
 func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[6]
+	mi := &file_agora_v1_sessions_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +737,7 @@ func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveResponse.ProtoReflect.Descriptor instead.
 func (*ResolveResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{6}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ResolveResponse) GetAgent() string {
@@ -630,7 +755,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[7]
+	mi := &file_agora_v1_sessions_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -642,7 +767,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[7]
+	mi := &file_agora_v1_sessions_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -655,7 +780,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{7}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{8}
 }
 
 type ListSessionsResponse struct {
@@ -667,7 +792,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[8]
+	mi := &file_agora_v1_sessions_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -679,7 +804,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[8]
+	mi := &file_agora_v1_sessions_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -692,7 +817,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{8}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*Session {
@@ -714,7 +839,7 @@ type WaitWakeRequest struct {
 
 func (x *WaitWakeRequest) Reset() {
 	*x = WaitWakeRequest{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[9]
+	mi := &file_agora_v1_sessions_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -726,7 +851,7 @@ func (x *WaitWakeRequest) String() string {
 func (*WaitWakeRequest) ProtoMessage() {}
 
 func (x *WaitWakeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[9]
+	mi := &file_agora_v1_sessions_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -739,7 +864,7 @@ func (x *WaitWakeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WaitWakeRequest.ProtoReflect.Descriptor instead.
 func (*WaitWakeRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{9}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *WaitWakeRequest) GetSessionId() string {
@@ -768,7 +893,7 @@ type WaitWakeResponse struct {
 
 func (x *WaitWakeResponse) Reset() {
 	*x = WaitWakeResponse{}
-	mi := &file_agora_v1_sessions_proto_msgTypes[10]
+	mi := &file_agora_v1_sessions_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -780,7 +905,7 @@ func (x *WaitWakeResponse) String() string {
 func (*WaitWakeResponse) ProtoMessage() {}
 
 func (x *WaitWakeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_sessions_proto_msgTypes[10]
+	mi := &file_agora_v1_sessions_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -793,7 +918,7 @@ func (x *WaitWakeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WaitWakeResponse.ProtoReflect.Descriptor instead.
 func (*WaitWakeResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{10}
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WaitWakeResponse) GetText() string {
@@ -810,11 +935,218 @@ func (x *WaitWakeResponse) GetArmed() bool {
 	return false
 }
 
+type CompactRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The agent that asks.
+	Agent string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// The agent whose conversation is compacted.
+	Target string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// What the compacted conversation should keep; may be empty.
+	Focus         string `protobuf:"bytes,3,opt,name=focus,proto3" json:"focus,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompactRequest) Reset() {
+	*x = CompactRequest{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompactRequest) ProtoMessage() {}
+
+func (x *CompactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompactRequest.ProtoReflect.Descriptor instead.
+func (*CompactRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *CompactRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *CompactRequest) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *CompactRequest) GetFocus() string {
+	if x != nil {
+		return x.Focus
+	}
+	return ""
+}
+
+type CompactResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// How the compaction will be done.
+	Mechanism     SessionMechanism `protobuf:"varint,1,opt,name=mechanism,proto3,enum=agora.v1.SessionMechanism" json:"mechanism,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompactResponse) Reset() {
+	*x = CompactResponse{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompactResponse) ProtoMessage() {}
+
+func (x *CompactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompactResponse.ProtoReflect.Descriptor instead.
+func (*CompactResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CompactResponse) GetMechanism() SessionMechanism {
+	if x != nil {
+		return x.Mechanism
+	}
+	return SessionMechanism_SESSION_MECHANISM_UNSPECIFIED
+}
+
+type InterruptRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The agent that asks.
+	Agent string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// The agent whose turn is interrupted.
+	Target        string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InterruptRequest) Reset() {
+	*x = InterruptRequest{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterruptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterruptRequest) ProtoMessage() {}
+
+func (x *InterruptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterruptRequest.ProtoReflect.Descriptor instead.
+func (*InterruptRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *InterruptRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *InterruptRequest) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+type InterruptResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// How the turn was interrupted.
+	Mechanism     SessionMechanism `protobuf:"varint,1,opt,name=mechanism,proto3,enum=agora.v1.SessionMechanism" json:"mechanism,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InterruptResponse) Reset() {
+	*x = InterruptResponse{}
+	mi := &file_agora_v1_sessions_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InterruptResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InterruptResponse) ProtoMessage() {}
+
+func (x *InterruptResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_sessions_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InterruptResponse.ProtoReflect.Descriptor instead.
+func (*InterruptResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_sessions_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *InterruptResponse) GetMechanism() SessionMechanism {
+	if x != nil {
+		return x.Mechanism
+	}
+	return SessionMechanism_SESSION_MECHANISM_UNSPECIFIED
+}
+
 var File_agora_v1_sessions_proto protoreflect.FileDescriptor
 
 const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\n" +
-	"\x17agora/v1/sessions.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa3\x02\n" +
+	"\x17agora/v1/sessions.proto\x12\bagora.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe6\x02\n" +
 	"\aSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x14\n" +
@@ -825,7 +1157,13 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"started_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x10\n" +
 	"\x03pid\x18\a \x01(\x05R\x03pid\x12\x10\n" +
 	"\x03cwd\x18\b \x01(\tR\x03cwd\x12\x1a\n" +
-	"\bterminal\x18\t \x01(\tR\bterminal\"\x86\x02\n" +
+	"\bterminal\x18\t \x01(\tR\bterminal\x12A\n" +
+	"\fcapabilities\x18\n" +
+	" \x01(\v2\x1d.agora.v1.SessionCapabilitiesR\fcapabilities\"\xb5\x01\n" +
+	"\x13SessionCapabilities\x12.\n" +
+	"\x04wake\x18\x01 \x01(\x0e2\x1a.agora.v1.SessionMechanismR\x04wake\x124\n" +
+	"\acompact\x18\x02 \x01(\x0e2\x1a.agora.v1.SessionMechanismR\acompact\x128\n" +
+	"\tinterrupt\x18\x03 \x01(\x0e2\x1a.agora.v1.SessionMechanismR\tinterrupt\"\x86\x02\n" +
 	"\rReportRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
@@ -863,7 +1201,18 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x05start\x18\x02 \x01(\bR\x05start\"<\n" +
 	"\x10WaitWakeResponse\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
-	"\x05armed\x18\x02 \x01(\bR\x05armed*\xdd\x01\n" +
+	"\x05armed\x18\x02 \x01(\bR\x05armed\"T\n" +
+	"\x0eCompactRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x12\x14\n" +
+	"\x05focus\x18\x03 \x01(\tR\x05focus\"K\n" +
+	"\x0fCompactResponse\x128\n" +
+	"\tmechanism\x18\x01 \x01(\x0e2\x1a.agora.v1.SessionMechanismR\tmechanism\"@\n" +
+	"\x10InterruptRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\"M\n" +
+	"\x11InterruptResponse\x128\n" +
+	"\tmechanism\x18\x01 \x01(\x0e2\x1a.agora.v1.SessionMechanismR\tmechanism*\xdd\x01\n" +
 	"\fSessionEvent\x12\x1d\n" +
 	"\x19SESSION_EVENT_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13SESSION_EVENT_START\x10\x01\x12\x18\n" +
@@ -878,13 +1227,20 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x12SESSION_STATE_BUSY\x10\x01\x12\x16\n" +
 	"\x12SESSION_STATE_IDLE\x10\x02\x12\x17\n" +
 	"\x13SESSION_STATE_ENDED\x10\x03\x12\x19\n" +
-	"\x15SESSION_STATE_OFFLINE\x10\x042\xe4\x02\n" +
+	"\x15SESSION_STATE_OFFLINE\x10\x04*\x8d\x01\n" +
+	"\x10SessionMechanism\x12!\n" +
+	"\x1dSESSION_MECHANISM_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16SESSION_MECHANISM_NONE\x10\x01\x12\x1a\n" +
+	"\x16SESSION_MECHANISM_HOOK\x10\x02\x12\x1e\n" +
+	"\x1aSESSION_MECHANISM_TERMINAL\x10\x032\xea\x03\n" +
 	"\x0eSessionService\x12;\n" +
 	"\x06Report\x12\x17.agora.v1.ReportRequest\x1a\x18.agora.v1.ReportResponse\x12A\n" +
 	"\bJoinName\x12\x19.agora.v1.JoinNameRequest\x1a\x1a.agora.v1.JoinNameResponse\x12>\n" +
 	"\aResolve\x12\x18.agora.v1.ResolveRequest\x1a\x19.agora.v1.ResolveResponse\x12M\n" +
 	"\fListSessions\x12\x1d.agora.v1.ListSessionsRequest\x1a\x1e.agora.v1.ListSessionsResponse\x12C\n" +
-	"\bWaitWake\x12\x19.agora.v1.WaitWakeRequest\x1a\x1a.agora.v1.WaitWakeResponse0\x01B3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
+	"\bWaitWake\x12\x19.agora.v1.WaitWakeRequest\x1a\x1a.agora.v1.WaitWakeResponse0\x01\x12>\n" +
+	"\aCompact\x12\x18.agora.v1.CompactRequest\x1a\x19.agora.v1.CompactResponse\x12D\n" +
+	"\tInterrupt\x12\x1a.agora.v1.InterruptRequest\x1a\x1b.agora.v1.InterruptResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
 	file_agora_v1_sessions_proto_rawDescOnce sync.Once
@@ -898,45 +1254,61 @@ func file_agora_v1_sessions_proto_rawDescGZIP() []byte {
 	return file_agora_v1_sessions_proto_rawDescData
 }
 
-var file_agora_v1_sessions_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agora_v1_sessions_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_agora_v1_sessions_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_agora_v1_sessions_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_agora_v1_sessions_proto_goTypes = []any{
 	(SessionEvent)(0),             // 0: agora.v1.SessionEvent
 	(SessionState)(0),             // 1: agora.v1.SessionState
-	(*Session)(nil),               // 2: agora.v1.Session
-	(*ReportRequest)(nil),         // 3: agora.v1.ReportRequest
-	(*ReportResponse)(nil),        // 4: agora.v1.ReportResponse
-	(*JoinNameRequest)(nil),       // 5: agora.v1.JoinNameRequest
-	(*JoinNameResponse)(nil),      // 6: agora.v1.JoinNameResponse
-	(*ResolveRequest)(nil),        // 7: agora.v1.ResolveRequest
-	(*ResolveResponse)(nil),       // 8: agora.v1.ResolveResponse
-	(*ListSessionsRequest)(nil),   // 9: agora.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),  // 10: agora.v1.ListSessionsResponse
-	(*WaitWakeRequest)(nil),       // 11: agora.v1.WaitWakeRequest
-	(*WaitWakeResponse)(nil),      // 12: agora.v1.WaitWakeResponse
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(SessionMechanism)(0),         // 2: agora.v1.SessionMechanism
+	(*Session)(nil),               // 3: agora.v1.Session
+	(*SessionCapabilities)(nil),   // 4: agora.v1.SessionCapabilities
+	(*ReportRequest)(nil),         // 5: agora.v1.ReportRequest
+	(*ReportResponse)(nil),        // 6: agora.v1.ReportResponse
+	(*JoinNameRequest)(nil),       // 7: agora.v1.JoinNameRequest
+	(*JoinNameResponse)(nil),      // 8: agora.v1.JoinNameResponse
+	(*ResolveRequest)(nil),        // 9: agora.v1.ResolveRequest
+	(*ResolveResponse)(nil),       // 10: agora.v1.ResolveResponse
+	(*ListSessionsRequest)(nil),   // 11: agora.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),  // 12: agora.v1.ListSessionsResponse
+	(*WaitWakeRequest)(nil),       // 13: agora.v1.WaitWakeRequest
+	(*WaitWakeResponse)(nil),      // 14: agora.v1.WaitWakeResponse
+	(*CompactRequest)(nil),        // 15: agora.v1.CompactRequest
+	(*CompactResponse)(nil),       // 16: agora.v1.CompactResponse
+	(*InterruptRequest)(nil),      // 17: agora.v1.InterruptRequest
+	(*InterruptResponse)(nil),     // 18: agora.v1.InterruptResponse
+	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
 }
 var file_agora_v1_sessions_proto_depIdxs = []int32{
 	1,  // 0: agora.v1.Session.state:type_name -> agora.v1.SessionState
-	13, // 1: agora.v1.Session.state_at:type_name -> google.protobuf.Timestamp
-	13, // 2: agora.v1.Session.started_at:type_name -> google.protobuf.Timestamp
-	0,  // 3: agora.v1.ReportRequest.event:type_name -> agora.v1.SessionEvent
-	2,  // 4: agora.v1.ListSessionsResponse.sessions:type_name -> agora.v1.Session
-	3,  // 5: agora.v1.SessionService.Report:input_type -> agora.v1.ReportRequest
-	5,  // 6: agora.v1.SessionService.JoinName:input_type -> agora.v1.JoinNameRequest
-	7,  // 7: agora.v1.SessionService.Resolve:input_type -> agora.v1.ResolveRequest
-	9,  // 8: agora.v1.SessionService.ListSessions:input_type -> agora.v1.ListSessionsRequest
-	11, // 9: agora.v1.SessionService.WaitWake:input_type -> agora.v1.WaitWakeRequest
-	4,  // 10: agora.v1.SessionService.Report:output_type -> agora.v1.ReportResponse
-	6,  // 11: agora.v1.SessionService.JoinName:output_type -> agora.v1.JoinNameResponse
-	8,  // 12: agora.v1.SessionService.Resolve:output_type -> agora.v1.ResolveResponse
-	10, // 13: agora.v1.SessionService.ListSessions:output_type -> agora.v1.ListSessionsResponse
-	12, // 14: agora.v1.SessionService.WaitWake:output_type -> agora.v1.WaitWakeResponse
-	10, // [10:15] is the sub-list for method output_type
-	5,  // [5:10] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	19, // 1: agora.v1.Session.state_at:type_name -> google.protobuf.Timestamp
+	19, // 2: agora.v1.Session.started_at:type_name -> google.protobuf.Timestamp
+	4,  // 3: agora.v1.Session.capabilities:type_name -> agora.v1.SessionCapabilities
+	2,  // 4: agora.v1.SessionCapabilities.wake:type_name -> agora.v1.SessionMechanism
+	2,  // 5: agora.v1.SessionCapabilities.compact:type_name -> agora.v1.SessionMechanism
+	2,  // 6: agora.v1.SessionCapabilities.interrupt:type_name -> agora.v1.SessionMechanism
+	0,  // 7: agora.v1.ReportRequest.event:type_name -> agora.v1.SessionEvent
+	3,  // 8: agora.v1.ListSessionsResponse.sessions:type_name -> agora.v1.Session
+	2,  // 9: agora.v1.CompactResponse.mechanism:type_name -> agora.v1.SessionMechanism
+	2,  // 10: agora.v1.InterruptResponse.mechanism:type_name -> agora.v1.SessionMechanism
+	5,  // 11: agora.v1.SessionService.Report:input_type -> agora.v1.ReportRequest
+	7,  // 12: agora.v1.SessionService.JoinName:input_type -> agora.v1.JoinNameRequest
+	9,  // 13: agora.v1.SessionService.Resolve:input_type -> agora.v1.ResolveRequest
+	11, // 14: agora.v1.SessionService.ListSessions:input_type -> agora.v1.ListSessionsRequest
+	13, // 15: agora.v1.SessionService.WaitWake:input_type -> agora.v1.WaitWakeRequest
+	15, // 16: agora.v1.SessionService.Compact:input_type -> agora.v1.CompactRequest
+	17, // 17: agora.v1.SessionService.Interrupt:input_type -> agora.v1.InterruptRequest
+	6,  // 18: agora.v1.SessionService.Report:output_type -> agora.v1.ReportResponse
+	8,  // 19: agora.v1.SessionService.JoinName:output_type -> agora.v1.JoinNameResponse
+	10, // 20: agora.v1.SessionService.Resolve:output_type -> agora.v1.ResolveResponse
+	12, // 21: agora.v1.SessionService.ListSessions:output_type -> agora.v1.ListSessionsResponse
+	14, // 22: agora.v1.SessionService.WaitWake:output_type -> agora.v1.WaitWakeResponse
+	16, // 23: agora.v1.SessionService.Compact:output_type -> agora.v1.CompactResponse
+	18, // 24: agora.v1.SessionService.Interrupt:output_type -> agora.v1.InterruptResponse
+	18, // [18:25] is the sub-list for method output_type
+	11, // [11:18] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_sessions_proto_init() }
@@ -949,8 +1321,8 @@ func file_agora_v1_sessions_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_sessions_proto_rawDesc), len(file_agora_v1_sessions_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   11,
+			NumEnums:      3,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

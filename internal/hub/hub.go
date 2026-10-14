@@ -56,6 +56,12 @@ const (
 	wakeOutputTail = 300
 )
 
+// terminal is the lock of one terminal and how many commands wait for it.
+type terminal struct {
+	mu      sync.Mutex
+	waiting atomic.Int32
+}
+
 // Hub holds the services and the change signal that wakes streaming waiters.
 type Hub struct {
 	db       *sql.DB
@@ -74,9 +80,14 @@ type Hub struct {
 	// WakeCommand, when set, wakes idle sessions that no connector waits for: it runs with
 	// `sh -c`, with $AGORA_TERMINAL and $AGORA_WAKE_TEXT in its environment.
 	WakeCommand string
+	// CompactCommand and InterruptCommand, when set, compact and interrupt sessions with a
+	// terminal like the wake command: `sh -c` with $AGORA_TERMINAL in its environment, and for
+	// compact the text to type (`/compact` and the focus) in $AGORA_WAKE_TEXT.
+	CompactCommand, InterruptCommand string
 	// WakeSettle is how long a session stays idle before the wake command may wake it.
-	WakeSettle time.Duration
-	wakeEvery  time.Duration // how often the wake loop runs: wakeCheckEvery, shorter in tests
+	WakeSettle   time.Duration
+	wakeEvery    time.Duration // how often the wake loop runs: wakeCheckEvery, shorter in tests
+	controlEvery time.Duration // how often queued compacts are looked at: sweepEvery
 
 	// Forges, by host, are asked about the pull requests of active agents; with none the hub
 	// does not follow pull requests.
@@ -94,9 +105,11 @@ type Hub struct {
 	bridgeRuns bridgeRuns // the bridges the hub runs while it serves
 	avatarRate avatarRate // how many avatar lines each bridge may still send
 
-	waitMu  sync.Mutex
-	waiters map[string]*waiter // by session id
-	waking  map[string]bool    // sessions whose wake command runs now
+	waitMu    sync.Mutex
+	waiters   map[string]*waiter // by session id
+	waking    map[string]bool    // sessions whose wake command runs now, and "interrupt:" + agent for an interrupt
+	termMu    sync.Mutex
+	terminals map[string]*terminal // one command at a time types into a terminal
 }
 
 // Open builds a hub over db with the given clock (time.Now when nil) and logger (none when nil).
@@ -110,8 +123,8 @@ func Open(db *sql.DB, now func() time.Time, log *slog.Logger) *Hub {
 		db: db, queue: q, sessions: sessions.New(db, q, r, now), agents: agents.New(db, now), rooms: r, gov: governance.New(db, r, now), tokens: webtoken.New(db, now),
 		bridges: bridges.New(db, r, now), avatars: avatars.New(db, now),
 		alive: proc.Alive, changes: newSignal(), rotated: newSignal(), log: log,
-		waiters: map[string]*waiter{}, waking: map[string]bool{}, avatarRate: avatarRate{limits: map[string]*avatarLimit{}},
-		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,
+		waiters: map[string]*waiter{}, waking: map[string]bool{}, terminals: map[string]*terminal{}, avatarRate: avatarRate{limits: map[string]*avatarLimit{}},
+		WakeSettle: defaultWakeSettle, wakeEvery: wakeCheckEvery, controlEvery: sweepEvery, WatchFirst: defaultWatchFirst, WatchEvery: defaultWatchEvery,
 		bridgeRuns: bridgeRuns{runs: map[string]*bridgeRun{}, minDelay: bridgeMinDelay, maxDelay: bridgeMaxDelay, steady: bridgeSteady, drain: bridgeDrain},
 	}
 }
@@ -134,6 +147,11 @@ func (h *Hub) Handler() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// commands says which terminal commands the hub was given.
+func (h *Hub) commands() sessions.Commands {
+	return sessions.Commands{Wake: h.WakeCommand != "", Compact: h.CompactCommand != "", Interrupt: h.InterruptCommand != ""}
 }
 
 // SetJoinMode sets how starting sessions that have not joined are invited: offer or expect.

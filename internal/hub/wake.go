@@ -184,7 +184,19 @@ func (h *Hub) wakeByCommand(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 			defer func() { h.waitMu.Lock(); delete(h.waking, c.SessionID); h.waitMu.Unlock() }()
-			result, ok := runWakeCommand(ctx, h.WakeCommand, c.Terminal, text)
+			unlock := h.lockTerminal(c.Terminal)
+			defer unlock() // after the wake is recorded: a compact claimed next sees it
+			// what was decided before the terminal was free may no longer hold
+			if !h.alive(c.PID, c.PIDStart) {
+				return
+			}
+			if due, err := h.sessions.WakeStillDue(ctx, c, h.WakeSettle); err != nil || !due {
+				if err != nil && ctx.Err() == nil {
+					h.log.Error("check wake", "session", c.SessionID, "err", err)
+				}
+				return
+			}
+			result, ok := runTerminalCommand(ctx, h.WakeCommand, c.Terminal, text)
 			h.log.Info("woke a session by command", "session", c.SessionID, "agent", c.Agent, "result", result)
 			if err := h.sessions.RecordWake(context.WithoutCancel(ctx), c.SessionID, key, result, ok); err != nil {
 				h.log.Error("record wake", "session", c.SessionID, "err", err)
@@ -195,12 +207,13 @@ func (h *Hub) wakeByCommand(ctx context.Context) error {
 	return nil
 }
 
-// runWakeCommand runs the wake command for one terminal in its own process group, killing the
-// whole group after wakeTimeout, and returns "ok" or the error with the end of its output.
-func runWakeCommand(ctx context.Context, command, terminal, text string) (string, bool) {
+// runTerminalCommand runs a command of the operator (the wake, compact or interrupt command)
+// for one terminal in its own process group, killing the whole group after wakeTimeout, and
+// returns "ok" or the error with the end of its output. text is what the command types.
+func runTerminalCommand(ctx context.Context, command, terminal, text string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, wakeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // the wake command is configured by the operator who runs the hub
+	cmd := exec.CommandContext(ctx, "sh", "-c", command) //nolint:gosec // the command is configured by the operator who runs the hub
 	cmd.Env = append(os.Environ(), "AGORA_TERMINAL="+terminal, "AGORA_WAKE_TEXT="+text)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
@@ -213,5 +226,7 @@ func runWakeCommand(ctx context.Context, command, terminal, text string) (string
 	if len(tail) > wakeOutputTail {
 		tail = tail[len(tail)-wakeOutputTail:]
 	}
-	return strings.TrimSpace(err.Error() + ": " + tail), false
+	// the cut may split a character, and the output may not be text at all
+	tail = strings.TrimSpace(strings.ToValidUTF8(tail, "\uFFFD"))
+	return strings.TrimSpace(strings.ToValidUTF8(err.Error(), "\uFFFD") + ": " + tail), false
 }

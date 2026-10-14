@@ -63,6 +63,11 @@ type running struct {
 func start(t *testing.T) *running { return startWith(t, nil) }
 
 func startWith(t *testing.T, configure func(*hub.Hub)) *running {
+	return startPrepared(t, nil, configure)
+}
+
+// startPrepared is startWith with prepare run on the database before the hub serves.
+func startPrepared(t *testing.T, prepare func(*sql.DB), configure func(*hub.Hub)) *running {
 	t.Helper()
 	dir := shortDir(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -77,6 +82,9 @@ func startWith(t *testing.T, configure func(*hub.Hub)) *running {
 		t.Fatal(err)
 	}
 	r := &running{db: db, clock: c, stop: cancel, done: make(chan struct{})}
+	if prepare != nil {
+		prepare(db)
+	}
 	h := hub.Open(db, c.now, nil)
 	if configure != nil {
 		configure(h)

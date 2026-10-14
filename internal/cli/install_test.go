@@ -27,7 +27,7 @@ func isolate(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, v := range []string{"CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "AGORA_SOCKET", "AGORA_DB", "AGORA_WAKE_COMMAND"} {
+	for _, v := range []string{"CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "AGORA_SOCKET", "AGORA_DB", "AGORA_WAKE_COMMAND", "AGORA_COMPACT_COMMAND", "AGORA_INTERRUPT_COMMAND"} {
 		t.Setenv(v, "")
 	}
 	t.Cleanup(cli.SetClaudeVersion(func(context.Context) (string, error) { return "", install.ErrNoClaude }))
@@ -193,6 +193,14 @@ func TestInstallService(t *testing.T) {
 	}
 
 	t.Setenv("AGORA_WAKE_COMMAND", "")
+	if r := run("install", "service", "--bin", exe, "--compact-command", `send "$AGORA_TERMINAL" "$AGORA_WAKE_TEXT"`, "--interrupt-command", "esc"); r.code != 0 {
+		t.Fatalf("install --compact-command: %+v", r)
+	}
+	b, _ = os.ReadFile(unit)
+	if !strings.Contains(string(b), `hub --compact-command "send \"$$AGORA_TERMINAL\" \"$$AGORA_WAKE_TEXT\"" --interrupt-command esc`) {
+		t.Fatalf("unit:\n%s", b)
+	}
+
 	t.Setenv("AGORA_WEB_AS", "owner")
 	if r := run("install", "service", "--bin", exe, "--web", "8484"); r.code != 0 {
 		t.Fatalf("install --web: %+v", r)
@@ -430,5 +438,23 @@ func TestNoClaudeCodeAddsTheHooksQuietly(t *testing.T) {
 	settings, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
 	if err != nil || !strings.Contains(string(settings), `"StopFailure"`) {
 		t.Fatalf("settings: %s %v", settings, err)
+	}
+}
+
+func TestSessionControlCommandsDefaultToTheEnvironment(t *testing.T) {
+	home := isolate(t)
+	defer cli.SetGOOS("linux")()
+	defer cli.SetSystemctl(func(context.Context, ...string) ([]byte, error) { return nil, nil })()
+	t.Setenv("AGORA_COMPACT_COMMAND", "send-compact")
+	t.Setenv("AGORA_INTERRUPT_COMMAND", "send-esc")
+	if r := run("install", "service", "--bin", fakeBin(t)); r.code != 0 {
+		t.Fatalf("install: %+v", r)
+	}
+	b, _ := os.ReadFile(filepath.Join(home, ".config", "systemd", "user", "agora-hub.service"))
+	if !strings.Contains(string(b), "hub --compact-command send-compact --interrupt-command send-esc\n") {
+		t.Fatalf("unit:\n%s", b)
+	}
+	if r := run("hub", "--help"); !strings.Contains(r.stdout, `(default "send-compact")`) || !strings.Contains(r.stdout, `(default "send-esc")`) {
+		t.Fatalf("hub flags do not default to the environment: %+v", r)
 	}
 }

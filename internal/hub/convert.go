@@ -30,6 +30,8 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, store.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, sessions.ErrRefused):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, queue.ErrNotQueued):
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, queue.ErrNotYourTurn):

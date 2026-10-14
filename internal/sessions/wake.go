@@ -169,11 +169,13 @@ type CommandWake struct {
 
 // IdleWithTerminal returns sessions with a bound agent, a known terminal and a known process
 // that have been idle for at least settle (so a connector that is about to wait gets there
-// first).
+// first) and whose compact command did not run within AfterCompact.
 func (s *Sessions) IdleWithTerminal(ctx context.Context, settle time.Duration) ([]CommandWake, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, agent, terminal, woken_for, woken_at, pid, pid_start FROM sessions
-		WHERE state = ? AND agent IS NOT NULL AND terminal != '' AND pid > 0 AND state_at <= ? ORDER BY id`,
-		Idle, s.now().Add(-settle).UnixMilli())
+		WHERE state = ? AND agent IS NOT NULL AND terminal != '' AND pid > 0 AND state_at <= ?
+		AND NOT EXISTS (SELECT 1 FROM session_controls c WHERE c.session_id = sessions.id AND c.action = 'compact' AND c.ran_at > ?)
+		ORDER BY id`,
+		Idle, s.now().Add(-settle).UnixMilli(), s.now().Add(-AfterCompact).UnixMilli())
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +191,18 @@ func (s *Sessions) IdleWithTerminal(ctx context.Context, settle time.Duration) (
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// WakeStillDue reports whether a command wake that was decided for c still holds: the session is
+// idle for settle, no compact command ran for it within AfterCompact, and it was not woken since
+// (the hub calls it with the terminal held, since a command that typed meanwhile changes these).
+func (s *Sessions) WakeStillDue(ctx context.Context, c CommandWake, settle time.Duration) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE id = ? AND state = ? AND agent = ? AND state_at <= ?
+		AND woken_for = ? AND woken_at = ?
+		AND NOT EXISTS (SELECT 1 FROM session_controls c WHERE c.session_id = sessions.id AND c.action = 'compact' AND c.ran_at > ?)`,
+		c.SessionID, Idle, c.Agent, s.now().Add(-settle).UnixMilli(), c.WokenFor, c.WokenAt.UnixMilli(), s.now().Add(-AfterCompact).UnixMilli()).Scan(&n)
+	return n > 0, err
 }
 
 // RecordWake stores how a command wake went; only a successful wake remembers what it was for,
