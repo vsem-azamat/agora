@@ -95,6 +95,9 @@ message Message {
   // In histories, for a message of the room with replies in its thread, and on the root of a
   // thread read; unset otherwise.
   ThreadSummary thread_summary = 17;
+  // For a note the operator sent out, the message that went out from it, unless that message
+  // certainly did not go out (not sent, cancelled); 0 otherwise.
+  int64 sent_out = 18;
 }
 
 // What a room's history shows of a thread at its root.

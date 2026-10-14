@@ -9,7 +9,7 @@ import { Icon } from '../icons';
 import { atBottom } from '../tape';
 import { AgentLink, Avatar, MessageBody, usePg } from './common';
 import { Composer } from './composer';
-import { type Decide, Decision, DeliveryMark, DeliveryNote, type Held, type SendOut, SendOutButton } from './message';
+import { type Decide, Decision, DeliveryMark, DeliveryNote, type Held, NoteMark, type SendOut, SendOutButton } from './message';
 import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
 import { roomHref } from './rooms';
 
@@ -99,11 +99,7 @@ function ThreadMessage({
           {ext ? <OutsiderName who={ext} /> : <AgentLink name={m.author} className="au" />}
           <time>{clock(toDate(m.at))}</time>
           {m.also && <span className="nt">also in the room</span>}
-          {m.note && (
-            <span className="nt" title={`Not sent to ${m.room}`}>
-              note · stays in Agora
-            </span>
-          )}
+          {m.note && <NoteMark m={m} />}
           <DeliveryMark d={d} room={m.room} />
         </div>
         <div className="tx">

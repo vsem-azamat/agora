@@ -890,6 +890,24 @@ describe('notes', () => {
     expect(within(tablet(read.container, 1)).queryByRole('button', { name: 'Send out' })).toBeNull();
   });
 
+  it('marks a note that was sent out in its header, as a link to the message, and offers no Send out', () => {
+    const sent = note(1, 'secretary', 'Draft: the fix ships tonight', 5);
+    sent.sentOut = 2n;
+    const out = message(2, 'secretary', 'Draft: the fix ships tonight', 4);
+    const onSendOut = vi.fn(async () => true);
+    const { container } = chatRoom([sent, out], { onSendOut });
+    const tab = tablet(container, 1);
+    expect(within(tab).queryByRole('button', { name: /^send out$/i })).toBeNull();
+    expect(tab.querySelector('.mh .nt')?.textContent).toBe('note · sent out → #2');
+    fireEvent.click(within(tab).getByRole('button', { name: 'sent out → #2' }));
+    expect(onSendOut).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-mid="2"]')?.classList.contains('flash')).toBe(true);
+    cleanup();
+    // also where nothing can be sent out any more
+    const read = chatRoom([sent, out], { onSendOut, bridge: bridge('example-chat', 'running', 'read') });
+    expect(within(tablet(read.container, 1)).getByRole('button', { name: 'sent out → #2' })).toBeTruthy();
+  });
+
   it('offers no choice in a room without a bridge', () => {
     const { container } = room([]);
     expect(screen.queryByRole('group', { name: 'Where the message goes' })).toBeNull();

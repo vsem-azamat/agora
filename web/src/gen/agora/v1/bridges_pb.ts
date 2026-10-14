@@ -458,7 +458,7 @@ export const SendNoteOutRequestSchema: GenMessage<SendNoteOutRequest> = /*@__PUR
  */
 export type SendNoteOutResponse = Message<"agora.v1.SendNoteOutResponse"> & {
   /**
-   * The message that goes out.
+   * The message that goes out, or went out when the note was sent out before.
    *
    * @generated from field: int64 id = 1;
    */
@@ -634,7 +634,9 @@ export const BridgeService: GenService<{
   },
   /**
    * SendNoteOut sends a note out: a new message of the note's author with its text goes out at
-   * once, and the note stays. Only the web listener serves it.
+   * once, and the note stays. A note sent out before returns that message's id and sends nothing, unless
+   * that message certainly did not go out (not sent, cancelled), when a new one goes out.
+   * Only the web listener serves it.
    *
    * @generated from rpc agora.v1.BridgeService.SendNoteOut
    */

@@ -1102,6 +1102,14 @@ button.pgname:hover {
   font-size: 0.8em;
   margin-left: 4px;
 }
+button.sentout {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+button.sentout:hover {
+  color: var(--fg);
+}
 .sys {
   display: flex;
   gap: 8px;

@@ -161,6 +161,92 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 	}
 }
 
+func TestANoteIsSentOutOnce(t *testing.T) {
+	e, _ := newDelayEnv(t)
+	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// two calls at once, then a third later
+	ids := make([]int64, 2)
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := range ids {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ids[i], errs[i] = e.b.SendNoteOut(ctx, note)
+		}()
+	}
+	wg.Wait()
+	again, err := e.b.SendNoteOut(ctx, note)
+	if err != nil || errs[0] != nil || errs[1] != nil || ids[0] == 0 || ids[0] != ids[1] || again != ids[0] {
+		t.Fatalf("ids %v %v, again %d %v, errs %v", ids, errs, again, err, errs)
+	}
+	outs, _ := outgoing(t, e)
+	if len(outs) != 1 || outs[0].ID != ids[0] {
+		t.Fatalf("one message goes out: %+v", outs)
+	}
+	var shown *rooms.Message
+	for _, m := range e.history(t) {
+		if m.ID == note {
+			shown = &m
+		}
+	}
+	if shown == nil || shown.SentOut != ids[0] || !strings.Contains(rooms.Format(*shown, 0), "sent out as "+itoa(ids[0])) {
+		t.Fatalf("the note does not link its message: %+v", shown)
+	}
+	// another note is its own
+	other, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, err := e.b.SendNoteOut(ctx, other); err != nil || id == ids[0] {
+		t.Fatalf("another note: %d %v", id, err)
+	}
+}
+
+func TestANoteIsSentOutAgainWhenItsMessageDidNotGoOut(t *testing.T) {
+	e, _ := newDelayEnv(t)
+	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := e.b.SendNoteOut(ctx, note)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown := func() int64 {
+		t.Helper()
+		for _, m := range e.history(t) {
+			if m.ID == note {
+				return m.SentOut
+			}
+		}
+		t.Fatal("no note")
+		return 0
+	}
+	if shown() != first {
+		t.Fatalf("the note links %d, not %d", shown(), first)
+	}
+	if ok, err := e.b.Failed(ctx, "example-chat", first, "chat not found"); err != nil || !ok {
+		t.Fatalf("failed: %v %v", ok, err)
+	}
+	if shown() != 0 {
+		t.Fatalf("the note still says it was sent out as %d, which did not go out", shown())
+	}
+	second, err := e.b.SendNoteOut(ctx, note)
+	if err != nil || second == first {
+		t.Fatalf("sent again: %d %v", second, err)
+	}
+	if shown() != second {
+		t.Fatalf("the note links %d, not %d", shown(), second)
+	}
+	if again, err := e.b.SendNoteOut(ctx, note); err != nil || again != second {
+		t.Fatalf("a repeat: %d %v", again, err)
+	}
+}
+
 func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
 	e, _ := newDelayEnv(t)
 	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseRoute } from '../App';
 import { knownNames } from '../board';
-import { agent, goingOut, message, NOW } from '../fixtures';
+import { agent, goingOut, message, NOW, note } from '../fixtures';
 import { RoomSchema, ThreadSchema, ThreadSummarySchema } from '../gen/agora/v1/rooms_pb';
 import { RoomNav } from './rooms';
 import { MAX_TITLE, ThreadPanel, ThreadStrip } from './thread';
@@ -45,6 +45,20 @@ function panel(more: Partial<Parameters<typeof ThreadPanel>[0]> = {}) {
 }
 
 describe('the thread panel', () => {
+  it('marks a note in the thread as sent out, in its header', () => {
+    const sent = note(41, 'reviewer', 'Draft: all fine', 20);
+    sent.thread = 40n;
+    const { container, rerender, props } = panel({
+      messages: [message(40, 'builder', 'the export is broken', 30), sent],
+    });
+    expect(container.querySelector('.tmsg .nt')?.textContent).toBe('note · stays in Agora');
+    sent.sentOut = 42n;
+    rerender(<ThreadPanel {...props} messages={[message(40, 'builder', 'the export is broken', 30), sent]} />);
+    const mark = container.querySelector('.tmsg .nt');
+    expect(mark?.textContent).toBe('note · sent out → #42');
+    expect(mark?.className).toBe('nt'); // not a phone-only class: visible on a desktop too
+  });
+
   it('closes with Escape, but not from a text field, and the room does not hear it', () => {
     const { props } = panel();
     const room = vi.fn();

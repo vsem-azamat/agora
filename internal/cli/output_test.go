@@ -50,6 +50,11 @@ func TestMessageLayout(t *testing.T) {
 	if got := cli.FormatMessage(note); got != "#example-chat [17] secretary · 22:50 · note\n  a draft" {
 		t.Fatalf("got %q", got)
 	}
+	note.SentOut = 18
+	if got := cli.FormatMessage(note); got != "#example-chat [17] secretary · 22:50 · note · sent out as 18\n  a draft" {
+		t.Fatalf("a note sent out: %q", got)
+	}
+	note.SentOut = 0
 	in := &agorav1.Message{Id: 18, Room: "example-chat", Author: "owner", Body: "checking", At: timestamppb.New(at), Incoming: true}
 	if got := cli.FormatMessage(in); got != "#example-chat [18] owner · 22:50 · from outside\n  checking" {
 		t.Fatalf("got %q", got)
