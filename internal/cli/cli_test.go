@@ -558,7 +558,8 @@ func TestChangingTheProjectMovesTheProjectRoom(t *testing.T) {
 	}
 	// an archived project room is not followed, and the output says why
 	agora(ctx, socket, "owner", "room-archive", "gamma")
-	if r := agora(ctx, socket, "builder", "set", "--project", "gamma"); r.code != 0 || !strings.Contains(r.stdout, "not following #gamma, your project's room: #gamma is archived") {
+	if r := agora(ctx, socket, "builder", "set", "--project", "gamma"); r.code != 0 || !strings.Contains(r.stdout, "not following #gamma, your project's room: #gamma is archived") ||
+		strings.Count(r.stdout, "not following") != 1 { // the line is printed as the hub sent it, not prefixed again
 		t.Fatalf("set --project with an archived room: %+v", r)
 	}
 	agora(ctx, socket, "owner", "room-unarchive", "gamma")
