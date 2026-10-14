@@ -423,7 +423,7 @@ func TestStartWaitIgnoresTheOtherReportsOfASessionResumedSoonAfterThem(t *testin
 	r.idleAgent(t, "builder", "session-1", "")
 	r.clock.add(time.Minute)
 	bg := context.Background()
-	for _, ev := range []agorav1.SessionEvent{agorav1.SessionEvent_SESSION_EVENT_PROMPT, agorav1.SessionEvent_SESSION_EVENT_TOOL, agorav1.SessionEvent_SESSION_EVENT_STOP} {
+	for _, ev := range []agorav1.SessionEvent{agorav1.SessionEvent_SESSION_EVENT_PROMPT, agorav1.SessionEvent_SESSION_EVENT_TOOL, agorav1.SessionEvent_SESSION_EVENT_WAITING, agorav1.SessionEvent_SESSION_EVENT_STOP} {
 		if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: ev})); err != nil {
 			t.Fatal(err)
 		}
@@ -436,6 +436,22 @@ func TestStartWaitIgnoresTheOtherReportsOfASessionResumedSoonAfterThem(t *testin
 	}
 	r.resume(t, "session-1")
 	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
+func TestACompactionStartCountsForTheStartWait(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	r.clock.add(time.Minute)
+	if _, err := r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{
+		SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_START, Reason: "compact",
+	})); err != nil { // a live session: the start keeps its state
+		t.Fatal(err)
+	}
+	r.post(t, "reviewer", "@builder can you take #57?")
+	text, ended := within(t, r.startWake(t, "session-1"), 2*time.Second)
 	if !ended || !strings.Contains(text, "can you take #57") {
 		t.Fatalf("ended %v text %q", ended, text)
 	}
