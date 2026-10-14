@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { watchViewport } from './viewport';
+import { SETTLE_MS, watchViewport } from './viewport';
 
 /** A visual viewport that can be resized as the on-screen keyboard opens. */
 function fakeViewport(height: number) {
@@ -104,8 +104,46 @@ describe('the part of the screen the app may use', () => {
         expect(top).toHaveBeenCalledOnce();
         vi.advanceTimersByTime(1000);
         expect(top).toHaveBeenCalledOnce();
+        touch(type, 0); // settled: a later lift has nothing to undo
+        expect(top).toHaveBeenCalledOnce();
       },
     );
+
+    it('is not held by a finger whose element left the page before it lifted', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      const el = document.createElement('div');
+      document.body.append(el);
+      const on = (type: string, n: number, target: EventTarget) => {
+        const e = new Event(type, { bubbles: true });
+        Object.defineProperty(e, 'touches', { value: new Array(n).fill({}) });
+        target.dispatchEvent(e);
+      };
+      on('touchstart', 1, el);
+      el.remove(); // a tablet drawn again under the finger; its touchend no longer reaches the document
+      on('touchend', 0, el);
+      vv.listeners.get('scroll')?.();
+      vi.advanceTimersByTime(SETTLE_MS);
+      expect(top).toHaveBeenCalledOnce();
+    });
+
+    it('is not held by a finger when the page goes to the background', () => {
+      vi.useFakeTimers();
+      const vv = fakeViewport(480);
+      const top = vi.fn();
+      watch(document, vv, top);
+      top.mockClear();
+      touch('touchstart', 1);
+      vv.listeners.get('scroll')?.();
+      vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(SETTLE_MS);
+      expect(top).toHaveBeenCalledOnce();
+      vi.restoreAllMocks();
+    });
 
     it('never scrolls back while a finger is down, even one held still', () => {
       vi.useFakeTimers();

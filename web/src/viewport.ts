@@ -48,13 +48,27 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
     clearTimeout(settling);
     settling = touching ? undefined : setTimeout(settle, SETTLE_MS);
   };
-  const touched = (e: TouchEvent) => {
-    touching = e.touches.length > 0;
-  };
+  let stopped = false;
   // the last finger lifting ends the pan: no need to wait for more events
   const lifted = (e: TouchEvent) => {
+    if (stopped) return;
     touching = e.touches.length > 0;
     if (!touching && moved) settle();
+  };
+  const touched = (e: TouchEvent) => {
+    touching = e.touches.length > 0;
+    // touchend and touchcancel go to the element the touch began on and reach the document only
+    // while it is in the page: listen there too, in case it is removed under the finger
+    if (e.target) {
+      e.target.addEventListener('touchend', lifted as EventListener, { once: true });
+      e.target.addEventListener('touchcancel', lifted as EventListener, { once: true });
+    }
+  };
+  // a page sent to the background gets no touchend: no finger is down any more
+  const visibility = () => {
+    if (doc.visibilityState !== 'hidden') return;
+    touching = false;
+    if (moved) settling = setTimeout(settle, SETTLE_MS);
   };
   // typing starts in a text field; where it ends is decided when the focus leaves one, and again
   // when the focus lands outside a form, in case a removed field's focusout never came
@@ -75,13 +89,16 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
   doc.addEventListener('touchstart', touched);
   doc.addEventListener('touchend', lifted);
   doc.addEventListener('touchcancel', lifted);
+  doc.addEventListener('visibilitychange', visibility);
   doc.addEventListener('focusin', focusIn);
   doc.addEventListener('focusout', focusOut);
   return () => {
     vv?.removeEventListener('resize', size);
     vv?.removeEventListener('scroll', scrolled);
+    stopped = true;
     clearTimeout(settling);
     settling = undefined;
+    doc.removeEventListener('visibilitychange', visibility);
     doc.removeEventListener('touchstart', touched);
     doc.removeEventListener('touchend', lifted);
     doc.removeEventListener('touchcancel', lifted);
