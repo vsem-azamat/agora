@@ -177,6 +177,9 @@ func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if outs, _ := outgoing(t, e); len(outs) == 0 || outs[len(outs)-1].ID != id || outs[len(outs)-1].ReplyTo != "5513" {
+			t.Fatalf("also=%v: outgoing %+v", also, outs)
+		}
 		var sent, kept *rooms.Message
 		for i := range th {
 			switch th[i].ID {
@@ -191,6 +194,34 @@ func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
 		}
 		if kept == nil || kept.Thread != root || kept.Also != also || !kept.Note {
 			t.Fatalf("also=%v: the note changed: %+v", also, kept)
+		}
+	}
+}
+
+func TestSendingANoteOutKeepsItsAuthorOutOfAThreadItLeft(t *testing.T) {
+	e, _ := newDelayEnv(t)
+	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})
+	note, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "Draft: yes", Thread: root, Note: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.LeaveThread(ctx, "secretary", root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.b.SendNoteOut(ctx, note); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "thanks", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := e.r.Unread(ctx, "secretary", rooms.Everything, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range got {
+		if m.ID == reply {
+			t.Fatalf("sending the note out brought secretary back into the thread it left: %+v", m)
 		}
 	}
 }

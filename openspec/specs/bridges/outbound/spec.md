@@ -118,7 +118,7 @@ The system SHALL show what the outside chat saw of a bridged room: with every me
 
 ### Requirement: Notes Stay In Agora
 
-A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be scheduled and SHALL have no delivery state, so it can be neither sent at once nor cancelled; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. The operator MAY send a note out under `open` and `delay`: that posts a new message of the note's author with the note's text, replying to what the note replies to and, for a note in a thread, a reply in the same thread, also to the room when the note is, which goes out at once, while the note stays as it was. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room.
+A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be scheduled and SHALL have no delivery state, so it can be neither sent at once nor cancelled; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. The operator MAY send a note out under `open` and `delay`: that posts a new message of the note's author with the note's text, replying to what the note replies to and, for a note in a thread, a reply in the same thread, also to the room when the note is, which goes out at once, while the note stays as it was. Sending a note out does not make its author follow a thread it left. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room.
 
 #### Scenario: A note under every policy
 - **WHEN** `secretary` and the operator post notes in `#example-chat` under `open`, `delay` and `read`
@@ -135,6 +135,10 @@ A message posted as a note (`agora post <room> --note`, the `note` flag of a pos
 #### Scenario: Sending out a note in a thread
 - **WHEN** `secretary` posts a note into the thread of message 40 in `#example-chat` and the operator sends it out
 - **THEN** the new message is a reply in the thread of 40, with the note's also-to-the-room setting, so it neither shows in the room's history nor is unread for the room's followers unless the note was also to the room
+
+#### Scenario: A note in a thread its author left
+- **WHEN** `secretary` posted a note in the thread of message 40, left the thread, and the operator sends the note out
+- **THEN** a later reply in the thread does not address `secretary`
 
 #### Scenario: A reply to a note goes out
 - **WHEN** under `open` the operator posts the note `@secretary say the release is on Friday` and `secretary` replies to it with `The release is on Friday.`
