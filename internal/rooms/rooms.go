@@ -475,6 +475,11 @@ func RequireUnarchivedTx(ctx context.Context, tx *sql.Tx, room string) error {
 	if err != nil || !archived {
 		return err
 	}
+	return archivedError(room)
+}
+
+// archivedError is what an archived room refuses, with how to bring it back.
+func archivedError(room string) error {
 	return store.Refuse(ErrArchived, "#%s is archived; bring it back first with `agora room-unarchive %s`", room, room)
 }
 
@@ -1880,27 +1885,48 @@ type ProjectFollow struct {
 	Detail     string       // for ProjectFailed, why
 }
 
-// FollowProject moves agent from the room of oldProject to the room of newProject after its
-// project changed (or was set again): it stops following the old project's room when that
-// subscription was made by a project follow and the agent has not touched it since, and follows
-// the new one unless the agent follows it already. Following by hand, changing a mode or
-// unfollowing (see Subscribe) makes a subscription the agent's own. It is one transaction.
-func (r *Rooms) FollowProject(ctx context.Context, agent, oldProject, newProject string) (ProjectFollow, error) {
+// FollowProject makes agent's subscriptions match its project as the profile has it now (the
+// project is read inside the transaction, so calls that arrive in another order than the
+// updates they follow still end on the current project): it deletes every subscription that
+// was made by a project follow and has not been touched since (see Subscribe) unless it is the
+// room of the project, and follows the project's room unless the agent follows it already.
+// Following by hand, changing a mode or unfollowing makes a subscription the agent's own.
+func (r *Rooms) FollowProject(ctx context.Context, agent string) (ProjectFollow, error) {
 	var out ProjectFollow
-	oldRoom, room := ProjectRoom(oldProject), ProjectRoom(newProject)
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
-		out = ProjectFollow{Room: room}
-		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+		out = ProjectFollow{}
+		var project string
+		switch err := tx.QueryRowContext(ctx, `SELECT project FROM agents WHERE name = ?`, agent).Scan(&project); {
+		case errors.Is(err, sql.ErrNoRows):
+			return agents.ExistsTx(ctx, tx, agent)
+		case err != nil:
 			return err
 		}
-		if oldRoom != "" && oldRoom != room && oldRoom != General {
-			res, err := tx.ExecContext(ctx, `DELETE FROM subscriptions WHERE agent = ? AND room = ? AND by_project`, agent, oldRoom)
-			if err != nil {
+		room := ProjectRoom(project)
+		out.Room = room
+		rows, err := tx.QueryContext(ctx, `SELECT room FROM subscriptions WHERE agent = ? AND by_project AND room != ?`, agent, room)
+		if err != nil {
+			return err
+		}
+		var stale []string
+		for rows.Next() {
+			var old string
+			if err := rows.Scan(&old); err != nil {
+				rows.Close()
 				return err
 			}
-			if n, _ := res.RowsAffected(); n > 0 {
-				out.Unfollowed = oldRoom
+			stale = append(stale, old)
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return err
+		}
+		for _, old := range stale {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM subscriptions WHERE agent = ? AND room = ?`, agent, old); err != nil {
+				return err
 			}
+		}
+		if len(stale) > 0 {
+			out.Unfollowed = stale[0]
 		}
 		if room == "" {
 			return nil
@@ -1912,26 +1938,25 @@ func (r *Rooms) FollowProject(ctx context.Context, agent, oldProject, newProject
 		case err != nil:
 			return err
 		}
-		var followed int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriptions WHERE agent = ? AND room = ?`, agent, room).Scan(&followed); err != nil {
-			return err
-		}
-		if followed > 0 || room == General {
-			out.State = ProjectFollowing // followed already: the agent's own, or by an earlier project follow
-			return nil
-		}
 		archived, err := isArchived(ctx, tx, room)
 		if err != nil {
 			return err
 		}
 		if archived {
-			out.State, out.Detail = ProjectFailed, fmt.Sprintf("#%s is archived; bring it back first with `agora room-unarchive %s`", room, room)
+			out.State, out.Detail = ProjectFailed, archivedError(room).Error()
 			return nil
+		}
+		var followed int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriptions WHERE agent = ? AND room = ?`, agent, room).Scan(&followed); err != nil {
+			return err
+		}
+		out.State = ProjectFollowing
+		if followed > 0 || room == General {
+			return nil // followed already: the agent's own, or by an earlier project follow
 		}
 		if err := subscribe(ctx, tx, agent, room, ""); err != nil {
 			return err
 		}
-		out.State = ProjectFollowing
 		_, err = tx.ExecContext(ctx, `UPDATE subscriptions SET by_project = 1 WHERE agent = ? AND room = ?`, agent, room)
 		return err
 	})

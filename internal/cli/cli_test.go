@@ -556,6 +556,13 @@ func TestChangingTheProjectMovesTheProjectRoom(t *testing.T) {
 	if got := follows("builder"); !strings.Contains(got, "#gamma (wake)") || !strings.Contains(got, "#alpha") {
 		t.Fatalf("follows after set: %s", got)
 	}
+	// an archived project room is not followed, and the output says why
+	agora(ctx, socket, "owner", "room-archive", "gamma")
+	if r := agora(ctx, socket, "builder", "set", "--project", "gamma"); r.code != 0 || !strings.Contains(r.stdout, "not following #gamma, your project's room: #gamma is archived") {
+		t.Fatalf("set --project with an archived room: %+v", r)
+	}
+	agora(ctx, socket, "owner", "room-unarchive", "gamma")
+	agora(ctx, socket, "builder", "set", "--project", "alpha")
 	// a project without a room: the old room goes, and the output says how to create the new one
 	r = agora(ctx, socket, "builder", "set", "--project", "delta")
 	if r.code != 0 || !strings.Contains(r.stdout, "no room #delta for your project yet; create it with agora room-create delta '<purpose>'") ||
