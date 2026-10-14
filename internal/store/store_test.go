@@ -487,3 +487,26 @@ func TestSettleSendingMigrationFailsMessagesWithoutABridge(t *testing.T) {
 		t.Errorf("messages %q, want %q", got, want)
 	}
 }
+
+// TestMigrationNumbersFollowTheirPosition pins that the number in each migration's name is its
+// place in name order: a migration's version is that place, so two branches that each add the
+// same number would run one of them again on a database the other had already migrated.
+func TestMigrationNumbersFollowTheirPosition(t *testing.T) {
+	names, err := fs.Glob(migrations, "migrations/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(names)
+	number := func(name string) string {
+		n, _, _ := strings.Cut(strings.TrimPrefix(name, "migrations/"), "_")
+		return n
+	}
+	for i, name := range names {
+		if i > 0 && number(name) == number(names[i-1]) {
+			t.Fatalf("%s and %s have the same number; give the one that is not on main yet the next free number", names[i-1], name)
+		}
+		if want := fmt.Sprintf("migrations/%04d_", i+1); !strings.HasPrefix(name, want) {
+			t.Fatalf("%s is migration %d; its name must start with %s", name, i+1, strings.TrimPrefix(want, "migrations/"))
+		}
+	}
+}
