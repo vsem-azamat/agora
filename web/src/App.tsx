@@ -263,6 +263,12 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   // the address of the thread this app opened over its room, as a history entry of its own
   const pushedThread = useRef<string>(undefined);
   const thread = useThread(api, roomName, threadRoot, data?.revision, fail);
+  // an address that names a reply opens its thread: the address is put right to the root's
+  const loadedRoot = thread.messages?.[0]?.id;
+  useEffect(() => {
+    if (roomName && threadRoot !== undefined && loadedRoot !== undefined && loadedRoot !== threadRoot)
+      location.replace(threadHref(roomName, loadedRoot));
+  }, [roomName, threadRoot, loadedRoot]);
   const listed = useMemo(() => (data ? boardAgents(data.agents, data.operator) : undefined), [data]);
   const recent = useAgentMessages(api, drawer, data?.rooms ?? [], fail);
   const modes = data?.modes;

@@ -539,15 +539,12 @@ export function RoomView(props: {
         <ThreadPanel
           key={String(props.thread.root)}
           archived={archived !== undefined}
-          bridge={
-            props.bridge && {
-              chat: props.bridge.name,
-              readOnly,
-              onDecide: decide,
-              onSendOut: !readOnly && !archived ? sendOut : undefined,
-              held: readOnly ? 'read' : undefined,
-            }
-          }
+          bridge={props.bridge && { chat: props.bridge.name, readOnly }}
+          delivering={{
+            onDecide: decide,
+            onSendOut: props.bridge && !readOnly && !archived ? sendOut : undefined,
+            held: readOnly ? 'read' : props.bridge ? undefined : 'unbridged',
+          }}
           room={name}
           root={props.thread.root}
           messages={props.thread.messages}

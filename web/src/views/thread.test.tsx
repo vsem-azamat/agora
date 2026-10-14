@@ -54,8 +54,11 @@ describe('the thread panel', () => {
     fireEvent.keyDown(box, { key: 'Escape' });
     expect(props.onClose).not.toHaveBeenCalled();
     expect((box as HTMLTextAreaElement).value).toBe('a long reply');
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Leave' }), { key: 'Escape' });
+    // a checkbox is no text field
+    fireEvent.keyDown(screen.getByLabelText('Also to the room'), { key: 'Escape' });
     expect(props.onClose).toHaveBeenCalledOnce();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Leave' }), { key: 'Escape' });
+    expect(props.onClose).toHaveBeenCalledTimes(2);
     expect(room).not.toHaveBeenCalled();
     document.removeEventListener('keydown', room);
   });
@@ -80,7 +83,8 @@ describe('the thread panel', () => {
     const { props } = panel({
       room: 'example-chat',
       messages: msgs,
-      bridge: { chat: 'example-chat', readOnly: false, onDecide },
+      bridge: { chat: 'example-chat', readOnly: false },
+      delivering: { onDecide },
     });
     // the reply's place in the chat shows as in the room
     expect(screen.getByTitle('Sent to example-chat')).toBeTruthy();
@@ -95,12 +99,39 @@ describe('the thread panel', () => {
   });
 
   it('keeps every reply in Agora when the bridged room is read only', async () => {
-    const { props } = panel({ bridge: { chat: 'example-chat', readOnly: true, onDecide: vi.fn(), held: 'read' } });
+    const { props } = panel({
+      bridge: { chat: 'example-chat', readOnly: true },
+      delivering: { onDecide: vi.fn(), held: 'read' },
+    });
     expect((screen.getByRole('radio', { name: /Note for agents/ }) as HTMLInputElement).checked).toBe(true);
     const box = screen.getByRole('combobox', { name: 'Reply in the thread #example-app' });
     fireEvent.change(box, { target: { value: 'noted' } });
     fireEvent.keyDown(box, { key: 'Enter' });
     await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('noted', false, true));
+  });
+
+  it('counts as read the newest reply only in the thread, leaving one also in the room to the room', () => {
+    const { props } = panel({
+      messages: [
+        message(40, 'builder', 'the export is broken', 30),
+        message(41, 'reviewer', 'which one?', 20, { thread: 40n }),
+        message(51, 'reviewer', 'the CSV one', 5, { thread: 40n, also: true }),
+      ],
+    });
+    expect(props.onSeen).toHaveBeenCalledWith(41n);
+    expect(props.onSeen).not.toHaveBeenCalledWith(51n);
+  });
+
+  it('offers Cancel on a scheduled reply in a room whose bridge was removed', () => {
+    panel({
+      messages: [
+        message(40, 'builder', 'root', 30),
+        { ...goingOut(41, 'secretary', 'waiting', 20, 'scheduled'), thread: 40n },
+      ],
+      delivering: { onDecide: vi.fn(), held: 'unbridged' },
+    });
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Send now' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('is read only in an archived room', () => {

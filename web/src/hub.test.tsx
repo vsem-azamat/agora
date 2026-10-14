@@ -1136,6 +1136,9 @@ describe('threads in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
     await waitFor(() => expect(calls).toContainEqual(['RoomService/LeaveThread', { messageId: '1' }]));
     await waitFor(() => expect(location.hash).toBe('#/rooms/general'));
+    // an address naming a reply opens its thread under the root's address
+    location.hash = '#/rooms/general/thread/3';
+    await waitFor(() => expect(location.hash).toBe('#/rooms/general/thread/1'));
   });
 });
 

@@ -68,7 +68,7 @@ export function ThreadStrip({ m, onOpen }: { m: Message; onOpen: (root: bigint) 
   );
 }
 
-/** How the panel acts on a reply that goes out of a bridged room; none outside one. */
+/** How the panel acts on a reply that goes out of a bridged room or waits to. */
 type Delivering = { onDecide: Decide; onSendOut?: SendOut; held?: Held };
 
 function ThreadMessage({
@@ -164,6 +164,14 @@ function TitleForm({ title, onTitle }: { title: string; onTitle: (t: string) => 
   );
 }
 
+/** Input types that take typed text; Escape there would lose what was written. */
+const TEXT_INPUTS = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number']);
+
+function textField(t: EventTarget | null): boolean {
+  if (t instanceof HTMLTextAreaElement) return true;
+  return t instanceof HTMLInputElement && TEXT_INPUTS.has(t.type);
+}
+
 /** The thread of a message: the path to its room, the root and its replies, and a compose box. */
 export function ThreadPanel(props: {
   room: string;
@@ -177,8 +185,10 @@ export function ThreadPanel(props: {
   known: Names;
   /** The room is archived: the thread is read only. */
   archived?: boolean;
-  /** In a bridged room: its chat, whether nothing goes out, and how replies going out are acted on. */
-  bridge?: { chat: string; readOnly: boolean } & Delivering;
+  /** In a bridged room: its chat and whether nothing goes out. */
+  bridge?: { chat: string; readOnly: boolean };
+  /** How the panel acts on replies going out or waiting to, as the room's tablets do. */
+  delivering?: Delivering;
   onClose: () => void;
   /** Posts a reply, also to the room when asked; a note stays in Agora. */
   onPost: (body: string, also: boolean, note: boolean) => Promise<void>;
@@ -206,24 +216,28 @@ export function ThreadPanel(props: {
     [root, props.operator],
   );
   const last = messages && messages.length > 1 ? messages.at(-1)?.id : undefined;
+  // the newest reply only in the thread counts as read; a reply also in the room is read with the
+  // room, whose own reading position marking it would move past the room's unseen messages
+  const newest = messages?.slice(1).findLast((m) => !m.also)?.id;
   const seen = useRef(props.onSeen);
   seen.current = props.onSeen;
   useEffect(() => {
-    if (last !== undefined) seen.current(last);
+    if (newest !== undefined) seen.current(newest);
+  }, [newest]);
+  useEffect(() => {
     const el = list.current;
-    if (el && follow.current) el.scrollTop = el.scrollHeight;
+    if (el && follow.current && last !== undefined) el.scrollTop = el.scrollHeight;
   }, [last]);
   // on a phone the panel covers the room: the focus moves into it
   useEffect(() => {
     if (onPhone()) back.current?.focus();
   }, []);
-  // Escape closes the thread, unless it is pressed in a text field, where it would lose the draft;
-  // the room's own Escape does not also run
+  // Escape in the thread closes it, unless it is pressed in a text field, where it would lose the
+  // draft; the room's own Escape does not also run
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     e.stopPropagation();
-    const t = e.target;
-    if (t instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+    if (textField(e.target)) return;
     props.onClose();
   };
   const inRoom = useMemo(() => new Set(wakes), [wakes]);
@@ -290,7 +304,7 @@ export function ThreadPanel(props: {
             m={m}
             known={props.known}
             operator={props.operator}
-            delivering={props.bridge}
+            delivering={props.delivering}
           />,
         ])}
         {messages?.length === 1 && <li className="empty">No replies yet.</li>}
