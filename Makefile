@@ -22,7 +22,7 @@ endef
 .PHONY: check fmt lint lint-go lint-proto lint-web breaking test test-go test-web test-deploy deploy \
 	generate generate-check generate-web generate-check-web build-web build-check repo help
 
-## check: everything CI runs
+## check: everything CI runs but the release config (docs/development/checks.md)
 check: repo lint test generate-check generate-check-web build-check
 
 ## fmt: apply the Go, protobuf and web formatters
