@@ -26,6 +26,14 @@ func SetSystemctl(f func(ctx context.Context, args ...string) ([]byte, error)) f
 	return func() { systemctl = old }
 }
 
+// SetClaudeVersion replaces how the Claude Code version is read and returns a function that
+// restores it.
+func SetClaudeVersion(f func(ctx context.Context) (string, error)) func() {
+	old := claudeVersion
+	claudeVersion = f
+	return func() { claudeVersion = old }
+}
+
 // SetGOOS pretends to run on another operating system and returns a function that restores it.
 func SetGOOS(s string) func() {
 	old := goos

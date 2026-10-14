@@ -2,12 +2,15 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +20,79 @@ import (
 // WaitTimeout is the timeout, in seconds, of the asynchronous wake hook. Claude Code enforces
 // it even for asynchronous hooks, so it bounds how long an idle agent can be woken.
 const WaitTimeout = 86400
+
+// StopFailureSince is the first Claude Code version that reports a failure to load credentials
+// as cloud_credential_error; older ones report it as server_error or unknown, which the
+// StopFailure hooks take for transient errors and wake the session for.
+const StopFailureSince = "2.1.267"
+
+// ClaudeVersionTimeout bounds how long install waits for `claude --version`.
+const ClaudeVersionTimeout = 10 * time.Second
+
+// versionRE finds a version at the start of a line, so a line printed before it is skipped.
+var versionRE = regexp.MustCompile(`(?m)^\s*(\d+)\.(\d+)\.(\d+)`)
+
+// ErrNoClaude means there is no claude on the PATH.
+var ErrNoClaude = errors.New("no claude on the PATH")
+
+// ClaudeCodeVersion returns the version `claude --version` prints, as major.minor.patch.
+func ClaudeCodeVersion(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ClaudeVersionTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "claude", "--version")
+	cmd.WaitDelay = time.Second // a child left holding the output does not keep install waiting
+	out, err := cmd.Output()
+	var exitErr *exec.ExitError
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		return "", ErrNoClaude
+	case errors.Is(err, exec.ErrWaitDelay): // claude exited; a child of it kept the output open
+	case ctx.Err() != nil:
+		return "", fmt.Errorf("claude --version did not answer within %s", ClaudeVersionTimeout)
+	case errors.As(err, &exitErr) && len(bytes.TrimSpace(exitErr.Stderr)) > 0:
+		return "", fmt.Errorf("claude --version: %w: %s", err, firstLine(exitErr.Stderr))
+	case err != nil:
+		return "", fmt.Errorf("claude --version: %w", err)
+	}
+	m := versionRE.FindStringSubmatch(string(out))
+	if m == nil {
+		return "", fmt.Errorf("claude --version printed no version: %q", strings.TrimSpace(string(out)))
+	}
+	return m[1] + "." + m[2] + "." + m[3], nil
+}
+
+// stderrChars is how many characters of claude's error output a failure quotes.
+const stderrChars = 200
+
+// firstLine returns the first line of b, trimmed and at most stderrChars characters long.
+func firstLine(b []byte) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
+	if r := []rune(line); len(r) > stderrChars {
+		line = string(r[:stderrChars])
+	}
+	return line
+}
+
+// StopFailureReportsCredentials reports whether Claude Code of version tells credential
+// failures apart, so the StopFailure hooks are safe; a text with no version counts as safe.
+func StopFailureReportsCredentials(version string) bool {
+	m := versionRE.FindStringSubmatch(version)
+	if m == nil {
+		return true
+	}
+	since := versionRE.FindStringSubmatch(StopFailureSince)
+	for i := 1; i <= 3; i++ {
+		a, errA := strconv.Atoi(m[i])
+		b, _ := strconv.Atoi(since[i])
+		if errA != nil { // too many digits for an int: newer than any version we know
+			return true
+		}
+		if a != b {
+			return a > b
+		}
+	}
+	return true
+}
 
 // ClaudeCodeSettings is Claude Code's user settings file: $CLAUDE_CONFIG_DIR/settings.json, else
 // ~/.claude/settings.json.
@@ -63,7 +139,7 @@ type eventGroup struct {
 }
 
 // claudeCodeHooks are the hook groups Agora adds, in the order they are added.
-func claudeCodeHooks(bin, terminalEnv string) []eventGroup {
+func claudeCodeHooks(bin, terminalEnv string, stopFailure bool) []eventGroup {
 	hook := shellQuote(bin) + " hook claude-code"
 	if terminalEnv != "" {
 		hook = `AGORA_TERMINAL="${` + terminalEnv + `:-$AGORA_TERMINAL}" ` + hook
@@ -77,29 +153,31 @@ func claudeCodeHooks(bin, terminalEnv string) []eventGroup {
 	// A turn that fails runs no Stop hook; StopFailure tells the hub that the session waits at
 	// its prompt, and waits for it, after errors the session can work again from.
 	failed := func(g hookGroup) hookGroup { g.Matcher = claudecode.TransientFailures; return g }
-	return []eventGroup{
+	groups := []eventGroup{
 		{"SessionStart", plain},
 		{"SessionStart", wait},
 		{"UserPromptSubmit", plain},
 		{"PostToolUse", hookGroup{Matcher: "*", Hooks: plain.Hooks}},
 		{"Stop", plain},
 		{"Stop", wait},
-		{"StopFailure", failed(plain)},
-		{"StopFailure", failed(wait)},
-		{"SessionEnd", plain},
 	}
+	if stopFailure {
+		groups = append(groups, eventGroup{"StopFailure", failed(plain)}, eventGroup{"StopFailure", failed(wait)})
+	}
+	return append(groups, eventGroup{"SessionEnd", plain})
 }
 
 // InstallClaudeCode puts Agora's hooks into the Claude Code settings file at path: it removes
 // every Agora hook entry, adds the current ones, and writes the file unless that changes
-// nothing. Everything else in the file is kept, in its order.
-func InstallClaudeCode(path, bin, terminalEnv string, now time.Time) (Change, error) {
+// nothing. Everything else in the file is kept, in its order. stopFailure says whether to add
+// the StopFailure hooks (see StopFailureReportsCredentials).
+func InstallClaudeCode(path, bin, terminalEnv string, stopFailure bool, now time.Time) (Change, error) {
 	if terminalEnv != "" && !ValidEnvName(terminalEnv) {
 		return Change{}, fmt.Errorf("--terminal-env %q: give the name of an environment variable, like TERM_HANDLE", terminalEnv)
 	}
 	return editSettings(path, now, func(hooks *object) ([]string, error) {
 		foreign := removeAgoraHooks(hooks, bin)
-		for _, eg := range claudeCodeHooks(bin, terminalEnv) {
+		for _, eg := range claudeCodeHooks(bin, terminalEnv, stopFailure) {
 			if err := appendGroup(hooks, eg.event, eg.group); err != nil {
 				return nil, err
 			}

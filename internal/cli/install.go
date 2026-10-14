@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,6 +21,9 @@ import (
 
 // goos is the operating system install targets check; tests replace it.
 var goos = runtime.GOOS
+
+// claudeVersion reads the Claude Code version; tests replace it.
+var claudeVersion = install.ClaudeCodeVersion
 
 // systemctl runs `systemctl --user args...` and returns its combined output; tests replace it.
 var systemctl = func(ctx context.Context, args ...string) ([]byte, error) {
@@ -169,11 +173,24 @@ func installClaudeCodeCmd(o *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ch, err := install.InstallClaudeCode(path, bin, terminalEnv, time.Now())
+			version, verErr := claudeVersion(cmd.Context())
+			stopFailure := install.StopFailureReportsCredentials(version)
+			ch, err := install.InstallClaudeCode(path, bin, terminalEnv, stopFailure, time.Now())
 			if err != nil {
 				return err
 			}
 			printForeign(cmd.ErrOrStderr(), ch.Foreign)
+			if verErr != nil && !errors.Is(verErr, install.ErrNoClaude) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read the Claude Code version (%v); added the StopFailure hooks, which Claude Code before %s "+
+					"also fires for credential failures. If yours is older, run `agora install claude-code` again once `claude --version` answers\n",
+					verErr, install.StopFailureSince)
+			}
+			if !stopFailure {
+				fmt.Fprintf(o.out, "left out the StopFailure hooks: Claude Code %s reports a failure to load credentials as a transient error, "+
+					"so a session that cannot authenticate would be woken; without them a turn that fails is not woken until the next prompt. "+
+					"Run `agora install claude-code` again after updating Claude Code to %s or later\n",
+					version, install.StopFailureSince)
+			}
 			if ch.Outcome == install.Unchanged {
 				fmt.Fprintf(o.out, "Claude Code hooks already installed in %s\n", path)
 				return nil

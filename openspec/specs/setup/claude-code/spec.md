@@ -10,11 +10,23 @@
 
 ### Requirement: Installing The Claude Code Hooks
 
-`agora install claude-code` SHALL add to Claude Code's user settings file (`--settings <path>`, else `$CLAUDE_CONFIG_DIR/settings.json` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/settings.json`) one command hook running `<agora> hook claude-code` on each of `SessionStart`, `UserPromptSubmit`, `PostToolUse` (with matcher `*`), `Stop`, `StopFailure` (with matcher `overloaded|server_error|unknown|max_output_tokens`) and `SessionEnd`, and one command hook running `<agora> hook claude-code-wait` on each of `SessionStart`, `Stop` and `StopFailure` (with the same matcher) that is asynchronous, wakes the agent (`asyncRewake`) and has a timeout of 86400 seconds. A missing file and its directory SHALL be created.
+`agora install claude-code` SHALL add to Claude Code's user settings file (`--settings <path>`, else `$CLAUDE_CONFIG_DIR/settings.json` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/settings.json`) one command hook running `<agora> hook claude-code` on each of `SessionStart`, `UserPromptSubmit`, `PostToolUse` (with matcher `*`), `Stop`, `StopFailure` (with matcher `overloaded|server_error|unknown|max_output_tokens`) and `SessionEnd`, and one command hook running `<agora> hook claude-code-wait` on each of `SessionStart`, `Stop` and `StopFailure` (with the same matcher) that is asynchronous, wakes the agent (`asyncRewake`) and has a timeout of 86400 seconds. A missing file and its directory SHALL be created. When `claude --version` reports a Claude Code older than 2.1.267, which reports a failure to load credentials as `server_error` or `unknown`, the command SHALL leave out both `StopFailure` hooks and say so, so that a session that cannot authenticate is not woken; when there is no `claude` on the `PATH` the hooks SHALL be added, and when its version cannot be read they SHALL be added with a warning.
 
 #### Scenario: Fresh settings
 - **WHEN** `agora install claude-code` runs and the settings file does not exist
 - **THEN** the file is created with exactly those hooks
+
+#### Scenario: Older Claude Code
+- **WHEN** `agora install claude-code` runs and `claude --version` reports `2.1.250 (Claude Code)`
+- **THEN** the file gets every hook except the two on `StopFailure`, and the command says that they were left out for that version and to install again after updating Claude Code
+
+#### Scenario: No Claude Code found
+- **WHEN** `agora install claude-code` runs and there is no `claude` on the `PATH`
+- **THEN** the file gets every hook, including the two on `StopFailure`, and nothing is said about them
+
+#### Scenario: Claude Code version unreadable
+- **WHEN** `agora install claude-code` runs and `claude --version` fails or does not answer within 10 seconds
+- **THEN** the file gets every hook, and the command warns that it could not read the version and says to install again once `claude --version` answers
 
 #### Scenario: Already installed
 - **WHEN** it runs again

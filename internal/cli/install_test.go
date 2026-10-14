@@ -30,6 +30,7 @@ func isolate(t *testing.T) string {
 	for _, v := range []string{"CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "AGORA_SOCKET", "AGORA_DB", "AGORA_WAKE_COMMAND"} {
 		t.Setenv(v, "")
 	}
+	t.Cleanup(cli.SetClaudeVersion(func(context.Context) (string, error) { return "", install.ErrNoClaude }))
 	return home
 }
 
@@ -385,5 +386,49 @@ func TestGuideMatchesCommands(t *testing.T) {
 				t.Errorf("agora %s: %s has no flag --%s", strings.Join(args, " "), cmd.CommandPath(), name)
 			}
 		}
+	}
+}
+
+func TestOlderClaudeCodeGetsNoStopFailureHooks(t *testing.T) {
+	home := isolate(t)
+	defer cli.SetClaudeVersion(func(context.Context) (string, error) { return "2.1.250", nil })()
+	r := run("install", "claude-code", "--bin", fakeBin(t))
+	if r.code != 0 || !strings.Contains(r.stdout, "left out the StopFailure hooks: Claude Code 2.1.250 ") {
+		t.Fatalf("install: %+v", r)
+	}
+	settings, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(settings), `"StopFailure"`) || !strings.Contains(string(settings), "claude-code-wait") {
+		t.Fatalf("settings: %s", settings)
+	}
+}
+
+func TestUnreadableClaudeCodeVersionIsReported(t *testing.T) {
+	home := isolate(t)
+	defer cli.SetClaudeVersion(func(context.Context) (string, error) {
+		return "", errors.New("claude --version did not answer within 10s")
+	})()
+	r := run("install", "claude-code", "--bin", fakeBin(t))
+	if r.code != 0 || !strings.Contains(r.stderr, "could not read the Claude Code version (claude --version did not answer within 10s)") ||
+		!strings.Contains(r.stderr, "run `agora install claude-code` again once `claude --version` answers") {
+		t.Fatalf("install: %+v", r)
+	}
+	settings, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if err != nil || !strings.Contains(string(settings), `"StopFailure"`) {
+		t.Fatalf("settings: %s %v", settings, err)
+	}
+}
+
+func TestNoClaudeCodeAddsTheHooksQuietly(t *testing.T) {
+	home := isolate(t)
+	r := run("install", "claude-code", "--bin", fakeBin(t))
+	if r.code != 0 || r.stderr != "" || strings.Contains(r.stdout, "StopFailure") {
+		t.Fatalf("install: %+v", r)
+	}
+	settings, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if err != nil || !strings.Contains(string(settings), `"StopFailure"`) {
+		t.Fatalf("settings: %s %v", settings, err)
 	}
 }
