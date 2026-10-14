@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 	"time"
@@ -553,18 +552,14 @@ func ReadCaps(raw map[string]json.RawMessage) Caps {
 	return Caps{Personas: read("personas"), Threads: read("threads")}
 }
 
-// MaxProtocolVersion is the largest protocol version a bridge may report; a larger number is
-// not a version.
-const MaxProtocolVersion = 1 << 20
-
-// ReadVersion reads the protocol version of a bridge's hello: a positive integer up to
-// MaxProtocolVersion given as a JSON number, 0 (not reported) for anything else.
+// ReadVersion reads the protocol version of a bridge's hello: a positive integer given as a JSON
+// number, 0 (not reported) for anything else.
 func ReadVersion(raw json.RawMessage) int32 {
-	var n float64
-	if json.Unmarshal(raw, &n) != nil || n < 1 || n > MaxProtocolVersion || n != math.Trunc(n) {
+	var n int32
+	if json.Unmarshal(raw, &n) != nil || n < 1 {
 		return 0
 	}
-	return int32(n)
+	return n
 }
 
 // Out is a message to hand to a bridge.

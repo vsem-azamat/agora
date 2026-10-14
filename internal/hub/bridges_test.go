@@ -1147,9 +1147,11 @@ func TestABridgeReportsItsProtocolVersion(t *testing.T) {
 		t.Fatalf("before hello: %v", s)
 	}
 	// a version that is no positive integer is not reported
-	for _, bad := range []string{`"3"`, `0`, `-2`, `2.5`, `null`, `99999999999`} {
-		f.send(`{"type":"hello","version":` + bad + `,"caps":{"threads":"topic"}}`)
-		eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == "topic" })
+	for i, bad := range []string{`"3"`, `0`, `-2`, `2.5`, `null`, `99999999999`} {
+		// each hello carries caps of its own, to wait until the hub has read it
+		topic := fmt.Sprintf("topic%d", i)
+		f.send(`{"type":"hello","version":` + bad + `,"caps":{"threads":"` + topic + `"}}`)
+		eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == topic })
 		if v := b.state(t).GetProtocolVersion(); v != 0 {
 			t.Fatalf("version %s read as %d", bad, v)
 		}
