@@ -840,6 +840,11 @@ func (s *bridgeService) SetBridge(ctx context.Context, req *connect.Request[agor
 		// the new run reads the new command; the board's word that the bridge stopped carries over,
 		// so it says once that a fixed command works again
 		if ran, down := s.h.stopBridge(name); ran {
+			// the old process may have written lines after Set deleted the keys of its chat; a
+			// caller that gave up while it stopped must not leave the bridge stopped
+			if err := s.h.bridges.ForgetThreadKeys(context.WithoutCancel(ctx), name); err != nil {
+				s.h.log.Error("bridge: forgetting thread keys after a command change", "bridge", name, "err", err)
+			}
 			s.h.startBridge(name, down) //nolint:contextcheck // the bridge outlives the call: it runs under Serve's context
 			restarted = true
 		}

@@ -1129,6 +1129,56 @@ func TestAThreadWithoutATitleTakesOneFromALaterLine(t *testing.T) {
 	}
 }
 
+func TestANewBridgeStartsWithoutThreadKeys(t *testing.T) {
+	e := newEnv(t)
+	old := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "in the old chat", ThreadKey: "77", ThreadTitle: "Old"})
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.b.Add(ctx, "builder", "example-chat", "example-bridge --chat 43", "", []string{"secretary"}); err != nil {
+		t.Fatal(err)
+	}
+	fresh := e.receive(t, bridges.In{ID: "2", AuthorName: "Bob", Text: "in the new chat", ThreadKey: "77", ThreadTitle: "New"})
+	msgs, err := e.r.ThreadHistory(ctx, fresh, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldThread, err := e.r.ThreadHistory(ctx, old, 0, "")
+	if err != nil || len(oldThread) != 1 || oldThread[0].ID != old || oldThread[0].ThreadTitle != "Old" {
+		t.Fatalf("the old thread stays as it was: %+v %v", oldThread, err)
+	}
+	if fresh == old || len(msgs) != 1 || msgs[0].Thread != 0 || msgs[0].ThreadTitle != "New" {
+		t.Fatalf("topic 77 of the new chat is not the old thread: %+v", msgs)
+	}
+	if again := e.receive(t, bridges.In{ID: "3", AuthorName: "Bob", Text: "next", ThreadKey: "77"}); again == fresh {
+		t.Fatal("the reply is its own message")
+	} else if got, err := e.r.ThreadHistory(ctx, again, 0, ""); err != nil || len(got) != 2 || got[0].ID != fresh {
+		t.Fatalf("later lines of the new topic join the new thread: %+v %v", got, err)
+	}
+}
+
+func TestAChangedCommandStartsWithoutThreadKeys(t *testing.T) {
+	e := newEnv(t)
+	old := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "in the old chat", ThreadKey: "77", ThreadTitle: "Old"})
+	if _, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "example-bridge --chat 43"}); err != nil {
+		t.Fatal(err)
+	}
+	fresh := e.receive(t, bridges.In{ID: "2", AuthorName: "Bob", Text: "in the new chat", ThreadKey: "77", ThreadTitle: "New"})
+	msgs, err := e.r.ThreadHistory(ctx, fresh, 0, "")
+	if err != nil || fresh == old || len(msgs) != 1 || msgs[0].Thread != 0 || msgs[0].ThreadTitle != "New" {
+		t.Fatalf("topic 77 of the new chat is not the old thread: %+v %v", msgs, err)
+	}
+	// the same command keeps the keys
+	if _, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "example-bridge --chat 43"}); err != nil {
+		t.Fatal(err)
+	}
+	if again := e.receive(t, bridges.In{ID: "3", AuthorName: "Bob", Text: "next", ThreadKey: "77"}); again == fresh {
+		t.Fatal("own message expected")
+	} else if got, err := e.r.ThreadHistory(ctx, again, 0, ""); err != nil || len(got) != 2 || got[0].ID != fresh {
+		t.Fatalf("an unchanged command keeps the keys: %+v %v", got, err)
+	}
+}
+
 func TestMessagesOfAThreadOutside(t *testing.T) {
 	e := newEnv(t)
 	root := e.receive(t, bridges.In{ID: "1", AuthorID: "42", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release\n2.4"})
