@@ -518,7 +518,7 @@ func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	applyBefore(t, db, "0023_unconfirmed.sql")
+	applyBefore(t, db, "0024_unconfirmed.sql")
 	for _, q := range []string{
 		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
 		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('old-chat', 'chat', 'builder', 1)`,
@@ -527,6 +527,7 @@ func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
 			(2, 'old-chat', 'builder', 'refused', 2, 'failed', 'chat not found'),
 			(3, 'old-chat', 'builder', 'went', 3, 'sent', NULL)`,
 		`INSERT INTO messages (id, room, author, body, at, thread, also) VALUES (4, 'old-chat', 'builder', 'reply', 4, 1, 1)`,
+		`INSERT INTO messages (id, room, author, body, at, echo_of) VALUES (5, 'old-chat', 'builder', 'went', 5, 3)`,
 	} {
 		if _, err := db.ExecContext(ctx, q); err != nil {
 			t.Fatal(err)
@@ -539,13 +540,16 @@ func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	got, err := Strings(ctx, db, `SELECT id || ':' || COALESCE(delivery, '') || ':' || COALESCE(delivery_error, '') || ':' || COALESCE(thread, '') || ':' || also FROM messages ORDER BY id`)
+	got, err := Strings(ctx, db, `SELECT id || ':' || COALESCE(delivery, '') || ':' || COALESCE(delivery_error, '') || ':' || COALESCE(thread, '') || ':' || also || ':' || COALESCE(echo_of, '') FROM messages ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"1:unconfirmed:the bridge was removed before it answered::0", "2:failed:chat not found::0", "3:sent:::0", "4:::1:1"}
+	want := []string{"1:unconfirmed:the bridge was removed before it answered::0:", "2:failed:chat not found::0:", "3:sent:::0:", "4:::1:1:", "5::::0:3"}
 	if !slices.Equal(got, want) {
 		t.Errorf("messages %q, want %q", got, want)
+	}
+	if idx, err := Strings(ctx, db, `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name IN ('messages_echo_of', 'messages_thread') ORDER BY name`); err != nil || !slices.Equal(idx, []string{"messages_echo_of", "messages_thread"}) {
+		t.Errorf("indexes %q, %v", idx, err)
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE messages SET delivery = 'unknown' WHERE id = 3`); err == nil {
 		t.Error("the CHECK accepts a delivery state that does not exist")

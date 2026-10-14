@@ -22,17 +22,18 @@ CREATE TABLE messages_new (
     note            INTEGER NOT NULL DEFAULT 0 CHECK (note IN (0, 1) AND (note = 0 OR delivery IS NULL)),
     scheduled_at    INTEGER,
     thread          INTEGER REFERENCES messages (id),
-    also            INTEGER NOT NULL DEFAULT 0 CHECK (also IN (0, 1) AND (also = 0 OR thread IS NOT NULL))
+    also            INTEGER NOT NULL DEFAULT 0 CHECK (also IN (0, 1) AND (also = 0 OR thread IS NOT NULL)),
+    echo_of         INTEGER REFERENCES messages (id)
 );
 
 INSERT INTO messages_new (id, room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name,
-                          delivery, delivery_error, quiet, note, scheduled_at, thread, also)
+                          delivery, delivery_error, quiet, note, scheduled_at, thread, also, echo_of)
 SELECT id, room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name,
        CASE WHEN delivery = 'failed' AND delivery_error = 'the bridge was removed before it answered; it may have gone out'
             THEN 'unconfirmed' ELSE delivery END,
        CASE WHEN delivery = 'failed' AND delivery_error = 'the bridge was removed before it answered; it may have gone out'
             THEN 'the bridge was removed before it answered' ELSE delivery_error END,
-       quiet, note, scheduled_at, thread, also
+       quiet, note, scheduled_at, thread, also, echo_of
 FROM messages;
 
 -- the next id continues after the highest ever given, also when the newest messages were deleted
@@ -49,3 +50,4 @@ CREATE UNIQUE INDEX messages_ext ON messages (room, ext_id) WHERE ext_id IS NOT 
 CREATE INDEX messages_delivery ON messages (room, id) WHERE delivery = 'sending';
 CREATE INDEX messages_scheduled ON messages (room) WHERE delivery = 'scheduled';
 CREATE INDEX messages_thread ON messages (thread, id) WHERE thread IS NOT NULL;
+CREATE INDEX messages_echo_of ON messages (echo_of) WHERE echo_of IS NOT NULL;
