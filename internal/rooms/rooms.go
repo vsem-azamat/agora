@@ -1904,20 +1904,23 @@ func (r *Rooms) FollowProject(ctx context.Context, agent string) (ProjectFollow,
 		}
 		room := ProjectRoom(project)
 		out.Room = room
-		rows, err := tx.QueryContext(ctx, `SELECT room FROM subscriptions WHERE agent = ? AND by_project AND room != ?`, agent, room)
-		if err != nil {
-			return err
-		}
-		var stale []string
-		for rows.Next() {
-			var old string
-			if err := rows.Scan(&old); err != nil {
-				rows.Close()
-				return err
+		stale, err := func() ([]string, error) {
+			rows, err := tx.QueryContext(ctx, `SELECT room FROM subscriptions WHERE agent = ? AND by_project AND room != ?`, agent, room)
+			if err != nil {
+				return nil, err
 			}
-			stale = append(stale, old)
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			defer rows.Close() // before the next statement: the database has one connection
+			var stale []string
+			for rows.Next() {
+				var old string
+				if err := rows.Scan(&old); err != nil {
+					return nil, err
+				}
+				stale = append(stale, old)
+			}
+			return stale, rows.Err()
+		}()
+		if err != nil {
 			return err
 		}
 		for _, old := range stale {
