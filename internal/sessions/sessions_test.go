@@ -1272,4 +1272,10 @@ func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
 	if !errors.As(err, &former) || !errors.Is(err, agents.ErrUnknown) || err.Error() != `"fixer" is now called "docs-writer"; use docs-writer` {
 		t.Fatalf("a name given up: %v", err)
 	}
+	// taking it, or renaming to it, is refused, and the message says so
+	e.join(t, "builder", "")
+	err = e.s.Rename(ctx, "builder", "fixer")
+	if !errors.As(err, &former) || !errors.Is(err, agents.ErrTaken) || err.Error() != `"fixer" is the former name of docs-writer; pick another name, or act as docs-writer if that is you` {
+		t.Fatalf("renaming to a name given up: %v", err)
+	}
 }

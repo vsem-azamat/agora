@@ -22,7 +22,7 @@ The hub is the process that holds Agora's state and serves its API.
 ## Errors
 
 - Domain packages return errors of a kind (`store.ErrInvalid`, `rooms.ErrNotFound`, `bridges.ErrExists`, …); `toConnect` in `internal/hub/convert.go` maps the kind, found with `errors.Is`, to the Connect code.
-- Every domain package builds them with `store.Refuse(kind, format, …)`: the message is only what was refused (`#example-chat is read-only; nothing goes out`, `a room needs a purpose`), without the kind's own text in front, while `errors.Is` still finds the kind. `fmt.Errorf` with `%w` is for wrapping an error with context, not for a refusal.
+- Every domain package builds them with `store.Refuse(kind, format, …)`: the message is only what was refused (`#example-chat is read-only; nothing goes out`, `a room needs a purpose`), without the kind's own text in front, while `errors.Is` still finds the kind; a typed error (`agents.FormerNameError`, `queue.ForbiddenError`) follows the same rule for its message. `TestRefusalsAreNotWrappedWithErrorf` in `internal/store` scans the sources under `internal/` for `fmt.Errorf("%w…", Err…)`. `fmt.Errorf` with `%w` is for wrapping an error with context, not for a refusal.
 
 ## Storage
 

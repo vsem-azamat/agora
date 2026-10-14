@@ -144,6 +144,9 @@ type FormerNameError struct {
 }
 
 func (e *FormerNameError) Error() string {
+	if errors.Is(e.sentinel, ErrTaken) { // a name to take, or to rename to: the request is refused
+		return fmt.Sprintf("%q is the former name of %s; pick another name, or act as %s if that is you", e.Name, e.Current, e.Current)
+	}
 	return fmt.Sprintf("%q is now called %q; use %s", e.Name, e.Current, e.Current)
 }
 
