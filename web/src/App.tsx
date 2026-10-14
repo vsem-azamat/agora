@@ -440,9 +440,9 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
       root: threadRoot,
       messages: thread.messages,
       error: thread.error,
-      onPost: async (body: string, also: boolean) => {
+      onPost: async (body: string, also: boolean, note: boolean) => {
         try {
-          await api.rooms.post({ room: roomName, body, thread: threadRoot, also });
+          await api.rooms.post({ room: roomName, body, thread: threadRoot, also, note });
         } catch (err) {
           if (unauthenticated(err)) fail(err);
           throw err;
@@ -508,6 +508,8 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
           arrival={arrival}
           onArrived={() => setArrival(undefined)}
           thread={openThreadProps || undefined}
+          threadUnread={data.unread.get(roomName ?? '')?.threads}
+          unreadThreads={data.threads.filter((t) => t.room === roomName)}
           onThread={openThread}
         />
       );

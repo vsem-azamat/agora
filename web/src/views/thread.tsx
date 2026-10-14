@@ -2,13 +2,14 @@
 // beside the room on wide screens and over the whole screen on a phone.
 import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { clock, type Names, toDate } from '../board';
-import { authorName } from '../bridges';
+import { authorName, deliveryOf } from '../bridges';
 import type { Profile } from '../gen/agora/v1/agents_pb';
 import type { Message } from '../gen/agora/v1/rooms_pb';
 import { Icon } from '../icons';
-import { addresseesById, atBottom } from '../tape';
+import { atBottom } from '../tape';
 import { AgentLink, Avatar, MessageBody, usePg } from './common';
 import { Composer } from './composer';
+import { type Decide, Decision, DeliveryMark, type Held, type SendOut, SendOutButton } from './message';
 import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
 import { roomHref } from './rooms';
 
@@ -67,24 +68,28 @@ export function ThreadStrip({ m, onOpen }: { m: Message; onOpen: (root: bigint) 
   );
 }
 
-/** Who a reply in the thread wakes: its participants other than the operator. */
-export function participants(messages: Message[], known: Names, board: string, operator: string): string[] {
-  const to = addresseesById(messages, known, board);
-  const names = new Set<string>();
-  for (const m of messages) {
-    if (!m.externalAuthor && m.author && m.author !== board) names.add(m.author);
-    for (const t of to.get(m.id) ?? []) names.add(t);
-  }
-  names.delete(operator);
-  return [...names].sort();
-}
+/** How the panel acts on a reply that goes out of a bridged room; none outside one. */
+type Delivering = { onDecide: Decide; onSendOut?: SendOut; held?: Held };
 
-function ThreadMessage({ m, known, operator }: { m: Message; known: Names; operator: string }) {
+function ThreadMessage({
+  m,
+  known,
+  operator,
+  delivering,
+}: {
+  m: Message;
+  known: Names;
+  operator: string;
+  delivering?: Delivering;
+}) {
   const pg = usePg();
   const ext = m.externalAuthor;
+  const d = deliveryOf(m);
   return (
     <li
-      className={m.author === operator ? 'tmsg own' : 'tmsg'}
+      className={['tmsg', m.author === operator && 'own', m.note && 'note', d === 'cancelled' && 'cancelled']
+        .filter(Boolean)
+        .join(' ')}
       data-tid={String(m.id)}
       style={ext ? OUTSIDE : pg(m.author)}
     >
@@ -94,10 +99,19 @@ function ThreadMessage({ m, known, operator }: { m: Message; known: Names; opera
           {ext ? <OutsiderName who={ext} /> : <AgentLink name={m.author} className="au" />}
           <time>{clock(toDate(m.at))}</time>
           {m.also && <span className="nt">also in the room</span>}
+          {m.note && (
+            <span className="nt" title={`Not sent to ${m.room}`}>
+              note · stays in Agora
+            </span>
+          )}
+          <DeliveryMark d={d} room={m.room} />
         </div>
         <div className="tx">
           <MessageBody body={m.body} known={known} operator={operator} />
         </div>
+        {d === 'scheduled' && delivering && <Decision m={m} onDecide={delivering.onDecide} held={delivering.held} />}
+        {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
+        {m.note && delivering?.onSendOut && <SendOutButton m={m} onSendOut={delivering.onSendOut} inline />}
       </div>
     </li>
   );
@@ -163,9 +177,11 @@ export function ThreadPanel(props: {
   known: Names;
   /** The room is archived: the thread is read only. */
   archived?: boolean;
+  /** In a bridged room: its chat, whether nothing goes out, and how replies going out are acted on. */
+  bridge?: { chat: string; readOnly: boolean } & Delivering;
   onClose: () => void;
-  /** Posts a reply, also to the room when asked. */
-  onPost: (body: string, also: boolean) => Promise<void>;
+  /** Posts a reply, also to the room when asked; a note stays in Agora. */
+  onPost: (body: string, also: boolean, note: boolean) => Promise<void>;
   onTitle: (title: string) => void;
   onLeave: () => void;
   /** The newest reply shown, to count as read. */
@@ -174,6 +190,9 @@ export function ThreadPanel(props: {
   const { messages } = props;
   const [draft, setDraft] = useState('');
   const [also, setAlso] = useState(false);
+  const [noteChosen, setNote] = useState(false);
+  // in a read-only bridged room every reply stays in Agora
+  const note = props.bridge !== undefined && (noteChosen || props.bridge.readOnly);
   const box = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const back = useRef<HTMLButtonElement>(null);
@@ -181,9 +200,10 @@ export function ThreadPanel(props: {
   const follow = useRef(true);
   const root = messages?.[0];
   const title = root?.threadTitle ?? '';
+  // who a reply wakes: the thread's participants as the hub counts them, without the operator
   const wakes = useMemo(
-    () => participants(messages ?? [], props.known, props.board, props.operator),
-    [messages, props.known, props.board, props.operator],
+    () => (root?.threadSummary?.participants ?? []).filter((p) => p !== props.operator),
+    [root, props.operator],
   );
   const last = messages && messages.length > 1 ? messages.at(-1)?.id : undefined;
   const seen = useRef(props.onSeen);
@@ -209,7 +229,7 @@ export function ThreadPanel(props: {
   const inRoom = useMemo(() => new Set(wakes), [wakes]);
   const post = async (body: string) => {
     follow.current = true; // what the operator posts is shown
-    await props.onPost(body, also);
+    await props.onPost(body, also, note);
     setDraft('');
   };
   return (
@@ -265,7 +285,13 @@ export function ThreadPanel(props: {
                 </li>,
               ]
             : []),
-          <ThreadMessage key={String(m.id)} m={m} known={props.known} operator={props.operator} />,
+          <ThreadMessage
+            key={String(m.id)}
+            m={m}
+            known={props.known}
+            operator={props.operator}
+            delivering={props.bridge}
+          />,
         ])}
         {messages?.length === 1 && <li className="empty">No replies yet.</li>}
       </ol>
@@ -288,7 +314,15 @@ export function ThreadPanel(props: {
             onPost={post}
             inputRef={box}
             label={`Reply in the thread #${props.room}`}
-            hint="Reply in the thread · @ to address someone"
+            hint={props.bridge ? undefined : 'Reply in the thread · @ to address someone'}
+            outbound={
+              props.bridge && {
+                chat: props.bridge.chat,
+                note,
+                readOnly: props.bridge.readOnly,
+                onNote: setNote,
+              }
+            }
           />
         </>
       )}

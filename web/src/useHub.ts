@@ -53,12 +53,14 @@ export function forgetLoadedBuild() {
   loadedWith = undefined;
 }
 
-/** The counts per room: unread and addressed from the hub's unread counts, scheduled from the rooms. */
+/** The counts per room: unread, addressed and thread replies from the hub's unread counts, scheduled from the rooms. */
 export function roomCounts(
-  unread: { room: string; unread: number; addressed: number }[],
+  unread: { room: string; unread: number; addressed: number; threads?: number }[],
   rooms: Pick<Room, 'name' | 'scheduled'>[],
 ): Map<string, RoomCount> {
-  const out = new Map<string, RoomCount>(unread.map((r) => [r.room, { unread: r.unread, addressed: r.addressed }]));
+  const out = new Map<string, RoomCount>(
+    unread.map((r) => [r.room, { unread: r.unread, addressed: r.addressed, threads: r.threads || undefined }]),
+  );
   for (const r of rooms) {
     if (r.scheduled > 0)
       out.set(r.name, { ...(out.get(r.name) ?? { unread: 0, addressed: 0 }), scheduled: r.scheduled });

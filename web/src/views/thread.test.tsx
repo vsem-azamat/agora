@@ -4,10 +4,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseRoute } from '../App';
 import { knownNames } from '../board';
-import { agent, message, NOW } from '../fixtures';
+import { agent, goingOut, message, NOW } from '../fixtures';
 import { RoomSchema, ThreadSchema, ThreadSummarySchema } from '../gen/agora/v1/rooms_pb';
 import { RoomNav } from './rooms';
-import { MAX_TITLE, participants, ThreadPanel, ThreadStrip } from './thread';
+import { MAX_TITLE, ThreadPanel, ThreadStrip } from './thread';
 
 afterEach(() => {
   cleanup();
@@ -68,6 +68,39 @@ describe('the thread panel', () => {
     fireEvent.click(backTo);
     expect(props.onClose).toHaveBeenCalledOnce();
     vi.unstubAllGlobals();
+  });
+
+  it('in a bridged room, asks where a reply goes and acts on replies going out', async () => {
+    const onDecide = vi.fn(async () => true);
+    const msgs = [
+      message(40, 'outsider', 'can you look?', 30, { room: 'example-chat' }),
+      { ...goingOut(41, 'secretary', 'looked, all fine', 20, 'scheduled'), thread: 40n },
+      { ...goingOut(42, 'secretary', 'sent before', 25, 'sent'), thread: 40n },
+    ];
+    const { props } = panel({
+      room: 'example-chat',
+      messages: msgs,
+      bridge: { chat: 'example-chat', readOnly: false, onDecide },
+    });
+    // the reply's place in the chat shows as in the room
+    expect(screen.getByTitle('Sent to example-chat')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }));
+    await waitFor(() => expect(onDecide).toHaveBeenCalledWith(msgs[1], true));
+    expect((screen.getByRole('radio', { name: /To example-chat/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /Note for agents/ }));
+    const box = screen.getByRole('combobox', { name: 'Reply in the thread #example-chat' });
+    fireEvent.change(box, { target: { value: '@secretary keep it short' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('@secretary keep it short', false, true));
+  });
+
+  it('keeps every reply in Agora when the bridged room is read only', async () => {
+    const { props } = panel({ bridge: { chat: 'example-chat', readOnly: true, onDecide: vi.fn(), held: 'read' } });
+    expect((screen.getByRole('radio', { name: /Note for agents/ }) as HTMLInputElement).checked).toBe(true);
+    const box = screen.getByRole('combobox', { name: 'Reply in the thread #example-app' });
+    fireEvent.change(box, { target: { value: 'noted' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(props.onPost).toHaveBeenCalledWith('noted', false, true));
   });
 
   it('is read only in an archived room', () => {
@@ -138,15 +171,6 @@ describe('threads in a room', () => {
     expect(container.textContent).toBe('');
   });
 
-  it('says whom a reply wakes: the participants other than the operator', () => {
-    const msgs = [
-      message(40, 'builder', 'the export is broken', 30),
-      message(41, 'operator', '@release can you look?', 20, { thread: 40n }),
-      message(42, 'reviewer', 'on it', 10, { thread: 40n }),
-    ];
-    expect(participants(msgs, known, 'agora', 'operator')).toEqual(['builder', 'release', 'reviewer']);
-  });
-
   it('posts a reply in the thread, also to the room when asked, and titles it', async () => {
     const onPost = vi.fn(async () => {});
     const onTitle = vi.fn();
@@ -156,7 +180,10 @@ describe('threads in a room', () => {
         room="example-app"
         root={40n}
         messages={[
-          message(40, 'builder', 'the export is broken', 30),
+          message(40, 'builder', 'the export is broken', 30, {
+            // the hub's participants: the operator is left out of whom a reply wakes
+            threadSummary: create(ThreadSummarySchema, { participants: ['builder', 'operator', 'reviewer'] }),
+          }),
           message(41, 'reviewer', 'which one?', 20, { thread: 40n }),
         ]}
         operator="operator"
@@ -176,7 +203,7 @@ describe('threads in a room', () => {
     const box = screen.getByRole('combobox', { name: 'Reply in the thread #example-app' });
     fireEvent.change(box, { target: { value: 'the CSV one' } });
     fireEvent.keyDown(box, { key: 'Enter' });
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith('the CSV one', true));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith('the CSV one', true, false));
     fireEvent.click(screen.getByRole('button', { name: 'Give a title' }));
     fireEvent.change(screen.getByLabelText('Thread title'), { target: { value: 'Release 2.4' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

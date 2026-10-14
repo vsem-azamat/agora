@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App, moveThread, page, parseRoute } from './App';
 import type { Api } from './api';
-import { forgetLoadedBuild, useRoom, useThread } from './useHub';
+import { forgetLoadedBuild, roomCounts, useRoom, useThread } from './useHub';
 
 afterEach(() => {
   cleanup();
@@ -1136,5 +1136,12 @@ describe('threads in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
     await waitFor(() => expect(calls).toContainEqual(['RoomService/LeaveThread', { messageId: '1' }]));
     await waitFor(() => expect(location.hash).toBe('#/rooms/general'));
+  });
+});
+
+describe('roomCounts', () => {
+  it('keeps the unread replies of threads apart from the room’s unread', () => {
+    const counts = roomCounts([{ room: 'example-app', unread: 1, addressed: 0, threads: 2 }], []);
+    expect(counts.get('example-app')).toEqual({ unread: 1, addressed: 0, threads: 2 });
   });
 });

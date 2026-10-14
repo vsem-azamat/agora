@@ -61,7 +61,7 @@ export const BoardLine = memo(function BoardLine({ m, dim, ...ctx }: Context & {
 });
 
 /** Where a message that goes out stands, next to its time: sending, sent or not sent. */
-function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
+export function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
   switch (d) {
     case 'sending':
       return <span className="dl sending">sending…</span>;
@@ -85,7 +85,7 @@ function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
  * operator cancels it, or at once when the operator sends it. While the room is read only it is
  * held and cannot be sent, only cancelled.
  */
-function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: Held }) {
+export function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: Held }) {
   const [busy, setBusy] = useState(false);
   const decide = (send: boolean) => {
     setBusy(true);
@@ -113,7 +113,7 @@ function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; held?: 
  * Send out on a note: off while the call runs, on again when the hub refused it. Inline, it is the
  * phone's, next to its inline reply.
  */
-function SendOutButton({ m, onSendOut, inline }: { m: Message; onSendOut: SendOut; inline?: boolean }) {
+export function SendOutButton({ m, onSendOut, inline }: { m: Message; onSendOut: SendOut; inline?: boolean }) {
   const [busy, setBusy] = useState(false);
   return (
     <button

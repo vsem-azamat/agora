@@ -8,7 +8,7 @@ import type { Message } from '../gen/agora/v1/rooms_pb';
 import { RoomSchema, ThreadSummarySchema } from '../gen/agora/v1/rooms_pb';
 import type { Saved } from '../tape';
 import { OpenAgent } from './common';
-import { RoomView } from './room';
+import { nextUnreadThread, RoomView } from './room';
 import { RoomNav, Rooms } from './rooms';
 
 afterEach(() => {
@@ -1131,5 +1131,21 @@ describe('threads in the room', () => {
     fireEvent.click(within(tablet(container, 40)).getByRole('button', { name: /Open the thread/ }));
     expect(onThread).toHaveBeenCalledWith(40n);
     expect(screen.queryByRole('combobox', { name: 'Reply in the thread #example-app' })).toBeNull();
+  });
+
+  it('offers the unread replies of its threads, which the room leaves out, and opens the next thread', () => {
+    const onThread = vi.fn();
+    room(ms, { onThread, threadUnread: 3, unreadThreads: [{ root: 30n, unread: 3 }] });
+    fireEvent.click(screen.getByRole('button', { name: /3 unread in threads/ }));
+    expect(onThread).toHaveBeenCalledWith(30n);
+  });
+
+  it('finds the next thread with unread replies among the listed ones and the loaded roots', () => {
+    const withUnread = message(40, 'builder', 'x', 9, {
+      threadSummary: create(ThreadSummarySchema, { replies: 2, unread: 1 }),
+    });
+    expect(nextUnreadThread([{ root: 50n, unread: 2 }], [withUnread], undefined)).toBe(40n);
+    expect(nextUnreadThread([{ root: 50n, unread: 2 }], [withUnread], 40n)).toBe(50n);
+    expect(nextUnreadThread([{ root: 50n, unread: 0 }], [], undefined)).toBeUndefined();
   });
 });

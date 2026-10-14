@@ -46,7 +46,8 @@ export type OpenThread = {
   /** The root, then its replies; undefined while loading. */
   messages?: Message[];
   error?: string;
-  onPost: (body: string, also: boolean) => Promise<void>;
+  /** Posts a reply, also to the room when asked; a note stays in Agora. */
+  onPost: (body: string, also: boolean, note: boolean) => Promise<void>;
   onTitle: (title: string) => void;
   onLeave: () => void;
   onSeen: (id: bigint) => void;
@@ -113,6 +114,10 @@ export function RoomView(props: {
   onArrived: () => void;
   /** The thread open beside the room, if one is. */
   thread?: OpenThread;
+  /** The operator's unread replies in the room's threads now, which the room's own unread leaves out. */
+  threadUnread?: number;
+  /** The room's threads the hub lists with unread replies for the operator. */
+  unreadThreads?: { root: bigint; unread: number }[];
   /** Opens the thread of a root, or closes the open one. */
   onThread?: (root: bigint | undefined) => void;
 }) {
@@ -401,6 +406,13 @@ export function RoomView(props: {
             <span className="sum">
               {props.room?.messages ?? 0} msgs · {people.length} in room
             </span>
+            {(props.threadUnread ?? 0) > 0 && props.onThread && (
+              <UnreadInThreads
+                n={props.threadUnread ?? 0}
+                next={nextUnreadThread(props.unreadThreads ?? [], messages ?? [], props.thread?.root)}
+                onOpen={openThread}
+              />
+            )}
             {props.bridge && <BridgeControls room={name} bridge={props.bridge} onPolicy={props.onPolicy} />}
             {!archived && (
               <FollowControls
@@ -527,6 +539,15 @@ export function RoomView(props: {
         <ThreadPanel
           key={String(props.thread.root)}
           archived={archived !== undefined}
+          bridge={
+            props.bridge && {
+              chat: props.bridge.name,
+              readOnly,
+              onDecide: decide,
+              onSendOut: !readOnly && !archived ? sendOut : undefined,
+              held: readOnly ? 'read' : undefined,
+            }
+          }
           room={name}
           root={props.thread.root}
           messages={props.thread.messages}
@@ -606,6 +627,42 @@ function roomPeople(messages: Message[], reader: Reader, live: Map<string, Liven
     name,
     live: name === reader.operator ? undefined : (live.get(name) ?? 'offline'),
   }));
+}
+
+/**
+ * The next thread with unread replies to open, other than the open one: those the hub lists, then
+ * the roots in the loaded history, oldest root first.
+ */
+export function nextUnreadThread(
+  listed: { root: bigint; unread: number }[],
+  messages: Message[],
+  open: bigint | undefined,
+): bigint | undefined {
+  const roots = new Set<bigint>();
+  for (const t of listed) if (t.unread > 0) roots.add(t.root);
+  for (const m of messages) if ((m.threadSummary?.unread ?? 0) > 0) roots.add(m.id);
+  roots.delete(open ?? -1n);
+  return [...roots].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))[0];
+}
+
+/** The unread replies in the room's threads; choosing it opens the next thread that has some. */
+function UnreadInThreads({ n, next, onOpen }: { n: number; next?: bigint; onOpen: (root: bigint) => void }) {
+  return (
+    <button
+      type="button"
+      className="chip mention"
+      disabled={next === undefined}
+      title={
+        next === undefined
+          ? 'Open the thread from its strip or the room list'
+          : 'Open the next thread with unread replies'
+      }
+      onClick={() => next !== undefined && onOpen(next)}
+    >
+      <Icon name="thread" />
+      {n} unread in threads
+    </button>
+  );
 }
 
 /** Archive room, asked again in the page before the room is archived. */
