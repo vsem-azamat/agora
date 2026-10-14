@@ -117,8 +117,9 @@ message ListAgentsRequest {
 
 message ListAgentsResponse {
   repeated Profile agents = 1;
-  // The version and commit of the running hub, as `agora version` prints them: `<version> (<commit>)`.
+  // The version and commit of the running hub, as WhoamiResponse reports them.
   string hub_version = 2;
+  string hub_commit = 3;
 }
 
 message WhoRequest {

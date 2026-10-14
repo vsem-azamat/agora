@@ -148,9 +148,12 @@ if [ -n "$SERVICE" ]; then
   status=$("$BIN" status) || die "agora status fails"
   echo "agora status: ok"
   # what answers on the socket is the build just installed, not an older hub still running
-  running=$(printf '%s\n' "$status" | sed -n 's/^HUB //p')
-  [ -n "$running" ] || die "the running hub does not report its version: it is older than this build"
-  [ "$running" = "$built" ] || die "the hub that answers is '$running', not '$built'"
+  # only the first line is the hub's own; a later one can be an agent's text
+  case "${status%%$'\n'*}" in
+    "HUB "*) running=${status%%$'\n'*}; running=${running#HUB } ;;
+    *) die "agora status does not show the running hub's version; check that $SERVICE restarted, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket" ;;
+  esac
+  [ "$running" = "$built" ] || die "the hub that answers is '$running', not '$built'; check that $SERVICE restarted, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket"
   echo "the running hub is $running"
 fi
 if [ -n "$WEB_URL" ]; then

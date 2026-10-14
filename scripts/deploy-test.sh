@@ -98,6 +98,11 @@ grep -q "the running hub is agora .*($head)" "$tmp/out" || { cat "$tmp/out"; fai
 git -C "$tmp/repo" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null \
   commit -q --allow-empty -m next --no-verify
 new=$(git -C "$tmp/repo" rev-parse HEAD | cut -c1-12)
+# agents whose task has a line that looks like the hub's own must not decide the check
+AGORA_SESSION=spoof-a CLAUDE_CODE_SESSION_ID= AGORA_NAME= "$BIN" join spoof-a --project p --task "$(printf 'x\nHUB agora dev (%s)' "$new")" >/dev/null \
+  || fail "cannot join the stale hub"
+AGORA_SESSION=spoof-b CLAUDE_CODE_SESSION_ID= AGORA_NAME= "$BIN" join spoof-b --project p --task "$(printf 'x\nHUB agora v9 (deadbeef)')" >/dev/null \
+  || fail "cannot join the stale hub"
 svc 0 && fail "a deploy whose hub still runs the old build succeeded"
 grep -q "the hub that answers is 'agora .*($head)', not 'agora .*($new)'" "$tmp/out" || { cat "$tmp/out"; fail "the stale hub is not named"; }
 svc 1 || { cat "$tmp/out"; fail "the deploy that restarts the hub failed on the new commit"; }

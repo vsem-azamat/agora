@@ -19,6 +19,7 @@ import (
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/connector/claudecode"
 	"github.com/vsem-azamat/agora/internal/rooms"
+	"github.com/vsem-azamat/agora/internal/version"
 )
 
 // profileFlags are the profile fields that join and set accept.
@@ -251,7 +252,7 @@ func statusCmd(o *options) *cobra.Command {
 				return err
 			}
 			if v := agents.Msg.GetHubVersion(); v != "" {
-				fmt.Fprintf(o.out, "HUB agora %s\n", v)
+				fmt.Fprintf(o.out, "HUB agora %s\n", version.Info{Version: v, Commit: agents.Msg.GetHubCommit()})
 			}
 			which := " active"
 			if all {

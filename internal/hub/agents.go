@@ -60,7 +60,7 @@ func (s *agentService) ListAgents(ctx context.Context, req *connect.Request[agor
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	out := &agorav1.ListAgentsResponse{HubVersion: version.Get().String()}
+	out := &agorav1.ListAgentsResponse{HubVersion: version.Get().Version, HubCommit: version.Get().Commit}
 	for _, p := range list {
 		out.Agents = append(out.Agents, profilePB(p))
 	}
