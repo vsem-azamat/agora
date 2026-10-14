@@ -60,7 +60,7 @@ export const BoardLine = memo(function BoardLine({ m, dim, ...ctx }: Context & {
   );
 });
 
-/** Where a message that goes out stands, next to its time: sending, sent or not sent. */
+/** Where a message that goes out stands, next to its time: sending, sent, not sent or unconfirmed. */
 export function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
   switch (d) {
     case 'sending':
@@ -75,9 +75,31 @@ export function DeliveryMark({ d, room }: { d: Delivery | undefined; room: strin
     case 'cancelled':
     case 'failed':
       return <span className={`dl ${d}`}>not sent</span>;
+    case 'unconfirmed':
+      return (
+        <span className="dl unconfirmed" title={CHECK_THE_CHAT}>
+          unconfirmed
+        </span>
+      );
     default:
       return null;
   }
+}
+
+/** What the operator should do about a message that may have gone out. */
+export const CHECK_THE_CHAT = 'check the chat before sending it again';
+
+/** The line under a message whose outcome is unknown, or a failed one: the reason. */
+export function DeliveryNote({ m, d }: { m: Message; d: Delivery | undefined }) {
+  if (d === 'failed') return <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>;
+  if (d === 'unconfirmed') {
+    return (
+      <p className="dlerr unconfirmed">
+        Unconfirmed{m.deliveryError ? `: ${m.deliveryError}` : ''} · {CHECK_THE_CHAT}
+      </p>
+    );
+  }
+  return null;
 }
 
 /**
@@ -253,7 +275,7 @@ export const Tablet = memo(function Tablet({
         </div>
         {onThread && <ThreadStrip m={m} onOpen={onThread} />}
         {d === 'scheduled' && <Decision m={m} onDecide={onDecide} held={held} />}
-        {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
+        <DeliveryNote m={m} d={d} />
       </div>
       <div className="acts">
         {onReply && (

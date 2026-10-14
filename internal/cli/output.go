@@ -56,11 +56,12 @@ func plural(n int32) string {
 
 // deliveryLabels follow the head of a message of a bridged room, as in rooms.Format.
 var deliveryLabels = map[agorav1.DeliveryState]string{
-	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED: " · scheduled",
-	agorav1.DeliveryState_DELIVERY_STATE_SENDING:   " · sending",
-	agorav1.DeliveryState_DELIVERY_STATE_SENT:      " · sent",
-	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED: " · cancelled",
-	agorav1.DeliveryState_DELIVERY_STATE_FAILED:    " · not sent: ",
+	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED:   " · scheduled",
+	agorav1.DeliveryState_DELIVERY_STATE_SENDING:     " · sending",
+	agorav1.DeliveryState_DELIVERY_STATE_SENT:        " · sent",
+	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED:   " · cancelled",
+	agorav1.DeliveryState_DELIVERY_STATE_FAILED:      " · not sent: ",
+	agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED: " · unconfirmed: ",
 }
 
 // formatMessage renders a message: room, identifier, author (name@bridge for a message from
@@ -86,7 +87,7 @@ func formatMessage(m *agorav1.Message) string {
 		head += " · note"
 	}
 	head += deliveryLabels[m.GetDeliveryState()]
-	if m.GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_FAILED {
+	if s := m.GetDeliveryState(); s == agorav1.DeliveryState_DELIVERY_STATE_FAILED || s == agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED {
 		head += m.GetDeliveryError()
 	}
 	head += threadLabel(m)

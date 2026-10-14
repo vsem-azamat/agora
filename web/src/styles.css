@@ -15,6 +15,7 @@
   --accent: #6e4f37;
   --ok: #55693f;
   --warn: #a7792e;
+  --warn-text: #734f10; /* warn as text: 4.5:1 on the room's backgrounds */
   --bad: #8e3b2c;
   --tome: #f3e7cc;
   --pg-terracotta: #9a4a2f;
@@ -42,6 +43,7 @@
   --accent: #dcc6a0;
   --ok: #9bb07a;
   --warn: #d3a056;
+  --warn-text: #d3a056; /* warn as text: 4.5:1 on the room's backgrounds */
   --bad: #d07a62;
   --tome: #3a2e22;
   --pg-terracotta: #d98a6c;
@@ -67,6 +69,7 @@
   --accent: #3c5677;
   --ok: #4d6b45;
   --warn: #9c7426;
+  --warn-text: #6f510f; /* warn as text: 4.5:1 on the room's backgrounds */
   --bad: #9a3a2e;
   --tome: #e2e8ef;
   --pg-umber: #5b5048;
@@ -84,6 +87,7 @@
   --accent: #a8581a;
   --ok: #4f7a2e;
   --warn: #b07a12;
+  --warn-text: #7a5206; /* warn as text: 4.5:1 on the room's backgrounds */
   --bad: #a83a24;
   --tome: #fff0d4;
   --pg-terracotta: #a8461f;
@@ -102,6 +106,7 @@
   --accent: #c9a46a;
   --ok: #a3bb82;
   --warn: #d8a95e;
+  --warn-text: #d8a95e; /* warn as text: 4.5:1 on the room's backgrounds */
   --bad: #d9836a;
   --tome: #2c3b34;
   --pg-terracotta: #e0957a;
@@ -1747,6 +1752,9 @@ button.pgname:hover {
 .dl.failed {
   color: var(--bad);
 }
+.dl.unconfirmed {
+  color: var(--warn-text);
+}
 .decide {
   display: flex;
   align-items: center;
@@ -1796,6 +1804,9 @@ button.pgname:hover {
   color: var(--bad);
   font-size: 0.86em;
   font-style: italic;
+}
+.dlerr.unconfirmed {
+  color: var(--warn-text);
 }
 
 /* a short notice, such as a refused call: a band under the room's header that covers nothing */

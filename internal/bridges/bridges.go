@@ -188,8 +188,8 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 }
 
 // Remove deletes the bridge name; its room, subscriptions and messages stay, and the board says
-// in the room that it is no longer bridged. Messages of the room left sending are marked not
-// sent, since no bridge answers for them any more, and the board tells their authors that they
+// in the room that it is no longer bridged. Messages of the room left sending are marked
+// unconfirmed, since no bridge answers for them any more, and the board tells their authors that they
 // may have gone out all the same.
 func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 	name = strings.TrimPrefix(name, "#")
@@ -208,7 +208,7 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 			return err
 		}
 		// no bridge answers for the messages left sending any more
-		failed, err := failSending(ctx, tx, name)
+		failed, err := unconfirmSending(ctx, tx, name)
 		if err != nil {
 			return err
 		}
@@ -334,20 +334,20 @@ func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Change
 	return out, nil
 }
 
-// settled is a message failSending marked not sent.
+// settled is a message unconfirmSending marked unconfirmed.
 type settled struct {
 	id     int64
 	author string
 }
 
-// failSending marks the messages of room still sending as not sent, since its bridge was
+// unconfirmSending marks the messages of room still sending as unconfirmed, since its bridge was
 // removed, and returns them in posting order.
-func failSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error) {
+func unconfirmSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error) {
 	// what is hidden as the echo of one of them is a message of its own
 	if _, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE room = ? AND echo_of IS NOT NULL`, room); err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `UPDATE messages SET delivery = 'failed', delivery_error = ?
+	rows, err := tx.QueryContext(ctx, `UPDATE messages SET delivery = 'unconfirmed', delivery_error = ?
 		WHERE room = ? AND delivery = 'sending' RETURNING id, author`, removedReason, room)
 	if err != nil {
 		return nil, err
@@ -368,9 +368,8 @@ func failSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error
 	return out, nil
 }
 
-// removedReason is why a message left sending when its bridge was removed is not known to have
-// gone out: the bridge may have sent it and been stopped before it answered.
-const removedReason = "the bridge was removed before it answered; it may have gone out"
+// removedReason is why a message left sending when its bridge was removed is unconfirmed: the bridge may have sent it and been stopped before it answered.
+const removedReason = "the bridge was removed before it answered"
 
 // List returns every bridge in name order.
 func (b *Bridges) List(ctx context.Context) ([]Bridge, error) {

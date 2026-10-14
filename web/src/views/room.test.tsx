@@ -806,6 +806,19 @@ describe('messages going out', () => {
     expect(props.onDecide).toHaveBeenCalledWith(scheduled, false);
   });
 
+  it('says that nobody knows whether a message went out when its bridge was removed', () => {
+    const { container } = chatRoom([
+      goingOut(1, 'secretary', 'hello', 5, 'unconfirmed', 'the bridge was removed before it answered'),
+    ]);
+    const mark = tablet(container, 1).querySelector('.dl');
+    expect(mark?.textContent).toBe('unconfirmed');
+    expect(mark?.classList.contains('unconfirmed')).toBe(true);
+    expect(mark?.getAttribute('title')).toBe('check the chat before sending it again');
+    expect(tablet(container, 1).querySelector('.dlerr')?.textContent).toBe(
+      'Unconfirmed: the bridge was removed before it answered · check the chat before sending it again',
+    );
+  });
+
   it('holds a scheduled message of a room without a bridge any more', () => {
     const scheduled = goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled');
     const { container, props } = chatRoom([scheduled], { bridge: undefined });

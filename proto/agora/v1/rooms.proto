@@ -75,7 +75,7 @@ message Message {
   ExternalAuthor external_author = 8;
   // Whether a message of a bridged room went out; unspecified for a message that stays here.
   DeliveryState delivery_state = 9;
-  // Why a message in DELIVERY_STATE_FAILED was not sent.
+  // Why a message in DELIVERY_STATE_FAILED was not sent, or in DELIVERY_STATE_UNCONFIRMED is not known to have gone out.
   string delivery_error = 10;
   // A note: a message of a bridged room that stays in Agora; it is never handed to the bridge and
   // has no delivery state.
@@ -156,6 +156,9 @@ enum DeliveryState {
   DELIVERY_STATE_CANCELLED = 4;
   // The bridge could not send it; delivery_error says why.
   DELIVERY_STATE_FAILED = 5;
+  // It was handed to a bridge that was removed before it answered, so nobody knows whether it went
+  // out; delivery_error says what happened.
+  DELIVERY_STATE_UNCONFIRMED = 6;
 }
 
 // How an agent follows a room.

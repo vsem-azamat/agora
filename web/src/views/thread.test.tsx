@@ -122,6 +122,20 @@ describe('the thread panel', () => {
     expect(props.onSeen).not.toHaveBeenCalledWith(51n);
   });
 
+  it('marks a reply whose bridge was removed before it answered as unconfirmed', () => {
+    panel({
+      messages: [
+        message(40, 'builder', 'root', 30),
+        {
+          ...goingOut(41, 'secretary', 'hello', 20, 'unconfirmed', 'the bridge was removed before it answered'),
+          thread: 40n,
+        },
+      ],
+    });
+    expect(screen.getByText('unconfirmed').getAttribute('title')).toBe('check the chat before sending it again');
+    expect(screen.getByText(/^Unconfirmed: the bridge was removed/)).toBeTruthy();
+  });
+
   it('offers Cancel on a scheduled reply in a room whose bridge was removed', () => {
     panel({
       messages: [

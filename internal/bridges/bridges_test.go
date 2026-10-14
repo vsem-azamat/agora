@@ -1282,7 +1282,7 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
 	}
-	if deliveryOf(t, e, "example-chat", sending) != rooms.Failed || deliveryOf(t, e, "example-chat", scheduled) != rooms.Scheduled {
+	if deliveryOf(t, e, "example-chat", sending) != rooms.Unconfirmed || deliveryOf(t, e, "example-chat", scheduled) != rooms.Scheduled {
 		t.Fatalf("history: %+v", e.history(t))
 	}
 	h := e.history(t)
@@ -1293,8 +1293,11 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 		t.Fatalf("the operator is not told: %+v", h)
 	}
 	for _, m := range h {
-		if m.ID == sending && m.DeliveryError != "the bridge was removed before it answered; it may have gone out" {
+		if m.ID == sending && m.DeliveryError != "the bridge was removed before it answered" {
 			t.Fatalf("reason: %+v", m)
+		}
+		if m.ID == sending && !strings.HasSuffix(strings.Split(rooms.Format(m, 0), "\n")[0], " · unconfirmed: the bridge was removed before it answered") {
+			t.Fatalf("formatted: %q", rooms.Format(m, 0))
 		}
 	}
 }

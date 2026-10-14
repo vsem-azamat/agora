@@ -31,6 +31,13 @@ func TestMessageLayout(t *testing.T) {
 	if got := cli.FormatMessage(failed); got != "#example-chat [15] secretary · 22:50 · not sent: chat not found\n  hi" {
 		t.Fatalf("got %q", got)
 	}
+	unconfirmed := &agorav1.Message{
+		Id: 18, Room: "example-chat", Author: "secretary", Body: "hi", At: timestamppb.New(at),
+		DeliveryState: agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED, DeliveryError: "the bridge was removed before it answered",
+	}
+	if got := cli.FormatMessage(unconfirmed); got != "#example-chat [18] secretary · 22:50 · unconfirmed: the bridge was removed before it answered\n  hi" {
+		t.Fatalf("got %q", got)
+	}
 	scheduled := &agorav1.Message{Id: 16, Room: "example-chat", Author: "secretary", Body: "hi", At: timestamppb.New(at), DeliveryState: agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED}
 	if got := cli.FormatMessage(scheduled); got != "#example-chat [16] secretary · 22:50 · scheduled\n  hi" {
 		t.Fatalf("got %q", got)

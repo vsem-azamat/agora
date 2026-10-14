@@ -9,7 +9,7 @@ import { Icon } from '../icons';
 import { atBottom } from '../tape';
 import { AgentLink, Avatar, MessageBody, usePg } from './common';
 import { Composer } from './composer';
-import { type Decide, Decision, DeliveryMark, type Held, type SendOut, SendOutButton } from './message';
+import { type Decide, Decision, DeliveryMark, DeliveryNote, type Held, type SendOut, SendOutButton } from './message';
 import { OUTSIDE, OutsiderAvatar, OutsiderName } from './outside';
 import { roomHref } from './rooms';
 
@@ -110,7 +110,7 @@ function ThreadMessage({
           <MessageBody body={m.body} known={known} operator={operator} />
         </div>
         {d === 'scheduled' && delivering && <Decision m={m} onDecide={delivering.onDecide} held={delivering.held} />}
-        {d === 'failed' && <p className="dlerr">Not sent{m.deliveryError ? `: ${m.deliveryError}` : ''}</p>}
+        <DeliveryNote m={m} d={d} />
         {m.note && delivering?.onSendOut && <SendOutButton m={m} onSendOut={delivering.onSendOut} inline />}
       </div>
     </li>
