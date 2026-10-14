@@ -74,11 +74,23 @@ A bridge MAY answer the hub's `hello` with `{"type":"hello","caps":{"personas":�
 
 ### Requirement: Threads Across Bridges
 
-The system SHALL, for a bridge that declared `threads` in its current run, store an `in` line with `thread: {"key": …, "title": …}` (a key of at most 256 bytes, given as a string or a number) in the room's thread mapped to that key. The first message with a new key SHALL join the thread of the message it replies to when the key is that thread's root's identifier outside and the thread has no key yet (a platform whose thread key names its root), and otherwise becomes the root of a new thread; either way the key is mapped to that thread, which gets the given title (cleaned like an author's name, cut to 100 characters) unless it has one. Later messages with the key are replies in that thread, addressed to its participants like any reply, and a title they carry is ignored. A `thread` of another shape SHALL be ignored, and the rest of the line stored. A bridge that did not declare `threads` has the thread of its lines ignored. The bridge's agents SHALL be participants of every thread of its room, so they are addressed by its replies as by the room's messages. An `out` line of a reply in a thread SHALL carry `thread`, the key, when the thread has one and the bridge declared `threads`; after a bridge starts, such replies wait until it declared `threads` or 3 seconds passed. When the reply replies to no message, or to one without an identifier outside (a note), `reply_to` SHALL name the root's identifier outside, so a thread started in Agora goes out as a chain of replies.
+The system SHALL, for a bridge that declared `threads` in its current run, store an `in` line with `thread: {"key": …, "title": …}` (a key of at most 256 bytes, given as a string or a number) in the room's thread mapped to that key. The first message with a new key SHALL join the thread of the message it replies to when the key is that thread's root's identifier outside and the thread has no key yet (a platform whose thread key names its root), and otherwise becomes the root of a new thread; either way the key is mapped to that thread, which gets the given title (cleaned like an author's name, cut to 100 characters) unless it has one an agent or the operator gave. Later messages with the key are replies in that thread, addressed to its participants like any reply; a title they carry is taken by a thread without a title, and replaces the title of one titled from outside (a topic renamed outside), and never one an agent or the operator gave. A line without a title leaves the title as it is. A `thread` of another shape SHALL be ignored, and the rest of the line stored. A bridge that did not declare `threads` has the thread of its lines ignored. The bridge's agents SHALL be participants of every thread of its room, so they are addressed by its replies as by the room's messages. An `out` line of a reply in a thread SHALL carry `thread`, the key, when the thread has one and the bridge declared `threads`; after a bridge starts, such replies wait until it declared `threads` or 3 seconds passed. When the reply replies to no message, or to one without an identifier outside (a note), `reply_to` SHALL name the root's identifier outside, so a thread started in Agora goes out as a chain of replies.
 
 #### Scenario: A forum topic
 - **WHEN** the bridge of `#example-chat` declared `threads` and its first line from topic `77` titled `Release` comes in, then a second
 - **THEN** the first is the root of a thread titled `Release` in `#example-chat`, the second is a reply in it, and an agent's reply in that thread goes out with `thread` `77`
+
+#### Scenario: A topic renamed outside
+- **WHEN** the first line of topic `77` came in titled `Release`, and a later line of the topic comes in titled `Release 2.4`
+- **THEN** the thread is titled `Release 2.4`
+
+#### Scenario: A title that comes later
+- **WHEN** the first line of topic `77` came in without a title and a later line comes in titled `Release`
+- **THEN** the thread is titled `Release`
+
+#### Scenario: A title Agora gave stays
+- **WHEN** `builder` titled the thread of topic `77` `Plan`, and a later line of the topic comes in titled `Release 2.4`
+- **THEN** the thread is still titled `Plan`
 
 #### Scenario: A key that names the root
 - **WHEN** `secretary` replied in the thread of Ada's message `100`, and the bridge's first line with key `100` replies to `100`

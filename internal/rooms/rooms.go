@@ -758,7 +758,7 @@ type Incoming struct {
 	Addressees []string // agents the message addresses besides its mentions
 	// ThreadKey names the thread outside the message belongs to, such as a forum topic; the
 	// first message with a new key becomes the root of a thread titled ThreadTitle, later ones
-	// are replies in it. "" for a message of the room.
+	// are replies in it, and a ThreadTitle on them retitles the thread as titleFromOutsideTx says. "" for a message of the room.
 	ThreadKey, ThreadTitle string
 }
 
@@ -820,18 +820,19 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 		if _, err := tx.ExecContext(ctx, `INSERT INTO thread_keys (room, key, root) VALUES (?, ?, ?)`, in.Room, in.ThreadKey, id); err != nil {
 			return 0, err
 		}
-		// the title the thread gets from outside is its first; later ones are ignored
-		if title := in.ThreadTitle; title != "" {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO threads (root, title, titled_by, titled_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`,
-				id, title, Board, r.now().UnixMilli()); err != nil {
-				return 0, err
-			}
+		if err := titleFromOutsideTx(ctx, tx, id, in.ThreadTitle, r.now()); err != nil {
+			return 0, err
 		}
 		if root == 0 {
 			return id, nil
 		}
 	case err != nil:
 		return 0, err
+	default:
+		// a topic renamed outside comes with its new title on the lines that follow
+		if err := titleFromOutsideTx(ctx, tx, root, in.ThreadTitle, r.now()); err != nil {
+			return 0, err
+		}
 	}
 	m.Thread = root
 	if in.Author != "" {
@@ -845,6 +846,20 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 		return 0, err
 	}
 	return insert(ctx, tx, m, in.ExtID, append(in.Addressees, participants...))
+}
+
+// titleFromOutsideTx gives the thread of root the title a bridge sent with its line, when there
+// is one: a thread without a title takes it, and so does one whose title came from outside
+// earlier (titled by the board); a title an agent or the operator gave stays.
+func titleFromOutsideTx(ctx context.Context, tx *sql.Tx, root int64, title string, now time.Time) error {
+	if title == "" {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO threads (root, title, titled_by, titled_at) VALUES (:root, :title, :board, :at)
+		ON CONFLICT (root) DO UPDATE SET title = excluded.title, titled_at = excluded.titled_at
+		WHERE threads.titled_by = :board AND threads.title != excluded.title`,
+		sql.Named("root", root), sql.Named("title", title), sql.Named("board", Board), sql.Named("at", now.UnixMilli()))
+	return err
 }
 
 // SettleTx moves message id, in room (any room when ""), from the delivery state from to to,
