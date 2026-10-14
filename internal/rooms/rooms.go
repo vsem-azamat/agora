@@ -311,7 +311,7 @@ func SubscribeTx(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode)
 // names 'scheduled' literally, so the partial index messages_scheduled covers it; a bound parameter
 // would keep the planner from it.
 const listQuery = `SELECT r.name, r.purpose, r.created_by, r.created_at,
-	(SELECT COUNT(*) FROM messages WHERE room = r.name), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name), 0),
+	(SELECT COUNT(*) FROM messages WHERE room = r.name AND echo_of IS NULL), COALESCE((SELECT MAX(at) FROM messages WHERE room = r.name AND echo_of IS NULL), 0),
 	(SELECT COUNT(*) FROM messages WHERE room = r.name AND delivery = 'scheduled'),
 	COALESCE(r.archived_by, ''), COALESCE(r.archived_at, 0)
 	FROM rooms AS r WHERE :all OR r.archived_at IS NULL ORDER BY r.name`
@@ -769,7 +769,11 @@ type Incoming struct {
 }
 
 // PostIncomingTx stores in inside the caller's transaction and returns its identifier, or 0 when
-// a message with its identifier outside is already stored in the room.
+// a message with its identifier outside is already stored in the room. A message of the operator
+// (Author set) outside a thread with the text of the oldest message of that author in the room
+// that is still sending, and no echo hidden for it yet, is stored hidden (echo_of): it may be that
+// message's echo. SentTx merges it when the identifier is the same and shows it otherwise, as do
+// SettleTx for a message that is not sent and the removal of the bridge.
 func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (int64, error) {
 	body := strings.TrimSpace(in.Body)
 	if in.ExtID == "" || body == "" || utf8.RuneCountInString(body) > MaxBody {
@@ -796,7 +800,17 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 		m.ReplyTo = reply
 	}
 	if in.ThreadKey == "" {
-		return insert(ctx, tx, m, in.ExtID, in.Addressees)
+		id, err := insert(ctx, tx, m, in.ExtID, in.Addressees)
+		if err != nil {
+			return id, err
+		}
+		// it may be the echo of a message its author posted here that the bridge has not answered
+		// (the oldest one with the same text that no other echo is hidden for): hidden until it does
+		_, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = (SELECT o.id FROM messages AS o WHERE o.room = :room AND o.author = :author
+				AND o.delivery = 'sending' AND o.body = :body AND NOT EXISTS (SELECT 1 FROM messages AS e WHERE e.echo_of = o.id)
+				ORDER BY o.id LIMIT 1) WHERE id = :id`,
+			sql.Named("room", in.Room), sql.Named("author", in.Author), sql.Named("body", body), sql.Named("id", id))
+		return id, err
 	}
 	var root int64
 	err := tx.QueryRowContext(ctx, `SELECT root FROM thread_keys WHERE room = ? AND key = ?`, in.Room, in.ThreadKey).Scan(&root)
@@ -884,19 +898,28 @@ func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to D
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
 	}
+	if err == nil && from == Sending && to != Sent {
+		// a message hidden as the echo of this one is a message of its own
+		_, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of = ?`, id)
+	}
 	return room, author, err == nil, err
 }
 
 // SentTx marks message id of room, handed to its bridge, as sent with the identifier outside
 // extID ("" for none), inside the caller's transaction, and reports whether it was waiting for
-// the answer. Its echo, a message that came in with extID after it was posted (from outside or
+// the answer; a message hidden as its echo with another identifier is shown. Its echo, a message that came in with extID after it was posted (from outside or
 // from the operator outside, so without a delivery state), is merged into it: replies to the
 // echo reply to it, replies in the echo's thread move to the thread of the sent message (its own,
 // or the one it is a reply in), and the echo is deleted. When another message of the room has extID, the
 // message is marked sent without it, nothing else changes, and taken is true.
 func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, taken bool, err error) {
-	if _, _, ok, err = SettleTx(ctx, tx, id, room, Sending, Sent, ""); !ok || err != nil || extID == "" {
+	if _, _, ok, err = SettleTx(ctx, tx, id, room, Sending, Sent, ""); !ok || err != nil {
 		return ok, false, err
+	}
+	// what was hidden as the echo of this one shows: below it is merged when it has the identifier,
+	// and is a message of its own otherwise
+	if _, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of = ?`, id); err != nil || extID == "" {
+		return true, false, err
 	}
 	var holder int64
 	var echo bool
@@ -982,7 +1005,7 @@ func (r *Rooms) HistoryFor(ctx context.Context, room string, last int, reader st
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT `+messageColumns+` FROM
-			(SELECT * FROM messages WHERE room = ? AND (thread IS NULL OR also) ORDER BY id DESC LIMIT ?) AS m ORDER BY m.id`, room, last)
+			(SELECT * FROM messages WHERE room = ? AND echo_of IS NULL AND (thread IS NULL OR also) ORDER BY id DESC LIMIT ?) AS m ORDER BY m.id`, room, last)
 		if err != nil {
 			return err
 		}
@@ -1007,10 +1030,15 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 		if err != nil {
 			return err
 		}
+		// a root hidden as an echo is shown as the thread of the message it may be the echo of
+		shown, err := shownRootTx(ctx, tx, root)
+		if err != nil {
+			return err
+		}
 		rows, err := tx.QueryContext(ctx, `SELECT `+messageColumns+` FROM
-			(SELECT * FROM messages WHERE id = :root
-				UNION ALL SELECT * FROM (SELECT * FROM messages WHERE thread = :root ORDER BY id DESC LIMIT :last)) AS m ORDER BY m.id`,
-			sql.Named("root", root), sql.Named("last", last))
+			(SELECT * FROM messages WHERE id = :shown
+				UNION ALL SELECT * FROM (SELECT * FROM messages WHERE thread IN (:root, :shown) ORDER BY id DESC LIMIT :last)) AS m ORDER BY m.id`,
+			sql.Named("shown", shown), sql.Named("root", root), sql.Named("last", last))
 		if err != nil {
 			return err
 		}
@@ -1020,10 +1048,60 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 		if err := summarize(ctx, tx, out[:1], reader); err != nil {
 			return err
 		}
-		out[0].Summary.Participants, err = participantsTx(ctx, tx, root, "")
+		if out[0].Summary.Participants, err = participantsTx(ctx, tx, shown, ""); err != nil || shown == root {
+			return err
+		}
+		if err := addHiddenReplies(ctx, tx, &out[0].Summary, root); err != nil {
+			return err
+		}
+		more, err := participantsTx(ctx, tx, root, "")
+		for _, p := range more {
+			if !slices.Contains(out[0].Summary.Participants, p) {
+				out[0].Summary.Participants = append(out[0].Summary.Participants, p)
+			}
+		}
 		return err
 	})
 	return out, err
+}
+
+// shownRootTx returns the root a thread rooted at root is shown under: root itself, or, for a
+// root hidden as the possible echo of a message of the operator, the root of the thread of that
+// message, so nothing hidden shows before the bridge answers.
+func shownRootTx(ctx context.Context, tx *sql.Tx, root int64) (int64, error) {
+	var shown int64
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(o.thread, o.id) FROM messages AS r JOIN messages AS o ON o.id = r.echo_of WHERE r.id = ?`, root).Scan(&shown)
+	if errors.Is(err, sql.ErrNoRows) {
+		return root, nil
+	}
+	return shown, err
+}
+
+// addHiddenReplies adds the replies in the thread of root, hidden as an echo, to the summary of
+// the thread it is shown as.
+func addHiddenReplies(ctx context.Context, tx *sql.Tx, sum *ThreadSummary, root int64) error {
+	rows, err := tx.QueryContext(ctx, `SELECT CASE WHEN author != '' THEN author ELSE ext_author_name || '@' || room END AS who,
+		COUNT(*), MAX(at) FROM messages WHERE thread = ? GROUP BY who ORDER BY MIN(id)`, root)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var who string
+		var n int
+		var last int64
+		if err := rows.Scan(&who, &n, &last); err != nil {
+			return err
+		}
+		sum.Replies += n
+		if !slices.Contains(sum.Repliers, who) {
+			sum.Repliers = append(sum.Repliers, who)
+		}
+		if t := time.UnixMilli(last); t.After(sum.LastAt) {
+			sum.LastAt = t
+		}
+	}
+	return rows.Err()
 }
 
 // summarize sets the thread summary of every message of msgs that has replies; Unread counts the
@@ -1191,7 +1269,7 @@ func (r *Rooms) Threads(ctx context.Context, room, reader string, withUnread boo
 				COALESCE(t.title, ''), COUNT(rp.id), MAX(m.at, COALESCE(t.titled_at, 0), COALESCE(MAX(rp.at), 0)) AS last
 			FROM messages AS m LEFT JOIN threads AS t ON t.root = m.id
 			LEFT JOIN messages AS rp ON rp.thread = m.id
-			WHERE (t.root IS NOT NULL OR m.id IN (SELECT value FROM json_each(:untitled)))
+			WHERE m.echo_of IS NULL AND (t.root IS NOT NULL OR m.id IN (SELECT value FROM json_each(:untitled)))
 				AND CASE :room WHEN '' THEN NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL) ELSE m.room = :room END
 			GROUP BY m.id ORDER BY last DESC, m.id DESC`, sql.Named("room", room), sql.Named("untitled", untitled))
 		if err != nil {
@@ -1322,7 +1400,7 @@ SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), ` + outsideAvatarColumn + `, COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
 	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0), ` + threadColumns + `
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
-WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
+WHERE m.author != :a AND m.echo_of IS NULL AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
 	AND NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL)
 GROUP BY m.id
 ORDER BY m.id`
