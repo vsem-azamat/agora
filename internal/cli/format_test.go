@@ -12,7 +12,10 @@ import (
 	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
-// pb gives m as the hub hands it to a client, field by field as the hub's conversion does.
+// pb gives m as the hub hands it to a client, for the fields a message's layout reads. It is not
+// the hub's conversion: that one also sets the avatar of an outside author, the participants of a
+// thread, and when a scheduled message is due, which no layout shows, and gives a thread summary
+// also to a root that has participants but no replies.
 func pb(m rooms.Message) *agorav1.Message {
 	states := map[rooms.Delivery]agorav1.DeliveryState{
 		rooms.Scheduled: agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED, rooms.Sending: agorav1.DeliveryState_DELIVERY_STATE_SENDING,
@@ -44,6 +47,7 @@ func TestTheHubAndTheCLIFormatEveryMarkAlike(t *testing.T) {
 		m    rooms.Message
 		mark string // what the header must carry
 	}{
+		{"a body longer than a connector's limit", with(func(m *rooms.Message) { m.Body = strings.Repeat("long line\n", 100) + "the end" }), ""},
 		{"plain", base, ""},
 		{"a reply", with(func(m *rooms.Message) { m.ReplyTo = 40 }), " · re 40"},
 		{"to you", with(func(m *rooms.Message) { m.Addressed = true }), " · to you"},
@@ -81,7 +85,7 @@ func TestTheHubAndTheCLIFormatEveryMarkAlike(t *testing.T) {
 			if head, _, _ := strings.Cut(client, "\n"); !strings.Contains(head, c.mark) {
 				t.Fatalf("the header %q lacks %q", head, c.mark)
 			}
-			if !strings.HasSuffix(client, "\n  first line\n  second line") {
+			if !strings.HasSuffix(client, "\n  "+strings.ReplaceAll(c.m.Body, "\n", "\n  ")) { // all of it: nothing is shortened
 				t.Fatalf("the body: %q", client)
 			}
 		})
