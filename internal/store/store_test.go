@@ -497,7 +497,14 @@ func TestMigrationNumbersFollowTheirPosition(t *testing.T) {
 		t.Fatal(err)
 	}
 	slices.Sort(names)
+	number := func(name string) string {
+		n, _, _ := strings.Cut(strings.TrimPrefix(name, "migrations/"), "_")
+		return n
+	}
 	for i, name := range names {
+		if i > 0 && number(name) == number(names[i-1]) {
+			t.Fatalf("%s and %s have the same number; give the one that is not on main yet the next free number", names[i-1], name)
+		}
 		if want := fmt.Sprintf("migrations/%04d_", i+1); !strings.HasPrefix(name, want) {
 			t.Fatalf("%s is migration %d; its name must start with %s", name, i+1, strings.TrimPrefix(want, "migrations/"))
 		}
