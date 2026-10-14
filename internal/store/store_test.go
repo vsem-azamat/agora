@@ -451,7 +451,7 @@ func TestAMigrationWithForeignKeysOffMustLeaveThemValid(t *testing.T) {
 	}
 }
 
-func TestSettleSendingMigrationFailsMessagesWithoutABridge(t *testing.T) {
+func TestSettleSendingMigrationLeavesMessagesWithoutABridgeUnconfirmed(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -482,7 +482,7 @@ func TestSettleSendingMigrationFailsMessagesWithoutABridge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"1:failed:the bridge was removed before it answered; it may have gone out", "2:sending:", "3:sent:"}
+	want := []string{"1:unconfirmed:the bridge was removed before it answered", "2:sending:", "3:sent:"}
 	if !slices.Equal(got, want) {
 		t.Errorf("messages %q, want %q", got, want)
 	}
@@ -508,5 +508,50 @@ func TestMigrationNumbersFollowTheirPosition(t *testing.T) {
 		if want := fmt.Sprintf("migrations/%04d_", i+1); !strings.HasPrefix(name, want) {
 			t.Fatalf("%s is migration %d; its name must start with %s", name, i+1, strings.TrimPrefix(want, "migrations/"))
 		}
+	}
+}
+
+func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0024_unconfirmed.sql")
+	for _, q := range []string{
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('old-chat', 'chat', 'builder', 1)`,
+		`INSERT INTO messages (id, room, author, body, at, delivery, delivery_error) VALUES
+			(1, 'old-chat', 'builder', 'removed', 1, 'failed', 'the bridge was removed before it answered; it may have gone out'),
+			(2, 'old-chat', 'builder', 'refused', 2, 'failed', 'chat not found'),
+			(3, 'old-chat', 'builder', 'went', 3, 'sent', NULL)`,
+		`INSERT INTO messages (id, room, author, body, at, thread, also) VALUES (4, 'old-chat', 'builder', 'reply', 4, 1, 1)`,
+		`INSERT INTO messages (id, room, author, body, at, echo_of) VALUES (5, 'old-chat', 'builder', 'went', 5, 3)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err := Strings(ctx, db, `SELECT id || ':' || COALESCE(delivery, '') || ':' || COALESCE(delivery_error, '') || ':' || COALESCE(thread, '') || ':' || also || ':' || COALESCE(echo_of, '') FROM messages ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"1:unconfirmed:the bridge was removed before it answered::0:", "2:failed:chat not found::0:", "3:sent:::0:", "4:::1:1:", "5::::0:3"}
+	if !slices.Equal(got, want) {
+		t.Errorf("messages %q, want %q", got, want)
+	}
+	if idx, err := Strings(ctx, db, `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name IN ('messages_echo_of', 'messages_thread') ORDER BY name`); err != nil || !slices.Equal(idx, []string{"messages_echo_of", "messages_thread"}) {
+		t.Errorf("indexes %q, %v", idx, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE messages SET delivery = 'unknown' WHERE id = 3`); err == nil {
+		t.Error("the CHECK accepts a delivery state that does not exist")
 	}
 }

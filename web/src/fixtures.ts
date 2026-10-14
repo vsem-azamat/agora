@@ -127,6 +127,7 @@ const deliveries: Record<string, DeliveryState> = {
   sent: DeliveryState.SENT,
   cancelled: DeliveryState.CANCELLED,
   failed: DeliveryState.FAILED,
+  unconfirmed: DeliveryState.UNCONFIRMED,
 };
 
 /** A message in `#example-chat` from `name` outside, posted `min` minutes before NOW. */

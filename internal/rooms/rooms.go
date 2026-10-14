@@ -228,6 +228,8 @@ const (
 	Sent      Delivery = "sent"      // the bridge sent it
 	Cancelled Delivery = "cancelled" // the operator cancelled it
 	Failed    Delivery = "failed"    // the bridge could not send it
+	// Unconfirmed is a message handed to a bridge that was removed before it answered: it may have gone out.
+	Unconfirmed Delivery = "unconfirmed"
 )
 
 // Mode is how an agent follows a room.
@@ -1780,13 +1782,15 @@ func scanCounted(rows *sql.Rows, total *int) ([]Message, error) {
 }
 
 // deliveryLabel is how a delivery state follows a message's head: "" for a message that stays
-// here, else " · scheduled", " · sending", " · sent", " · cancelled" or " · not sent: <reason>".
+// here, else " · scheduled", " · sending", " · sent", " · cancelled", " · not sent: <reason>" or " · unconfirmed: <reason>".
 func deliveryLabel(d Delivery, reason string) string {
 	switch d {
 	case "":
 		return ""
 	case Failed:
 		return " · not sent: " + reason
+	case Unconfirmed:
+		return " · unconfirmed: " + reason
 	}
 	return " · " + string(d)
 }

@@ -51,7 +51,7 @@ export const POLICY_LABELS: Record<Policy, string> = {
 };
 
 /** Where a message stands on its way out; undefined for one that stays here. */
-export type Delivery = 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed';
+export type Delivery = 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed' | 'unconfirmed';
 
 const DELIVERIES: Partial<Record<DeliveryState, Delivery>> = {
   [DeliveryState.SCHEDULED]: 'scheduled',
@@ -59,6 +59,7 @@ const DELIVERIES: Partial<Record<DeliveryState, Delivery>> = {
   [DeliveryState.SENT]: 'sent',
   [DeliveryState.CANCELLED]: 'cancelled',
   [DeliveryState.FAILED]: 'failed',
+  [DeliveryState.UNCONFIRMED]: 'unconfirmed',
 };
 
 export function deliveryOf(m: Pick<Message, 'deliveryState'>): Delivery | undefined {

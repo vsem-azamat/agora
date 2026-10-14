@@ -39,6 +39,9 @@ const (
 	DeliveryState_DELIVERY_STATE_CANCELLED DeliveryState = 4
 	// The bridge could not send it; delivery_error says why.
 	DeliveryState_DELIVERY_STATE_FAILED DeliveryState = 5
+	// It was handed to a bridge that was removed before it answered, so nobody knows whether it went
+	// out; delivery_error says what happened.
+	DeliveryState_DELIVERY_STATE_UNCONFIRMED DeliveryState = 6
 )
 
 // Enum value maps for DeliveryState.
@@ -50,6 +53,7 @@ var (
 		3: "DELIVERY_STATE_SENT",
 		4: "DELIVERY_STATE_CANCELLED",
 		5: "DELIVERY_STATE_FAILED",
+		6: "DELIVERY_STATE_UNCONFIRMED",
 	}
 	DeliveryState_value = map[string]int32{
 		"DELIVERY_STATE_UNSPECIFIED": 0,
@@ -58,6 +62,7 @@ var (
 		"DELIVERY_STATE_SENT":        3,
 		"DELIVERY_STATE_CANCELLED":   4,
 		"DELIVERY_STATE_FAILED":      5,
+		"DELIVERY_STATE_UNCONFIRMED": 6,
 	}
 )
 
@@ -272,7 +277,7 @@ type Message struct {
 	ExternalAuthor *ExternalAuthor `protobuf:"bytes,8,opt,name=external_author,json=externalAuthor,proto3" json:"external_author,omitempty"`
 	// Whether a message of a bridged room went out; unspecified for a message that stays here.
 	DeliveryState DeliveryState `protobuf:"varint,9,opt,name=delivery_state,json=deliveryState,proto3,enum=agora.v1.DeliveryState" json:"delivery_state,omitempty"`
-	// Why a message in DELIVERY_STATE_FAILED was not sent.
+	// Why a message in DELIVERY_STATE_FAILED was not sent, or in DELIVERY_STATE_UNCONFIRMED is not known to have gone out.
 	DeliveryError string `protobuf:"bytes,10,opt,name=delivery_error,json=deliveryError,proto3" json:"delivery_error,omitempty"`
 	// A note: a message of a bridged room that stays in Agora; it is never handed to the bridge and
 	// has no delivery state.
@@ -2336,14 +2341,15 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x16\n" +
 	"\x06unread\x18\x03 \x01(\bR\x06unread\"A\n" +
 	"\x13ListThreadsResponse\x12*\n" +
-	"\athreads\x18\x01 \x03(\v2\x10.agora.v1.ThreadR\athreads*\xbb\x01\n" +
+	"\athreads\x18\x01 \x03(\v2\x10.agora.v1.ThreadR\athreads*\xdb\x01\n" +
 	"\rDeliveryState\x12\x1e\n" +
 	"\x1aDELIVERY_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18DELIVERY_STATE_SCHEDULED\x10\x01\x12\x1a\n" +
 	"\x16DELIVERY_STATE_SENDING\x10\x02\x12\x17\n" +
 	"\x13DELIVERY_STATE_SENT\x10\x03\x12\x1c\n" +
 	"\x18DELIVERY_STATE_CANCELLED\x10\x04\x12\x19\n" +
-	"\x15DELIVERY_STATE_FAILED\x10\x05*\x8c\x01\n" +
+	"\x15DELIVERY_STATE_FAILED\x10\x05\x12\x1e\n" +
+	"\x1aDELIVERY_STATE_UNCONFIRMED\x10\x06*\x8c\x01\n" +
 	"\x10SubscriptionMode\x12!\n" +
 	"\x1dSUBSCRIPTION_MODE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SUBSCRIPTION_MODE_ALL\x10\x01\x12\x1e\n" +

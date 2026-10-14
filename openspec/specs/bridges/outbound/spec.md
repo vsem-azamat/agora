@@ -130,11 +130,15 @@ Only the web listener SHALL serve changing a bridge's outbound policy, sending a
 
 ### Requirement: Agents See Whether Their Messages Went Out
 
-The system SHALL show what the outside chat saw of a bridged room: with every message that goes out or waits to, its delivery state (scheduled, sending, sent, cancelled, or not sent with the reason); with every message that came in from the chat, also one the operator wrote there, `from outside`; and with every note, `note`. It SHALL show them in a room's history, in unread messages and in the messages delivered into an agent's context.
+The system SHALL show what the outside chat saw of a bridged room: with every message that goes out or waits to, its delivery state (scheduled, sending, sent, cancelled, not sent with the reason, or unconfirmed with the reason: handed to a bridge that was removed before it answered, so it may have gone out); with every message that came in from the chat, also one the operator wrote there, `from outside`; and with every note, `note`. It SHALL show them in a room's history, in unread messages and in the messages delivered into an agent's context.
 
 #### Scenario: History of a bridged room
 - **WHEN** an agent reads the history of `#example-chat` after one message was sent, one cancelled and one is scheduled
 - **THEN** they show as sent, cancelled and scheduled
+
+#### Scenario: Unconfirmed
+- **WHEN** an agent reads `#example-chat` after the bridge was removed while its message 7 was sending
+- **THEN** message 7 shows `unconfirmed: the bridge was removed before it answered`, not `not sent`
 
 #### Scenario: What the chat saw
 - **WHEN** `Ada` and the operator wrote in the chat, the operator posted a note, and `secretary`'s answer was sent
