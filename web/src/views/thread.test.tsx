@@ -216,7 +216,11 @@ describe('threads in a room', () => {
         rooms={[create(RoomSchema, { name: 'example-app' })]}
         unread={new Map()}
         followed={new Set()}
-        threads={[create(ThreadSchema, { root: 40n, room: 'example-app', title: 'Release 2.4', unread: 2 })]}
+        threads={[
+          create(ThreadSchema, { root: 40n, room: 'example-app', title: 'Release 2.4', unread: 2 }),
+          // an untitled thread with unread replies is reached from its room, not listed
+          create(ThreadSchema, { root: 50n, room: 'example-app', author: 'builder', unread: 1 }),
+        ]}
       />,
     );
     const link = screen.getByRole('link', { name: /Release 2.4/ });

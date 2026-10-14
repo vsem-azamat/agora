@@ -33,7 +33,8 @@ type RoomsProps = {
 
 /** The titled threads of a room, under it in the room list. */
 function ThreadLinks({ room, threads, current }: { room: string; threads?: Thread[]; current?: bigint }) {
-  const mine = (threads ?? []).filter((t) => t.room === room);
+  // untitled threads are reached from the room; only titled ones have a row
+  const mine = (threads ?? []).filter((t) => t.room === room && t.title);
   if (mine.length === 0) return null;
   return (
     <>

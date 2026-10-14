@@ -32,7 +32,10 @@ type HubData = {
   /** The bridges by the name of their room. */
   bridges: Map<string, Bridge>;
   followed: Set<string>;
-  /** The titled threads of the rooms that are not archived, the most recently active first. */
+  /**
+   * The titled threads of the rooms that are not archived, and the untitled ones with unread
+   * replies for the operator, the most recently active first.
+   */
   threads: Thread[];
   /** The mode of each followed room. */
   modes: Map<string, Mode>;
@@ -95,7 +98,7 @@ export function useHub(api: Api, onUnauthenticated: () => void) {
       api.governance.listProposals({ all: true }),
       api.governance.getCharter({}),
       api.bridges.listBridges({}),
-      api.rooms.listThreads({}),
+      api.rooms.listThreads({ unread: true }),
     ]);
     const build = `${who.version} ${who.commit}`;
     loadedWith ??= build;
