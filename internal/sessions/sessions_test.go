@@ -436,11 +436,50 @@ func TestJoiningExpected(t *testing.T) {
 	}
 }
 
+func TestJoiningExpectedWithManyRooms(t *testing.T) {
+	e := newEnv(t)
+	e.s.JoinMode = sessions.JoinExpect
+	if _, err := e.s.Join(ctx, "builder", "", false); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 29 {
+		e.room(t, fmt.Sprintf("chat-%02d", i), "builder")
+	}
+	e.room(t, "zeta-app", "builder")
+	// listing the rooms needs no message counts; without the table the greeting still lists them
+	if _, err := e.db.Exec(`ALTER TABLE messages RENAME TO messages_gone`); err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: repoNamed(t, "zeta-app")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var line string
+	for _, l := range strings.Split(r.Context, "\n") {
+		if strings.HasPrefix(l, "Rooms: ") {
+			line = l
+		}
+	}
+	// #general and 29 chats and the project's room are 31 rooms
+	if got := strings.Count(line, "#"); got != 20 || !strings.Contains(line, "#zeta-app (your project's room)") ||
+		!strings.Contains(line, "#chat-00") || strings.Contains(line, "#chat-28") || !strings.Contains(line, "and 11 more; agora rooms lists them.") ||
+		strings.Contains(r.Context, "room-create") {
+		t.Fatalf("greeting: %d rooms in %q", strings.Count(line, "#"), line)
+	}
+	// few rooms are listed without a tail
+	e2 := newEnv(t)
+	e2.s.JoinMode = sessions.JoinExpect
+	r, err = e2.s.Report(ctx, sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: repoNamed(t, "zeta-app")})
+	if err != nil || strings.Contains(r.Context, " more;") {
+		t.Fatalf("greeting with one room: %v %q", err, r.Context)
+	}
+}
+
 func TestJoiningExpectedWhenTheRoomsCannotBeListed(t *testing.T) {
 	e := newEnv(t)
 	e.s.JoinMode = sessions.JoinExpect
-	// listing the rooms counts their messages; without the table it fails, the report does not
-	if _, err := e.db.Exec(`ALTER TABLE messages RENAME TO messages_gone`); err != nil {
+	// without the table the rooms cannot be listed; the report still goes out
+	if _, err := e.db.Exec(`ALTER TABLE rooms RENAME TO rooms_gone`); err != nil {
 		t.Fatal(err)
 	}
 	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: exampleRepo(t)})
