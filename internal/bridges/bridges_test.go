@@ -1248,3 +1248,98 @@ func TestAReplyToANoteInAThreadGoesOutUnderTheRoot(t *testing.T) {
 		t.Fatalf("outs %+v %v", outs, err)
 	}
 }
+
+func TestAReplyWaitsForTheMessageItRepliesTo(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root, err := e.r.Post(ctx, "secretary", "example-chat", "release today", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inThread, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "at five", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := e.r.Post(ctx, "builder", "example-chat", "agreed", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := func() []int64 {
+		t.Helper()
+		outs, err := outgoing(t, e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []int64
+		for _, o := range outs {
+			ids = append(ids, o.ID)
+		}
+		return ids
+	}
+	if got := ids(); len(got) != 1 || got[0] != root {
+		t.Fatalf("replies wait while their root is going out: %v", got)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", root, "900"); err != nil {
+		t.Fatal(err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 2 || outs[0].ID != inThread || outs[0].ReplyTo != "900" || outs[1].ID != plain || outs[1].ReplyTo != "900" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
+func TestAReplyGoesOutWhenTheMessageItRepliesToWasSentWithoutAnIdentifier(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	first, err := e.r.Post(ctx, "secretary", "example-chat", "one", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", first, "900"); err != nil {
+		t.Fatal(err)
+	}
+	root, err := e.r.Post(ctx, "secretary", "example-chat", "two", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "at five", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct, err := e.r.Post(ctx, "builder", "example-chat", "agreed", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the identifier is taken by the first message, so the root is sent without one
+	if _, taken, err := e.b.Sent(ctx, "example-chat", root, "900"); err != nil || !taken {
+		t.Fatalf("taken %v %v", taken, err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 2 || outs[0].ID != reply || outs[0].ReplyTo != "" || outs[1].ID != direct || outs[1].ReplyTo != "" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
+func TestAReplyGoesOutWhenTheMessageItRepliesToFailed(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root, err := e.r.Post(ctx, "secretary", "example-chat", "release today", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "at five", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct, err := e.r.Post(ctx, "builder", "example-chat", "agreed", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.b.Failed(ctx, "example-chat", root, "chat not found"); err != nil {
+		t.Fatal(err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 2 || outs[0].ID != reply || outs[0].ReplyTo != "" || outs[1].ID != direct || outs[1].ReplyTo != "" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
