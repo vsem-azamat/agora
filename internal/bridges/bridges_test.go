@@ -1306,12 +1306,16 @@ func TestAReplyGoesOutWhenTheMessageItRepliesToWasSentWithoutAnIdentifier(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	direct, err := e.r.Post(ctx, "builder", "example-chat", "agreed", root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// the identifier is taken by the first message, so the root is sent without one
 	if _, taken, err := e.b.Sent(ctx, "example-chat", root, "900"); err != nil || !taken {
 		t.Fatalf("taken %v %v", taken, err)
 	}
 	outs, err := outgoing(t, e)
-	if err != nil || len(outs) != 1 || outs[0].ID != reply || outs[0].ReplyTo != "" {
+	if err != nil || len(outs) != 2 || outs[0].ID != reply || outs[0].ReplyTo != "" || outs[1].ID != direct || outs[1].ReplyTo != "" {
 		t.Fatalf("outs %+v %v", outs, err)
 	}
 }
@@ -1327,11 +1331,15 @@ func TestAReplyGoesOutWhenTheMessageItRepliesToFailed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	direct, err := e.r.Post(ctx, "builder", "example-chat", "agreed", root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.b.Failed(ctx, "example-chat", root, "chat not found"); err != nil {
 		t.Fatal(err)
 	}
 	outs, err := outgoing(t, e)
-	if err != nil || len(outs) != 1 || outs[0].ID != reply || outs[0].ReplyTo != "" {
+	if err != nil || len(outs) != 2 || outs[0].ID != reply || outs[0].ReplyTo != "" || outs[1].ID != direct || outs[1].ReplyTo != "" {
 		t.Fatalf("outs %+v %v", outs, err)
 	}
 }
