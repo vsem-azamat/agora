@@ -162,6 +162,8 @@ type Posting struct {
 	Also   bool
 	// Note posts a note (see PostNote); Operator posts as the operator does (see PostFromOperator).
 	Note, Operator bool
+	// keepLeft keeps a thread the author left left: the post is not the author's own act.
+	keepLeft bool
 }
 
 // External reports whether the message came from outside through a bridge.
@@ -552,9 +554,11 @@ func (r *Rooms) PostNote(ctx context.Context, author, room, body string, replyTo
 
 // SendOutTx stores a message of author in the bridged room that goes out at once, as the
 // operator's messages do, inside the caller's transaction: the operator sends a note out with it.
-// The caller checks that the room's policy lets it go out.
-func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
-	return r.postTx(ctx, tx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo}, sendAsOperator)
+// The posting names the thread and Also of a note in a thread, which its copy keeps. The caller
+// checks that the room's policy lets it go out.
+func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, p Posting) (int64, error) {
+	p.keepLeft = true
+	return r.postTx(ctx, tx, p, sendAsOperator)
 }
 
 // sending is how a new message of a bridged room may leave Agora.
@@ -629,8 +633,10 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 		}
 		m.Thread, m.Also = root, p.Also
 		// posting in a thread makes the author a participant again
-		if _, err := tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE root = ? AND agent = ?`, root, author); err != nil {
-			return 0, err
+		if !p.keepLeft {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE root = ? AND agent = ?`, root, author); err != nil {
+				return 0, err
+			}
 		}
 		if participants, err = participantsTx(ctx, tx, root, author); err != nil {
 			return 0, err

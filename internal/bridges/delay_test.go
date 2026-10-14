@@ -161,6 +161,71 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 	}
 }
 
+func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
+	e, _ := newDelayEnv(t)
+	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})
+	for _, also := range []bool{false, true} {
+		note, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "Draft: the fix ships tonight", Thread: root, Also: also, Note: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, err := e.b.SendNoteOut(ctx, note)
+		if err != nil {
+			t.Fatal(err)
+		}
+		th, err := e.r.ThreadHistory(ctx, root, 0, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if outs, _ := outgoing(t, e); len(outs) == 0 || outs[len(outs)-1].ID != id || outs[len(outs)-1].ReplyTo != "5513" {
+			t.Fatalf("also=%v: outgoing %+v", also, outs)
+		}
+		var sent, kept *rooms.Message
+		for i := range th {
+			switch th[i].ID {
+			case id:
+				sent = &th[i]
+			case note:
+				kept = &th[i]
+			}
+		}
+		if sent == nil || sent.Thread != root || sent.Also != also || sent.Note || sent.Delivery != rooms.Sending {
+			t.Fatalf("also=%v: the copy is not in the thread: %+v", also, sent)
+		}
+		if kept == nil || kept.Thread != root || kept.Also != also || !kept.Note {
+			t.Fatalf("also=%v: the note changed: %+v", also, kept)
+		}
+	}
+}
+
+func TestSendingANoteOutKeepsItsAuthorOutOfAThreadItLeft(t *testing.T) {
+	e, _ := newDelayEnv(t)
+	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})
+	note, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "Draft: yes", Thread: root, Note: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.LeaveThread(ctx, "secretary", root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.b.SendNoteOut(ctx, note); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "thanks", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := e.r.Unread(ctx, "secretary", rooms.Everything, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range got {
+		if m.ID == reply {
+			t.Fatalf("sending the note out brought secretary back into the thread it left: %+v", m)
+		}
+	}
+}
+
 func TestAddingABridgeAgainStartsTheDelayAgain(t *testing.T) {
 	e, c := newDelayEnv(t)
 	id := e.post(t, "secretary", "example-chat", "something rude")

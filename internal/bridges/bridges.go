@@ -688,15 +688,16 @@ func mayGoOut(room string, policy Policy) error {
 }
 
 // SendNoteOut sends the note id out: a new message of the note's author with its text, replying
-// to what the note replies to, goes out at once, and the note stays. Its room must have a bridge
-// whose policy is not read. It returns the new message's identifier.
+// to what the note replies to and in the note's thread, goes out at once, and the note stays.
+// Its room must have a bridge whose policy is not read. It returns the new message's identifier.
 func (b *Bridges) SendNoteOut(ctx context.Context, id int64) (int64, error) {
 	var out int64
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var room, author, body, policy string
-		var reply int64
-		err := tx.QueryRowContext(ctx, `SELECT m.room, m.author, m.body, COALESCE(m.reply_to, 0), COALESCE(b.policy, '')
-			FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room WHERE m.id = ? AND m.note`, id).Scan(&room, &author, &body, &reply, &policy)
+		var reply, thread int64
+		var also bool
+		err := tx.QueryRowContext(ctx, `SELECT m.room, m.author, m.body, COALESCE(m.reply_to, 0), COALESCE(m.thread, 0), m.also, COALESCE(b.policy, '')
+			FROM messages AS m LEFT JOIN bridges AS b ON b.name = m.room WHERE m.id = ? AND m.note`, id).Scan(&room, &author, &body, &reply, &thread, &also, &policy)
 		if errors.Is(err, sql.ErrNoRows) {
 			return store.Refuse(ErrNotFound, "message %d is not a note", id)
 		}
@@ -706,7 +707,7 @@ func (b *Bridges) SendNoteOut(ctx context.Context, id int64) (int64, error) {
 		if err := mayGoOut(room, Policy(policy)); err != nil {
 			return err
 		}
-		out, err = b.rooms.SendOutTx(ctx, tx, author, room, body, reply)
+		out, err = b.rooms.SendOutTx(ctx, tx, rooms.Posting{Author: author, Room: room, Body: body, ReplyTo: reply, Thread: thread, Also: also})
 		return err
 	})
 	return out, err
