@@ -23,11 +23,11 @@ func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
 	return turn, err
 }
 
-// Reported reports whether the session is live, bound to an agent and reported at since or
-// later.
-func (s *Sessions) Reported(ctx context.Context, sessionID string, since time.Time) (bool, error) {
+// StartReported reports whether the session is live, bound to an agent and reported a start at
+// since or later; its other reports do not count.
+func (s *Sessions) StartReported(ctx context.Context, sessionID string, since time.Time) (bool, error) {
 	var bound bool
-	err := s.db.QueryRowContext(ctx, `SELECT agent IS NOT NULL AND state != ? AND seen_at >= ? FROM sessions WHERE id = ?`,
+	err := s.db.QueryRowContext(ctx, `SELECT agent IS NOT NULL AND state != ? AND start_reported_at >= ? FROM sessions WHERE id = ?`,
 		Ended, since.UnixMilli(), sessionID).Scan(&bound)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

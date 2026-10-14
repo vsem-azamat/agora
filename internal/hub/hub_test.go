@@ -418,6 +418,29 @@ func TestStartWaitWaitsForTheResumeOfAStaleSession(t *testing.T) {
 	}
 }
 
+func TestStartWaitIgnoresTheOtherReportsOfASessionResumedSoonAfterThem(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	r.clock.add(time.Minute)
+	bg := context.Background()
+	for _, ev := range []agorav1.SessionEvent{agorav1.SessionEvent_SESSION_EVENT_PROMPT, agorav1.SessionEvent_SESSION_EVENT_TOOL, agorav1.SessionEvent_SESSION_EVENT_STOP} {
+		if _, err := r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: ev})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.clock.add(5 * time.Second) // its process went away without an end; it is resumed now
+	r.post(t, "reviewer", "@builder can you take #57?")
+	woke := r.startWake(t, "session-1")
+	if _, ended := within(t, woke, 300*time.Millisecond); ended {
+		t.Fatal("woke on the report of the turn, before the resume was reported")
+	}
+	r.resume(t, "session-1")
+	text, ended := within(t, woke, 2*time.Second)
+	if !ended || !strings.Contains(text, "can you take #57") {
+		t.Fatalf("ended %v text %q", ended, text)
+	}
+}
+
 func TestStartWaitWaitsForTheResumeOfAnEndedSession(t *testing.T) {
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")

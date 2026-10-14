@@ -52,9 +52,9 @@ func (h *Hub) currentWait(sessionID string) (gen, active int) {
 }
 
 // startGrace is how long a wait that begins at a session start waits for the start's report to
-// bind the session to an agent: Claude Code runs the start's hooks at the same time. A report
-// up to startGrace before the wait counts as the start's, so an older one (a session resumed
-// that the hub still lists) is not taken for it.
+// bind the session to an agent: Claude Code runs the start's hooks at the same time. A start
+// reported up to startGrace before the wait counts as the start's, so an older one (a session
+// resumed that the hub still lists) is not taken for it, and neither is another kind of report.
 const startGrace = 10 * time.Second
 
 func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agorav1.WaitWakeRequest], stream *connect.ServerStream[agorav1.WaitWakeResponse]) error {
@@ -117,13 +117,13 @@ func (s *sessionService) WaitWake(ctx context.Context, req *connect.Request[agor
 }
 
 // awaitBound waits up to startGrace for the start's report: the session live, bound to an agent
-// and reported since startGrace before the wait began.
+// and reporting a start since startGrace before the wait began.
 func (s *sessionService) awaitBound(ctx context.Context, id string) (bool, error) {
 	began := s.h.sessions.Now()
 	deadline := began.Add(startGrace)
 	for {
 		changed := s.h.changes.wait()
-		bound, err := s.h.sessions.Reported(ctx, id, began.Add(-startGrace))
+		bound, err := s.h.sessions.StartReported(ctx, id, began.Add(-startGrace))
 		if err != nil || bound {
 			return bound, err
 		}
