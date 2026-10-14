@@ -348,27 +348,47 @@ func TestUnreadLimitIsAppliedInTheQuery(t *testing.T) {
 	}
 }
 
-// Leaving mentions looks at the room's messages only: an unreadable message of another room
-// does not stand in its way.
+// Leaving mentions looks at the room's messages only: unreadable messages of other rooms, older
+// than the room's own, do not stand in its way, whether they are followed with mentions or all.
 func TestLeavingMentionsReadsOnlyItsRoom(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
-	for _, room := range []string{"example-app", "other-app"} {
+	for _, room := range []string{"example-app", "other-app", "all-app"} {
 		if err := e.r.Create(ctx, room, "work", "reviewer"); err != nil {
 			t.Fatal(err)
 		}
-		e.subscribe(t, "builder", room, rooms.ModeMentions)
 	}
+	e.subscribe(t, "builder", "example-app", rooms.ModeMentions)
+	e.subscribe(t, "builder", "other-app", rooms.ModeMentions)
+	e.subscribe(t, "builder", "all-app", rooms.ModeAll)
+	older := []int64{e.post(t, "reviewer", "other-app", "@builder look too"), e.post(t, "reviewer", "other-app", "@all heads up"), e.post(t, "reviewer", "all-app", "@builder and here")}
 	e.post(t, "reviewer", "example-app", "chatter")
 	addressed := e.post(t, "reviewer", "example-app", "@builder look")
-	other := e.post(t, "reviewer", "other-app", "@builder look too")
-	if _, err := e.db.Exec(`UPDATE messages SET at = 'not a time' WHERE id = ?`, other); err != nil {
-		t.Fatal(err)
+	for _, id := range older {
+		if _, err := e.db.Exec(`UPDATE messages SET at = 'not a time' WHERE id = ?`, id); err != nil {
+			t.Fatal(err)
+		}
 	}
 	e.subscribe(t, "builder", "example-app", rooms.ModeAll)
 	var pos int64
 	if err := e.db.QueryRow(`SELECT last_id FROM read_positions WHERE agent = 'builder' AND room = 'example-app'`).Scan(&pos); err != nil || pos != addressed-1 {
 		t.Fatalf("position %d (%v), want %d", pos, err, addressed-1)
+	}
+}
+
+// The total counts the rows that pass the filter, not those the limit cut.
+func TestUnreadTotalCountsTheFilteredRows(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer")
+	var want []int64
+	for _, body := range []string{"@builder one", "chatter", "@builder two", "more chatter", "@builder three"} {
+		if id := e.post(t, "reviewer", "general", body); strings.HasPrefix(body, "@") {
+			want = append(want, id)
+		}
+	}
+	got, total, err := e.r.Unread(ctx, "builder", rooms.Addressed, 2)
+	if err != nil || total != 3 || !slices.Equal(ids(got), want[:2]) {
+		t.Fatalf("%v of %d: %v", ids(got), total, err)
 	}
 }
 

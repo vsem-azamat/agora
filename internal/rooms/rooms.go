@@ -1252,7 +1252,9 @@ WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a A
 GROUP BY m.id
 ORDER BY m.id`
 
-// unreadFilter keeps the rows of unreadQuery that pass the filter :f, as Filter.keeps does.
+// unreadFilter keeps the rows of unreadQuery that pass the filter :f: Everything all of them,
+// Addressed those addressed to the agent, Waking those addressed to it or in a room it follows
+// with ModeWake, Quiet the others.
 const unreadFilter = `CASE :f WHEN :addressed THEN addressed WHEN :waking THEN addressed OR wake_room
 	WHEN :quiet THEN NOT (addressed OR wake_room) ELSE 1 END`
 
@@ -1279,20 +1281,16 @@ func unread(ctx context.Context, tx *sql.Tx, agent, room string, filter Filter, 
 	if limit > 0 {
 		sqlLimit = limit
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT * FROM (`+unreadQuery+`) WHERE `+unreadFilter+` ORDER BY 1 LIMIT :limit`,
+	// the window counts the rows that pass the filter before the limit cuts them
+	rows, err := tx.QueryContext(ctx, `SELECT *, COUNT(*) OVER () FROM (`+unreadQuery+`) WHERE `+unreadFilter+` ORDER BY 1 LIMIT :limit`,
 		append(args, sql.Named("limit", sqlLimit))...)
 	if err != nil {
 		return nil, 0, err
 	}
-	out, err := scanMessages(rows)
+	var total int // stays 0 when no row passes
+	out, err := scanCounted(rows, &total)
 	if err != nil {
 		return nil, 0, err
-	}
-	total := len(out)
-	if limit > 0 && total == limit {
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`) WHERE `+unreadFilter, args...).Scan(&total); err != nil {
-			return nil, 0, err
-		}
 	}
 	return out, total, nil
 }
@@ -1566,16 +1564,26 @@ const threadColumns = `COALESCE(m.thread, 0) AS thread, m.also, COALESCE((SELECT
 // outsideAvatarColumn selects the avatar of the author outside of message m, or "".
 const outsideAvatarColumn = `COALESCE((SELECT oa.avatar FROM outside_avatars AS oa WHERE oa.room = m.room AND oa.author = m.ext_author_id), '')`
 
-func scanMessages(rows *sql.Rows) ([]Message, error) {
+func scanMessages(rows *sql.Rows) ([]Message, error) { return scanCounted(rows, nil) }
+
+// scanCounted is scanMessages for rows with one more column at the end, the count of all the rows
+// before the limit, which it stores in total; with a nil total there is no such column.
+func scanCounted(rows *sql.Rows, total *int) ([]Message, error) {
 	defer rows.Close()
 	var out []Message
 	for rows.Next() {
 		var m Message
 		var at, scheduled int64
 		var wakeRoom bool
-		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
+		dest := []any{
+			&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
 			&m.ExtAuthorID, &m.ExtAuthorName, &m.ExtAuthorAvatar, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled,
-			&m.Thread, &m.Also, &m.ThreadTitle); err != nil {
+			&m.Thread, &m.Also, &m.ThreadTitle,
+		}
+		if total != nil {
+			dest = append(dest, total)
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
 		m.At = time.UnixMilli(at)
