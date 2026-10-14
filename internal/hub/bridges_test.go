@@ -1158,6 +1158,14 @@ func TestABridgeReportsItsProtocolVersion(t *testing.T) {
 	}
 	f.send(`{"type":"hello","version":2}`)
 	eventually(t, "version", func() bool { return b.state(t).GetProtocolVersion() == 2 })
+	// every hello replaces it: one without a usable version clears it
+	f.send(`{"type":"hello","caps":{"threads":"again"}}`)
+	eventually(t, "caps", func() bool { return b.state(t).GetCaps().GetThreads() == "again" })
+	if v := b.state(t).GetProtocolVersion(); v != 0 {
+		t.Fatalf("a hello without a version kept version %d", v)
+	}
+	f.send(`{"type":"hello","version":2}`)
+	eventually(t, "version", func() bool { return b.state(t).GetProtocolVersion() == 2 })
 	// the bridge keeps working with another version
 	f.send(`{"type":"in","id":"1","author":{"id":"42","name":"Ada"},"text":"hello"}`)
 	eventually(t, "the message", func() bool { return len(b.history(t)) == 1 })

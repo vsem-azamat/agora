@@ -1771,8 +1771,8 @@ func TestAThreadKeyedByAMessageThatWasNotTheEchoStaysOnIt(t *testing.T) {
 
 func TestReadingAProtocolVersion(t *testing.T) {
 	for raw, want := range map[string]int32{
-		`3`: 3, `1`: 1, `2000000`: 2000000,
-		`0`: 0, `-2`: 0, `2.5`: 0, `3.0`: 0, `1.0000000000000001`: 0, `"3"`: 0, `null`: 0, `true`: 0, `[3]`: 0, `99999999999`: 0, ``: 0,
+		`3`: 3, `1`: 1, `2000000`: 2000000, `2147483647`: 2147483647, ` 3 `: 3,
+		`0`: 0, `-2`: 0, `2.5`: 0, `3.0`: 0, `1.0000000000000001`: 0, `"3"`: 0, `null`: 0, `true`: 0, `[3]`: 0, `99999999999`: 0, `2147483648`: 0, `2e0`: 0, `-0`: 0, ``: 0,
 	} {
 		if got := bridges.ReadVersion(json.RawMessage(raw)); got != want {
 			t.Errorf("ReadVersion(%q) = %d, want %d", raw, got, want)
