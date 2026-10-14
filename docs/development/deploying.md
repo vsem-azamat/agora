@@ -21,6 +21,7 @@
 8. **Verify.**
    - It checks that the installed binary's `agora version` is the build's.
    - It checks that `agora status` reaches the hub. Like every `agora` command, it finds the socket through `AGORA_SOCKET` or `XDG_RUNTIME_DIR`, so they must match what the service uses.
+   - It checks that the version `agora status` shows for the running hub (its `HUB` line, which the hub reports itself) is the build's, so a hub still running an older build fails the deploy even when the process looks right.
    - When `WEB_URL` is given, it checks that the web app answers 200; a binary without the web app answers 503 there.
    - It reinstalls the agent skill into `SKILL_DIRS`.
 
@@ -52,4 +53,5 @@ Backups are kept; remove old ones by hand. `make test-deploy`, part of `make tes
 - the installed version;
 - the backups, with a quote and a space in the database's path;
 - the way back after a failed check;
+- a restart that starts the new build and one that leaves the old hub running, through a stub `systemctl`;
 - the refusal of a tree with an untracked file, of a symbolic link and of a missing service.
