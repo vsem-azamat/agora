@@ -8,13 +8,22 @@ function fakeViewport(height: number) {
     height,
     scale: 1,
     addEventListener: (type: string, f: () => void) => listeners.set(type, f),
-    removeEventListener: (type: string) => listeners.delete(type),
+    removeEventListener: (type: string, f: () => void) => {
+      if (listeners.get(type) === f) listeners.delete(type);
+    },
     resize(h: number) {
       this.height = h;
       listeners.get('resize')?.();
     },
     listeners,
   };
+}
+
+/** A touch event with `n` fingers still on the screen. */
+function touch(type: 'touchstart' | 'touchend' | 'touchcancel', n: number) {
+  const e = new Event(type);
+  Object.defineProperty(e, 'touches', { value: new Array(n).fill({}) });
+  document.dispatchEvent(e);
 }
 
 const root = document.documentElement;
@@ -79,19 +88,41 @@ describe('the part of the screen the app may use', () => {
       expect(top).toHaveBeenCalledOnce();
     });
 
-    it('scrolls back to the top when the finger lifts, without waiting', () => {
+    it.each(['touchend', 'touchcancel'] as const)(
+      'scrolls back to the top at once on %s of the last finger',
+      (type) => {
+        vi.useFakeTimers();
+        const vv = fakeViewport(480);
+        const top = vi.fn();
+        watch(document, vv, top);
+        top.mockClear();
+        touch(type, 0); // nothing moved: nothing to undo
+        expect(top).not.toHaveBeenCalled();
+        vv.listeners.get('scroll')?.();
+        expect(top).not.toHaveBeenCalled();
+        touch(type, 0);
+        expect(top).toHaveBeenCalledOnce();
+        vi.advanceTimersByTime(1000);
+        expect(top).toHaveBeenCalledOnce();
+      },
+    );
+
+    it('never scrolls back while a finger is down, even one held still', () => {
       vi.useFakeTimers();
       const vv = fakeViewport(480);
       const top = vi.fn();
       watch(document, vv, top);
       top.mockClear();
-      document.dispatchEvent(new Event('touchend')); // nothing moved: nothing to undo
-      expect(top).not.toHaveBeenCalled();
+      touch('touchstart', 1);
       vv.listeners.get('scroll')?.();
+      vi.advanceTimersByTime(5000); // held still for far longer than the settle time
       expect(top).not.toHaveBeenCalled();
-      document.dispatchEvent(new Event('touchend'));
-      expect(top).toHaveBeenCalledOnce();
-      vi.advanceTimersByTime(1000);
+      touch('touchstart', 2);
+      touch('touchend', 1); // one of two fingers lifts: the pan goes on
+      expect(top).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(5000);
+      expect(top).not.toHaveBeenCalled();
+      touch('touchend', 0);
       expect(top).toHaveBeenCalledOnce();
     });
 
@@ -109,7 +140,10 @@ describe('the part of the screen the app may use', () => {
       vv.listeners.get('scroll')?.();
       stop();
       vi.advanceTimersByTime(1000);
+      touch('touchend', 0);
+      touch('touchcancel', 0);
       expect(top).not.toHaveBeenCalled();
+      expect(vv.listeners.size).toBe(0);
     });
   });
 

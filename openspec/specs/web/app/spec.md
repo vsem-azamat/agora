@@ -574,7 +574,7 @@ The operator SHALL choose per browser what the app notifies about while its page
 
 ### Requirement: Phone Layout
 
-On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, or a control of the same form such as Send, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. Where the browser pans the page instead of shrinking it for the keyboard, the app SHALL bring the page back to the top when the visible part resizes, and after it moves only once it has not moved for 150 milliseconds or the finger is lifted, never while the finger is still dragging, and the page SHALL not bounce or chain a scroll past its edge. A menu SHALL open on the side of its chip where it fits on the screen. The compose box and its send button SHALL stay within the width of the screen, also while replying to a long message, whose quote is cut short instead. The Rooms tab SHALL count, for each room, its unread messages or its messages scheduled to go out, whichever is more, so a scheduled message that is also unread counts once.
+On screens 760 pixels wide or narrower the app SHALL show one column with bottom tabs Board, Rooms, Turns, Charter and Settings instead of the sidebar, and the agent drawer covers the screen. While a text field has the focus there, or a control of the same form such as Send, the tabs SHALL be hidden, and the app SHALL always fit the part of the screen the on-screen keyboard leaves visible. Where the browser pans the page instead of shrinking it for the keyboard, the app SHALL bring the page back to the top when the visible part resizes, and after it moves only once it has not moved for 150 milliseconds with no finger on the screen, or when the last finger lifts, never while a finger is down, even one held still, and the page SHALL not bounce or pull to refresh. A menu SHALL open on the side of its chip where it fits on the screen. The compose box and its send button SHALL stay within the width of the screen, also while replying to a long message, whose quote is cut short instead. The Rooms tab SHALL count, for each room, its unread messages or its messages scheduled to go out, whichever is more, so a scheduled message that is also unread counts once.
 
 #### Scenario: Phone
 - **WHEN** the app is 390 pixels wide
@@ -590,7 +590,7 @@ On screens 760 pixels wide or narrower the app SHALL show one column with bottom
 
 #### Scenario: Dragging the page while the keyboard is up
 - **WHEN** the on-screen keyboard is up and the operator drags the header or the compose box so that the page pans
-- **THEN** the page follows the finger, and returns to the top 150 milliseconds after the last movement or when the finger lifts
+- **THEN** the page follows the finger, and returns to the top 150 milliseconds after the last movement once the finger is up, or when the finger lifts
 
 #### Scenario: Replying on a phone
 - **WHEN** the operator chooses Reply on a message longer than the screen is wide on a phone

@@ -28,9 +28,12 @@ function textField(el: EventTarget | null): boolean {
 export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: () => void): () => void {
   const root = doc.documentElement;
   let settling: ReturnType<typeof setTimeout> | undefined;
+  let moved = false; // the visual viewport scrolled and has not settled yet
+  let touching = false; // a finger is on the screen
   const settle = () => {
     clearTimeout(settling);
     settling = undefined;
+    moved = false;
     if (vv && vv.scale <= 1) toTop(); // zoomed in, the operator pans the page
   };
   const size = () => {
@@ -38,14 +41,20 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
     root.style.setProperty('--vvh', `${vv.height * vv.scale}px`);
     settle();
   };
-  // the page moved: back to the top when it stops moving, not on every event
+  // the page moved: back to the top when it stops moving, not on every event and never while a
+  // finger is down, even one held still
   const scrolled = () => {
+    moved = true;
     clearTimeout(settling);
-    settling = setTimeout(settle, SETTLE_MS);
+    settling = touching ? undefined : setTimeout(settle, SETTLE_MS);
   };
-  // a lifted finger ends the pan: no need to wait for more events
-  const lifted = () => {
-    if (settling !== undefined) settle();
+  const touched = (e: TouchEvent) => {
+    touching = e.touches.length > 0;
+  };
+  // the last finger lifting ends the pan: no need to wait for more events
+  const lifted = (e: TouchEvent) => {
+    touching = e.touches.length > 0;
+    if (!touching && moved) settle();
   };
   // typing starts in a text field; where it ends is decided when the focus leaves one, and again
   // when the focus lands outside a form, in case a removed field's focusout never came
@@ -63,6 +72,7 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
   size();
   vv?.addEventListener('resize', size);
   vv?.addEventListener('scroll', scrolled);
+  doc.addEventListener('touchstart', touched);
   doc.addEventListener('touchend', lifted);
   doc.addEventListener('touchcancel', lifted);
   doc.addEventListener('focusin', focusIn);
@@ -71,6 +81,8 @@ export function watchViewport(doc: Document, vv: Viewport | undefined, toTop: ()
     vv?.removeEventListener('resize', size);
     vv?.removeEventListener('scroll', scrolled);
     clearTimeout(settling);
+    settling = undefined;
+    doc.removeEventListener('touchstart', touched);
     doc.removeEventListener('touchend', lifted);
     doc.removeEventListener('touchcancel', lifted);
     doc.removeEventListener('focusin', focusIn);
