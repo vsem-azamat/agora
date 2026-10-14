@@ -538,11 +538,15 @@ On screens 760 pixels wide or narrower the app SHALL show one column with bottom
 
 ### Requirement: Following An Upgraded Hub
 
-The app SHALL remember the version and commit of the hub the page loaded first, also when the operator signs in again on the same page. When a later load of the board reports another version or commit, as after the hub was upgraded and restarted, the app SHALL load itself again from the hub, so an open tab or an installed app runs the web app of the new hub. It SHALL wait while any compose box holds text, which a reload would lose: until then the bar SHALL show a button `Updated · Reload` in place of the live status (on a phone, where the live status is hidden, it reads `Reload`), and choosing it reloads at once; the app reloads by itself as soon as no compose box holds text.
+The app SHALL remember the version and commit of the hub the page loaded first, also when the operator signs in again on the same page. When a later load of the board reports another version or commit, as after the hub was upgraded and restarted, the app SHALL load itself again from the hub, so an open tab or an installed app runs the web app of the new hub. It SHALL wait while any compose box holds text, which a reload would lose: until then the bar SHALL show a button `Updated · Reload` in place of the live status (on a phone, where the live status is hidden, it reads `Reload`), and choosing it reloads at once; the app reloads by itself as soon as no compose box holds text. The hub SHALL tell browsers not to keep a copy of the app's page (`/`), so a page taken from the browser's history is not an old copy.
 
 #### Scenario: Upgraded hub
 - **WHEN** the app was opened on commit `3bc332799d4c`, nothing is written in any compose box, and the hub comes back on commit `a964c856ff7e`
 - **THEN** the app loads itself again
+
+#### Scenario: Back to the app after an upgrade
+- **WHEN** the operator opened the app, went on to another page, the hub was upgraded and restarted, and the operator goes Back to the app
+- **THEN** the app runs the web app of the new hub
 
 #### Scenario: Upgraded hub while writing
 - **WHEN** the hub comes back on another commit while the compose box of `#general` holds `almost done`

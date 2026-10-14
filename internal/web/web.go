@@ -23,8 +23,8 @@ func files() fs.FS {
 	return sub
 }
 
-// Handler serves the built app: hashed files under /assets/ are cached for good, everything
-// else is revalidated, and missing files are not found.
+// Handler serves the built app: hashed files under /assets/ are cached for good, the page is
+// never kept, everything else is revalidated, and missing files are not found.
 func Handler() http.Handler {
 	server := http.FileServerFS(files())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,9 +37,13 @@ func Handler() http.Handler {
 			http.NotFound(w, r) // no directory listings
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/assets/") {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/assets/"):
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		} else {
+		case r.URL.Path == "/": // /index.html only redirects here
+			// a page kept by the browser would run an old bundle after Back
+			w.Header().Set("Cache-Control", "no-store")
+		default:
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		if strings.HasSuffix(r.URL.Path, ".webmanifest") {

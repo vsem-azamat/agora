@@ -712,3 +712,16 @@ func TestTheAppArchivesAsTheOperator(t *testing.T) {
 		t.Fatalf("archived from the app: %v", rs)
 	}
 }
+
+func TestThePageIsNeverKept(t *testing.T) {
+	w := startWeb(t, "operator")
+	for path, want := range map[string]string{
+		"/":                     "no-store",
+		"/manifest.webmanifest": "no-cache",
+	} {
+		resp, _ := get(t, w.base+path)
+		if got := resp.Header.Get("Cache-Control"); got != want {
+			t.Fatalf("%s: Cache-Control %q, want %q", path, got, want)
+		}
+	}
+}
