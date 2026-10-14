@@ -10,7 +10,7 @@
 
 ### Requirement: Installing The Claude Code Hooks
 
-`agora install claude-code` SHALL add to Claude Code's user settings file (`--settings <path>`, else `$CLAUDE_CONFIG_DIR/settings.json` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/settings.json`) one command hook running `<agora> hook claude-code` on each of `SessionStart`, `UserPromptSubmit`, `PostToolUse` (with matcher `*`), `Stop`, `StopFailure` (with matcher `overloaded|server_error|unknown|max_output_tokens`) and `SessionEnd`, and one command hook running `<agora> hook claude-code-wait` on each of `Stop` and `StopFailure` (with the same matcher) that is asynchronous, wakes the agent (`asyncRewake`) and has a timeout of 86400 seconds. A missing file and its directory SHALL be created.
+`agora install claude-code` SHALL add to Claude Code's user settings file (`--settings <path>`, else `$CLAUDE_CONFIG_DIR/settings.json` when `CLAUDE_CONFIG_DIR` is set, else `~/.claude/settings.json`) one command hook running `<agora> hook claude-code` on each of `SessionStart`, `UserPromptSubmit`, `PostToolUse` (with matcher `*`), `Stop`, `StopFailure` (with matcher `overloaded|server_error|unknown|max_output_tokens`) and `SessionEnd`, and one command hook running `<agora> hook claude-code-wait` on each of `SessionStart`, `Stop` and `StopFailure` (with the same matcher) that is asynchronous, wakes the agent (`asyncRewake`) and has a timeout of 86400 seconds. A missing file and its directory SHALL be created.
 
 #### Scenario: Fresh settings
 - **WHEN** `agora install claude-code` runs and the settings file does not exist

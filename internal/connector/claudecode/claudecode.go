@@ -145,7 +145,7 @@ func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	}
 	reached := time.Now() // the last time the hub answered
 	for {
-		text, err := waitOnce(ctx, client, h.SessionID, func() { reached = time.Now() })
+		text, err := waitOnce(ctx, client, h.SessionID, h.HookEventName == "SessionStart", func() { reached = time.Now() })
 		if err == nil {
 			return text, nil
 		}
@@ -164,8 +164,10 @@ func Wait(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	}
 }
 
-func waitOnce(ctx context.Context, client agorav1connect.SessionServiceClient, sessionID string, armed func()) (string, error) {
-	stream, err := client.WaitWake(ctx, connect.NewRequest(&agorav1.WaitWakeRequest{SessionId: sessionID}))
+// waitOnce opens one wait; start says it runs at a session start, whose report may reach the
+// hub after it.
+func waitOnce(ctx context.Context, client agorav1connect.SessionServiceClient, sessionID string, start bool, armed func()) (string, error) {
+	stream, err := client.WaitWake(ctx, connect.NewRequest(&agorav1.WaitWakeRequest{SessionId: sessionID, Start: start}))
 	if err != nil {
 		return "", err
 	}

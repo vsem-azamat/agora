@@ -23,6 +23,18 @@ func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
 	return turn, err
 }
 
+// Reported reports whether the session is live, bound to an agent and reported at since or
+// later.
+func (s *Sessions) Reported(ctx context.Context, sessionID string, since time.Time) (bool, error) {
+	var bound bool
+	err := s.db.QueryRowContext(ctx, `SELECT agent IS NOT NULL AND state != ? AND seen_at >= ? FROM sessions WHERE id = ?`,
+		Ended, since.UnixMilli(), sessionID).Scan(&bound)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return bound, err
+}
+
 // Wake is what a connector wait delivers: the text, the messages that wake the agent it shows (marked
 // read only once the wake is delivered) and a key of what it woke for.
 type Wake struct {

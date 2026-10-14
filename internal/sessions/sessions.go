@@ -244,23 +244,25 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 		if show {
 			text = note(agent, entries, lost)
 		}
-		news, _, err := s.deliver(ctx, agent)
+		news, err := s.deliver(ctx, agent, rooms.Everything)
 		if err != nil {
 			return Reply{}, err
 		}
 		return Reply{Context: strings.TrimSpace(text + "\n\n" + news)}, nil
 	}
 	// A start always reminds the agent who it is; the places only when this hook recorded the
-	// check, so concurrent hooks still add them once.
+	// check, so concurrent hooks still add them once. A start runs no turn: the messages that
+	// wake the agent stay unread and reach it as a wake, or with the next delivery of a turn
+	// that goes on after a compaction.
 	if !checked {
 		entries, lost, show = nil, nil, false
 	}
 	addressed, countErr := s.addressedCount(ctx, agent)
-	news, shown, err := s.deliver(ctx, agent)
+	news, err := s.deliver(ctx, agent, rooms.Quiet)
 	if err != nil {
 		return Reply{}, err
 	}
-	text, err := s.reminder(ctx, agent, entries, lost, addressed, shown)
+	text, err := s.reminder(ctx, agent, entries, lost, addressed)
 	if err != nil || countErr != nil {
 		text = "" // fall back to the queue note
 		if show {

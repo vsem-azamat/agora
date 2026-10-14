@@ -70,7 +70,7 @@ func TestInstallIntoMissingSettings(t *testing.T) {
 	}
 	s := readJSON(t, path)
 	want := map[string][]string{
-		"SessionStart":     {bin + " hook claude-code"},
+		"SessionStart":     {bin + " hook claude-code", bin + " hook claude-code-wait async"},
 		"UserPromptSubmit": {bin + " hook claude-code"},
 		"PostToolUse":      {bin + " hook claude-code"},
 		"Stop":             {bin + " hook claude-code", bin + " hook claude-code-wait async"},
@@ -223,14 +223,14 @@ func TestTerminalEnv(t *testing.T) {
 	if got := commands(t, s, "Stop"); !reflect.DeepEqual(got, []string{hooked, bin + " hook claude-code-wait async"}) {
 		t.Errorf("Stop: %q", got)
 	}
-	if got := commands(t, s, "SessionStart"); !reflect.DeepEqual(got, []string{hooked}) {
+	if got := commands(t, s, "SessionStart"); !reflect.DeepEqual(got, []string{hooked, bin + " hook claude-code-wait async"}) {
 		t.Errorf("SessionStart: %q", got)
 	}
 	ch, err := install.InstallClaudeCode(path, bin, "", now)
 	if err != nil || ch.Outcome != install.Updated {
 		t.Fatalf("reinstall without terminal env: %+v %v", ch, err)
 	}
-	if got := commands(t, readJSON(t, path), "SessionStart"); !reflect.DeepEqual(got, []string{bin + " hook claude-code"}) {
+	if got := commands(t, readJSON(t, path), "SessionStart"); !reflect.DeepEqual(got, []string{bin + " hook claude-code", bin + " hook claude-code-wait async"}) {
 		t.Errorf("SessionStart after reinstall: %q", got)
 	}
 }

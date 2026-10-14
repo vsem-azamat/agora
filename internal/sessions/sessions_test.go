@@ -512,14 +512,44 @@ func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
 	r := e.report(t, "session-1", sessions.Start) // the conversation was compacted
 	for _, want := range []string{
 		"Agora: you are builder on the Agora board.", "Task: fix login timeout.", "Status: reviewing.",
-		"Rooms: #general.", "1 unread message addresses you (below).", "agora unread", "agora set --task", "--icon", "--pigment", "agora rename", "agora leave",
+		"Rooms: #general.", "1 unread message addresses you (delivered next).", "agora unread", "agora set --task", "--icon", "--pigment", "agora rename", "agora leave",
 	} {
 		if !strings.Contains(r.Context, want) {
 			t.Fatalf("reminder lacks %q: %q", want, r.Context)
 		}
 	}
-	if strings.Index(r.Context, "please review #57") < strings.Index(r.Context, "agora leave") {
-		t.Fatalf("message not after the reminder: %q", r.Context)
+	if strings.Contains(r.Context, "please review #57") {
+		t.Fatalf("the mention was delivered at the start: %q", r.Context)
+	}
+	if n, _ := e.r.UnreadCount(ctx, "builder", rooms.Addressed); n != 1 {
+		t.Fatalf("%d addressed unread", n)
+	}
+}
+
+func TestStartDeliversOnlyWhatDoesNotWake(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	for _, body := range []string{"@builder can you take #57?", "the deploy is done"} {
+		if _, err := e.r.Post(ctx, "reviewer", "general", body, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := e.report(t, "session-1", sessions.Start) // resumed
+	if strings.Contains(r.Context, "can you take #57?") || !strings.Contains(r.Context, "the deploy is done") {
+		t.Fatalf("context %q", r.Context)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after resume: %s", st)
+	}
+	turn, err := e.s.Turn(ctx, "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
+	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57?") || strings.Contains(w.Text, "the deploy is done") {
+		t.Fatalf("wake %+v done %v err %v", w, done, err)
 	}
 }
 
@@ -531,14 +561,17 @@ func TestStartRemindsEvenWhenAConcurrentHookWonTheCheck(t *testing.T) {
 	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder please review #57", 0); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := e.r.Post(ctx, "reviewer", "general", "the deploy is done", 0); err != nil {
+		t.Fatal(err)
+	}
 	sessions.RaceNoteCheck(t) // a concurrent prompt records its check first
 	r := e.report(t, "session-1", sessions.Start)
-	if !strings.HasPrefix(r.Context, "Agora: you are builder on the Agora board.") || !strings.Contains(r.Context, "please review #57") {
+	if !strings.HasPrefix(r.Context, "Agora: you are builder on the Agora board.") || !strings.Contains(r.Context, "the deploy is done") {
 		t.Fatalf("context %q", r.Context)
 	}
 }
 
-func TestReminderCountsAddressedMessagesNotShown(t *testing.T) {
+func TestReminderCountsAddressedMessages(t *testing.T) {
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -548,8 +581,11 @@ func TestReminderCountsAddressedMessagesNotShown(t *testing.T) {
 		}
 	}
 	r := e.report(t, "session-1", sessions.Start)
-	if !strings.Contains(r.Context, "7 unread messages address you (5 below).") {
+	if !strings.Contains(r.Context, "7 unread messages address you (delivered next).") {
 		t.Fatalf("context %q", r.Context)
+	}
+	if n, _ := e.r.UnreadCount(ctx, "builder", rooms.Addressed); n != 7 {
+		t.Fatalf("%d addressed unread", n)
 	}
 }
 

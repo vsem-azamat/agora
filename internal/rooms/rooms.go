@@ -167,6 +167,8 @@ const (
 	// Waking is the unread messages that wake the agent: those addressed to it and those in
 	// rooms it follows with ModeWake.
 	Waking
+	// Quiet is the unread messages that do not wake the agent.
+	Quiet
 )
 
 func (f Filter) keeps(m Message) bool {
@@ -175,6 +177,8 @@ func (f Filter) keeps(m Message) bool {
 		return m.Addressed
 	case Waking:
 		return m.Wakes
+	case Quiet:
+		return !m.Wakes
 	}
 	return true
 }
@@ -755,9 +759,10 @@ func (r *Rooms) UnreadCount(ctx context.Context, agent string, filter Filter) (i
 			return err
 		}
 		return tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (`+unreadQuery+`)
-			WHERE CASE :f WHEN :addressed THEN addressed WHEN :waking THEN addressed OR wake_room ELSE 1 END`,
+			WHERE CASE :f WHEN :addressed THEN addressed WHEN :waking THEN addressed OR wake_room
+				WHEN :quiet THEN NOT (addressed OR wake_room) ELSE 1 END`,
 			sql.Named("a", agent), sql.Named("general", General), sql.Named("f", filter),
-			sql.Named("addressed", Addressed), sql.Named("waking", Waking)).Scan(&n)
+			sql.Named("addressed", Addressed), sql.Named("waking", Waking), sql.Named("quiet", Quiet)).Scan(&n)
 	})
 	return n, err
 }

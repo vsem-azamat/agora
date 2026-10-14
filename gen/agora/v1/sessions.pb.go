@@ -698,8 +698,11 @@ func (x *ListSessionsResponse) GetSessions() []*Session {
 }
 
 type WaitWakeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// The wait begins at a session start, whose report may reach the hub after the wait: the hub
+	// waits a short while for the session to be bound to an agent before it gives up.
+	Start         bool `protobuf:"varint,2,opt,name=start,proto3" json:"start,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -739,6 +742,13 @@ func (x *WaitWakeRequest) GetSessionId() string {
 		return x.SessionId
 	}
 	return ""
+}
+
+func (x *WaitWakeRequest) GetStart() bool {
+	if x != nil {
+		return x.Start
+	}
+	return false
 }
 
 type WaitWakeResponse struct {
@@ -841,10 +851,11 @@ const file_agora_v1_sessions_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\"\x15\n" +
 	"\x13ListSessionsRequest\"E\n" +
 	"\x14ListSessionsResponse\x12-\n" +
-	"\bsessions\x18\x01 \x03(\v2\x11.agora.v1.SessionR\bsessions\"0\n" +
+	"\bsessions\x18\x01 \x03(\v2\x11.agora.v1.SessionR\bsessions\"F\n" +
 	"\x0fWaitWakeRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"<\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05start\x18\x02 \x01(\bR\x05start\"<\n" +
 	"\x10WaitWakeResponse\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
 	"\x05armed\x18\x02 \x01(\bR\x05armed*\xc2\x01\n" +

@@ -58,11 +58,19 @@ The system SHALL let a connector wait on behalf of an idle session: the wait end
 
 ### Requirement: Claude Code Wakes Through An Asynchronous Hook
 
-The Claude Code connector SHALL wait in an asynchronous hook that runs when the agent ends its turn and when a turn ends on an API error the session can work again from, and wakes Claude Code by exiting with code 2 and the wake text, so the agent is woken whatever terminal it runs in. On any failure, including an unreachable hub, the hook SHALL end quietly with code 0.
+The Claude Code connector SHALL wait in an asynchronous hook that runs when a session starts, when the agent ends its turn and when a turn ends on an API error the session can work again from, and wakes Claude Code by exiting with code 2 and the wake text, so the agent is woken whatever terminal it runs in. On any failure, including an unreachable hub, the hook SHALL end quietly with code 0.
 
 #### Scenario: Wake
 - **WHEN** the waiting hook receives a wake
 - **THEN** it prints the wake text and exits with code 2
+
+#### Scenario: Mention unread at a resume
+- **WHEN** a session bound to `builder` is resumed while `@builder can you take #57?` is unread
+- **THEN** the hook that runs at the start wakes the session with that message
+
+#### Scenario: Wait before the start is reported
+- **WHEN** the hook that runs at a start opens its wait before the start is reported: before the hub has heard of the session, while the hub still lists the session from before it was resumed, or before the start has moved the agent's name to the session after a cleared conversation
+- **THEN** the wait waits up to 10 seconds for a report of the session, made no earlier than 10 seconds before the wait began, that binds it to an agent, and ends quietly when none comes
 
 #### Scenario: Hub unavailable
 - **WHEN** the hub cannot be reached while the hook waits
