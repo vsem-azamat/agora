@@ -563,3 +563,30 @@ func TestLastReportedCIIsOnTheProfile(t *testing.T) {
 		t.Fatalf("listed CI %+v", list)
 	}
 }
+
+func TestADetachedRepositoryIsLookedUpWithoutFailing(t *testing.T) {
+	e := newEnv(t)
+	calls := 0
+	// GitHub rejects a query that defines a fragment it does not use.
+	e.forges["github.com"] = &forge.GitHub{Run: func(_ context.Context, a []string) ([]byte, error) {
+		calls++
+		q := a[len(a)-1]
+		if strings.Contains(q, "...pr") {
+			t.Errorf("asked for pull requests of a detached checkout: %v", a)
+		}
+		if strings.Contains(q, "fragment pr ") {
+			return []byte(`{"errors":[{"message":"Fragment pr was defined, but not used"}]}`), errors.New("exit status 1")
+		}
+		return []byte(`{"data":{"repository":{"defaultBranchRef":{"name":"main"}}}}`), nil
+	}}
+	e.restart()
+	dir := repo(t, "git@github.com:example-org/example-app.git")
+	wt := worktree(t, dir, "w", "feat/export")
+	e.agent(t, "builder", wt)
+	write(t, filepath.Join(dir, ".git", "worktrees", "w", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
+	e.w.Round(ctx)
+	e.w.Round(ctx)
+	if calls != 2 || strings.Contains(e.log.String(), "lookup failed") {
+		t.Fatalf("%d lookups, log:\n%s", calls, e.log)
+	}
+}

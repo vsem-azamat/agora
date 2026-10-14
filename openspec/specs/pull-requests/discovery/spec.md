@@ -48,6 +48,10 @@ The system SHALL not find pull requests by branch for an agent on the repository
 - **WHEN** `builder`'s checkout of `feat/export` is switched to a commit by its hash and pull request 57 is open from `feat/export`
 - **THEN** 57 is not found for `builder`
 
+#### Scenario: Nothing to ask but the default branch
+- **WHEN** `builder`, the only agent in `example-org/example-app`, has its checkout switched to a commit by its hash and follows no pull request
+- **THEN** the lookup of the repository asks only for the default branch and succeeds, and the repository is not retried with growing gaps
+
 ### Requirement: Found Pull Requests Stay Followed While Open
 
 The system SHALL keep following a found pull request while it is open, whatever branch or repository the agent works in now, and SHALL drop it from the profile once the forge reports it closed, merged or not existing. A pull request the forge's reply says nothing about keeps its place and what was reported for it.
