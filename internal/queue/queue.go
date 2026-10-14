@@ -97,14 +97,14 @@ func New(db *sql.DB, now func() time.Time) *Queue {
 
 func checkKey(key string) error {
 	if !validKey(key) {
-		return fmt.Errorf("%w: resource key %q: up to 64 lowercase letters, digits, '.', '_', '-', '/', no '..'", store.ErrInvalid, key)
+		return store.Refuse(store.ErrInvalid, "resource key %q: up to 64 lowercase letters, digits, '.', '_', '-', '/', no '..'", key)
 	}
 	return nil
 }
 
 func checkAgent(agent string) error {
 	if strings.TrimSpace(agent) == "" {
-		return fmt.Errorf("%w: agent name is required", store.ErrInvalid)
+		return store.Refuse(store.ErrInvalid, "agent name is required")
 	}
 	return nil
 }
@@ -127,7 +127,7 @@ func (q *Queue) Join(ctx context.Context, key, agent, note string, lease time.Du
 		lease = DefaultLease
 	}
 	if lease < MinLease || lease > MaxLease {
-		return nil, Resource{}, fmt.Errorf("%w: lease must be between %s and %s", store.ErrInvalid, MinLease, MaxLease)
+		return nil, Resource{}, store.Refuse(store.ErrInvalid, "lease must be between %s and %s", MinLease, MaxLease)
 	}
 	var res Resource
 	var joined bool
@@ -227,11 +227,11 @@ func (q *Queue) touch(ctx context.Context, key, agent string, renew bool) (*Entr
 		}
 		e := find(r, agent)
 		if e == nil {
-			return fmt.Errorf("%w: %s is not in the queue of %s", ErrNotQueued, agent, key)
+			return store.Refuse(ErrNotQueued, "%s is not in the queue of %s", agent, key)
 		}
 		if e.State == Waiting {
 			if renew {
-				return fmt.Errorf("%w: %s waits at position %d for %s", ErrNotYourTurn, agent, e.Position, key)
+				return store.Refuse(ErrNotYourTurn, "%s waits at position %d for %s", agent, e.Position, key)
 			}
 			out = e
 			return nil
@@ -308,7 +308,7 @@ func (q *Queue) SetSlots(ctx context.Context, key string, slots int) (Resource, 
 		return Resource{}, err
 	}
 	if slots < 1 || slots > MaxSlots {
-		return Resource{}, fmt.Errorf("%w: slots must be between 1 and %d", store.ErrInvalid, MaxSlots)
+		return Resource{}, store.Refuse(store.ErrInvalid, "slots must be between 1 and %d", MaxSlots)
 	}
 	var res Resource
 	err := q.tx(ctx, func(tx *sql.Tx, now time.Time) error {

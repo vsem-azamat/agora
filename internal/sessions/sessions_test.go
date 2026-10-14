@@ -1252,3 +1252,16 @@ func TestPendingIncludesRoomsFollowedToWake(t *testing.T) {
 		t.Fatalf("key %q text %q", key, text)
 	}
 }
+
+// A refusal says only what was refused; errors.Is still finds its kind.
+func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	e := newEnv(t)
+	task := "x"
+	_, err := e.s.Join(ctx, "agora", "", false)
+	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {
+		t.Fatalf("a reserved name: %v", err)
+	}
+	if _, err := e.a.Update(ctx, "nobody", agents.Update{Task: &task}); !errors.Is(err, agents.ErrUnknown) || strings.HasPrefix(err.Error(), agents.ErrUnknown.Error()) {
+		t.Fatalf("an agent that has not joined: %v", err)
+	}
+}

@@ -571,3 +571,15 @@ func TestListingReportsWhetherItSettledAQueue(t *testing.T) {
 		t.Fatal("listing again settled something")
 	}
 }
+
+// A refusal says only what was refused; errors.Is still finds its kind.
+func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	q, _ := newQueue(t)
+	_, _, err := q.Join(ctx, "Bad Key", "a", "", 0, false)
+	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {
+		t.Fatalf("an invalid key: %v", err)
+	}
+	if _, err := q.Claim(ctx, "example-app/merge", "a"); !errors.Is(err, queue.ErrNotQueued) || strings.HasPrefix(err.Error(), queue.ErrNotQueued.Error()) {
+		t.Fatalf("claiming without a place: %v", err)
+	}
+}

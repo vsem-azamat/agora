@@ -37,7 +37,7 @@ func checkChoice(what string, v *string, allowed []string) error {
 		return nil
 	}
 	if s := strings.TrimSpace(*v); s != "" && !slices.Contains(allowed, s) {
-		return fmt.Errorf("%w: %s %q: one of %s, or empty to unset", store.ErrInvalid, what, s, strings.Join(allowed, ", "))
+		return store.Refuse(store.ErrInvalid, "%s %q: one of %s, or empty to unset", what, s, strings.Join(allowed, ", "))
 	}
 	return nil
 }
@@ -107,7 +107,7 @@ func FreeForTx(ctx context.Context, tx *sql.Tx, agent, name string) error {
 		return err
 	}
 	if used != 0 {
-		return fmt.Errorf("%w: %q is in use; pick another name", ErrTaken, name)
+		return store.Refuse(ErrTaken, "%q is in use; pick another name", name)
 	}
 	owner, err := formerOwner(ctx, tx, name)
 	if err != nil || owner == "" || owner == agent {

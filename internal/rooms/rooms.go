@@ -309,11 +309,11 @@ func (r *Rooms) Create(ctx context.Context, name, purpose, creator string) error
 // CreateTx is Create inside the caller's transaction.
 func (r *Rooms) CreateTx(ctx context.Context, tx *sql.Tx, name, purpose, creator string) error {
 	if !ValidName(name) {
-		return fmt.Errorf("%w: room name %q: %s", store.ErrInvalid, name, NameRule)
+		return store.Refuse(store.ErrInvalid, "room name %q: %s", name, NameRule)
 	}
 	purpose = strings.TrimSpace(purpose)
 	if purpose == "" {
-		return fmt.Errorf("%w: a room needs a purpose", store.ErrInvalid)
+		return store.Refuse(store.ErrInvalid, "a room needs a purpose")
 	}
 	if err := agents.ExistsTx(ctx, tx, creator); err != nil {
 		return err
@@ -326,7 +326,7 @@ func (r *Rooms) CreateTx(ctx context.Context, tx *sql.Tx, name, purpose, creator
 	case archived.Valid:
 		return store.Refuse(ErrExists, "#%s already exists, archived; bring it back with `agora room-unarchive %s`", name, name)
 	default:
-		return fmt.Errorf("%w: #%s already exists", ErrExists, name)
+		return store.Refuse(ErrExists, "#%s already exists", name)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO rooms (name, purpose, created_by, created_at) VALUES (?, ?, ?, ?)`,
 		name, purpose, creator, r.now().UnixMilli()); err != nil {
@@ -489,14 +489,14 @@ func archivedError(room string) error {
 // follows afterwards.
 func (r *Rooms) Subscribe(ctx context.Context, agent string, rooms []string, add bool, mode Mode) ([]Subscription, error) {
 	if len(rooms) == 0 {
-		return nil, fmt.Errorf("%w: name at least one room", store.ErrInvalid)
+		return nil, store.Refuse(store.ErrInvalid, "name at least one room")
 	}
 	switch {
 	case !add:
 		mode = ""
 	case mode == "", mode == ModeAll, mode == ModeMentions, mode == ModeWake:
 	default:
-		return nil, fmt.Errorf("%w: mode %q: all, mentions or wake", store.ErrInvalid, mode)
+		return nil, store.Refuse(store.ErrInvalid, "mode %q: all, mentions or wake", mode)
 	}
 	var out []Subscription
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
@@ -634,10 +634,10 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 	room := strings.TrimPrefix(p.Room, "#")
 	body := strings.TrimSpace(p.Body)
 	if !utf8.ValidString(body) {
-		return 0, fmt.Errorf("%w: a message is valid UTF-8 text", store.ErrInvalid)
+		return 0, store.Refuse(store.ErrInvalid, "a message is valid UTF-8 text")
 	}
 	if body == "" || utf8.RuneCountInString(body) > MaxBody {
-		return 0, fmt.Errorf("%w: a message is 1 to %d characters", store.ErrInvalid, MaxBody)
+		return 0, store.Refuse(store.ErrInvalid, "a message is 1 to %d characters", MaxBody)
 	}
 	if author != Board {
 		if err := agents.ExistsTx(ctx, tx, author); err != nil {
@@ -656,7 +656,7 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 			return 0, err
 		}
 		if n == 0 {
-			return 0, fmt.Errorf("%w: no message %d to reply to", store.ErrInvalid, replyTo)
+			return 0, store.Refuse(store.ErrInvalid, "no message %d to reply to", replyTo)
 		}
 	}
 	m := Message{Room: room, Author: author, Body: body, ReplyTo: replyTo, At: r.now()}
@@ -671,7 +671,7 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 			return 0, err
 		}
 		if in != room {
-			return 0, fmt.Errorf("%w: message %d is in #%s, not #%s", store.ErrInvalid, p.Thread, in, room)
+			return 0, store.Refuse(store.ErrInvalid, "message %d is in #%s, not #%s", p.Thread, in, room)
 		}
 		m.Thread, m.Also = root, p.Also
 		// posting in a thread makes the author a participant again
@@ -684,7 +684,7 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 			return 0, err
 		}
 	} else if p.Also {
-		return 0, fmt.Errorf("%w: also to the room needs a thread", store.ErrInvalid)
+		return 0, store.Refuse(store.ErrInvalid, "also to the room needs a thread")
 	}
 	if author != Board {
 		var err error
@@ -701,7 +701,7 @@ func rootTx(ctx context.Context, tx *sql.Tx, id int64) (int64, error) {
 	var root int64
 	err := tx.QueryRowContext(ctx, `SELECT COALESCE(thread, id) FROM messages WHERE id = ?`, id).Scan(&root)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("%w: no message %d", store.ErrInvalid, id)
+		return 0, store.Refuse(store.ErrInvalid, "no message %d", id)
 	}
 	return root, err
 }
@@ -819,7 +819,7 @@ type Incoming struct {
 func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (int64, error) {
 	body := strings.TrimSpace(in.Body)
 	if in.ExtID == "" || body == "" || utf8.RuneCountInString(body) > MaxBody {
-		return 0, fmt.Errorf("%w: a message from outside needs an id and 1 to %d characters", store.ErrInvalid, MaxBody)
+		return 0, store.Refuse(store.ErrInvalid, "a message from outside needs an id and 1 to %d characters", MaxBody)
 	}
 	if err := RequireUnarchivedTx(ctx, tx, in.Room); err != nil {
 		return 0, err
@@ -1231,7 +1231,7 @@ func countUnread(ctx context.Context, tx *sql.Tx, msgs []Message, reader string)
 func (r *Rooms) SetThreadTitle(ctx context.Context, agent string, id int64, title string) error {
 	title = strings.Join(strings.Fields(title), " ")
 	if title == "" || utf8.RuneCountInString(title) > MaxTitle {
-		return fmt.Errorf("%w: a thread title is 1 to %d characters", store.ErrInvalid, MaxTitle)
+		return store.Refuse(store.ErrInvalid, "a thread title is 1 to %d characters", MaxTitle)
 	}
 	return store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
@@ -1549,7 +1549,7 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 		var also bool
 		err := tx.QueryRowContext(ctx, `SELECT room, COALESCE(thread, 0), also FROM messages WHERE id = ?`, through).Scan(&in, &thread, &also)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && in != room) {
-			return fmt.Errorf("%w: message %d is not in #%s", store.ErrInvalid, through, room)
+			return store.Refuse(store.ErrInvalid, "message %d is not in #%s", through, room)
 		}
 		if err != nil {
 			return err
@@ -1638,7 +1638,7 @@ func requireRoom(ctx context.Context, tx *sql.Tx, room string) error {
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("%w: no room #%s; see `agora rooms`, or create it with `agora room-create`", ErrNotFound, room)
+		return store.Refuse(ErrNotFound, "no room #%s; see `agora rooms`, or create it with `agora room-create`", room)
 	}
 	return nil
 }
