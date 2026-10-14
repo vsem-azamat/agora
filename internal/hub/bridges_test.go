@@ -1285,7 +1285,7 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 	b := startBridgeHub(t, time.Hour)
 	// ignores TERM, so it stops only when killed, and floods lines of topic 77 until then; the
 	// trap is set before the first line
-	old := `trap '' TERM; echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old","thread":{"key":"77","title":"Old"}}'; sleep 0.01; done`
+	old := `trap '' TERM; echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old","thread":{"key":"77","title":"Old"}}'; done`
 	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{Agent: "builder", Name: "example-chat", Command: old})); err != nil {
 		t.Fatal(err)
 	}
@@ -1304,19 +1304,15 @@ func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.
 	}
 	// the keys the old process wrote while it stopped are forgotten although the call gave up
 	g.send(`{"type":"in","id":"n1","author":{"name":"Bob"},"text":"NEWCHAT","thread":{"key":"77","title":"New"}}`)
-	eventually(t, "the new chat's line", func() bool {
+	// a root shows in the room's history; a reply in the old chat's thread would not
+	eventually(t, "the new chat's line as a root", func() bool {
 		for _, m := range b.history(t) {
 			if m.GetBody() == "NEWCHAT" {
-				return true
+				return m.GetThread() == 0 && m.GetThreadTitle() == "New"
 			}
 		}
 		return false
 	})
-	for _, m := range b.history(t) {
-		if m.GetBody() == "NEWCHAT" && m.GetThread() != 0 {
-			t.Fatalf("the new chat's line joined the old chat's thread %d", m.GetThread())
-		}
-	}
 }
 
 func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
