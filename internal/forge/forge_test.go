@@ -131,3 +131,29 @@ func TestQueriesAreDeduplicated(t *testing.T) {
 		t.Fatalf("duplicates queried: %v", args)
 	}
 }
+
+func TestThePRFragmentIsDefinedExactlyWhenUsed(t *testing.T) {
+	// GitHub rejects a query that defines a fragment it does not use, or uses one it does not define.
+	gh := &forge.GitHub{Run: func(_ context.Context, a []string) ([]byte, error) {
+		q := a[len(a)-1]
+		switch defined, used := strings.Contains(q, "fragment pr "), strings.Contains(q, "...pr"); {
+		case defined && !used:
+			return []byte(`{"errors":[{"message":"Fragment pr was defined, but not used"}]}`), errors.New("exit status 1")
+		case used && !defined:
+			return []byte(`{"errors":[{"message":"Fragment pr was used, but not defined"}]}`), errors.New("exit status 1")
+		}
+		if strings.Contains(q, "n0:") {
+			return []byte(`{"data":{"repository":{"defaultBranchRef":{"name":"main"},"n0":{"number":5,"headRefName":"feat/x","state":"OPEN"}}}}`), nil
+		}
+		return []byte(`{"data":{"repository":{"defaultBranchRef":{"name":"main"}}}}`), nil
+	}}
+	for _, q := range []forge.Query{{}, {Branches: []string{""}}, {Numbers: []int{5}}, {Branches: []string{"feat/x"}}} {
+		res, err := gh.Lookup(context.Background(), forge.Repo{Host: "github.com", Path: "example-org/example-app"}, q)
+		if err != nil {
+			t.Fatalf("%+v: %v", q, err)
+		}
+		if res.DefaultBranch != "main" {
+			t.Fatalf("%+v: default branch = %q", q, res.DefaultBranch)
+		}
+	}
+}

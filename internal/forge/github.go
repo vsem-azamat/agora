@@ -102,7 +102,11 @@ func newLookup(host, owner, name string, q Query) lookup {
 		lq.args = append(lq.args, "-F", k+"="+strconv.Itoa(n))
 	}
 	query := "query(" + strings.Join(vars, ", ") + ") {\n  repository(owner: $owner, name: $name) {\n    " +
-		strings.Join(fields, "\n    ") + "\n  }\n}\n" + prFields
+		strings.Join(fields, "\n    ") + "\n  }\n}\n"
+	// GitHub rejects a fragment the query does not use, as when it asks only for the default branch.
+	if len(lq.branches)+len(lq.numbers) > 0 {
+		query += prFields
+	}
 	lq.args = append(lq.args, "-f", "query="+query)
 	return lq
 }
