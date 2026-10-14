@@ -166,6 +166,10 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 			b.now().UnixMilli(), name); err != nil {
 			return err
 		}
+		// the keys of a bridge removed earlier belong to its chat, which this one may not be
+		if _, err := tx.ExecContext(ctx, `DELETE FROM thread_keys WHERE room = ?`, name); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO bridges (name, command, policy, created_by, created_at) VALUES (?, ?, ?, ?, ?)`,
 			name, command, policy, agent, b.now().UnixMilli()); err != nil {
 			return err
@@ -302,6 +306,10 @@ func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Change
 		}
 		if c.SetCommand && command != old {
 			if _, err := tx.ExecContext(ctx, `UPDATE bridges SET command = ? WHERE name = ?`, command, name); err != nil {
+				return err
+			}
+			// the keys name threads of the chat the old command served
+			if _, err := tx.ExecContext(ctx, `DELETE FROM thread_keys WHERE room = ?`, name); err != nil {
 				return err
 			}
 			out.Restart = true
