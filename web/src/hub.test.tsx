@@ -258,9 +258,7 @@ describe('the hub clock after the browser clock was set', () => {
             yield { revision: 2n };
             await untilAborted(signal);
           })();
-        return (async function* () {
-          throw new Error('down'); // the new stream cannot connect
-        })();
+        return { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('down')) }) }; // the new stream cannot connect
       },
     );
     fakeClock();
