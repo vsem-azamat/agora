@@ -1062,11 +1062,17 @@ i=0; while [ $i -lt 1000 ]; do i=$((i+1)); echo '{"type":"in","id":"'$i'","autho
 		}
 		return n
 	}
-	deadline := time.Now().Add(30 * time.Second)
-	for count() < 1000 && time.Now().Before(deadline) {
+	// a loaded machine stores the lines slowly, so only a count that stops growing fails: lost lines
+	// leave it short for good
+	const stalled = 15 * time.Second
+	n, grew := count(), time.Now()
+	for n < 1000 && time.Since(grew) < stalled {
 		time.Sleep(100 * time.Millisecond)
+		if c := count(); c > n {
+			n, grew = c, time.Now()
+		}
 	}
-	if n := count(); n != 1000 {
+	if n != 1000 {
 		t.Fatalf("%d messages stored, want 1000", n)
 	}
 }
