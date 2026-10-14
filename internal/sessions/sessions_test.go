@@ -75,6 +75,16 @@ func (e env) compact(t *testing.T, id string) {
 	}
 }
 
+// precompact reports that the conversation is about to be compacted, for trigger.
+func (e env) precompact(t *testing.T, id, trigger string) error {
+	t.Helper()
+	_, err := e.s.Report(ctx, sessions.Report{
+		SessionID: id, Kind: "claude-code", Event: sessions.Compact, PID: 4242, PIDStart: 111,
+		CWD: "/src/example-app", Reason: trigger,
+	})
+	return err
+}
+
 func (e env) join(t *testing.T, name, session string) {
 	t.Helper()
 	if _, err := e.s.Join(ctx, name, session, false); err != nil {
@@ -242,6 +252,78 @@ func TestCompactionOfASessionNotLiveStartsIdle(t *testing.T) {
 	e.compact(t, "session-2")              // /compact at the prompt revives it
 	if st := e.state(t, "session-2"); st != sessions.Idle {
 		t.Fatalf("after compacting an ended session: %s", st)
+	}
+}
+
+func TestManualCompactionMakesABusySessionIdle(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.report(t, "session-1", sessions.Prompt) // the turn was interrupted: no stop follows
+	if err := e.precompact(t, "session-1", sessions.CompactManual); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after /compact: %s", st)
+	}
+	e.compact(t, "session-1")
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after the compaction's start: %s", st)
+	}
+}
+
+func TestManualCompactionOfAnUnknownOrEndedSessionIsIdle(t *testing.T) {
+	for name, prepare := range map[string]func(e env){
+		"unknown": func(env) {}, // the first event the hub hears of the session
+		"ended": func(e env) {
+			e.report(t, "session-1", sessions.Start)
+			e.report(t, "session-1", sessions.Prompt)
+			e.report(t, "session-1", sessions.End)
+		},
+	} {
+		e := newEnv(t)
+		prepare(e)
+		if err := e.precompact(t, "session-1", sessions.CompactManual); err != nil {
+			t.Fatal(err)
+		}
+		if st := e.state(t, "session-1"); st != sessions.Idle {
+			t.Fatalf("%s after /compact: %s", name, st)
+		}
+		e.compact(t, "session-1")
+		if st := e.state(t, "session-1"); st != sessions.Idle {
+			t.Fatalf("%s after the compaction's start: %s", name, st)
+		}
+	}
+}
+
+func TestAutomaticCompactionOfAnUnknownSessionIsBusy(t *testing.T) {
+	e := newEnv(t)
+	if err := e.precompact(t, "session-1", sessions.CompactAuto); err != nil { // the first event the hub hears
+		t.Fatal(err)
+	}
+	e.compact(t, "session-1")
+	if st := e.state(t, "session-1"); st != sessions.Busy {
+		t.Fatalf("after an automatic compaction: %s", st)
+	}
+	e.report(t, "session-2", sessions.Start)
+	e.report(t, "session-2", sessions.Stop)
+	if err := e.precompact(t, "session-2", sessions.CompactAuto); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.state(t, "session-2"); st != sessions.Busy {
+		t.Fatalf("after an automatic compaction of an idle session: %s", st)
+	}
+}
+
+func TestCompactionOfAnotherKindIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	for _, trigger := range []string{"", "other"} {
+		if err := e.precompact(t, "session-1", trigger); !errors.Is(err, store.ErrInvalid) {
+			t.Errorf("trigger %q: %v", trigger, err)
+		}
+	}
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("state %s", st)
 	}
 }
 

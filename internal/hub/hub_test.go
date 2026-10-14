@@ -260,6 +260,31 @@ func TestFailedTurnWaitsAtThePrompt(t *testing.T) {
 	}
 }
 
+func TestManualCompactionOfABusySessionMakesItIdle(t *testing.T) {
+	r := start(t)
+	r.idleAgent(t, "builder", "session-1", "")
+	bg := context.Background()
+	for _, rep := range []*agorav1.ReportRequest{
+		{SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_PROMPT},
+		{SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_COMPACT, Reason: "manual"},
+	} {
+		if _, err := r.sessions.Report(bg, connect.NewRequest(rep)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := r.sessions.ListSessions(bg, connect.NewRequest(&agorav1.ListSessionsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := list.Msg.GetSessions(); len(s) != 1 || s[0].GetState() != agorav1.SessionState_SESSION_STATE_IDLE {
+		t.Fatalf("sessions %v", s)
+	}
+	_, err = r.sessions.Report(bg, connect.NewRequest(&agorav1.ReportRequest{SessionId: "session-1", Event: agorav1.SessionEvent_SESSION_EVENT_COMPACT, Reason: "x"}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("other trigger: %v", err)
+	}
+}
+
 func (r *running) post(t *testing.T, author, body string) {
 	t.Helper()
 	bg := context.Background()

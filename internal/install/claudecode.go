@@ -158,6 +158,9 @@ func claudeCodeHooks(bin, terminalEnv string, stopFailure bool) []eventGroup {
 		{"SessionStart", wait},
 		{"UserPromptSubmit", plain},
 		{"PostToolUse", hookGroup{Matcher: "*", Hooks: plain.Hooks}},
+		// The trigger of a compaction (/compact or automatic) says whether the session waits
+		// at its prompt: a compaction runs no prompt or stop hook.
+		{"PreCompact", plain},
 		{"Stop", plain},
 		{"Stop", wait},
 	}

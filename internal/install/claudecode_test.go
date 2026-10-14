@@ -160,6 +160,7 @@ func TestInstallIntoMissingSettings(t *testing.T) {
 		"SessionStart":     {bin + " hook claude-code", bin + " hook claude-code-wait async"},
 		"UserPromptSubmit": {bin + " hook claude-code"},
 		"PostToolUse":      {bin + " hook claude-code"},
+		"PreCompact":       {bin + " hook claude-code"},
 		"Stop":             {bin + " hook claude-code", bin + " hook claude-code-wait async"},
 		"StopFailure":      {bin + " hook claude-code", bin + " hook claude-code-wait async"},
 		"SessionEnd":       {bin + " hook claude-code"},
@@ -286,7 +287,7 @@ func TestInstallReplacesOutdatedEntries(t *testing.T) {
 	    {"hooks": [{"type": "command", "command": "agora hook claude-code"}, {"type": "command", "command": "notify-done"}]},
 	    {"hooks": [{"type": "command", "command": "AGORA_TERMINAL=\"$X\" '/old place/agora' hook claude-code-wait", "async": true}]}
 	  ],
-	  "PreCompact": [{"hooks": [{"type": "command", "command": "/usr/local/bin/agora hook claude-code"}]}]
+	  "Notification": [{"hooks": [{"type": "command", "command": "/usr/local/bin/agora hook claude-code"}]}]
 	}}`)
 	if _, err := install.InstallClaudeCode(path, bin, "", true, now); err != nil {
 		t.Fatal(err)
@@ -295,8 +296,8 @@ func TestInstallReplacesOutdatedEntries(t *testing.T) {
 	if got := commands(t, s, "Stop"); !reflect.DeepEqual(got, []string{"notify-done", bin + " hook claude-code", bin + " hook claude-code-wait async"}) {
 		t.Errorf("Stop: %q", got)
 	}
-	if _, ok := s["hooks"].(map[string]any)["PreCompact"]; ok {
-		t.Errorf("outdated PreCompact entry kept: %v", s["hooks"])
+	if _, ok := s["hooks"].(map[string]any)["Notification"]; ok {
+		t.Errorf("outdated Notification entry kept: %v", s["hooks"])
 	}
 }
 

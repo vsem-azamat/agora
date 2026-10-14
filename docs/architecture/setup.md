@@ -35,7 +35,7 @@ What install writes, with `<agora>` the binary's path (single-quoted for the she
 
 | Event | Group |
 | --- | --- |
-| `UserPromptSubmit`, `SessionEnd` | `{"hooks": [{"type": "command", "command": "<agora> hook claude-code"}]}` |
+| `UserPromptSubmit`, `PreCompact`, `SessionEnd` | `{"hooks": [{"type": "command", "command": "<agora> hook claude-code"}]}` |
 | `PostToolUse` | the same with `"matcher": "*"` |
 | `SessionStart`, `Stop` | the same, then `{"hooks": [{"type": "command", "command": "<agora> hook claude-code-wait", "async": true, "asyncRewake": true, "timeout": 86400}]}` |
 | `StopFailure` | both of `Stop`'s groups, each with `"matcher": "overloaded\|server_error\|unknown\|max_output_tokens"`; left out when `claude --version` reports a version older than 2.1.267 (`install.StopFailureSince`) |

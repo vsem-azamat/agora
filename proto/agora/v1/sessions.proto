@@ -32,6 +32,9 @@ enum SessionEvent {
   // The session waits at its prompt after a turn that ended without a stop, such as a failed
   // one.
   SESSION_EVENT_WAITING = 6;
+  // The conversation is about to be compacted; reason says whether the user asked for it
+  // ("manual") or the agent tool does it by itself ("auto").
+  SESSION_EVENT_COMPACT = 7;
 }
 
 enum SessionState {

@@ -45,9 +45,10 @@ type hookInput struct {
 	HookEventName  string `json:"hook_event_name"`
 	CWD            string `json:"cwd"`
 	StopHookActive bool   `json:"stop_hook_active"`
-	Reason         string `json:"reason"` // SessionEnd: why the session ends, e.g. "clear"
-	Source         string `json:"source"` // SessionStart: why the session starts, e.g. "compact"
-	Error          string `json:"error"`  // StopFailure: the kind of API error
+	Reason         string `json:"reason"`  // SessionEnd: why the session ends, e.g. "clear"
+	Source         string `json:"source"`  // SessionStart: why the session starts, e.g. "compact"
+	Error          string `json:"error"`   // StopFailure: the kind of API error
+	Trigger        string `json:"trigger"` // PreCompact: "manual" for /compact, "auto" for an automatic compaction
 }
 
 var events = map[string]agorav1.SessionEvent{
@@ -58,12 +59,18 @@ var events = map[string]agorav1.SessionEvent{
 	"SessionEnd":       agorav1.SessionEvent_SESSION_EVENT_END,
 	// A turn that ends on an API error runs no Stop hook.
 	"StopFailure": agorav1.SessionEvent_SESSION_EVENT_WAITING,
+	// A compaction runs no Stop or UserPromptSubmit, so its trigger says what it does to the state.
+	"PreCompact": agorav1.SessionEvent_SESSION_EVENT_COMPACT,
 }
 
 // TransientFailures are the StopFailure errors after which the session waits at its prompt and
 // can work again; after the others (a usage limit, billing, authentication) it cannot, so they
 // are not reported.
 const TransientFailures = "overloaded|server_error|unknown|max_output_tokens"
+
+// CompactTriggers are the PreCompact triggers the connector reports: a compaction the user asks
+// for with /compact, and one Claude Code starts by itself.
+const CompactTriggers = "manual|auto"
 
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
@@ -74,7 +81,8 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		return fmt.Errorf("read hook input: %w", err)
 	}
 	ev, ok := events[h.HookEventName]
-	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) {
+	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) ||
+		h.HookEventName == "PreCompact" && !slices.Contains(strings.Split(CompactTriggers, "|"), h.Trigger) {
 		return nil // an event the connector does not handle
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
@@ -85,8 +93,11 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		start = proc.StartTime(pid)
 	}
 	reason := h.Reason
-	if ev == agorav1.SessionEvent_SESSION_EVENT_START {
+	switch ev {
+	case agorav1.SessionEvent_SESSION_EVENT_START:
 		reason = h.Source
+	case agorav1.SessionEvent_SESSION_EVENT_COMPACT:
+		reason = h.Trigger
 	}
 	resp, err := client.Report(ctx, connect.NewRequest(&agorav1.ReportRequest{
 		SessionId: h.SessionID, Kind: Kind, Event: ev, Pid: int32(pid), PidStart: start,
