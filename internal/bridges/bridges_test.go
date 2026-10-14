@@ -575,6 +575,310 @@ func TestCursorOnlyAndEmptyLines(t *testing.T) {
 	}
 }
 
+// ownPost has the operator post text in example-chat; it stays sending.
+func (e env) ownPost(t *testing.T, text string) int64 {
+	t.Helper()
+	id, err := e.r.PostFromOperator(ctx, "owner", "example-chat", text, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func (e env) sent(t *testing.T, id int64, ext string) {
+	t.Helper()
+	if ok, _, err := e.b.Sent(ctx, "example-chat", id, ext); !ok || err != nil {
+		t.Fatalf("sent %d: %v %v", id, ok, err)
+	}
+}
+
+// fromOutside returns the messages of example-chat that came in, by their text.
+func (e env) fromOutside(t *testing.T) []rooms.Message {
+	t.Helper()
+	var out []rooms.Message
+	for _, m := range e.history(t) {
+		if m.Incoming {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func TestTheOperatorsEchoBeforeSentIsNotStoredTwice(t *testing.T) {
+	e := newEnv(t)
+	id := e.ownPost(t, "on my way")
+	if echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "on my way", At: time.Now().Add(2 * time.Hour)}); echo == 0 {
+		t.Fatal("the echo was not stored")
+	}
+	if h := e.history(t); len(h) != 1 || h[0].ID != id {
+		t.Fatalf("the room before the answer: %+v", h)
+	}
+	if list, err := e.r.List(ctx, false); err != nil || slices.IndexFunc(list, func(r rooms.Room) bool {
+		return r.Name == "example-chat" && r.Messages == 1 && r.LastAt.Before(time.Now().Add(time.Hour))
+	}) < 0 {
+		t.Fatalf("the room counts the hidden echo: %+v %v", list, err)
+	}
+	// the same line again changes nothing
+	if again := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "on my way"}); again != 0 {
+		t.Fatalf("the repeated line was stored as %d", again)
+	}
+	e.sent(t, id, "5515")
+	if h := e.history(t); len(h) != 1 || deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+		t.Fatalf("the room after the answer: %+v", h)
+	}
+	if again := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "on my way"}); again != 0 || len(e.history(t)) != 1 {
+		t.Fatal("the identifier was not kept")
+	}
+	// the same words written outside once the message is answered are a message of their own
+	if later := e.receive(t, bridges.In{ID: "5516", AuthorName: "Owner", Self: true, Text: "on my way"}); later == 0 {
+		t.Fatal("a later message with the same text was dropped")
+	}
+}
+
+// What the operator wrote outside is never lost when it only looked like the echo.
+func TestAHeldMessageIsShownWhenItWasNotTheEcho(t *testing.T) {
+	for name, answer := range map[string]func(e env, id int64){
+		"sent with another identifier": func(e env, id int64) { e.sent(t, id, "7002") },
+		"sent without an identifier":   func(e env, id int64) { e.sent(t, id, "") },
+		"failed": func(e env, id int64) {
+			if ok, err := e.b.Failed(ctx, "example-chat", id, "chat not found"); !ok || err != nil {
+				t.Fatalf("failed: %v %v", ok, err)
+			}
+		},
+		"the bridge removed": func(e env, id int64) {
+			if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t)
+			theirs := e.receive(t, bridges.In{ID: "6000", AuthorName: "Ada", Text: "question?"})
+			id := e.ownPost(t, "ok")
+			at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+			held := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok", ReplyTo: "6000", At: at})
+			if got := e.fromOutside(t); len(got) != 1 || got[0].ID != theirs {
+				t.Fatalf("before the answer: %+v", got)
+			}
+			answer(e, id)
+			var phone *rooms.Message
+			for _, m := range e.fromOutside(t) {
+				if m.Body == "ok" {
+					phone = &m
+				}
+			}
+			if phone == nil || phone.ID != held || phone.Author != "owner" || phone.ReplyTo != theirs || !phone.At.Equal(at) {
+				t.Fatalf("the message written outside after the answer: %+v", phone)
+			}
+			if name == "the bridge removed" {
+				return // nothing more comes in
+			}
+			// it carries its identifier: a reply to it finds it, and the line is not stored again
+			if again := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"}); again != 0 {
+				t.Fatal("stored again")
+			}
+			reply := e.receive(t, bridges.In{ID: "7003", AuthorName: "Ada", Text: "thanks", ReplyTo: "7001"})
+			for _, m := range e.history(t) {
+				if m.ID == reply && m.ReplyTo != phone.ID {
+					t.Fatalf("the reply replies to %d, want %d", m.ReplyTo, phone.ID)
+				}
+			}
+		})
+	}
+}
+
+// Each condition of the hold: when it does not hold, the line is stored at once.
+func TestAnEchoIsHeldOnlyForTheSameMessage(t *testing.T) {
+	stored := func(t *testing.T, e env, in bridges.In) {
+		t.Helper()
+		id := e.receive(t, in)
+		if !slices.ContainsFunc(e.fromOutside(t), func(m rooms.Message) bool { return m.ID == id }) {
+			t.Fatalf("hidden: %+v", in)
+		}
+	}
+	self := func(text string) bridges.In {
+		return bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: text}
+	}
+	t.Run("other text", func(t *testing.T) {
+		e := newEnv(t)
+		e.ownPost(t, "ok")
+		stored(t, e, self("okay"))
+	})
+	t.Run("other room", func(t *testing.T) {
+		e := newEnv(t)
+		if _, err := e.b.Add(ctx, "builder", "example-other", "example-bridge", "", nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.r.PostFromOperator(ctx, "owner", "example-other", "ok", 0); err != nil {
+			t.Fatal(err)
+		}
+		stored(t, e, self("ok"))
+	})
+	t.Run("another author", func(t *testing.T) {
+		e := newEnv(t)
+		setPolicy(t, e, bridges.Open)
+		e.post(t, "secretary", "example-chat", "ok")
+		stored(t, e, self("ok"))
+	})
+	t.Run("answered", func(t *testing.T) {
+		e := newEnv(t)
+		e.sent(t, e.ownPost(t, "ok"), "6000")
+		stored(t, e, self("ok"))
+	})
+	t.Run("failed", func(t *testing.T) {
+		e := newEnv(t)
+		if ok, err := e.b.Failed(ctx, "example-chat", e.ownPost(t, "ok"), "no"); !ok || err != nil {
+			t.Fatal(ok, err)
+		}
+		stored(t, e, self("ok"))
+	})
+	t.Run("in a thread", func(t *testing.T) {
+		e := newEnv(t)
+		e.ownPost(t, "ok")
+		in := self("ok")
+		in.ThreadKey = "77"
+		stored(t, e, in)
+	})
+	t.Run("not from the operator", func(t *testing.T) {
+		e := newEnv(t)
+		e.ownPost(t, "ok")
+		stored(t, e, bridges.In{ID: "7001", AuthorName: "Ada", Text: "ok"})
+	})
+	t.Run("the message already holds an echo", func(t *testing.T) {
+		e := newEnv(t)
+		e.ownPost(t, "ok")
+		e.receive(t, self("ok"))
+		in := self("ok")
+		in.ID = "7002"
+		stored(t, e, in)
+	})
+	t.Run("two messages with the same text: the oldest", func(t *testing.T) {
+		e := newEnv(t)
+		first, second := e.ownPost(t, "ok"), e.ownPost(t, "ok")
+		e.receive(t, self("ok"))
+		// the second answers with another identifier: the echo is not its
+		e.sent(t, second, "7002")
+		if got := e.fromOutside(t); len(got) != 0 {
+			t.Fatalf("shown by the wrong message: %+v", got)
+		}
+		e.sent(t, first, "7001")
+		if got := e.fromOutside(t); len(got) != 0 || len(e.history(t)) != 2 {
+			t.Fatalf("after the first answers: %+v", e.history(t))
+		}
+	})
+}
+
+// A reply to a message that is hidden as an echo keeps pointing at it: to the sent message when
+// the echo is merged, to the message written outside when it is shown.
+func TestRepliesToAHiddenEchoFollowIt(t *testing.T) {
+	t.Run("merged", func(t *testing.T) {
+		e := newEnv(t)
+		id := e.ownPost(t, "ok")
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		reply := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "thanks", ReplyTo: "5515"})
+		e.sent(t, id, "5515")
+		for _, m := range e.history(t) {
+			if m.ID == reply && m.ReplyTo != id {
+				t.Fatalf("the reply replies to %d, want %d", m.ReplyTo, id)
+			}
+		}
+		if len(e.history(t)) != 2 {
+			t.Fatalf("history: %+v", e.history(t))
+		}
+	})
+	t.Run("shown", func(t *testing.T) {
+		e := newEnv(t)
+		id := e.ownPost(t, "ok")
+		phone := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+		reply := e.receive(t, bridges.In{ID: "7002", AuthorName: "Ada", Text: "thanks", ReplyTo: "7001"})
+		e.sent(t, id, "7003")
+		if phone > reply {
+			t.Fatalf("the message written outside (%d) is after the reply (%d)", phone, reply)
+		}
+		found := false
+		for _, m := range e.history(t) {
+			if m.ID == reply {
+				found = true
+				if m.ReplyTo != phone {
+					t.Fatalf("the reply replies to %d, want %d", m.ReplyTo, phone)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("no reply")
+		}
+	})
+}
+
+// A thread outside whose key is the identifier of the hidden echo ends up in one thread with the
+// sent message.
+func TestAThreadKeyedByAHiddenEchoJoinsTheSentMessage(t *testing.T) {
+	e := newEnv(t)
+	id := e.ownPost(t, "ok")
+	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+	first := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515", ThreadTitle: "topic"})
+	// before the answer the thread is the sent message's, not the hidden echo's
+	before, err := e.r.ThreadHistory(ctx, first, 10, "")
+	if err != nil || len(before) != 2 || before[0].ID != id {
+		t.Fatalf("the thread before the answer: %+v %v", before, err)
+	}
+	if list, err := e.r.Threads(ctx, "example-chat", "", false); err != nil || len(list) != 0 {
+		t.Fatalf("threads before the answer: %+v %v", list, err)
+	}
+	e.sent(t, id, "5515")
+	second := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "two", ReplyTo: "5515", ThreadKey: "5515"})
+	threads := map[int64]int64{}
+	for _, m := range []int64{first, second} {
+		msgs, err := e.r.ThreadHistory(ctx, m, 10, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, x := range msgs {
+			threads[m] = x.ID // the last of the thread; both must see the same one
+		}
+	}
+	if threads[first] != threads[second] || threads[first] != second {
+		t.Fatalf("the thread is split: %v (first %d, second %d, sent %d)", threads, first, second, id)
+	}
+}
+
+// What a message shown after the answer addresses is unread for those agents then, not before.
+func TestAShownMessageAddressesItsAgents(t *testing.T) {
+	e := newEnv(t)
+	id := e.ownPost(t, "ok")
+	e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok", Addressed: true})
+	incoming := func() []rooms.Message {
+		got, _, err := e.r.Unread(ctx, "secretary", rooms.Everything, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.DeleteFunc(got, func(m rooms.Message) bool { return !m.Incoming })
+	}
+	if got := incoming(); len(got) != 0 {
+		t.Fatalf("unread while hidden: %+v", got)
+	}
+	e.sent(t, id, "7002")
+	if got := incoming(); len(got) != 1 || got[0].Body != "ok" || !got[0].Addressed {
+		t.Fatalf("unread after the answer: %+v", got)
+	}
+}
+
+// Two messages with the same text: the echo that answers the second one merges into it, and the
+// first one failing afterwards finds nothing left to show.
+func TestAnEchoTakenByTheSecondMessage(t *testing.T) {
+	e := newEnv(t)
+	first, second := e.ownPost(t, "ok"), e.ownPost(t, "ok")
+	e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+	e.sent(t, second, "7001")
+	if ok, err := e.b.Failed(ctx, "example-chat", first, "chat not found"); !ok || err != nil {
+		t.Fatalf("failed: %v %v", ok, err)
+	}
+	h := e.history(t)
+	if len(h) != 3 || h[0].ID != first || h[1].ID != second || h[2].Author != "agora" {
+		t.Fatalf("history: %+v", h)
+	}
+}
+
 func TestAnEchoBeforeSentIsMerged(t *testing.T) {
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
@@ -1391,5 +1695,75 @@ func TestAReplyGoesOutWhenTheMessageItRepliesToFailed(t *testing.T) {
 	outs, err := outgoing(t, e)
 	if err != nil || len(outs) != 2 || outs[0].ID != reply || outs[0].ReplyTo != "" || outs[1].ID != direct || outs[1].ReplyTo != "" {
 		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
+// thread returns the thread of message id as ThreadHistory shows it.
+func (e env) thread(t *testing.T, id int64) []rooms.Message {
+	t.Helper()
+	msgs, err := e.r.ThreadHistory(ctx, id, 20, "")
+	if err != nil {
+		t.Fatalf("ThreadHistory(%d): %v", id, err)
+	}
+	return msgs
+}
+
+// The operator's message is itself a reply in a thread: a thread outside keyed by its hidden echo
+// is shown under the thread's root, never nested under the reply, before and after the answer.
+func TestAThreadKeyedByTheEchoOfAThreadReplyDoesNotNest(t *testing.T) {
+	e := newEnv(t)
+	root := e.ownPost(t, "plan")
+	e.sent(t, root, "")
+	o, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "ok", Thread: root, Operator: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+	ada := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})
+	before := e.thread(t, ada)
+	if before[0].ID != root || before[0].Thread != 0 || len(before) != 3 || before[0].Summary.Replies != 2 {
+		t.Fatalf("before the answer: %+v", before)
+	}
+	e.sent(t, o, "5515")
+	for _, m := range e.thread(t, ada) {
+		if m.ID == ada && m.Thread != root {
+			t.Fatalf("after the answer the reply is in thread %d, want %d", m.Thread, root)
+		}
+		if m.Thread != 0 && m.Thread != root {
+			t.Fatalf("nested: %+v", m)
+		}
+	}
+}
+
+// The hidden line was not the echo: the thread outside keyed by it stays on the message written
+// outside, with its reply and thread pointing at it.
+func TestAThreadKeyedByAMessageThatWasNotTheEchoStaysOnIt(t *testing.T) {
+	for name, answer := range map[string]func(e env, o int64){
+		"sent with another identifier": func(e env, o int64) { e.sent(t, o, "9999") },
+		"failed": func(e env, o int64) {
+			if ok, err := e.b.Failed(ctx, "example-chat", o, "nope"); !ok || err != nil {
+				t.Fatal(ok, err)
+			}
+		},
+		"the bridge removed": func(e env, o int64) {
+			if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t)
+			o := e.ownPost(t, "ok")
+			phone := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+			ada := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})
+			if got := e.thread(t, ada); got[0].ID != o && got[0].ID != phone {
+				t.Fatalf("before the answer: %+v", got)
+			}
+			answer(e, o)
+			got := e.thread(t, ada)
+			if got[0].ID != phone || got[0].Body != "ok" || len(got) != 2 || got[1].ID != ada || got[1].Thread != phone || got[1].ReplyTo != phone {
+				t.Fatalf("after the answer: %+v", got)
+			}
+		})
 	}
 }

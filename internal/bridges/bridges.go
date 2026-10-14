@@ -343,6 +343,10 @@ type settled struct {
 // failSending marks the messages of room still sending as not sent, since its bridge was
 // removed, and returns them in posting order.
 func failSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error) {
+	// what is hidden as the echo of one of them is a message of its own
+	if _, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE room = ? AND echo_of IS NOT NULL`, room); err != nil {
+		return nil, err
+	}
 	rows, err := tx.QueryContext(ctx, `UPDATE messages SET delivery = 'failed', delivery_error = ?
 		WHERE room = ? AND delivery = 'sending' RETURNING id, author`, removedReason, room)
 	if err != nil {

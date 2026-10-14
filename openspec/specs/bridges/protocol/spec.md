@@ -130,7 +130,7 @@ The system SHALL treat an `in` line marked `"addressed":true` as addressed to ev
 
 ### Requirement: The Operator's Own Messages From Outside
 
-The system SHALL attribute an `in` line whose author is marked `"self":true` (the operator wrote it outside) to the operator, the name the web listener acts under; such a message SHALL not go out again. When the hub serves no web app, the line SHALL be stored from its external author like any other.
+The system SHALL attribute an `in` line whose author is marked `"self":true` (the operator wrote it outside) to the operator, the name the web listener acts under; such a message SHALL not go out again. While it may be the echo of a message of the operator that the bridge has not answered yet, it SHALL stay out of the room until the bridge answers, as the outbound requirement says, and is never lost. When the hub serves no web app, the line SHALL be stored from its external author like any other.
 
 #### Scenario: The operator writes from the phone
 - **WHEN** the hub serves the app as `owner` and the bridge writes an `in` line whose author is marked `self`
