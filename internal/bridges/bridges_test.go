@@ -982,13 +982,13 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 	}
 	h := e.history(t)
 	told := slices.ContainsFunc(h, func(m rooms.Message) bool {
-		return m.Author == rooms.Board && m.Body == "@owner your message "+itoa(sending)+" was not sent: the bridge was removed."
+		return m.Author == rooms.Board && m.Body == "@owner your message "+itoa(sending)+" may not have gone out: the bridge was removed before it answered. Check the chat before you send it again." && m.ReplyTo == sending
 	})
 	if !told {
 		t.Fatalf("the operator is not told: %+v", h)
 	}
 	for _, m := range h {
-		if m.ID == sending && m.DeliveryError != "the bridge was removed" {
+		if m.ID == sending && m.DeliveryError != "the bridge was removed before it answered; it may have gone out" {
 			t.Fatalf("reason: %+v", m)
 		}
 	}

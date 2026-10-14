@@ -450,3 +450,40 @@ func TestAMigrationWithForeignKeysOffMustLeaveThemValid(t *testing.T) {
 		t.Fatalf("after the refused migration: version %d (was %d), messages %d, foreign keys %d", after, version, messages, keys)
 	}
 }
+
+func TestSettleSendingMigrationFailsMessagesWithoutABridge(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0019_settle_sending.sql")
+	for _, q := range []string{
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('old-chat', 'chat', 'builder', 1), ('example-chat', 'chat', 'builder', 1)`,
+		`INSERT INTO bridges (name, command, policy, created_by, created_at) VALUES ('example-chat', 'example-bridge', 'delay', 'builder', 1)`,
+		`INSERT INTO messages (id, room, author, body, at, delivery) VALUES
+			(1, 'old-chat', 'builder', 'left sending', 1, 'sending'), (2, 'example-chat', 'builder', 'going out', 2, 'sending'),
+			(3, 'old-chat', 'builder', 'went', 3, 'sent')`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err := Strings(ctx, db, `SELECT id || ':' || delivery || ':' || COALESCE(delivery_error, '') FROM messages ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"1:failed:the bridge was removed before it answered; it may have gone out", "2:sending:", "3:sent:"}
+	if !slices.Equal(got, want) {
+		t.Errorf("messages %q, want %q", got, want)
+	}
+}

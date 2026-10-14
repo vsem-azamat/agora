@@ -185,7 +185,8 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 
 // Remove deletes the bridge name; its room, subscriptions and messages stay, and the board says
 // in the room that it is no longer bridged. Messages of the room left sending are marked not
-// sent, since no bridge answers for them any more, and the board tells their authors.
+// sent, since no bridge answers for them any more, and the board tells their authors that they
+// may have gone out all the same.
 func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 	name = strings.TrimPrefix(name, "#")
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
@@ -208,7 +209,8 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 			return err
 		}
 		for _, f := range failed {
-			if err := b.tell(ctx, tx, f.author, name, f.id, removedReason); err != nil {
+			text := fmt.Sprintf("@%s your message %d may not have gone out: the bridge was removed before it answered. Check the chat before you send it again.", f.author, f.id)
+			if _, err := b.rooms.PostTx(ctx, tx, rooms.Board, name, text, f.id); err != nil {
 				return err
 			}
 		}
@@ -346,8 +348,9 @@ func failSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error
 	return out, nil
 }
 
-// removedReason is why a message left sending when its bridge was removed was not sent.
-const removedReason = "the bridge was removed"
+// removedReason is why a message left sending when its bridge was removed is not known to have
+// gone out: the bridge may have sent it and been stopped before it answered.
+const removedReason = "the bridge was removed before it answered; it may have gone out"
 
 // List returns every bridge in name order.
 func (b *Bridges) List(ctx context.Context) ([]Bridge, error) {
