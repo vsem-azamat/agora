@@ -154,9 +154,25 @@ func TestFailuresThatKeepTheSessionFromWorkingAreIgnored(t *testing.T) {
 	}
 }
 
+func TestCompactionTriggerIsReported(t *testing.T) {
+	for _, trigger := range []string{"manual", "auto"} {
+		hub := &fakeHub{reply: &agorav1.ReportResponse{Context: "ignored"}}
+		out, err := run(t, hub, `{"session_id":"session-1","hook_event_name":"PreCompact","trigger":"`+trigger+`"}`)
+		if out != "" || err != nil || hub.got.GetEvent() != agorav1.SessionEvent_SESSION_EVENT_COMPACT || hub.got.GetReason() != trigger {
+			t.Errorf("%s: out %q err %v report %v", trigger, out, err, hub.got)
+		}
+	}
+}
+
 func TestUnknownEventsAreIgnored(t *testing.T) {
 	hub := &fakeHub{}
-	if out, err := run(t, hub, `{"session_id":"session-1","hook_event_name":"PreCompact"}`); out != "" || err != nil || hub.got != nil {
-		t.Fatalf("out %q err %v report %v", out, err, hub.got)
+	for _, in := range []string{
+		`{"session_id":"session-1","hook_event_name":"PreCompact"}`,
+		`{"session_id":"session-1","hook_event_name":"PreCompact","trigger":"other"}`,
+		`{"session_id":"session-1","hook_event_name":"PostCompact"}`,
+	} {
+		if out, err := run(t, hub, in); out != "" || err != nil || hub.got != nil {
+			t.Fatalf("%s: out %q err %v report %v", in, out, err, hub.got)
+		}
 	}
 }

@@ -45,9 +45,10 @@ type hookInput struct {
 	HookEventName  string `json:"hook_event_name"`
 	CWD            string `json:"cwd"`
 	StopHookActive bool   `json:"stop_hook_active"`
-	Reason         string `json:"reason"` // SessionEnd: why the session ends, e.g. "clear"
-	Source         string `json:"source"` // SessionStart: why the session starts, e.g. "compact"
-	Error          string `json:"error"`  // StopFailure: the kind of API error
+	Reason         string `json:"reason"`  // SessionEnd: why the session ends, e.g. "clear"
+	Source         string `json:"source"`  // SessionStart: why the session starts, e.g. "compact"
+	Error          string `json:"error"`   // StopFailure: the kind of API error
+	Trigger        string `json:"trigger"` // PreCompact: "manual" for /compact, "auto" for an automatic compaction
 }
 
 var events = map[string]agorav1.SessionEvent{
@@ -58,6 +59,8 @@ var events = map[string]agorav1.SessionEvent{
 	"SessionEnd":       agorav1.SessionEvent_SESSION_EVENT_END,
 	// A turn that ends on an API error runs no Stop hook.
 	"StopFailure": agorav1.SessionEvent_SESSION_EVENT_WAITING,
+	// A compaction runs no Stop or UserPromptSubmit, so its trigger says what it does to the state.
+	"PreCompact": agorav1.SessionEvent_SESSION_EVENT_COMPACT,
 }
 
 // TransientFailures are the StopFailure errors after which the session waits at its prompt and
@@ -74,7 +77,8 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		return fmt.Errorf("read hook input: %w", err)
 	}
 	ev, ok := events[h.HookEventName]
-	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) {
+	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) ||
+		h.HookEventName == "PreCompact" && h.Trigger != "manual" && h.Trigger != "auto" {
 		return nil // an event the connector does not handle
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
@@ -85,8 +89,11 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 		start = proc.StartTime(pid)
 	}
 	reason := h.Reason
-	if ev == agorav1.SessionEvent_SESSION_EVENT_START {
+	switch ev {
+	case agorav1.SessionEvent_SESSION_EVENT_START:
 		reason = h.Source
+	case agorav1.SessionEvent_SESSION_EVENT_COMPACT:
+		reason = h.Trigger
 	}
 	resp, err := client.Report(ctx, connect.NewRequest(&agorav1.ReportRequest{
 		SessionId: h.SessionID, Kind: Kind, Event: ev, Pid: int32(pid), PidStart: start,

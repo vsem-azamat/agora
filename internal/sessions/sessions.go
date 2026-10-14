@@ -43,6 +43,17 @@ const (
 	// Waiting reports a session waiting at its prompt after a turn that ended without a stop,
 	// such as one that failed.
 	Waiting Event = "waiting"
+	// Compact reports that the conversation is about to be compacted; the report's reason is
+	// CompactManual or CompactAuto.
+	Compact Event = "compact"
+)
+
+// Reasons of a Compact report.
+const (
+	// CompactManual is a compaction the user asked for, at the prompt.
+	CompactManual = "manual"
+	// CompactAuto is a compaction the agent tool starts by itself, during a turn.
+	CompactAuto = "auto"
 )
 
 // EndReasonClear is the end reason of a session replaced by a new conversation in the same
@@ -169,6 +180,9 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 	if err := checkSession(r.SessionID); err != nil {
 		return Reply{}, err
 	}
+	if r.Event == Compact && r.Reason != CompactManual && r.Reason != CompactAuto {
+		return Reply{}, fmt.Errorf("%w: compaction %q: manual or auto", store.ErrInvalid, r.Reason)
+	}
 	if r.Event == End && r.Reason == EndReasonClear {
 		return Reply{}, nil // the next start in the same process takes over the name and places
 	}
@@ -207,20 +221,29 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 		case Start:
 			// A new, resumed or cleared session starts at the prompt. A compaction starts the
 			// session again with no turn and, when it runs while idle or on /compact, no stop
-			// after it: a live session keeps its state, and a connector waiting on it keeps
-			// waiting. One the hub did not know or had ended has no state to keep.
+			// after it: a live session keeps its state (the connector reports the compaction's
+			// trigger first, which sets it), and a connector waiting on it keeps waiting. One
+			// the hub did not know or had ended, and whose trigger was not reported, has no
+			// state to keep.
 			if r.Reason == StartReasonCompact && wasLive {
 				return nil
 			}
 			return setState(ctx, tx, r.SessionID, Idle, now)
 		case Waiting:
 			return setState(ctx, tx, r.SessionID, Idle, now)
+		case Compact:
+			// /compact runs at the prompt, and runs no prompt or stop; an automatic compaction
+			// interrupts a turn. The start that follows keeps the state set here.
+			if r.Reason == CompactManual {
+				return setState(ctx, tx, r.SessionID, Idle, now)
+			}
+			return setState(ctx, tx, r.SessionID, Busy, now)
 		case End:
 			return s.endTx(ctx, tx, r.SessionID, now)
 		}
 		return nil
 	})
-	if err != nil || r.Event == End || r.Event == Waiting {
+	if err != nil || r.Event == End || r.Event == Waiting || r.Event == Compact {
 		return Reply{}, err // nothing a waiting session's connector shows reaches the agent
 	}
 	if r.Event == Stop {

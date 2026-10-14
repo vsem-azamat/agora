@@ -22,7 +22,7 @@ The connector SHALL exit successfully and print nothing whenever it fails, inclu
 
 ### Requirement: Hook Events Report The Session
 
-The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an API error the session can work again from (`StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens`), adding nothing to the agent's context, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session start (its `source`) or end.
+The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an API error the session can work again from (`StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens`), adding nothing to the agent's context, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session start (its `source`) or end, and SHALL report the trigger of a compaction (`PreCompact` with trigger `manual` or `auto`) before it runs, adding nothing to the agent's context.
 
 #### Scenario: Start and end
 - **WHEN** a Claude Code session starts and later exits
@@ -31,6 +31,14 @@ The connector SHALL report session start, new prompts, tool use, the end of a tu
 #### Scenario: Turn ends on an API error
 - **WHEN** the agent's turn ends because the API is overloaded, so no `Stop` hook runs and `StopFailure` runs instead
 - **THEN** the hub records the session as `idle`
+
+#### Scenario: Compaction triggers
+- **WHEN** `PreCompact` runs with trigger `manual`, or with trigger `auto`
+- **THEN** the hub is told that the conversation is compacted at the user's request, or automatically, and nothing is printed
+
+#### Scenario: Compaction of another trigger
+- **WHEN** `PreCompact` runs with a trigger other than `manual` and `auto`
+- **THEN** the hook reports nothing and prints nothing
 
 #### Scenario: Usage limit
 - **WHEN** `StopFailure` runs with error `rate_limit`
