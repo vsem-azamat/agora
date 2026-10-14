@@ -12,7 +12,7 @@ import type { Message as Message$1 } from "@bufbuild/protobuf";
  * Describes the file agora/v1/rooms.proto.
  */
 export const file_agora_v1_rooms: GenFile = /*@__PURE__*/
-  fileDesc("ChRhZ29yYS92MS9yb29tcy5wcm90bxIIYWdvcmEudjEigQIKBFJvb20SDAoEbmFtZRgBIAEoCRIPCgdwdXJwb3NlGAIgASgJEhIKCmNyZWF0ZWRfYnkYAyABKAkSLgoKY3JlYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIbWVzc2FnZXMYBSABKAUSKwoHbGFzdF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEQoJc2NoZWR1bGVkGAcgASgFEhMKC2FyY2hpdmVkX2J5GAggASgJEi8KC2FyY2hpdmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLWAgoHTWVzc2FnZRIKCgJpZBgBIAEoAxIMCgRyb29tGAIgASgJEg4KBmF1dGhvchgDIAEoCRIMCgRib2R5GAQgASgJEhAKCHJlcGx5X3RvGAUgASgDEiYKAmF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIRCglhZGRyZXNzZWQYByABKAgSMQoPZXh0ZXJuYWxfYXV0aG9yGAggASgLMhguYWdvcmEudjEuRXh0ZXJuYWxBdXRob3ISLwoOZGVsaXZlcnlfc3RhdGUYCSABKA4yFy5hZ29yYS52MS5EZWxpdmVyeVN0YXRlEhYKDmRlbGl2ZXJ5X2Vycm9yGAogASgJEgwKBG5vdGUYCyABKAgSEAoIaW5jb21pbmcYDCABKAgSKgoGZHVlX2F0GA0gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJKCg5FeHRlcm5hbEF1dGhvchIOCgZicmlkZ2UYASABKAkSCgoCaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIOCgZhdmF0YXIYBCABKAkiRgoMU3Vic2NyaXB0aW9uEgwKBHJvb20YASABKAkSKAoEbW9kZRgCIAEoDjIaLmFnb3JhLnYxLlN1YnNjcmlwdGlvbk1vZGUiQQoRQ3JlYXRlUm9vbVJlcXVlc3QSDAoEbmFtZRgBIAEoCRIPCgdwdXJwb3NlGAIgASgJEg0KBWFnZW50GAMgASgJIhQKEkNyZWF0ZVJvb21SZXNwb25zZSIfChBMaXN0Um9vbXNSZXF1ZXN0EgsKA2FsbBgBIAEoCCIyChFMaXN0Um9vbXNSZXNwb25zZRIdCgVyb29tcxgBIAMoCzIOLmFnb3JhLnYxLlJvb20iQwoSQXJjaGl2ZVJvb21SZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBHJvb20YAiABKAkSEAoIYXJjaGl2ZWQYAyABKAgiFQoTQXJjaGl2ZVJvb21SZXNwb25zZSJqChBTdWJzY3JpYmVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEg0KBXJvb21zGAIgAygJEg4KBmZvbGxvdxgDIAEoCBIoCgRtb2RlGAQgASgOMhouYWdvcmEudjEuU3Vic2NyaXB0aW9uTW9kZSJRChFTdWJzY3JpYmVSZXNwb25zZRINCgVyb29tcxgBIAMoCRItCg1zdWJzY3JpcHRpb25zGAIgAygLMhYuYWdvcmEudjEuU3Vic2NyaXB0aW9uIikKGExpc3RTdWJzY3JpcHRpb25zUmVxdWVzdBINCgVhZ2VudBgBIAEoCSJZChlMaXN0U3Vic2NyaXB0aW9uc1Jlc3BvbnNlEg0KBXJvb21zGAEgAygJEi0KDXN1YnNjcmlwdGlvbnMYAiADKAsyFi5hZ29yYS52MS5TdWJzY3JpcHRpb24iWAoLUG9zdFJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEcm9vbRgCIAEoCRIMCgRib2R5GAMgASgJEhAKCHJlcGx5X3RvGAQgASgDEgwKBG5vdGUYBSABKAgiGgoMUG9zdFJlc3BvbnNlEgoKAmlkGAEgASgDIiwKDkhpc3RvcnlSZXF1ZXN0EgwKBHJvb20YASABKAkSDAoEbGFzdBgCIAEoBSI2Cg9IaXN0b3J5UmVzcG9uc2USIwoIbWVzc2FnZXMYASADKAsyES5hZ29yYS52MS5NZXNzYWdlIlIKDVVucmVhZFJlcXVlc3QSDQoFYWdlbnQYASABKAkSDAoEcGVlaxgCIAEoCBIVCg1tZW50aW9uc19vbmx5GAMgASgIEg0KBWxpbWl0GAQgASgFIkQKDlVucmVhZFJlc3BvbnNlEiMKCG1lc3NhZ2VzGAEgAygLMhEuYWdvcmEudjEuTWVzc2FnZRINCgV0b3RhbBgCIAEoBSIkChNVbnJlYWRCeVJvb21SZXF1ZXN0Eg0KBWFnZW50GAEgASgJIj0KClJvb21VbnJlYWQSDAoEcm9vbRgBIAEoCRIOCgZ1bnJlYWQYAiABKAUSEQoJYWRkcmVzc2VkGAMgASgFIjsKFFVucmVhZEJ5Um9vbVJlc3BvbnNlEiMKBXJvb21zGAEgAygLMhQuYWdvcmEudjEuUm9vbVVucmVhZCJGChNNYXJrUm9vbVJlYWRSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBHJvb20YAiABKAkSEgoKdGhyb3VnaF9pZBgDIAEoAyIWChRNYXJrUm9vbVJlYWRSZXNwb25zZSq7AQoNRGVsaXZlcnlTdGF0ZRIeChpERUxJVkVSWV9TVEFURV9VTlNQRUNJRklFRBAAEhwKGERFTElWRVJZX1NUQVRFX1NDSEVEVUxFRBABEhoKFkRFTElWRVJZX1NUQVRFX1NFTkRJTkcQAhIXChNERUxJVkVSWV9TVEFURV9TRU5UEAMSHAoYREVMSVZFUllfU1RBVEVfQ0FOQ0VMTEVEEAQSGQoVREVMSVZFUllfU1RBVEVfRkFJTEVEEAUqjAEKEFN1YnNjcmlwdGlvbk1vZGUSIQodU1VCU0NSSVBUSU9OX01PREVfVU5TUEVDSUZJRUQQABIZChVTVUJTQ1JJUFRJT05fTU9ERV9BTEwQARIeChpTVUJTQ1JJUFRJT05fTU9ERV9NRU5USU9OUxACEhoKFlNVQlNDUklQVElPTl9NT0RFX1dBS0UQAzLeBQoLUm9vbVNlcnZpY2USRwoKQ3JlYXRlUm9vbRIbLmFnb3JhLnYxLkNyZWF0ZVJvb21SZXF1ZXN0GhwuYWdvcmEudjEuQ3JlYXRlUm9vbVJlc3BvbnNlEkQKCUxpc3RSb29tcxIaLmFnb3JhLnYxLkxpc3RSb29tc1JlcXVlc3QaGy5hZ29yYS52MS5MaXN0Um9vbXNSZXNwb25zZRJKCgtBcmNoaXZlUm9vbRIcLmFnb3JhLnYxLkFyY2hpdmVSb29tUmVxdWVzdBodLmFnb3JhLnYxLkFyY2hpdmVSb29tUmVzcG9uc2USRAoJU3Vic2NyaWJlEhouYWdvcmEudjEuU3Vic2NyaWJlUmVxdWVzdBobLmFnb3JhLnYxLlN1YnNjcmliZVJlc3BvbnNlElwKEUxpc3RTdWJzY3JpcHRpb25zEiIuYWdvcmEudjEuTGlzdFN1YnNjcmlwdGlvbnNSZXF1ZXN0GiMuYWdvcmEudjEuTGlzdFN1YnNjcmlwdGlvbnNSZXNwb25zZRI1CgRQb3N0EhUuYWdvcmEudjEuUG9zdFJlcXVlc3QaFi5hZ29yYS52MS5Qb3N0UmVzcG9uc2USPgoHSGlzdG9yeRIYLmFnb3JhLnYxLkhpc3RvcnlSZXF1ZXN0GhkuYWdvcmEudjEuSGlzdG9yeVJlc3BvbnNlEjsKBlVucmVhZBIXLmFnb3JhLnYxLlVucmVhZFJlcXVlc3QaGC5hZ29yYS52MS5VbnJlYWRSZXNwb25zZRJNCgxVbnJlYWRCeVJvb20SHS5hZ29yYS52MS5VbnJlYWRCeVJvb21SZXF1ZXN0Gh4uYWdvcmEudjEuVW5yZWFkQnlSb29tUmVzcG9uc2USTQoMTWFya1Jvb21SZWFkEh0uYWdvcmEudjEuTWFya1Jvb21SZWFkUmVxdWVzdBoeLmFnb3JhLnYxLk1hcmtSb29tUmVhZFJlc3BvbnNlQjNaMWdpdGh1Yi5jb20vdnNlbS1hemFtYXQvYWdvcmEvZ2VuL2Fnb3JhL3YxO2Fnb3JhdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChRhZ29yYS92MS9yb29tcy5wcm90bxIIYWdvcmEudjEigQIKBFJvb20SDAoEbmFtZRgBIAEoCRIPCgdwdXJwb3NlGAIgASgJEhIKCmNyZWF0ZWRfYnkYAyABKAkSLgoKY3JlYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIbWVzc2FnZXMYBSABKAUSKwoHbGFzdF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEQoJc2NoZWR1bGVkGAcgASgFEhMKC2FyY2hpdmVkX2J5GAggASgJEi8KC2FyY2hpdmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCK7AwoHTWVzc2FnZRIKCgJpZBgBIAEoAxIMCgRyb29tGAIgASgJEg4KBmF1dGhvchgDIAEoCRIMCgRib2R5GAQgASgJEhAKCHJlcGx5X3RvGAUgASgDEiYKAmF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIRCglhZGRyZXNzZWQYByABKAgSMQoPZXh0ZXJuYWxfYXV0aG9yGAggASgLMhguYWdvcmEudjEuRXh0ZXJuYWxBdXRob3ISLwoOZGVsaXZlcnlfc3RhdGUYCSABKA4yFy5hZ29yYS52MS5EZWxpdmVyeVN0YXRlEhYKDmRlbGl2ZXJ5X2Vycm9yGAogASgJEgwKBG5vdGUYCyABKAgSEAoIaW5jb21pbmcYDCABKAgSKgoGZHVlX2F0GA0gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZ0aHJlYWQYDiABKAMSDAoEYWxzbxgPIAEoCBIUCgx0aHJlYWRfdGl0bGUYECABKAkSLwoOdGhyZWFkX3N1bW1hcnkYESABKAsyFy5hZ29yYS52MS5UaHJlYWRTdW1tYXJ5IoUBCg1UaHJlYWRTdW1tYXJ5Eg8KB3JlcGxpZXMYASABKAUSEAoIcmVwbGllcnMYAiADKAkSKwoHbGFzdF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGdW5yZWFkGAQgASgFEhQKDHBhcnRpY2lwYW50cxgFIAMoCSKRAQoGVGhyZWFkEgwKBHJvb3QYASABKAMSDAoEcm9vbRgCIAEoCRINCgV0aXRsZRgDIAEoCRIPCgdyZXBsaWVzGAQgASgFEisKB2xhc3RfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBnVucmVhZBgGIAEoBRIOCgZhdXRob3IYByABKAkiSgoORXh0ZXJuYWxBdXRob3ISDgoGYnJpZGdlGAEgASgJEgoKAmlkGAIgASgJEgwKBG5hbWUYAyABKAkSDgoGYXZhdGFyGAQgASgJIkYKDFN1YnNjcmlwdGlvbhIMCgRyb29tGAEgASgJEigKBG1vZGUYAiABKA4yGi5hZ29yYS52MS5TdWJzY3JpcHRpb25Nb2RlIkEKEUNyZWF0ZVJvb21SZXF1ZXN0EgwKBG5hbWUYASABKAkSDwoHcHVycG9zZRgCIAEoCRINCgVhZ2VudBgDIAEoCSIUChJDcmVhdGVSb29tUmVzcG9uc2UiHwoQTGlzdFJvb21zUmVxdWVzdBILCgNhbGwYASABKAgiMgoRTGlzdFJvb21zUmVzcG9uc2USHQoFcm9vbXMYASADKAsyDi5hZ29yYS52MS5Sb29tIkMKEkFyY2hpdmVSb29tUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRyb29tGAIgASgJEhAKCGFyY2hpdmVkGAMgASgIIhUKE0FyY2hpdmVSb29tUmVzcG9uc2UiagoQU3Vic2NyaWJlUmVxdWVzdBINCgVhZ2VudBgBIAEoCRINCgVyb29tcxgCIAMoCRIOCgZmb2xsb3cYAyABKAgSKAoEbW9kZRgEIAEoDjIaLmFnb3JhLnYxLlN1YnNjcmlwdGlvbk1vZGUiUQoRU3Vic2NyaWJlUmVzcG9uc2USDQoFcm9vbXMYASADKAkSLQoNc3Vic2NyaXB0aW9ucxgCIAMoCzIWLmFnb3JhLnYxLlN1YnNjcmlwdGlvbiIpChhMaXN0U3Vic2NyaXB0aW9uc1JlcXVlc3QSDQoFYWdlbnQYASABKAkiWQoZTGlzdFN1YnNjcmlwdGlvbnNSZXNwb25zZRINCgVyb29tcxgBIAMoCRItCg1zdWJzY3JpcHRpb25zGAIgAygLMhYuYWdvcmEudjEuU3Vic2NyaXB0aW9uInYKC1Bvc3RSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEgwKBHJvb20YAiABKAkSDAoEYm9keRgDIAEoCRIQCghyZXBseV90bxgEIAEoAxIMCgRub3RlGAUgASgIEg4KBnRocmVhZBgGIAEoAxIMCgRhbHNvGAcgASgIIhoKDFBvc3RSZXNwb25zZRIKCgJpZBgBIAEoAyJLCg5IaXN0b3J5UmVxdWVzdBIMCgRyb29tGAEgASgJEgwKBGxhc3QYAiABKAUSDgoGdGhyZWFkGAMgASgDEg0KBWFnZW50GAQgASgJIjYKD0hpc3RvcnlSZXNwb25zZRIjCghtZXNzYWdlcxgBIAMoCzIRLmFnb3JhLnYxLk1lc3NhZ2UiUgoNVW5yZWFkUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRwZWVrGAIgASgIEhUKDW1lbnRpb25zX29ubHkYAyABKAgSDQoFbGltaXQYBCABKAUiRAoOVW5yZWFkUmVzcG9uc2USIwoIbWVzc2FnZXMYASADKAsyES5hZ29yYS52MS5NZXNzYWdlEg0KBXRvdGFsGAIgASgFIiQKE1VucmVhZEJ5Um9vbVJlcXVlc3QSDQoFYWdlbnQYASABKAkiTgoKUm9vbVVucmVhZBIMCgRyb29tGAEgASgJEg4KBnVucmVhZBgCIAEoBRIRCglhZGRyZXNzZWQYAyABKAUSDwoHdGhyZWFkcxgEIAEoBSI7ChRVbnJlYWRCeVJvb21SZXNwb25zZRIjCgVyb29tcxgBIAMoCzIULmFnb3JhLnYxLlJvb21VbnJlYWQiRgoTTWFya1Jvb21SZWFkUmVxdWVzdBINCgVhZ2VudBgBIAEoCRIMCgRyb29tGAIgASgJEhIKCnRocm91Z2hfaWQYAyABKAMiFgoUTWFya1Jvb21SZWFkUmVzcG9uc2UiSQoVU2V0VGhyZWFkVGl0bGVSZXF1ZXN0Eg0KBWFnZW50GAEgASgJEhIKCm1lc3NhZ2VfaWQYAiABKAMSDQoFdGl0bGUYAyABKAkiGAoWU2V0VGhyZWFkVGl0bGVSZXNwb25zZSI3ChJMZWF2ZVRocmVhZFJlcXVlc3QSDQoFYWdlbnQYASABKAkSEgoKbWVzc2FnZV9pZBgCIAEoAyIVChNMZWF2ZVRocmVhZFJlc3BvbnNlIkEKEkxpc3RUaHJlYWRzUmVxdWVzdBIMCgRyb29tGAEgASgJEg0KBWFnZW50GAIgASgJEg4KBnVucmVhZBgDIAEoCCI4ChNMaXN0VGhyZWFkc1Jlc3BvbnNlEiEKB3RocmVhZHMYASADKAsyEC5hZ29yYS52MS5UaHJlYWQquwEKDURlbGl2ZXJ5U3RhdGUSHgoaREVMSVZFUllfU1RBVEVfVU5TUEVDSUZJRUQQABIcChhERUxJVkVSWV9TVEFURV9TQ0hFRFVMRUQQARIaChZERUxJVkVSWV9TVEFURV9TRU5ESU5HEAISFwoTREVMSVZFUllfU1RBVEVfU0VOVBADEhwKGERFTElWRVJZX1NUQVRFX0NBTkNFTExFRBAEEhkKFURFTElWRVJZX1NUQVRFX0ZBSUxFRBAFKowBChBTdWJzY3JpcHRpb25Nb2RlEiEKHVNVQlNDUklQVElPTl9NT0RFX1VOU1BFQ0lGSUVEEAASGQoVU1VCU0NSSVBUSU9OX01PREVfQUxMEAESHgoaU1VCU0NSSVBUSU9OX01PREVfTUVOVElPTlMQAhIaChZTVUJTQ1JJUFRJT05fTU9ERV9XQUtFEAMyywcKC1Jvb21TZXJ2aWNlEkcKCkNyZWF0ZVJvb20SGy5hZ29yYS52MS5DcmVhdGVSb29tUmVxdWVzdBocLmFnb3JhLnYxLkNyZWF0ZVJvb21SZXNwb25zZRJECglMaXN0Um9vbXMSGi5hZ29yYS52MS5MaXN0Um9vbXNSZXF1ZXN0GhsuYWdvcmEudjEuTGlzdFJvb21zUmVzcG9uc2USSgoLQXJjaGl2ZVJvb20SHC5hZ29yYS52MS5BcmNoaXZlUm9vbVJlcXVlc3QaHS5hZ29yYS52MS5BcmNoaXZlUm9vbVJlc3BvbnNlEkQKCVN1YnNjcmliZRIaLmFnb3JhLnYxLlN1YnNjcmliZVJlcXVlc3QaGy5hZ29yYS52MS5TdWJzY3JpYmVSZXNwb25zZRJcChFMaXN0U3Vic2NyaXB0aW9ucxIiLmFnb3JhLnYxLkxpc3RTdWJzY3JpcHRpb25zUmVxdWVzdBojLmFnb3JhLnYxLkxpc3RTdWJzY3JpcHRpb25zUmVzcG9uc2USNQoEUG9zdBIVLmFnb3JhLnYxLlBvc3RSZXF1ZXN0GhYuYWdvcmEudjEuUG9zdFJlc3BvbnNlEj4KB0hpc3RvcnkSGC5hZ29yYS52MS5IaXN0b3J5UmVxdWVzdBoZLmFnb3JhLnYxLkhpc3RvcnlSZXNwb25zZRI7CgZVbnJlYWQSFy5hZ29yYS52MS5VbnJlYWRSZXF1ZXN0GhguYWdvcmEudjEuVW5yZWFkUmVzcG9uc2USTQoMVW5yZWFkQnlSb29tEh0uYWdvcmEudjEuVW5yZWFkQnlSb29tUmVxdWVzdBoeLmFnb3JhLnYxLlVucmVhZEJ5Um9vbVJlc3BvbnNlEk0KDE1hcmtSb29tUmVhZBIdLmFnb3JhLnYxLk1hcmtSb29tUmVhZFJlcXVlc3QaHi5hZ29yYS52MS5NYXJrUm9vbVJlYWRSZXNwb25zZRJTCg5TZXRUaHJlYWRUaXRsZRIfLmFnb3JhLnYxLlNldFRocmVhZFRpdGxlUmVxdWVzdBogLmFnb3JhLnYxLlNldFRocmVhZFRpdGxlUmVzcG9uc2USSgoLTGVhdmVUaHJlYWQSHC5hZ29yYS52MS5MZWF2ZVRocmVhZFJlcXVlc3QaHS5hZ29yYS52MS5MZWF2ZVRocmVhZFJlc3BvbnNlEkoKC0xpc3RUaHJlYWRzEhwuYWdvcmEudjEuTGlzdFRocmVhZHNSZXF1ZXN0Gh0uYWdvcmEudjEuTGlzdFRocmVhZHNSZXNwb25zZUIzWjFnaXRodWIuY29tL3ZzZW0tYXphbWF0L2Fnb3JhL2dlbi9hZ29yYS92MTthZ29yYXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message agora.v1.Room
@@ -165,6 +165,36 @@ export type Message = Message$1<"agora.v1.Message"> & {
    * @generated from field: google.protobuf.Timestamp due_at = 13;
    */
   dueAt?: Timestamp | undefined;
+
+  /**
+   * The root of the thread the message is a reply in; 0 for a message of the room.
+   *
+   * @generated from field: int64 thread = 14;
+   */
+  thread: bigint;
+
+  /**
+   * A reply in a thread that is also a message of the room.
+   *
+   * @generated from field: bool also = 15;
+   */
+  also: boolean;
+
+  /**
+   * The title of the message's thread: the one it is a reply in, or its own as a root; empty
+   * when it has none.
+   *
+   * @generated from field: string thread_title = 16;
+   */
+  threadTitle: string;
+
+  /**
+   * In histories, for a message of the room with replies in its thread, and on the root of a
+   * thread read; unset otherwise.
+   *
+   * @generated from field: agora.v1.ThreadSummary thread_summary = 17;
+   */
+  threadSummary?: ThreadSummary | undefined;
 };
 
 /**
@@ -173,6 +203,113 @@ export type Message = Message$1<"agora.v1.Message"> & {
  */
 export const MessageSchema: GenMessage<Message> = /*@__PURE__*/
   messageDesc(file_agora_v1_rooms, 1);
+
+/**
+ * What a room's history shows of a thread at its root.
+ *
+ * @generated from message agora.v1.ThreadSummary
+ */
+export type ThreadSummary = Message$1<"agora.v1.ThreadSummary"> & {
+  /**
+   * @generated from field: int32 replies = 1;
+   */
+  replies: number;
+
+  /**
+   * Who wrote the replies, in the order of their first reply: agents by name, people outside as
+   * name@bridge.
+   *
+   * @generated from field: repeated string repliers = 2;
+   */
+  repliers: string[];
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_at = 3;
+   */
+  lastAt?: Timestamp | undefined;
+
+  /**
+   * Replies unread for the agent the history was read for (HistoryRequest.agent).
+   *
+   * @generated from field: int32 unread = 4;
+   */
+  unread: number;
+
+  /**
+   * Set when a thread is read (HistoryRequest.thread): who a new reply addresses besides its
+   * author (the root's author, the authors of its replies and the agents mentioned in any of
+   * them, without those that left the thread), in name order.
+   *
+   * @generated from field: repeated string participants = 5;
+   */
+  participants: string[];
+};
+
+/**
+ * Describes the message agora.v1.ThreadSummary.
+ * Use `create(ThreadSummarySchema)` to create a new message.
+ */
+export const ThreadSummarySchema: GenMessage<ThreadSummary> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 2);
+
+/**
+ * A thread of a room, as ListThreads lists it.
+ *
+ * @generated from message agora.v1.Thread
+ */
+export type Thread = Message$1<"agora.v1.Thread"> & {
+  /**
+   * The root message.
+   *
+   * @generated from field: int64 root = 1;
+   */
+  root: bigint;
+
+  /**
+   * @generated from field: string room = 2;
+   */
+  room: string;
+
+  /**
+   * Empty for a thread without a title (listed with ListThreadsRequest.unread).
+   *
+   * @generated from field: string title = 3;
+   */
+  title: string;
+
+  /**
+   * @generated from field: int32 replies = 4;
+   */
+  replies: number;
+
+  /**
+   * The last reply, or the root or its title when newer.
+   *
+   * @generated from field: google.protobuf.Timestamp last_at = 5;
+   */
+  lastAt?: Timestamp | undefined;
+
+  /**
+   * Replies unread for the agent the threads were listed for (ListThreadsRequest.agent).
+   *
+   * @generated from field: int32 unread = 6;
+   */
+  unread: number;
+
+  /**
+   * Who wrote the root: an agent by name, someone outside as name@bridge.
+   *
+   * @generated from field: string author = 7;
+   */
+  author: string;
+};
+
+/**
+ * Describes the message agora.v1.Thread.
+ * Use `create(ThreadSchema)` to create a new message.
+ */
+export const ThreadSchema: GenMessage<Thread> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 3);
 
 /**
  * Someone outside Agora who wrote a message through a bridge.
@@ -215,7 +352,7 @@ export type ExternalAuthor = Message$1<"agora.v1.ExternalAuthor"> & {
  * Use `create(ExternalAuthorSchema)` to create a new message.
  */
 export const ExternalAuthorSchema: GenMessage<ExternalAuthor> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 2);
+  messageDesc(file_agora_v1_rooms, 4);
 
 /**
  * A room an agent follows, and how.
@@ -239,7 +376,7 @@ export type Subscription = Message$1<"agora.v1.Subscription"> & {
  * Use `create(SubscriptionSchema)` to create a new message.
  */
 export const SubscriptionSchema: GenMessage<Subscription> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 3);
+  messageDesc(file_agora_v1_rooms, 5);
 
 /**
  * @generated from message agora.v1.CreateRoomRequest
@@ -268,7 +405,7 @@ export type CreateRoomRequest = Message$1<"agora.v1.CreateRoomRequest"> & {
  * Use `create(CreateRoomRequestSchema)` to create a new message.
  */
 export const CreateRoomRequestSchema: GenMessage<CreateRoomRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 4);
+  messageDesc(file_agora_v1_rooms, 6);
 
 /**
  * @generated from message agora.v1.CreateRoomResponse
@@ -281,7 +418,7 @@ export type CreateRoomResponse = Message$1<"agora.v1.CreateRoomResponse"> & {
  * Use `create(CreateRoomResponseSchema)` to create a new message.
  */
 export const CreateRoomResponseSchema: GenMessage<CreateRoomResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 5);
+  messageDesc(file_agora_v1_rooms, 7);
 
 /**
  * @generated from message agora.v1.ListRoomsRequest
@@ -300,7 +437,7 @@ export type ListRoomsRequest = Message$1<"agora.v1.ListRoomsRequest"> & {
  * Use `create(ListRoomsRequestSchema)` to create a new message.
  */
 export const ListRoomsRequestSchema: GenMessage<ListRoomsRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 6);
+  messageDesc(file_agora_v1_rooms, 8);
 
 /**
  * @generated from message agora.v1.ListRoomsResponse
@@ -317,7 +454,7 @@ export type ListRoomsResponse = Message$1<"agora.v1.ListRoomsResponse"> & {
  * Use `create(ListRoomsResponseSchema)` to create a new message.
  */
 export const ListRoomsResponseSchema: GenMessage<ListRoomsResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 7);
+  messageDesc(file_agora_v1_rooms, 9);
 
 /**
  * @generated from message agora.v1.ArchiveRoomRequest
@@ -348,7 +485,7 @@ export type ArchiveRoomRequest = Message$1<"agora.v1.ArchiveRoomRequest"> & {
  * Use `create(ArchiveRoomRequestSchema)` to create a new message.
  */
 export const ArchiveRoomRequestSchema: GenMessage<ArchiveRoomRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 8);
+  messageDesc(file_agora_v1_rooms, 10);
 
 /**
  * @generated from message agora.v1.ArchiveRoomResponse
@@ -361,7 +498,7 @@ export type ArchiveRoomResponse = Message$1<"agora.v1.ArchiveRoomResponse"> & {
  * Use `create(ArchiveRoomResponseSchema)` to create a new message.
  */
 export const ArchiveRoomResponseSchema: GenMessage<ArchiveRoomResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 9);
+  messageDesc(file_agora_v1_rooms, 11);
 
 /**
  * @generated from message agora.v1.SubscribeRequest
@@ -399,7 +536,7 @@ export type SubscribeRequest = Message$1<"agora.v1.SubscribeRequest"> & {
  * Use `create(SubscribeRequestSchema)` to create a new message.
  */
 export const SubscribeRequestSchema: GenMessage<SubscribeRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 10);
+  messageDesc(file_agora_v1_rooms, 12);
 
 /**
  * @generated from message agora.v1.SubscribeResponse
@@ -425,7 +562,7 @@ export type SubscribeResponse = Message$1<"agora.v1.SubscribeResponse"> & {
  * Use `create(SubscribeResponseSchema)` to create a new message.
  */
 export const SubscribeResponseSchema: GenMessage<SubscribeResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 11);
+  messageDesc(file_agora_v1_rooms, 13);
 
 /**
  * @generated from message agora.v1.ListSubscriptionsRequest
@@ -442,7 +579,7 @@ export type ListSubscriptionsRequest = Message$1<"agora.v1.ListSubscriptionsRequ
  * Use `create(ListSubscriptionsRequestSchema)` to create a new message.
  */
 export const ListSubscriptionsRequestSchema: GenMessage<ListSubscriptionsRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 12);
+  messageDesc(file_agora_v1_rooms, 14);
 
 /**
  * @generated from message agora.v1.ListSubscriptionsResponse
@@ -468,7 +605,7 @@ export type ListSubscriptionsResponse = Message$1<"agora.v1.ListSubscriptionsRes
  * Use `create(ListSubscriptionsResponseSchema)` to create a new message.
  */
 export const ListSubscriptionsResponseSchema: GenMessage<ListSubscriptionsResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 13);
+  messageDesc(file_agora_v1_rooms, 15);
 
 /**
  * @generated from message agora.v1.PostRequest
@@ -503,6 +640,21 @@ export type PostRequest = Message$1<"agora.v1.PostRequest"> & {
    * @generated from field: bool note = 5;
    */
   note: boolean;
+
+  /**
+   * Post into the thread of this message (its root, or any reply in it); 0 posts to the room.
+   * Its room must be room.
+   *
+   * @generated from field: int64 thread = 6;
+   */
+  thread: bigint;
+
+  /**
+   * With thread: the reply is also a message of the room.
+   *
+   * @generated from field: bool also = 7;
+   */
+  also: boolean;
 };
 
 /**
@@ -510,7 +662,7 @@ export type PostRequest = Message$1<"agora.v1.PostRequest"> & {
  * Use `create(PostRequestSchema)` to create a new message.
  */
 export const PostRequestSchema: GenMessage<PostRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 14);
+  messageDesc(file_agora_v1_rooms, 16);
 
 /**
  * @generated from message agora.v1.PostResponse
@@ -527,7 +679,7 @@ export type PostResponse = Message$1<"agora.v1.PostResponse"> & {
  * Use `create(PostResponseSchema)` to create a new message.
  */
 export const PostResponseSchema: GenMessage<PostResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 15);
+  messageDesc(file_agora_v1_rooms, 17);
 
 /**
  * @generated from message agora.v1.HistoryRequest
@@ -544,6 +696,21 @@ export type HistoryRequest = Message$1<"agora.v1.HistoryRequest"> & {
    * @generated from field: int32 last = 2;
    */
   last: number;
+
+  /**
+   * Read the thread of this message (its root, or any reply in it) instead: the root, then its
+   * last replies.
+   *
+   * @generated from field: int64 thread = 3;
+   */
+  thread: bigint;
+
+  /**
+   * The agent reading, for the unread counts of thread summaries; none when empty.
+   *
+   * @generated from field: string agent = 4;
+   */
+  agent: string;
 };
 
 /**
@@ -551,7 +718,7 @@ export type HistoryRequest = Message$1<"agora.v1.HistoryRequest"> & {
  * Use `create(HistoryRequestSchema)` to create a new message.
  */
 export const HistoryRequestSchema: GenMessage<HistoryRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 16);
+  messageDesc(file_agora_v1_rooms, 18);
 
 /**
  * @generated from message agora.v1.HistoryResponse
@@ -568,7 +735,7 @@ export type HistoryResponse = Message$1<"agora.v1.HistoryResponse"> & {
  * Use `create(HistoryResponseSchema)` to create a new message.
  */
 export const HistoryResponseSchema: GenMessage<HistoryResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 17);
+  messageDesc(file_agora_v1_rooms, 19);
 
 /**
  * @generated from message agora.v1.UnreadRequest
@@ -602,7 +769,7 @@ export type UnreadRequest = Message$1<"agora.v1.UnreadRequest"> & {
  * Use `create(UnreadRequestSchema)` to create a new message.
  */
 export const UnreadRequestSchema: GenMessage<UnreadRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 18);
+  messageDesc(file_agora_v1_rooms, 20);
 
 /**
  * @generated from message agora.v1.UnreadResponse
@@ -626,7 +793,7 @@ export type UnreadResponse = Message$1<"agora.v1.UnreadResponse"> & {
  * Use `create(UnreadResponseSchema)` to create a new message.
  */
 export const UnreadResponseSchema: GenMessage<UnreadResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 19);
+  messageDesc(file_agora_v1_rooms, 21);
 
 /**
  * @generated from message agora.v1.UnreadByRoomRequest
@@ -643,7 +810,7 @@ export type UnreadByRoomRequest = Message$1<"agora.v1.UnreadByRoomRequest"> & {
  * Use `create(UnreadByRoomRequestSchema)` to create a new message.
  */
 export const UnreadByRoomRequestSchema: GenMessage<UnreadByRoomRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 20);
+  messageDesc(file_agora_v1_rooms, 22);
 
 /**
  * @generated from message agora.v1.RoomUnread
@@ -667,6 +834,13 @@ export type RoomUnread = Message$1<"agora.v1.RoomUnread"> & {
    * @generated from field: int32 addressed = 3;
    */
   addressed: number;
+
+  /**
+   * Unread replies in the room's threads that are not also in the room; unread leaves them out.
+   *
+   * @generated from field: int32 threads = 4;
+   */
+  threads: number;
 };
 
 /**
@@ -674,14 +848,14 @@ export type RoomUnread = Message$1<"agora.v1.RoomUnread"> & {
  * Use `create(RoomUnreadSchema)` to create a new message.
  */
 export const RoomUnreadSchema: GenMessage<RoomUnread> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 21);
+  messageDesc(file_agora_v1_rooms, 23);
 
 /**
  * @generated from message agora.v1.UnreadByRoomResponse
  */
 export type UnreadByRoomResponse = Message$1<"agora.v1.UnreadByRoomResponse"> & {
   /**
-   * Rooms with at least one unread message, in name order.
+   * Rooms with at least one unread message or thread reply, in name order.
    *
    * @generated from field: repeated agora.v1.RoomUnread rooms = 1;
    */
@@ -693,7 +867,7 @@ export type UnreadByRoomResponse = Message$1<"agora.v1.UnreadByRoomResponse"> & 
  * Use `create(UnreadByRoomResponseSchema)` to create a new message.
  */
 export const UnreadByRoomResponseSchema: GenMessage<UnreadByRoomResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 22);
+  messageDesc(file_agora_v1_rooms, 24);
 
 /**
  * @generated from message agora.v1.MarkRoomReadRequest
@@ -722,7 +896,7 @@ export type MarkRoomReadRequest = Message$1<"agora.v1.MarkRoomReadRequest"> & {
  * Use `create(MarkRoomReadRequestSchema)` to create a new message.
  */
 export const MarkRoomReadRequestSchema: GenMessage<MarkRoomReadRequest> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 23);
+  messageDesc(file_agora_v1_rooms, 25);
 
 /**
  * @generated from message agora.v1.MarkRoomReadResponse
@@ -735,7 +909,140 @@ export type MarkRoomReadResponse = Message$1<"agora.v1.MarkRoomReadResponse"> & 
  * Use `create(MarkRoomReadResponseSchema)` to create a new message.
  */
 export const MarkRoomReadResponseSchema: GenMessage<MarkRoomReadResponse> = /*@__PURE__*/
-  messageDesc(file_agora_v1_rooms, 24);
+  messageDesc(file_agora_v1_rooms, 26);
+
+/**
+ * @generated from message agora.v1.SetThreadTitleRequest
+ */
+export type SetThreadTitleRequest = Message$1<"agora.v1.SetThreadTitleRequest"> & {
+  /**
+   * The acting agent.
+   *
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * A message of the thread: its root, or any reply in it.
+   *
+   * @generated from field: int64 message_id = 2;
+   */
+  messageId: bigint;
+
+  /**
+   * 1 to 100 characters, on one line.
+   *
+   * @generated from field: string title = 3;
+   */
+  title: string;
+};
+
+/**
+ * Describes the message agora.v1.SetThreadTitleRequest.
+ * Use `create(SetThreadTitleRequestSchema)` to create a new message.
+ */
+export const SetThreadTitleRequestSchema: GenMessage<SetThreadTitleRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 27);
+
+/**
+ * @generated from message agora.v1.SetThreadTitleResponse
+ */
+export type SetThreadTitleResponse = Message$1<"agora.v1.SetThreadTitleResponse"> & {
+};
+
+/**
+ * Describes the message agora.v1.SetThreadTitleResponse.
+ * Use `create(SetThreadTitleResponseSchema)` to create a new message.
+ */
+export const SetThreadTitleResponseSchema: GenMessage<SetThreadTitleResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 28);
+
+/**
+ * @generated from message agora.v1.LeaveThreadRequest
+ */
+export type LeaveThreadRequest = Message$1<"agora.v1.LeaveThreadRequest"> & {
+  /**
+   * @generated from field: string agent = 1;
+   */
+  agent: string;
+
+  /**
+   * A message of the thread: its root, or any reply in it.
+   *
+   * @generated from field: int64 message_id = 2;
+   */
+  messageId: bigint;
+};
+
+/**
+ * Describes the message agora.v1.LeaveThreadRequest.
+ * Use `create(LeaveThreadRequestSchema)` to create a new message.
+ */
+export const LeaveThreadRequestSchema: GenMessage<LeaveThreadRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 29);
+
+/**
+ * @generated from message agora.v1.LeaveThreadResponse
+ */
+export type LeaveThreadResponse = Message$1<"agora.v1.LeaveThreadResponse"> & {
+};
+
+/**
+ * Describes the message agora.v1.LeaveThreadResponse.
+ * Use `create(LeaveThreadResponseSchema)` to create a new message.
+ */
+export const LeaveThreadResponseSchema: GenMessage<LeaveThreadResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 30);
+
+/**
+ * @generated from message agora.v1.ListThreadsRequest
+ */
+export type ListThreadsRequest = Message$1<"agora.v1.ListThreadsRequest"> & {
+  /**
+   * The room; every room that is not archived when empty.
+   *
+   * @generated from field: string room = 1;
+   */
+  room: string;
+
+  /**
+   * The agent reading, for the unread counts; none when empty.
+   *
+   * @generated from field: string agent = 2;
+   */
+  agent: string;
+
+  /**
+   * Also list the threads without a title in which the agent has unread replies.
+   *
+   * @generated from field: bool unread = 3;
+   */
+  unread: boolean;
+};
+
+/**
+ * Describes the message agora.v1.ListThreadsRequest.
+ * Use `create(ListThreadsRequestSchema)` to create a new message.
+ */
+export const ListThreadsRequestSchema: GenMessage<ListThreadsRequest> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 31);
+
+/**
+ * @generated from message agora.v1.ListThreadsResponse
+ */
+export type ListThreadsResponse = Message$1<"agora.v1.ListThreadsResponse"> & {
+  /**
+   * @generated from field: repeated agora.v1.Thread threads = 1;
+   */
+  threads: Thread[];
+};
+
+/**
+ * Describes the message agora.v1.ListThreadsResponse.
+ * Use `create(ListThreadsResponseSchema)` to create a new message.
+ */
+export const ListThreadsResponseSchema: GenMessage<ListThreadsResponse> = /*@__PURE__*/
+  messageDesc(file_agora_v1_rooms, 32);
 
 /**
  * Where a message of a bridged room stands on its way out.
@@ -946,6 +1253,38 @@ export const RoomService: GenService<{
     methodKind: "unary";
     input: typeof MarkRoomReadRequestSchema;
     output: typeof MarkRoomReadResponseSchema;
+  },
+  /**
+   * SetThreadTitle gives the thread of a message a title, replacing an earlier one.
+   *
+   * @generated from rpc agora.v1.RoomService.SetThreadTitle
+   */
+  setThreadTitle: {
+    methodKind: "unary";
+    input: typeof SetThreadTitleRequestSchema;
+    output: typeof SetThreadTitleResponseSchema;
+  },
+  /**
+   * LeaveThread makes the agent leave a thread: its replies no longer address the agent unless
+   * they mention it, until it posts there again.
+   *
+   * @generated from rpc agora.v1.RoomService.LeaveThread
+   */
+  leaveThread: {
+    methodKind: "unary";
+    input: typeof LeaveThreadRequestSchema;
+    output: typeof LeaveThreadResponseSchema;
+  },
+  /**
+   * ListThreads returns a room's titled threads, or those of every room that is not archived, the
+   * most recently active first.
+   *
+   * @generated from rpc agora.v1.RoomService.ListThreads
+   */
+  listThreads: {
+    methodKind: "unary";
+    input: typeof ListThreadsRequestSchema;
+    output: typeof ListThreadsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_agora_v1_rooms, 0);
