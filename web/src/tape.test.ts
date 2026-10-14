@@ -79,6 +79,16 @@ describe('tape', () => {
     expect(msg(7)).toMatchObject({ toYou: true, own: false });
     expect(msg(8)).toMatchObject({ toYou: false, own: true });
   });
+  it('starts a group where the operator moves between the room and the chat', () => {
+    const moved = [
+      message(1, 'operator', 'hi', 10),
+      message(2, 'operator', 'also', 9, { incoming: true }),
+      message(3, 'operator', 'and more', 8, { incoming: true }),
+      message(4, 'operator', 'back in the room', 7),
+    ];
+    const at = tape(moved, new Map(), reader, NOW).filter((i) => i.kind === 'message');
+    expect(at.map((i) => i.cont)).toEqual([false, false, true, false]);
+  });
   it('heads days and puts the NEW line above the first unread', () => {
     const withNew = tape(ms, new Map(), reader, NOW, 3n);
     expect(withNew[0]).toEqual({ kind: 'day', key: 'day-1', label: 'TODAY' });

@@ -341,6 +341,14 @@ describe('bridged rooms', () => {
           return reply({
             messages: [
               {
+                id: '4',
+                room: 'example-chat',
+                author: 'operator',
+                body: 'on it',
+                deliveryState: 'DELIVERY_STATE_SENT',
+              },
+              { id: '5', room: 'example-chat', author: 'operator', body: 'morning all', incoming: true },
+              {
                 id: '6',
                 room: 'example-chat',
                 body: 'can you look?',
@@ -390,6 +398,15 @@ describe('bridged rooms', () => {
     await waitFor(() => expect(r.container.querySelector('[data-mid="7"]')).not.toBeNull());
     return r;
   }
+
+  it('marks what the operator wrote in the chat', async () => {
+    const { container } = await openChat('BRIDGE_POLICY_DELAY', []);
+    const mark = container.querySelector('[data-mid="5"] .mh .wi');
+    expect(mark?.textContent).toBe('written in example-chat');
+    expect(container.querySelector('[data-mid="5"] .mh .au')?.textContent).toContain('operator');
+    expect(container.querySelector('[data-mid="4"] .mh .au')?.textContent).toContain('operator');
+    expect(container.querySelector('[data-mid="4"] .wi')).toBeNull();
+  });
 
   it('shows the waiting message in the room list and sends it', async () => {
     const calls: [string, unknown][] = [];

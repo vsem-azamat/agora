@@ -208,6 +208,11 @@ export const Tablet = memo(function Tablet({
             </span>
           )}
           <Time m={m} />
+          {m.incoming && !ext && (
+            <span className="wi" title={`The operator wrote this in ${m.room}, outside Agora`}>
+              written in {m.room}
+            </span>
+          )}
           {m.note && (
             <span className="nt" title={`Not sent to ${m.room}`}>
               note · stays in Agora

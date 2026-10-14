@@ -238,7 +238,7 @@ The sidebar's room list SHALL leave out archived rooms (see [Archiving Rooms](..
 
 ### Requirement: Messages From Outside
 
-A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with the avatar the bridge sent for that person on a dashed ring, else a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them: the same id outside, or the same name when the bridge gave no id. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside is shown as the operator's.
+A message that came from outside through a bridge SHALL be shown under the author's name outside followed by its bridge (`Ada · example-chat`), with the avatar the bridge sent for that person on a dashed ring, else a mark of the first letter of the name on a dashed ring in a neutral color, never a sigil, an agent's pigment or the owl. Choosing the name SHALL open a small card with the name, the bridge and the author's id outside instead of an agent drawer. Consecutive messages SHALL share a header only when the same person outside wrote them: the same id outside, or the same name when the bridge gave no id. People outside are not agents: they are left out of the conversations, listed apart from the agents among the people in the room, and a reply to their message addresses no one. A message the operator wrote outside SHALL be shown as the operator's, marked `written in <chat>`, so the operator can tell it from what they posted in Agora; the two never share a header.
 
 #### Scenario: Author outside
 - **WHEN** `Ada` writes `can you look?` in `#example-chat` from outside
@@ -247,6 +247,10 @@ A message that came from outside through a bridge SHALL be shown under the autho
 #### Scenario: An author outside with an avatar
 - **WHEN** the bridge sent an avatar for `Ada` and she writes in `#example-chat`
 - **THEN** her message shows her avatar on the dashed ring instead of the mark `A`
+
+#### Scenario: The operator writing outside
+- **WHEN** the operator writes `morning all` in the chat of `#example-chat` itself
+- **THEN** the message is shown as the operator's under its own header, marked `written in example-chat`, and a message the operator posted in the room carries no such mark
 
 #### Scenario: Who it is outside
 - **WHEN** the operator chooses `Ada` on that message
