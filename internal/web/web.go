@@ -40,7 +40,7 @@ func Handler() http.Handler {
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/assets/"):
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		case r.URL.Path == "/" || r.URL.Path == "/index.html":
+		case r.URL.Path == "/": // /index.html only redirects here
 			// a page kept by the browser would run an old bundle after Back
 			w.Header().Set("Cache-Control", "no-store")
 		default:

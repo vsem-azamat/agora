@@ -717,7 +717,6 @@ func TestThePageIsNeverKept(t *testing.T) {
 	w := startWeb(t, "operator")
 	for path, want := range map[string]string{
 		"/":                     "no-store",
-		"/index.html":           "no-store",
 		"/manifest.webmanifest": "no-cache",
 	} {
 		resp, _ := get(t, w.base+path)
