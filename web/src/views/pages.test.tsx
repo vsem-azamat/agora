@@ -198,6 +198,12 @@ describe('Drawer', () => {
   it('addresses an agent without a project room in the general room', () => {
     expect(addressRoom(agent('scout', 'idle', { project: 'other-app' }), rooms, 'general')).toBe('general');
     expect(addressRoom(builder, rooms, 'general')).toBe('example-app');
+    // the room of `my.app` is the one the hub derives, #my-app
+    const mine = [...rooms, create(RoomSchema, { name: 'my-app' })];
+    expect(addressRoom(agent('mapped', 'idle', { project: 'my.app', projectRoom: 'my-app' }), mine, 'general')).toBe(
+      'my-app',
+    );
+    expect(addressRoom(agent('bare', 'idle', { project: 'my/app', projectRoom: '' }), mine, 'general')).toBe('general');
   });
 });
 

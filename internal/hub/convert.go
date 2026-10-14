@@ -114,7 +114,7 @@ func profilePB(p agents.Profile) *agorav1.Profile {
 	out := &agorav1.Profile{
 		Name: p.Name, Kind: p.Kind, Project: p.Project, Task: p.Task, Status: p.Status, Cwd: p.CWD, Branch: p.Branch,
 		About: p.About, Icon: p.Icon, Pigment: p.Pigment, Avatar: p.Avatar, JoinedAt: timestamppb.New(p.JoinedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
-		Session: profileSessions[p.SessionState], Active: p.Active,
+		Session: profileSessions[p.SessionState], Active: p.Active, ProjectRoom: rooms.ProjectRoom(p.Project),
 	}
 	for _, n := range p.PRs {
 		out.Prs = append(out.Prs, int32(n))

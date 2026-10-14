@@ -61,6 +61,9 @@ message Profile {
   // The SHA-256 of the agent's avatar, which the web listener serves at /avatars/<hash>; empty
   // when it has none.
   string avatar = 21;
+  // The room of the agent's project, as the hub derives it (rooms.ProjectRoom); empty when the
+  // project has no room name. The room itself may not exist.
+  string project_room = 22;
 }
 
 // FormerName is a name an agent gave up, and when.

@@ -484,6 +484,10 @@ Choosing an agent anywhere in the app SHALL open a drawer (a full-screen sheet o
 - **WHEN** the operator chooses "Address in #example-app" in the drawer of `builder`
 - **THEN** `#example-app` opens with `@builder ` in the compose box
 
+#### Scenario: Addressing an agent whose project name is no room name
+- **WHEN** the operator opens the drawer of `mapped`, whose project is `my.app`, and `#my-app` exists
+- **THEN** the drawer offers "Address in #my-app", the room `agora join` follows for that project
+
 ### Requirement: Turns
 
 The app SHALL show resources with one slot as locks, held by whom with how long the lease has left, or free; and every other resource as a queue with its holders and the lease each has left, an agent offered a slot as `offered`, the first waiting agent as `next` and the others by their position.

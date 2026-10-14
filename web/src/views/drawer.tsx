@@ -21,8 +21,8 @@ import { useDialog } from './dialog';
 
 /** The room to address an agent in: its project's room when there is one, else the general room. */
 export function addressRoom(agent: Profile | undefined, rooms: Room[], general: string): string {
-  const project = agent?.project.trim();
-  return project && rooms.some((r) => r.name === project) ? project : general;
+  const room = agent?.projectRoom; // the hub derives it from the project, as join does
+  return room && rooms.some((r) => r.name === room) ? room : general;
 }
 
 export function Drawer(props: {

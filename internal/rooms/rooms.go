@@ -45,21 +45,28 @@ var nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 func ValidName(s string) bool { return nameRE.MatchString(s) }
 
 // ProjectRoom returns the name of the room of a project, or "" when it has none: the project
-// in lowercase with `.`, `_` and spaces mapped to `-`, repeated dashes collapsed, dashes
-// trimmed from both ends, `p-` put in front when it does not start with a letter, and cut to
-// MaxName characters without a dash at its end. A name that is still no room name (another
-// character, or one letter) has no project room.
+// with ASCII letters in lowercase and `.`, `_` and spaces mapped to `-`, repeated dashes
+// collapsed, dashes trimmed from both ends, `p-` put in front when it does not start with a
+// letter, and cut to MaxName characters without a dash at its end. A project with any other
+// character (a slash, a non-ASCII letter, a tab) has no room, as does one that is no room name
+// even so (one letter, or only separators).
 func ProjectRoom(project string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(project)) {
-		switch r {
-		case '.', '_', ' ':
-			r = '-'
+	for i := 0; i < len(project); i++ {
+		c := project[i]
+		switch {
+		case c >= 'A' && c <= 'Z':
+			c += 'a' - 'A'
+		case c == '.' || c == '_' || c == ' ':
+			c = '-'
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '-':
+		default:
+			return ""
 		}
-		if r == '-' && strings.HasSuffix(b.String(), "-") {
+		if c == '-' && strings.HasSuffix(b.String(), "-") {
 			continue
 		}
-		b.WriteRune(r)
+		b.WriteByte(c)
 	}
 	name := strings.Trim(b.String(), "-")
 	if name == "" {

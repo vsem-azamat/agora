@@ -42,6 +42,7 @@ export function agent(name: string, state: string, more: MessageInitShape<typeof
     name,
     session: sessions[state] ?? SessionState.UNSPECIFIED,
     project: 'example-app',
+    projectRoom: String(more.project ?? 'example-app').toLowerCase(), // the hub derives it; the examples need no more
     task: `${name} task`,
     updatedAt: ago(3),
     active: true,
