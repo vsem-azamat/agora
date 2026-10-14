@@ -14,6 +14,7 @@ import {
   subscriptionMode,
 } from './board';
 import { bridgePolicy, type Policy } from './bridges';
+import { type Draft, forgetDrafts, loadDrafts, saveDrafts } from './drafts';
 import type { Profile } from './gen/agora/v1/agents_pb';
 import type { Room } from './gen/agora/v1/rooms_pb';
 import { Icon, type IconName } from './icons';
@@ -89,9 +90,6 @@ function usePaletteKey(toggle: () => void) {
     return () => document.removeEventListener('keydown', onKey);
   }, [toggle]);
 }
-
-/** What the operator was writing in a room; in a bridged room, whether it is a note for the agents. */
-type Draft = { text: string; note: boolean };
 
 function redraft(drafts: Record<string, Draft>, room: string, change: Partial<Draft>): Record<string, Draft> {
   return { ...drafts, [room]: { text: '', note: false, ...drafts[room], ...change } };
@@ -170,6 +168,8 @@ export function App() {
   }, []);
   const signOut = useCallback((wasRejected: boolean) => {
     forgetToken();
+    // a refused token keeps the drafts for the next sign-in; signing out drops them
+    if (!wasRejected) forgetDrafts();
     setRejected(wasRejected);
     setToken(undefined);
   }, []);
@@ -204,8 +204,9 @@ function Signed({ token, onSignOut }: { token: string; onSignOut: (rejected: boo
   const [project, setProject] = useState<string>();
   const [drawer, setDrawer] = useState<string>();
   const [palette, setPalette] = useState(false);
-  // what the operator was writing in each room, and whether it is a note, kept while the app is open
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  // what the operator was writing in each room, and whether it is a note, kept for the tab
+  const [drafts, setDrafts] = useState(loadDrafts);
+  useEffect(() => saveDrafts(drafts), [drafts]);
   // an upgraded hub serves a newer app: load it, once no draft would be lost
   const writing = Object.values(drafts).some((d) => d.text.trim() !== '');
   useEffect(() => {

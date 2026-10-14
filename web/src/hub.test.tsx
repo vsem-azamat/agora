@@ -9,6 +9,7 @@ afterEach(() => {
   forgetLoadedBuild();
   vi.unstubAllGlobals();
   localStorage.clear();
+  sessionStorage.clear();
   history.replaceState(null, '', '/');
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-size');
@@ -190,6 +191,13 @@ describe('an upgraded hub', () => {
     await screen.findByRole('button', { name: 'Updated · Reload' });
     // a new link in the same tab signs in again, with the upgraded hub already running
     location.hash = '#token=other-token';
+    await waitFor(() => expect(localStorage.getItem('agora.token')).toBe('other-token'));
+    location.hash = '#/rooms/general';
+    const box = await screen.findByLabelText('Message #general');
+    await screen.findByRole('button', { name: 'Updated · Reload' });
+    expect(reload).not.toHaveBeenCalled();
+    expect((box as HTMLTextAreaElement).value).toBe('almost done');
+    fireEvent.change(box, { target: { value: '' } });
     await waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
 
@@ -206,6 +214,82 @@ describe('an upgraded hub', () => {
     expect(reload).toHaveBeenCalledOnce();
     fireEvent.change(box, { target: { value: '' } });
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('drafts', () => {
+  const box = () => screen.getByLabelText('Message #general') as HTMLTextAreaElement;
+  async function inGeneral() {
+    const r = await signedIn();
+    location.hash = '#/rooms/general';
+    await screen.findByLabelText('Message #general');
+    return r;
+  }
+
+  it('come back after the page is reloaded', async () => {
+    await inGeneral();
+    fireEvent.change(box(), { target: { value: 'almost done' } });
+    cleanup();
+    await inGeneral();
+    expect(box().value).toBe('almost done');
+  });
+
+  it('are gone once erased', async () => {
+    await inGeneral();
+    fireEvent.change(box(), { target: { value: 'almost done' } });
+    fireEvent.change(box(), { target: { value: '' } });
+    cleanup();
+    await inGeneral();
+    expect(box().value).toBe('');
+  });
+
+  it('are dropped by signing out', async () => {
+    await inGeneral();
+    fireEvent.change(box(), { target: { value: 'almost done' } });
+    openMenu();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    cleanup();
+    await inGeneral();
+    expect(box().value).toBe('');
+  });
+
+  it('are kept when the hub refuses the token', async () => {
+    await inGeneral();
+    fireEvent.change(box(), { target: { value: 'almost done' } });
+    cleanup();
+    const refused = async () =>
+      new Response(JSON.stringify({ code: 'unauthenticated', message: 'a valid web token is required' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    vi.stubGlobal('fetch', vi.fn(refused));
+    render(<App />);
+    fireEvent.change(await screen.findByLabelText('Web token'), { target: { value: 'new-token' } });
+    expect(screen.getByText(/did not accept that token/)).toBeTruthy();
+    vi.stubGlobal('fetch', fakeHub([]));
+    fireEvent.click(screen.getByRole('button', { name: 'Enter' }));
+    await screen.findByLabelText('Message #general');
+    expect(box().value).toBe('almost done');
+  });
+
+  it('last while the page is open where the browser keeps nothing', async () => {
+    const off = () => {
+      throw new DOMException('storage is off', 'SecurityError');
+    };
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(off);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(off);
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(off);
+    try {
+      await inGeneral();
+      fireEvent.change(box(), { target: { value: 'almost done' } });
+      location.hash = '#/rooms/example-app';
+      await screen.findByLabelText('Message #example-app');
+      location.hash = '#/rooms/general';
+      await screen.findByLabelText('Message #general');
+      expect(box().value).toBe('almost done');
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 
@@ -390,6 +474,24 @@ describe('bridged rooms', () => {
         ['RoomService/Post', { room: 'example-chat', body: '@secretary keep it short', note: true }],
       ]),
     );
+  });
+
+  it('brings a note draft back as a note after a reload', async () => {
+    await openChat('BRIDGE_POLICY_DELAY', []);
+    fireEvent.click(screen.getByRole('radio', { name: 'Note for agents' }));
+    fireEvent.change(chatBox(), { target: { value: '@secretary keep it short' } });
+    cleanup();
+    await openChat('BRIDGE_POLICY_DELAY', []);
+    expect(chatBox().value).toBe('@secretary keep it short');
+    expect(chosen('Note for agents')).toBe(true);
+  });
+
+  it('opens on the chat again when reloaded with nothing written', async () => {
+    await openChat('BRIDGE_POLICY_DELAY', []);
+    fireEvent.click(screen.getByRole('radio', { name: 'Note for agents' }));
+    cleanup();
+    await openChat('BRIDGE_POLICY_DELAY', []);
+    expect(chosen('To example-chat')).toBe(true);
   });
 
   it('opens on the chat again when left with nothing written', async () => {

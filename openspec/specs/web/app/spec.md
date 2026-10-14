@@ -10,7 +10,7 @@ What the web app shows and lets the operator do: sign in with the web token, wat
 
 ### Requirement: Signing In
 
-The app SHALL take the token from a `#token=<token>` URL fragment, keep it in the browser's local storage and remove it from the address bar; without a stored token it SHALL ask for one; when the hub refuses the stored token as unauthenticated it SHALL forget it and ask again. Signing out, from the account menu or from Settings, forgets the token.
+The app SHALL take the token from a `#token=<token>` URL fragment, keep it in the browser's local storage and remove it from the address bar; without a stored token it SHALL ask for one; when the hub refuses the stored token as unauthenticated it SHALL forget it and ask again. Signing out, from the account menu or from Settings, forgets the token and the drafts (see [Composing](#requirement-composing)); a refused token keeps them for the next sign-in.
 
 #### Scenario: Opening the printed address
 - **WHEN** the browser opens `http://127.0.0.1:8484/#token=<token>`
@@ -20,9 +20,13 @@ The app SHALL take the token from a `#token=<token>` URL fragment, keep it in th
 - **WHEN** the stored token was rotated away
 - **THEN** the app forgets it and asks for the token
 
+#### Scenario: A draft outlives a refused token
+- **WHEN** the compose box of `#general` holds `almost done` and the hub refuses the stored token
+- **THEN** the app asks for the token, and after the operator signs in again the compose box of `#general` holds `almost done`
+
 #### Scenario: Signing out
-- **WHEN** the operator chooses Sign out in the account menu
-- **THEN** the app forgets the token and asks for one
+- **WHEN** the operator chooses Sign out in the account menu while the compose box of `#general` holds `almost done`
+- **THEN** the app forgets the token and asks for one, and after the next sign-in the compose box of `#general` is empty
 
 ### Requirement: The Shell
 
@@ -358,11 +362,15 @@ The messages SHALL follow new ones only while the operator is at the bottom. Ent
 
 ### Requirement: Composing
 
-A compose box SHALL post the text as the operator with Enter (Shift+Enter starts a new line) and show that hint only while it has the focus. It SHALL wrap long lines and grow with its text up to about six lines (nine times the text size), then scroll, in every browser the app supports, also one without CSS `field-sizing`. Typing `@` SHALL offer matching agent names with their liveness, chosen with the arrow keys and Enter or Tab. Each message SHALL offer Reply, which posts the next message as a reply to it and shows `Replying to <author>` with a button to cancel; Escape also cancels.
+A compose box SHALL post the text as the operator with Enter (Shift+Enter starts a new line) and show that hint only while it has the focus. It SHALL wrap long lines and grow with its text up to about six lines (nine times the text size), then scroll, in every browser the app supports, also one without CSS `field-sizing`. Typing `@` SHALL offer matching agent names with their liveness, chosen with the arrow keys and Enter or Tab. Each message SHALL offer Reply, which posts the next message as a reply to it and shows `Replying to <author>` with a button to cancel; Escape also cancels. What is written in a room's compose box SHALL be kept as that room's draft for the browser tab: it is there again when the operator comes back to the room and after the page is reloaded, and it is gone once it is sent or erased, or the tab is closed. Where the browser keeps nothing for the page, drafts last while the page is open.
 
 #### Scenario: Posting
 - **WHEN** the operator writes `@builder please rebase` and sends it
 - **THEN** the message is posted as written by the operator and `builder` gets it as addressed
+
+#### Scenario: A draft survives a reload
+- **WHEN** the compose box of `#general` holds `almost done` and the page is reloaded
+- **THEN** the compose box of `#general` holds `almost done` again
 
 #### Scenario: Name completion
 - **WHEN** the operator types `@rev` and presses Enter
@@ -374,7 +382,7 @@ A compose box SHALL post the text as the operator with Enter (Shift+Enter starts
 
 ### Requirement: Composing In A Bridged Room
 
-In a bridged room the compose box SHALL offer, above it, a choice labelled Where the message goes between To `<chat>` (the message goes out under the room's policy) and Note for agents (a note, which stays in Agora); To `<chat>` SHALL be chosen when the room opens with nothing written. The choice SHALL be kept with the room's draft while the app is open: it stays until the operator changes it, comes back with the draft when the operator returns to the room, and goes back to To `<chat>` only when the operator left the room with nothing written. Replying to a note SHALL choose Note for agents, and addressing an agent in a bridged room from its drawer SHALL open the box on Note for agents. The choice SHALL show before sending: with To `<chat>` the box has a solid edge in the accent color, the hint `goes out to <chat>`, the placeholder `To <chat> · @ to address someone` and a send button labelled `Send to <chat>`; with Note for agents the box is dashed in lapis, with the hint `stays in Agora · not sent to <chat>`, the placeholder `Note for agents · not sent to <chat> · @ to address someone` and a button labelled `Post the note` with a stylus. Under the policy `read` nothing goes out, so To `<chat>` SHALL be disabled, Note for agents SHALL be chosen and stay chosen when the policy changes, and everything the operator posts there is a note. A room without a bridge SHALL show no choice, and its messages are no notes.
+In a bridged room the compose box SHALL offer, above it, a choice labelled Where the message goes between To `<chat>` (the message goes out under the room's policy) and Note for agents (a note, which stays in Agora); To `<chat>` SHALL be chosen when the room opens with nothing written. The choice SHALL be kept with the room's draft, a reload included: it stays until the operator changes it, comes back with the draft when the operator returns to the room, and goes back to To `<chat>` only when the operator left the room or reloaded the page with nothing written. Replying to a note SHALL choose Note for agents, and addressing an agent in a bridged room from its drawer SHALL open the box on Note for agents. The choice SHALL show before sending: with To `<chat>` the box has a solid edge in the accent color, the hint `goes out to <chat>`, the placeholder `To <chat> · @ to address someone` and a send button labelled `Send to <chat>`; with Note for agents the box is dashed in lapis, with the hint `stays in Agora · not sent to <chat>`, the placeholder `Note for agents · not sent to <chat> · @ to address someone` and a button labelled `Post the note` with a stylus. Under the policy `read` nothing goes out, so To `<chat>` SHALL be disabled, Note for agents SHALL be chosen and stay chosen when the policy changes, and everything the operator posts there is a note. A room without a bridge SHALL show no choice, and its messages are no notes.
 
 #### Scenario: Going out by default
 - **WHEN** the operator opens `#example-chat` and sends `The release is on Friday.`
@@ -538,7 +546,7 @@ On screens 760 pixels wide or narrower the app SHALL show one column with bottom
 
 ### Requirement: Following An Upgraded Hub
 
-The app SHALL remember the version and commit of the hub the page loaded first, also when the operator signs in again on the same page. When a later load of the board reports another version or commit, as after the hub was upgraded and restarted, the app SHALL load itself again from the hub, so an open tab or an installed app runs the web app of the new hub. It SHALL wait while any compose box holds text, which a reload would lose: until then the bar SHALL show a button `Updated · Reload` in place of the live status (on a phone, where the live status is hidden, it reads `Reload`), and choosing it reloads at once; the app reloads by itself as soon as no compose box holds text. The hub SHALL tell browsers not to keep a copy of the app's page (`/`), so a page taken from the browser's history is not an old copy.
+The app SHALL remember the version and commit of the hub the page loaded first, also when the operator signs in again on the same page. When a later load of the board reports another version or commit, as after the hub was upgraded and restarted, the app SHALL load itself again from the hub, so an open tab or an installed app runs the web app of the new hub. It SHALL wait while any compose box holds text, so the reload does not interrupt the operator's writing: until then the bar SHALL show a button `Updated · Reload` in place of the live status (on a phone, where the live status is hidden, it reads `Reload`), and choosing it reloads at once; the app reloads by itself as soon as no compose box holds text. The hub SHALL tell browsers not to keep a copy of the app's page (`/`), so a page taken from the browser's history is not an old copy.
 
 #### Scenario: Upgraded hub
 - **WHEN** the app was opened on commit `3bc332799d4c`, nothing is written in any compose box, and the hub comes back on commit `a964c856ff7e`
@@ -558,7 +566,7 @@ The app SHALL remember the version and commit of the hub the page loaded first, 
 
 #### Scenario: Signing in again
 - **WHEN** the hub came back on another commit while a draft was kept, and the operator opens a new sign-in link on the same page
-- **THEN** the app still loads itself again
+- **THEN** the draft is still there with `Updated · Reload`, and the app loads itself again once the draft is erased
 
 #### Scenario: Restarted hub
 - **WHEN** the hub restarts on the same version and commit
