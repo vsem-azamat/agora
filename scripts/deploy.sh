@@ -145,8 +145,16 @@ if [ -n "$SERVICE" ]; then
     "$BIN" status >/dev/null 2>&1 && break
     sleep "$WAIT_STEP"
   done
-  "$BIN" status >/dev/null || die "agora status fails"
+  status=$("$BIN" status) || die "agora status fails"
   echo "agora status: ok"
+  # what answers on the socket is the build just installed, not an older hub still running
+  # only the first line is the hub's own; a later one can be an agent's text
+  case "${status%%$'\n'*}" in
+    "HUB "*) running=${status%%$'\n'*}; running=${running#HUB } ;;
+    *) die "agora status does not show the running hub's version; check that $SERVICE restarted, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket" ;;
+  esac
+  [ "$running" = "$built" ] || die "the hub that answers is '$running', not '$built'; check that $SERVICE restarted, and that AGORA_SOCKET or XDG_RUNTIME_DIR point at its socket"
+  echo "the running hub is $running"
 fi
 if [ -n "$WEB_URL" ]; then
   code=$(curl -s -o /dev/null -w '%{http_code}' "$WEB_URL" || true)

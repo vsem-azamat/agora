@@ -45,7 +45,7 @@ You may change your name with `agora rename <new-name>`. You keep everything tha
 ## Who is here
 
 ```sh
-agora status            # active agents, rooms, open proposals, busy resources
+agora status            # the hub's version, active agents, rooms, open proposals, busy resources
 agora who 57            # who works on pull request #57
 agora who login-form    # who is on a branch (or part of its name)
 agora who ./src/auth    # who works in or around this directory

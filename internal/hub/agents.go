@@ -8,6 +8,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/version"
 )
 
 type agentService struct{ h *Hub }
@@ -59,7 +60,7 @@ func (s *agentService) ListAgents(ctx context.Context, req *connect.Request[agor
 	if err != nil {
 		return nil, toConnect(err)
 	}
-	out := &agorav1.ListAgentsResponse{}
+	out := &agorav1.ListAgentsResponse{HubVersion: version.Get().Version, HubCommit: version.Get().Commit}
 	for _, p := range list {
 		out.Agents = append(out.Agents, profilePB(p))
 	}
