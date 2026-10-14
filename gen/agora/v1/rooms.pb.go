@@ -281,7 +281,16 @@ type Message struct {
 	// (external_author), or from the operator writing there.
 	Incoming bool `protobuf:"varint,12,opt,name=incoming,proto3" json:"incoming,omitempty"`
 	// When a scheduled message goes out; unset for every other message.
-	DueAt         *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=due_at,json=dueAt,proto3" json:"due_at,omitempty"`
+	DueAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=due_at,json=dueAt,proto3" json:"due_at,omitempty"`
+	// The root of the thread the message is a reply in; 0 for a message of the room.
+	Thread int64 `protobuf:"varint,14,opt,name=thread,proto3" json:"thread,omitempty"`
+	// A reply in a thread that is also a message of the room.
+	Also bool `protobuf:"varint,15,opt,name=also,proto3" json:"also,omitempty"`
+	// The title of the message's thread: the one it is a reply in, or its own as a root; empty
+	// when it has none.
+	ThreadTitle string `protobuf:"bytes,16,opt,name=thread_title,json=threadTitle,proto3" json:"thread_title,omitempty"`
+	// In histories, for a message of the room with replies in its thread; unset otherwise.
+	ThreadSummary *ThreadSummary `protobuf:"bytes,17,opt,name=thread_summary,json=threadSummary,proto3" json:"thread_summary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -407,6 +416,194 @@ func (x *Message) GetDueAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *Message) GetThread() int64 {
+	if x != nil {
+		return x.Thread
+	}
+	return 0
+}
+
+func (x *Message) GetAlso() bool {
+	if x != nil {
+		return x.Also
+	}
+	return false
+}
+
+func (x *Message) GetThreadTitle() string {
+	if x != nil {
+		return x.ThreadTitle
+	}
+	return ""
+}
+
+func (x *Message) GetThreadSummary() *ThreadSummary {
+	if x != nil {
+		return x.ThreadSummary
+	}
+	return nil
+}
+
+// What a room's history shows of a thread at its root.
+type ThreadSummary struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Replies int32                  `protobuf:"varint,1,opt,name=replies,proto3" json:"replies,omitempty"`
+	// Who wrote the replies, in the order of their first reply: agents by name, people outside as
+	// name@bridge.
+	Repliers []string               `protobuf:"bytes,2,rep,name=repliers,proto3" json:"repliers,omitempty"`
+	LastAt   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
+	// Replies unread for the agent the history was read for (HistoryRequest.agent).
+	Unread        int32 `protobuf:"varint,4,opt,name=unread,proto3" json:"unread,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ThreadSummary) Reset() {
+	*x = ThreadSummary{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ThreadSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ThreadSummary) ProtoMessage() {}
+
+func (x *ThreadSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ThreadSummary.ProtoReflect.Descriptor instead.
+func (*ThreadSummary) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ThreadSummary) GetReplies() int32 {
+	if x != nil {
+		return x.Replies
+	}
+	return 0
+}
+
+func (x *ThreadSummary) GetRepliers() []string {
+	if x != nil {
+		return x.Repliers
+	}
+	return nil
+}
+
+func (x *ThreadSummary) GetLastAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastAt
+	}
+	return nil
+}
+
+func (x *ThreadSummary) GetUnread() int32 {
+	if x != nil {
+		return x.Unread
+	}
+	return 0
+}
+
+// A titled thread of a room.
+type Thread struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The root message.
+	Root    int64  `protobuf:"varint,1,opt,name=root,proto3" json:"root,omitempty"`
+	Room    string `protobuf:"bytes,2,opt,name=room,proto3" json:"room,omitempty"`
+	Title   string `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Replies int32  `protobuf:"varint,4,opt,name=replies,proto3" json:"replies,omitempty"`
+	// The last reply, or the root or its title when newer.
+	LastAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
+	// Replies unread for the agent the threads were listed for (ListThreadsRequest.agent).
+	Unread        int32 `protobuf:"varint,6,opt,name=unread,proto3" json:"unread,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Thread) Reset() {
+	*x = Thread{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Thread) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Thread) ProtoMessage() {}
+
+func (x *Thread) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Thread.ProtoReflect.Descriptor instead.
+func (*Thread) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Thread) GetRoot() int64 {
+	if x != nil {
+		return x.Root
+	}
+	return 0
+}
+
+func (x *Thread) GetRoom() string {
+	if x != nil {
+		return x.Room
+	}
+	return ""
+}
+
+func (x *Thread) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Thread) GetReplies() int32 {
+	if x != nil {
+		return x.Replies
+	}
+	return 0
+}
+
+func (x *Thread) GetLastAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastAt
+	}
+	return nil
+}
+
+func (x *Thread) GetUnread() int32 {
+	if x != nil {
+		return x.Unread
+	}
+	return 0
+}
+
 // Someone outside Agora who wrote a message through a bridge.
 type ExternalAuthor struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -425,7 +622,7 @@ type ExternalAuthor struct {
 
 func (x *ExternalAuthor) Reset() {
 	*x = ExternalAuthor{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[2]
+	mi := &file_agora_v1_rooms_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -437,7 +634,7 @@ func (x *ExternalAuthor) String() string {
 func (*ExternalAuthor) ProtoMessage() {}
 
 func (x *ExternalAuthor) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[2]
+	mi := &file_agora_v1_rooms_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +647,7 @@ func (x *ExternalAuthor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExternalAuthor.ProtoReflect.Descriptor instead.
 func (*ExternalAuthor) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{2}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ExternalAuthor) GetBridge() string {
@@ -492,7 +689,7 @@ type Subscription struct {
 
 func (x *Subscription) Reset() {
 	*x = Subscription{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[3]
+	mi := &file_agora_v1_rooms_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -504,7 +701,7 @@ func (x *Subscription) String() string {
 func (*Subscription) ProtoMessage() {}
 
 func (x *Subscription) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[3]
+	mi := &file_agora_v1_rooms_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -517,7 +714,7 @@ func (x *Subscription) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Subscription.ProtoReflect.Descriptor instead.
 func (*Subscription) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{3}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Subscription) GetRoom() string {
@@ -546,7 +743,7 @@ type CreateRoomRequest struct {
 
 func (x *CreateRoomRequest) Reset() {
 	*x = CreateRoomRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[4]
+	mi := &file_agora_v1_rooms_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -558,7 +755,7 @@ func (x *CreateRoomRequest) String() string {
 func (*CreateRoomRequest) ProtoMessage() {}
 
 func (x *CreateRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[4]
+	mi := &file_agora_v1_rooms_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +768,7 @@ func (x *CreateRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoomRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoomRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{4}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CreateRoomRequest) GetName() string {
@@ -603,7 +800,7 @@ type CreateRoomResponse struct {
 
 func (x *CreateRoomResponse) Reset() {
 	*x = CreateRoomResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[5]
+	mi := &file_agora_v1_rooms_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -615,7 +812,7 @@ func (x *CreateRoomResponse) String() string {
 func (*CreateRoomResponse) ProtoMessage() {}
 
 func (x *CreateRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[5]
+	mi := &file_agora_v1_rooms_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -628,7 +825,7 @@ func (x *CreateRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoomResponse.ProtoReflect.Descriptor instead.
 func (*CreateRoomResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{5}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{7}
 }
 
 type ListRoomsRequest struct {
@@ -641,7 +838,7 @@ type ListRoomsRequest struct {
 
 func (x *ListRoomsRequest) Reset() {
 	*x = ListRoomsRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[6]
+	mi := &file_agora_v1_rooms_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -653,7 +850,7 @@ func (x *ListRoomsRequest) String() string {
 func (*ListRoomsRequest) ProtoMessage() {}
 
 func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[6]
+	mi := &file_agora_v1_rooms_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -666,7 +863,7 @@ func (x *ListRoomsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoomsRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{6}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListRoomsRequest) GetAll() bool {
@@ -685,7 +882,7 @@ type ListRoomsResponse struct {
 
 func (x *ListRoomsResponse) Reset() {
 	*x = ListRoomsResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[7]
+	mi := &file_agora_v1_rooms_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -697,7 +894,7 @@ func (x *ListRoomsResponse) String() string {
 func (*ListRoomsResponse) ProtoMessage() {}
 
 func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[7]
+	mi := &file_agora_v1_rooms_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -710,7 +907,7 @@ func (x *ListRoomsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoomsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoomsResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{7}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListRoomsResponse) GetRooms() []*Room {
@@ -733,7 +930,7 @@ type ArchiveRoomRequest struct {
 
 func (x *ArchiveRoomRequest) Reset() {
 	*x = ArchiveRoomRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[8]
+	mi := &file_agora_v1_rooms_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -745,7 +942,7 @@ func (x *ArchiveRoomRequest) String() string {
 func (*ArchiveRoomRequest) ProtoMessage() {}
 
 func (x *ArchiveRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[8]
+	mi := &file_agora_v1_rooms_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -758,7 +955,7 @@ func (x *ArchiveRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveRoomRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveRoomRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{8}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ArchiveRoomRequest) GetAgent() string {
@@ -790,7 +987,7 @@ type ArchiveRoomResponse struct {
 
 func (x *ArchiveRoomResponse) Reset() {
 	*x = ArchiveRoomResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[9]
+	mi := &file_agora_v1_rooms_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -802,7 +999,7 @@ func (x *ArchiveRoomResponse) String() string {
 func (*ArchiveRoomResponse) ProtoMessage() {}
 
 func (x *ArchiveRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[9]
+	mi := &file_agora_v1_rooms_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -815,7 +1012,7 @@ func (x *ArchiveRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveRoomResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveRoomResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{9}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{11}
 }
 
 type SubscribeRequest struct {
@@ -833,7 +1030,7 @@ type SubscribeRequest struct {
 
 func (x *SubscribeRequest) Reset() {
 	*x = SubscribeRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[10]
+	mi := &file_agora_v1_rooms_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +1042,7 @@ func (x *SubscribeRequest) String() string {
 func (*SubscribeRequest) ProtoMessage() {}
 
 func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[10]
+	mi := &file_agora_v1_rooms_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +1055,7 @@ func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{10}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SubscribeRequest) GetAgent() string {
@@ -901,7 +1098,7 @@ type SubscribeResponse struct {
 
 func (x *SubscribeResponse) Reset() {
 	*x = SubscribeResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[11]
+	mi := &file_agora_v1_rooms_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -913,7 +1110,7 @@ func (x *SubscribeResponse) String() string {
 func (*SubscribeResponse) ProtoMessage() {}
 
 func (x *SubscribeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[11]
+	mi := &file_agora_v1_rooms_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -926,7 +1123,7 @@ func (x *SubscribeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeResponse.ProtoReflect.Descriptor instead.
 func (*SubscribeResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{11}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SubscribeResponse) GetRooms() []string {
@@ -952,7 +1149,7 @@ type ListSubscriptionsRequest struct {
 
 func (x *ListSubscriptionsRequest) Reset() {
 	*x = ListSubscriptionsRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[12]
+	mi := &file_agora_v1_rooms_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -964,7 +1161,7 @@ func (x *ListSubscriptionsRequest) String() string {
 func (*ListSubscriptionsRequest) ProtoMessage() {}
 
 func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[12]
+	mi := &file_agora_v1_rooms_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -977,7 +1174,7 @@ func (x *ListSubscriptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{12}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListSubscriptionsRequest) GetAgent() string {
@@ -999,7 +1196,7 @@ type ListSubscriptionsResponse struct {
 
 func (x *ListSubscriptionsResponse) Reset() {
 	*x = ListSubscriptionsResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[13]
+	mi := &file_agora_v1_rooms_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1011,7 +1208,7 @@ func (x *ListSubscriptionsResponse) String() string {
 func (*ListSubscriptionsResponse) ProtoMessage() {}
 
 func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[13]
+	mi := &file_agora_v1_rooms_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1024,7 +1221,7 @@ func (x *ListSubscriptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSubscriptionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSubscriptionsResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{13}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListSubscriptionsResponse) GetRooms() []string {
@@ -1050,14 +1247,19 @@ type PostRequest struct {
 	ReplyTo int64  `protobuf:"varint,4,opt,name=reply_to,json=replyTo,proto3" json:"reply_to,omitempty"`
 	// Post a note: in a bridged room the message stays in Agora under every outbound policy and is
 	// never handed to the bridge; in a room without a bridge it is an ordinary message.
-	Note          bool `protobuf:"varint,5,opt,name=note,proto3" json:"note,omitempty"`
+	Note bool `protobuf:"varint,5,opt,name=note,proto3" json:"note,omitempty"`
+	// Post into the thread of this message (its root, or any reply in it); 0 posts to the room.
+	// Its room must be room.
+	Thread int64 `protobuf:"varint,6,opt,name=thread,proto3" json:"thread,omitempty"`
+	// With thread: the reply is also a message of the room.
+	Also          bool `protobuf:"varint,7,opt,name=also,proto3" json:"also,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PostRequest) Reset() {
 	*x = PostRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[14]
+	mi := &file_agora_v1_rooms_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1069,7 +1271,7 @@ func (x *PostRequest) String() string {
 func (*PostRequest) ProtoMessage() {}
 
 func (x *PostRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[14]
+	mi := &file_agora_v1_rooms_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1082,7 +1284,7 @@ func (x *PostRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostRequest.ProtoReflect.Descriptor instead.
 func (*PostRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{14}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PostRequest) GetAgent() string {
@@ -1120,6 +1322,20 @@ func (x *PostRequest) GetNote() bool {
 	return false
 }
 
+func (x *PostRequest) GetThread() int64 {
+	if x != nil {
+		return x.Thread
+	}
+	return 0
+}
+
+func (x *PostRequest) GetAlso() bool {
+	if x != nil {
+		return x.Also
+	}
+	return false
+}
+
 type PostResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1129,7 +1345,7 @@ type PostResponse struct {
 
 func (x *PostResponse) Reset() {
 	*x = PostResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[15]
+	mi := &file_agora_v1_rooms_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1141,7 +1357,7 @@ func (x *PostResponse) String() string {
 func (*PostResponse) ProtoMessage() {}
 
 func (x *PostResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[15]
+	mi := &file_agora_v1_rooms_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1154,7 +1370,7 @@ func (x *PostResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostResponse.ProtoReflect.Descriptor instead.
 func (*PostResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{15}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PostResponse) GetId() int64 {
@@ -1168,14 +1384,19 @@ type HistoryRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Room  string                 `protobuf:"bytes,1,opt,name=room,proto3" json:"room,omitempty"`
 	// How many messages; 20 when 0.
-	Last          int32 `protobuf:"varint,2,opt,name=last,proto3" json:"last,omitempty"`
+	Last int32 `protobuf:"varint,2,opt,name=last,proto3" json:"last,omitempty"`
+	// Read the thread of this message (its root, or any reply in it) instead: the root, then its
+	// last replies.
+	Thread int64 `protobuf:"varint,3,opt,name=thread,proto3" json:"thread,omitempty"`
+	// The agent reading, for the unread counts of thread summaries; none when empty.
+	Agent         string `protobuf:"bytes,4,opt,name=agent,proto3" json:"agent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HistoryRequest) Reset() {
 	*x = HistoryRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[16]
+	mi := &file_agora_v1_rooms_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1187,7 +1408,7 @@ func (x *HistoryRequest) String() string {
 func (*HistoryRequest) ProtoMessage() {}
 
 func (x *HistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[16]
+	mi := &file_agora_v1_rooms_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1200,7 +1421,7 @@ func (x *HistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HistoryRequest.ProtoReflect.Descriptor instead.
 func (*HistoryRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{16}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *HistoryRequest) GetRoom() string {
@@ -1217,6 +1438,20 @@ func (x *HistoryRequest) GetLast() int32 {
 	return 0
 }
 
+func (x *HistoryRequest) GetThread() int64 {
+	if x != nil {
+		return x.Thread
+	}
+	return 0
+}
+
+func (x *HistoryRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
 type HistoryResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Messages      []*Message             `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
@@ -1226,7 +1461,7 @@ type HistoryResponse struct {
 
 func (x *HistoryResponse) Reset() {
 	*x = HistoryResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[17]
+	mi := &file_agora_v1_rooms_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1238,7 +1473,7 @@ func (x *HistoryResponse) String() string {
 func (*HistoryResponse) ProtoMessage() {}
 
 func (x *HistoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[17]
+	mi := &file_agora_v1_rooms_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1251,7 +1486,7 @@ func (x *HistoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HistoryResponse.ProtoReflect.Descriptor instead.
 func (*HistoryResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{17}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *HistoryResponse) GetMessages() []*Message {
@@ -1274,7 +1509,7 @@ type UnreadRequest struct {
 
 func (x *UnreadRequest) Reset() {
 	*x = UnreadRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[18]
+	mi := &file_agora_v1_rooms_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1286,7 +1521,7 @@ func (x *UnreadRequest) String() string {
 func (*UnreadRequest) ProtoMessage() {}
 
 func (x *UnreadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[18]
+	mi := &file_agora_v1_rooms_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1299,7 +1534,7 @@ func (x *UnreadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnreadRequest.ProtoReflect.Descriptor instead.
 func (*UnreadRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{18}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *UnreadRequest) GetAgent() string {
@@ -1341,7 +1576,7 @@ type UnreadResponse struct {
 
 func (x *UnreadResponse) Reset() {
 	*x = UnreadResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[19]
+	mi := &file_agora_v1_rooms_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1353,7 +1588,7 @@ func (x *UnreadResponse) String() string {
 func (*UnreadResponse) ProtoMessage() {}
 
 func (x *UnreadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[19]
+	mi := &file_agora_v1_rooms_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1366,7 +1601,7 @@ func (x *UnreadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnreadResponse.ProtoReflect.Descriptor instead.
 func (*UnreadResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{19}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *UnreadResponse) GetMessages() []*Message {
@@ -1392,7 +1627,7 @@ type UnreadByRoomRequest struct {
 
 func (x *UnreadByRoomRequest) Reset() {
 	*x = UnreadByRoomRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[20]
+	mi := &file_agora_v1_rooms_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1404,7 +1639,7 @@ func (x *UnreadByRoomRequest) String() string {
 func (*UnreadByRoomRequest) ProtoMessage() {}
 
 func (x *UnreadByRoomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[20]
+	mi := &file_agora_v1_rooms_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1417,7 +1652,7 @@ func (x *UnreadByRoomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnreadByRoomRequest.ProtoReflect.Descriptor instead.
 func (*UnreadByRoomRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{20}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UnreadByRoomRequest) GetAgent() string {
@@ -1440,7 +1675,7 @@ type RoomUnread struct {
 
 func (x *RoomUnread) Reset() {
 	*x = RoomUnread{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[21]
+	mi := &file_agora_v1_rooms_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +1687,7 @@ func (x *RoomUnread) String() string {
 func (*RoomUnread) ProtoMessage() {}
 
 func (x *RoomUnread) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[21]
+	mi := &file_agora_v1_rooms_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +1700,7 @@ func (x *RoomUnread) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoomUnread.ProtoReflect.Descriptor instead.
 func (*RoomUnread) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{21}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RoomUnread) GetRoom() string {
@@ -1499,7 +1734,7 @@ type UnreadByRoomResponse struct {
 
 func (x *UnreadByRoomResponse) Reset() {
 	*x = UnreadByRoomResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[22]
+	mi := &file_agora_v1_rooms_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1511,7 +1746,7 @@ func (x *UnreadByRoomResponse) String() string {
 func (*UnreadByRoomResponse) ProtoMessage() {}
 
 func (x *UnreadByRoomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[22]
+	mi := &file_agora_v1_rooms_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1524,7 +1759,7 @@ func (x *UnreadByRoomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnreadByRoomResponse.ProtoReflect.Descriptor instead.
 func (*UnreadByRoomResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{22}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UnreadByRoomResponse) GetRooms() []*RoomUnread {
@@ -1546,7 +1781,7 @@ type MarkRoomReadRequest struct {
 
 func (x *MarkRoomReadRequest) Reset() {
 	*x = MarkRoomReadRequest{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[23]
+	mi := &file_agora_v1_rooms_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1558,7 +1793,7 @@ func (x *MarkRoomReadRequest) String() string {
 func (*MarkRoomReadRequest) ProtoMessage() {}
 
 func (x *MarkRoomReadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[23]
+	mi := &file_agora_v1_rooms_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1571,7 +1806,7 @@ func (x *MarkRoomReadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkRoomReadRequest.ProtoReflect.Descriptor instead.
 func (*MarkRoomReadRequest) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{23}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *MarkRoomReadRequest) GetAgent() string {
@@ -1603,7 +1838,7 @@ type MarkRoomReadResponse struct {
 
 func (x *MarkRoomReadResponse) Reset() {
 	*x = MarkRoomReadResponse{}
-	mi := &file_agora_v1_rooms_proto_msgTypes[24]
+	mi := &file_agora_v1_rooms_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1615,7 +1850,7 @@ func (x *MarkRoomReadResponse) String() string {
 func (*MarkRoomReadResponse) ProtoMessage() {}
 
 func (x *MarkRoomReadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agora_v1_rooms_proto_msgTypes[24]
+	mi := &file_agora_v1_rooms_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1628,7 +1863,293 @@ func (x *MarkRoomReadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkRoomReadResponse.ProtoReflect.Descriptor instead.
 func (*MarkRoomReadResponse) Descriptor() ([]byte, []int) {
-	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{24}
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{26}
+}
+
+type SetThreadTitleRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The acting agent.
+	Agent string `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// A message of the thread: its root, or any reply in it.
+	MessageId int64 `protobuf:"varint,2,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// 1 to 100 characters, on one line.
+	Title         string `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetThreadTitleRequest) Reset() {
+	*x = SetThreadTitleRequest{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetThreadTitleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetThreadTitleRequest) ProtoMessage() {}
+
+func (x *SetThreadTitleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetThreadTitleRequest.ProtoReflect.Descriptor instead.
+func (*SetThreadTitleRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *SetThreadTitleRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *SetThreadTitleRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+func (x *SetThreadTitleRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+type SetThreadTitleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetThreadTitleResponse) Reset() {
+	*x = SetThreadTitleResponse{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetThreadTitleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetThreadTitleResponse) ProtoMessage() {}
+
+func (x *SetThreadTitleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetThreadTitleResponse.ProtoReflect.Descriptor instead.
+func (*SetThreadTitleResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{28}
+}
+
+type LeaveThreadRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Agent string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// A message of the thread: its root, or any reply in it.
+	MessageId     int64 `protobuf:"varint,2,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaveThreadRequest) Reset() {
+	*x = LeaveThreadRequest{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaveThreadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveThreadRequest) ProtoMessage() {}
+
+func (x *LeaveThreadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveThreadRequest.ProtoReflect.Descriptor instead.
+func (*LeaveThreadRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *LeaveThreadRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *LeaveThreadRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+type LeaveThreadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaveThreadResponse) Reset() {
+	*x = LeaveThreadResponse{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaveThreadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveThreadResponse) ProtoMessage() {}
+
+func (x *LeaveThreadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveThreadResponse.ProtoReflect.Descriptor instead.
+func (*LeaveThreadResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{30}
+}
+
+type ListThreadsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The room; every room that is not archived when empty.
+	Room string `protobuf:"bytes,1,opt,name=room,proto3" json:"room,omitempty"`
+	// The agent reading, for the unread counts; none when empty.
+	Agent         string `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListThreadsRequest) Reset() {
+	*x = ListThreadsRequest{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListThreadsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListThreadsRequest) ProtoMessage() {}
+
+func (x *ListThreadsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListThreadsRequest.ProtoReflect.Descriptor instead.
+func (*ListThreadsRequest) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ListThreadsRequest) GetRoom() string {
+	if x != nil {
+		return x.Room
+	}
+	return ""
+}
+
+func (x *ListThreadsRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+type ListThreadsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Threads       []*Thread              `protobuf:"bytes,1,rep,name=threads,proto3" json:"threads,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListThreadsResponse) Reset() {
+	*x = ListThreadsResponse{}
+	mi := &file_agora_v1_rooms_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListThreadsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListThreadsResponse) ProtoMessage() {}
+
+func (x *ListThreadsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agora_v1_rooms_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListThreadsResponse.ProtoReflect.Descriptor instead.
+func (*ListThreadsResponse) Descriptor() ([]byte, []int) {
+	return file_agora_v1_rooms_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ListThreadsResponse) GetThreads() []*Thread {
+	if x != nil {
+		return x.Threads
+	}
+	return nil
 }
 
 var File_agora_v1_rooms_proto protoreflect.FileDescriptor
@@ -1649,7 +2170,7 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\varchived_by\x18\b \x01(\tR\n" +
 	"archivedBy\x12;\n" +
 	"\varchived_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"archivedAt\"\xcb\x03\n" +
+	"archivedAt\"\xda\x04\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x16\n" +
@@ -1664,7 +2185,23 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	" \x01(\tR\rdeliveryError\x12\x12\n" +
 	"\x04note\x18\v \x01(\bR\x04note\x12\x1a\n" +
 	"\bincoming\x18\f \x01(\bR\bincoming\x121\n" +
-	"\x06due_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x05dueAt\"d\n" +
+	"\x06due_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x05dueAt\x12\x16\n" +
+	"\x06thread\x18\x0e \x01(\x03R\x06thread\x12\x12\n" +
+	"\x04also\x18\x0f \x01(\bR\x04also\x12!\n" +
+	"\fthread_title\x18\x10 \x01(\tR\vthreadTitle\x12>\n" +
+	"\x0ethread_summary\x18\x11 \x01(\v2\x17.agora.v1.ThreadSummaryR\rthreadSummary\"\x92\x01\n" +
+	"\rThreadSummary\x12\x18\n" +
+	"\areplies\x18\x01 \x01(\x05R\areplies\x12\x1a\n" +
+	"\brepliers\x18\x02 \x03(\tR\brepliers\x123\n" +
+	"\alast_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x16\n" +
+	"\x06unread\x18\x04 \x01(\x05R\x06unread\"\xad\x01\n" +
+	"\x06Thread\x12\x12\n" +
+	"\x04root\x18\x01 \x01(\x03R\x04root\x12\x12\n" +
+	"\x04room\x18\x02 \x01(\tR\x04room\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x18\n" +
+	"\areplies\x18\x04 \x01(\x05R\areplies\x123\n" +
+	"\alast_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x16\n" +
+	"\x06unread\x18\x06 \x01(\x05R\x06unread\"d\n" +
 	"\x0eExternalAuthor\x12\x16\n" +
 	"\x06bridge\x18\x01 \x01(\tR\x06bridge\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x12\n" +
@@ -1699,18 +2236,22 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\"o\n" +
 	"\x19ListSubscriptionsResponse\x12\x14\n" +
 	"\x05rooms\x18\x01 \x03(\tR\x05rooms\x12<\n" +
-	"\rsubscriptions\x18\x02 \x03(\v2\x16.agora.v1.SubscriptionR\rsubscriptions\"z\n" +
+	"\rsubscriptions\x18\x02 \x03(\v2\x16.agora.v1.SubscriptionR\rsubscriptions\"\xa6\x01\n" +
 	"\vPostRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12\x19\n" +
 	"\breply_to\x18\x04 \x01(\x03R\areplyTo\x12\x12\n" +
-	"\x04note\x18\x05 \x01(\bR\x04note\"\x1e\n" +
+	"\x04note\x18\x05 \x01(\bR\x04note\x12\x16\n" +
+	"\x06thread\x18\x06 \x01(\x03R\x06thread\x12\x12\n" +
+	"\x04also\x18\a \x01(\bR\x04also\"\x1e\n" +
 	"\fPostResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"8\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"f\n" +
 	"\x0eHistoryRequest\x12\x12\n" +
 	"\x04room\x18\x01 \x01(\tR\x04room\x12\x12\n" +
-	"\x04last\x18\x02 \x01(\x05R\x04last\"@\n" +
+	"\x04last\x18\x02 \x01(\x05R\x04last\x12\x16\n" +
+	"\x06thread\x18\x03 \x01(\x03R\x06thread\x12\x14\n" +
+	"\x05agent\x18\x04 \x01(\tR\x05agent\"@\n" +
 	"\x0fHistoryResponse\x12-\n" +
 	"\bmessages\x18\x01 \x03(\v2\x11.agora.v1.MessageR\bmessages\"t\n" +
 	"\rUnreadRequest\x12\x14\n" +
@@ -1735,7 +2276,23 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x1d\n" +
 	"\n" +
 	"through_id\x18\x03 \x01(\x03R\tthroughId\"\x16\n" +
-	"\x14MarkRoomReadResponse*\xbb\x01\n" +
+	"\x14MarkRoomReadResponse\"b\n" +
+	"\x15SetThreadTitleRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x02 \x01(\x03R\tmessageId\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\"\x18\n" +
+	"\x16SetThreadTitleResponse\"I\n" +
+	"\x12LeaveThreadRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x02 \x01(\x03R\tmessageId\"\x15\n" +
+	"\x13LeaveThreadResponse\">\n" +
+	"\x12ListThreadsRequest\x12\x12\n" +
+	"\x04room\x18\x01 \x01(\tR\x04room\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\"A\n" +
+	"\x13ListThreadsResponse\x12*\n" +
+	"\athreads\x18\x01 \x03(\v2\x10.agora.v1.ThreadR\athreads*\xbb\x01\n" +
 	"\rDeliveryState\x12\x1e\n" +
 	"\x1aDELIVERY_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18DELIVERY_STATE_SCHEDULED\x10\x01\x12\x1a\n" +
@@ -1747,7 +2304,7 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x1dSUBSCRIPTION_MODE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SUBSCRIPTION_MODE_ALL\x10\x01\x12\x1e\n" +
 	"\x1aSUBSCRIPTION_MODE_MENTIONS\x10\x02\x12\x1a\n" +
-	"\x16SUBSCRIPTION_MODE_WAKE\x10\x032\xde\x05\n" +
+	"\x16SUBSCRIPTION_MODE_WAKE\x10\x032\xcb\a\n" +
 	"\vRoomService\x12G\n" +
 	"\n" +
 	"CreateRoom\x12\x1b.agora.v1.CreateRoomRequest\x1a\x1c.agora.v1.CreateRoomResponse\x12D\n" +
@@ -1759,7 +2316,10 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\aHistory\x12\x18.agora.v1.HistoryRequest\x1a\x19.agora.v1.HistoryResponse\x12;\n" +
 	"\x06Unread\x12\x17.agora.v1.UnreadRequest\x1a\x18.agora.v1.UnreadResponse\x12M\n" +
 	"\fUnreadByRoom\x12\x1d.agora.v1.UnreadByRoomRequest\x1a\x1e.agora.v1.UnreadByRoomResponse\x12M\n" +
-	"\fMarkRoomRead\x12\x1d.agora.v1.MarkRoomReadRequest\x1a\x1e.agora.v1.MarkRoomReadResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
+	"\fMarkRoomRead\x12\x1d.agora.v1.MarkRoomReadRequest\x1a\x1e.agora.v1.MarkRoomReadResponse\x12S\n" +
+	"\x0eSetThreadTitle\x12\x1f.agora.v1.SetThreadTitleRequest\x1a .agora.v1.SetThreadTitleResponse\x12J\n" +
+	"\vLeaveThread\x12\x1c.agora.v1.LeaveThreadRequest\x1a\x1d.agora.v1.LeaveThreadResponse\x12J\n" +
+	"\vListThreads\x12\x1c.agora.v1.ListThreadsRequest\x1a\x1d.agora.v1.ListThreadsResponseB3Z1github.com/vsem-azamat/agora/gen/agora/v1;agorav1b\x06proto3"
 
 var (
 	file_agora_v1_rooms_proto_rawDescOnce sync.Once
@@ -1774,78 +2334,96 @@ func file_agora_v1_rooms_proto_rawDescGZIP() []byte {
 }
 
 var file_agora_v1_rooms_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_agora_v1_rooms_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_agora_v1_rooms_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_agora_v1_rooms_proto_goTypes = []any{
 	(DeliveryState)(0),                // 0: agora.v1.DeliveryState
 	(SubscriptionMode)(0),             // 1: agora.v1.SubscriptionMode
 	(*Room)(nil),                      // 2: agora.v1.Room
 	(*Message)(nil),                   // 3: agora.v1.Message
-	(*ExternalAuthor)(nil),            // 4: agora.v1.ExternalAuthor
-	(*Subscription)(nil),              // 5: agora.v1.Subscription
-	(*CreateRoomRequest)(nil),         // 6: agora.v1.CreateRoomRequest
-	(*CreateRoomResponse)(nil),        // 7: agora.v1.CreateRoomResponse
-	(*ListRoomsRequest)(nil),          // 8: agora.v1.ListRoomsRequest
-	(*ListRoomsResponse)(nil),         // 9: agora.v1.ListRoomsResponse
-	(*ArchiveRoomRequest)(nil),        // 10: agora.v1.ArchiveRoomRequest
-	(*ArchiveRoomResponse)(nil),       // 11: agora.v1.ArchiveRoomResponse
-	(*SubscribeRequest)(nil),          // 12: agora.v1.SubscribeRequest
-	(*SubscribeResponse)(nil),         // 13: agora.v1.SubscribeResponse
-	(*ListSubscriptionsRequest)(nil),  // 14: agora.v1.ListSubscriptionsRequest
-	(*ListSubscriptionsResponse)(nil), // 15: agora.v1.ListSubscriptionsResponse
-	(*PostRequest)(nil),               // 16: agora.v1.PostRequest
-	(*PostResponse)(nil),              // 17: agora.v1.PostResponse
-	(*HistoryRequest)(nil),            // 18: agora.v1.HistoryRequest
-	(*HistoryResponse)(nil),           // 19: agora.v1.HistoryResponse
-	(*UnreadRequest)(nil),             // 20: agora.v1.UnreadRequest
-	(*UnreadResponse)(nil),            // 21: agora.v1.UnreadResponse
-	(*UnreadByRoomRequest)(nil),       // 22: agora.v1.UnreadByRoomRequest
-	(*RoomUnread)(nil),                // 23: agora.v1.RoomUnread
-	(*UnreadByRoomResponse)(nil),      // 24: agora.v1.UnreadByRoomResponse
-	(*MarkRoomReadRequest)(nil),       // 25: agora.v1.MarkRoomReadRequest
-	(*MarkRoomReadResponse)(nil),      // 26: agora.v1.MarkRoomReadResponse
-	(*timestamppb.Timestamp)(nil),     // 27: google.protobuf.Timestamp
+	(*ThreadSummary)(nil),             // 4: agora.v1.ThreadSummary
+	(*Thread)(nil),                    // 5: agora.v1.Thread
+	(*ExternalAuthor)(nil),            // 6: agora.v1.ExternalAuthor
+	(*Subscription)(nil),              // 7: agora.v1.Subscription
+	(*CreateRoomRequest)(nil),         // 8: agora.v1.CreateRoomRequest
+	(*CreateRoomResponse)(nil),        // 9: agora.v1.CreateRoomResponse
+	(*ListRoomsRequest)(nil),          // 10: agora.v1.ListRoomsRequest
+	(*ListRoomsResponse)(nil),         // 11: agora.v1.ListRoomsResponse
+	(*ArchiveRoomRequest)(nil),        // 12: agora.v1.ArchiveRoomRequest
+	(*ArchiveRoomResponse)(nil),       // 13: agora.v1.ArchiveRoomResponse
+	(*SubscribeRequest)(nil),          // 14: agora.v1.SubscribeRequest
+	(*SubscribeResponse)(nil),         // 15: agora.v1.SubscribeResponse
+	(*ListSubscriptionsRequest)(nil),  // 16: agora.v1.ListSubscriptionsRequest
+	(*ListSubscriptionsResponse)(nil), // 17: agora.v1.ListSubscriptionsResponse
+	(*PostRequest)(nil),               // 18: agora.v1.PostRequest
+	(*PostResponse)(nil),              // 19: agora.v1.PostResponse
+	(*HistoryRequest)(nil),            // 20: agora.v1.HistoryRequest
+	(*HistoryResponse)(nil),           // 21: agora.v1.HistoryResponse
+	(*UnreadRequest)(nil),             // 22: agora.v1.UnreadRequest
+	(*UnreadResponse)(nil),            // 23: agora.v1.UnreadResponse
+	(*UnreadByRoomRequest)(nil),       // 24: agora.v1.UnreadByRoomRequest
+	(*RoomUnread)(nil),                // 25: agora.v1.RoomUnread
+	(*UnreadByRoomResponse)(nil),      // 26: agora.v1.UnreadByRoomResponse
+	(*MarkRoomReadRequest)(nil),       // 27: agora.v1.MarkRoomReadRequest
+	(*MarkRoomReadResponse)(nil),      // 28: agora.v1.MarkRoomReadResponse
+	(*SetThreadTitleRequest)(nil),     // 29: agora.v1.SetThreadTitleRequest
+	(*SetThreadTitleResponse)(nil),    // 30: agora.v1.SetThreadTitleResponse
+	(*LeaveThreadRequest)(nil),        // 31: agora.v1.LeaveThreadRequest
+	(*LeaveThreadResponse)(nil),       // 32: agora.v1.LeaveThreadResponse
+	(*ListThreadsRequest)(nil),        // 33: agora.v1.ListThreadsRequest
+	(*ListThreadsResponse)(nil),       // 34: agora.v1.ListThreadsResponse
+	(*timestamppb.Timestamp)(nil),     // 35: google.protobuf.Timestamp
 }
 var file_agora_v1_rooms_proto_depIdxs = []int32{
-	27, // 0: agora.v1.Room.created_at:type_name -> google.protobuf.Timestamp
-	27, // 1: agora.v1.Room.last_at:type_name -> google.protobuf.Timestamp
-	27, // 2: agora.v1.Room.archived_at:type_name -> google.protobuf.Timestamp
-	27, // 3: agora.v1.Message.at:type_name -> google.protobuf.Timestamp
-	4,  // 4: agora.v1.Message.external_author:type_name -> agora.v1.ExternalAuthor
+	35, // 0: agora.v1.Room.created_at:type_name -> google.protobuf.Timestamp
+	35, // 1: agora.v1.Room.last_at:type_name -> google.protobuf.Timestamp
+	35, // 2: agora.v1.Room.archived_at:type_name -> google.protobuf.Timestamp
+	35, // 3: agora.v1.Message.at:type_name -> google.protobuf.Timestamp
+	6,  // 4: agora.v1.Message.external_author:type_name -> agora.v1.ExternalAuthor
 	0,  // 5: agora.v1.Message.delivery_state:type_name -> agora.v1.DeliveryState
-	27, // 6: agora.v1.Message.due_at:type_name -> google.protobuf.Timestamp
-	1,  // 7: agora.v1.Subscription.mode:type_name -> agora.v1.SubscriptionMode
-	2,  // 8: agora.v1.ListRoomsResponse.rooms:type_name -> agora.v1.Room
-	1,  // 9: agora.v1.SubscribeRequest.mode:type_name -> agora.v1.SubscriptionMode
-	5,  // 10: agora.v1.SubscribeResponse.subscriptions:type_name -> agora.v1.Subscription
-	5,  // 11: agora.v1.ListSubscriptionsResponse.subscriptions:type_name -> agora.v1.Subscription
-	3,  // 12: agora.v1.HistoryResponse.messages:type_name -> agora.v1.Message
-	3,  // 13: agora.v1.UnreadResponse.messages:type_name -> agora.v1.Message
-	23, // 14: agora.v1.UnreadByRoomResponse.rooms:type_name -> agora.v1.RoomUnread
-	6,  // 15: agora.v1.RoomService.CreateRoom:input_type -> agora.v1.CreateRoomRequest
-	8,  // 16: agora.v1.RoomService.ListRooms:input_type -> agora.v1.ListRoomsRequest
-	10, // 17: agora.v1.RoomService.ArchiveRoom:input_type -> agora.v1.ArchiveRoomRequest
-	12, // 18: agora.v1.RoomService.Subscribe:input_type -> agora.v1.SubscribeRequest
-	14, // 19: agora.v1.RoomService.ListSubscriptions:input_type -> agora.v1.ListSubscriptionsRequest
-	16, // 20: agora.v1.RoomService.Post:input_type -> agora.v1.PostRequest
-	18, // 21: agora.v1.RoomService.History:input_type -> agora.v1.HistoryRequest
-	20, // 22: agora.v1.RoomService.Unread:input_type -> agora.v1.UnreadRequest
-	22, // 23: agora.v1.RoomService.UnreadByRoom:input_type -> agora.v1.UnreadByRoomRequest
-	25, // 24: agora.v1.RoomService.MarkRoomRead:input_type -> agora.v1.MarkRoomReadRequest
-	7,  // 25: agora.v1.RoomService.CreateRoom:output_type -> agora.v1.CreateRoomResponse
-	9,  // 26: agora.v1.RoomService.ListRooms:output_type -> agora.v1.ListRoomsResponse
-	11, // 27: agora.v1.RoomService.ArchiveRoom:output_type -> agora.v1.ArchiveRoomResponse
-	13, // 28: agora.v1.RoomService.Subscribe:output_type -> agora.v1.SubscribeResponse
-	15, // 29: agora.v1.RoomService.ListSubscriptions:output_type -> agora.v1.ListSubscriptionsResponse
-	17, // 30: agora.v1.RoomService.Post:output_type -> agora.v1.PostResponse
-	19, // 31: agora.v1.RoomService.History:output_type -> agora.v1.HistoryResponse
-	21, // 32: agora.v1.RoomService.Unread:output_type -> agora.v1.UnreadResponse
-	24, // 33: agora.v1.RoomService.UnreadByRoom:output_type -> agora.v1.UnreadByRoomResponse
-	26, // 34: agora.v1.RoomService.MarkRoomRead:output_type -> agora.v1.MarkRoomReadResponse
-	25, // [25:35] is the sub-list for method output_type
-	15, // [15:25] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	35, // 6: agora.v1.Message.due_at:type_name -> google.protobuf.Timestamp
+	4,  // 7: agora.v1.Message.thread_summary:type_name -> agora.v1.ThreadSummary
+	35, // 8: agora.v1.ThreadSummary.last_at:type_name -> google.protobuf.Timestamp
+	35, // 9: agora.v1.Thread.last_at:type_name -> google.protobuf.Timestamp
+	1,  // 10: agora.v1.Subscription.mode:type_name -> agora.v1.SubscriptionMode
+	2,  // 11: agora.v1.ListRoomsResponse.rooms:type_name -> agora.v1.Room
+	1,  // 12: agora.v1.SubscribeRequest.mode:type_name -> agora.v1.SubscriptionMode
+	7,  // 13: agora.v1.SubscribeResponse.subscriptions:type_name -> agora.v1.Subscription
+	7,  // 14: agora.v1.ListSubscriptionsResponse.subscriptions:type_name -> agora.v1.Subscription
+	3,  // 15: agora.v1.HistoryResponse.messages:type_name -> agora.v1.Message
+	3,  // 16: agora.v1.UnreadResponse.messages:type_name -> agora.v1.Message
+	25, // 17: agora.v1.UnreadByRoomResponse.rooms:type_name -> agora.v1.RoomUnread
+	5,  // 18: agora.v1.ListThreadsResponse.threads:type_name -> agora.v1.Thread
+	8,  // 19: agora.v1.RoomService.CreateRoom:input_type -> agora.v1.CreateRoomRequest
+	10, // 20: agora.v1.RoomService.ListRooms:input_type -> agora.v1.ListRoomsRequest
+	12, // 21: agora.v1.RoomService.ArchiveRoom:input_type -> agora.v1.ArchiveRoomRequest
+	14, // 22: agora.v1.RoomService.Subscribe:input_type -> agora.v1.SubscribeRequest
+	16, // 23: agora.v1.RoomService.ListSubscriptions:input_type -> agora.v1.ListSubscriptionsRequest
+	18, // 24: agora.v1.RoomService.Post:input_type -> agora.v1.PostRequest
+	20, // 25: agora.v1.RoomService.History:input_type -> agora.v1.HistoryRequest
+	22, // 26: agora.v1.RoomService.Unread:input_type -> agora.v1.UnreadRequest
+	24, // 27: agora.v1.RoomService.UnreadByRoom:input_type -> agora.v1.UnreadByRoomRequest
+	27, // 28: agora.v1.RoomService.MarkRoomRead:input_type -> agora.v1.MarkRoomReadRequest
+	29, // 29: agora.v1.RoomService.SetThreadTitle:input_type -> agora.v1.SetThreadTitleRequest
+	31, // 30: agora.v1.RoomService.LeaveThread:input_type -> agora.v1.LeaveThreadRequest
+	33, // 31: agora.v1.RoomService.ListThreads:input_type -> agora.v1.ListThreadsRequest
+	9,  // 32: agora.v1.RoomService.CreateRoom:output_type -> agora.v1.CreateRoomResponse
+	11, // 33: agora.v1.RoomService.ListRooms:output_type -> agora.v1.ListRoomsResponse
+	13, // 34: agora.v1.RoomService.ArchiveRoom:output_type -> agora.v1.ArchiveRoomResponse
+	15, // 35: agora.v1.RoomService.Subscribe:output_type -> agora.v1.SubscribeResponse
+	17, // 36: agora.v1.RoomService.ListSubscriptions:output_type -> agora.v1.ListSubscriptionsResponse
+	19, // 37: agora.v1.RoomService.Post:output_type -> agora.v1.PostResponse
+	21, // 38: agora.v1.RoomService.History:output_type -> agora.v1.HistoryResponse
+	23, // 39: agora.v1.RoomService.Unread:output_type -> agora.v1.UnreadResponse
+	26, // 40: agora.v1.RoomService.UnreadByRoom:output_type -> agora.v1.UnreadByRoomResponse
+	28, // 41: agora.v1.RoomService.MarkRoomRead:output_type -> agora.v1.MarkRoomReadResponse
+	30, // 42: agora.v1.RoomService.SetThreadTitle:output_type -> agora.v1.SetThreadTitleResponse
+	32, // 43: agora.v1.RoomService.LeaveThread:output_type -> agora.v1.LeaveThreadResponse
+	34, // 44: agora.v1.RoomService.ListThreads:output_type -> agora.v1.ListThreadsResponse
+	32, // [32:45] is the sub-list for method output_type
+	19, // [19:32] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_agora_v1_rooms_proto_init() }
@@ -1859,7 +2437,7 @@ func file_agora_v1_rooms_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agora_v1_rooms_proto_rawDesc), len(file_agora_v1_rooms_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   25,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

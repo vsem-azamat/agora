@@ -64,7 +64,7 @@ var deliveryLabels = map[agorav1.DeliveryState]string{
 }
 
 // formatMessage renders a message: room, identifier, author (name@bridge for a message from
-// outside), time, reply reference, whether it came from outside or is a note, and delivery state, then the body indented. It is the same
+// outside), time, reply reference, whether it came from outside or is a note, delivery state and thread, then the body indented. It is the same
 // layout as rooms.Format, which the hub uses for the messages it delivers into an agent's
 // context; keep the two alike.
 func formatMessage(m *agorav1.Message) string {
@@ -89,5 +89,31 @@ func formatMessage(m *agorav1.Message) string {
 	if m.GetDeliveryState() == agorav1.DeliveryState_DELIVERY_STATE_FAILED {
 		head += m.GetDeliveryError()
 	}
+	head += threadLabel(m)
 	return head + "\n  " + strings.ReplaceAll(m.GetBody(), "\n", "\n  ")
+}
+
+// threadLabel follows a message's head as rooms.Format's thread label does: the thread a reply is
+// in, or the thread of a root.
+func threadLabel(m *agorav1.Message) string {
+	title := m.GetThreadTitle()
+	if title != "" {
+		title = " «" + title + "»"
+	}
+	if m.GetThread() != 0 {
+		return fmt.Sprintf(" · in thread %d%s", m.GetThread(), title)
+	}
+	sum := m.GetThreadSummary()
+	if sum.GetReplies() == 0 {
+		if title == "" {
+			return ""
+		}
+		return " · thread" + title
+	}
+	label := fmt.Sprintf(" · thread%s: %d repl%s (%s), last %s", title, sum.GetReplies(), map[bool]string{true: "y", false: "ies"}[sum.GetReplies() == 1],
+		strings.Join(sum.GetRepliers(), ", "), shortClock(sum.GetLastAt().AsTime()))
+	if sum.GetUnread() > 0 {
+		label += fmt.Sprintf(", %d unread", sum.GetUnread())
+	}
+	return label
 }

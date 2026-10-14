@@ -35,6 +35,14 @@ service RoomService {
   rpc UnreadByRoom(UnreadByRoomRequest) returns (UnreadByRoomResponse);
   // MarkRoomRead moves the agent's reading position in a room up to a message.
   rpc MarkRoomRead(MarkRoomReadRequest) returns (MarkRoomReadResponse);
+  // SetThreadTitle gives the thread of a message a title, replacing an earlier one.
+  rpc SetThreadTitle(SetThreadTitleRequest) returns (SetThreadTitleResponse);
+  // LeaveThread makes the agent leave a thread: its replies no longer address the agent unless
+  // they mention it, until it posts there again.
+  rpc LeaveThread(LeaveThreadRequest) returns (LeaveThreadResponse);
+  // ListThreads returns a room's titled threads, or those of every room that is not archived, the
+  // most recently active first.
+  rpc ListThreads(ListThreadsRequest) returns (ListThreadsResponse);
 }
 
 message Room {
@@ -77,6 +85,39 @@ message Message {
   bool incoming = 12;
   // When a scheduled message goes out; unset for every other message.
   google.protobuf.Timestamp due_at = 13;
+  // The root of the thread the message is a reply in; 0 for a message of the room.
+  int64 thread = 14;
+  // A reply in a thread that is also a message of the room.
+  bool also = 15;
+  // The title of the message's thread: the one it is a reply in, or its own as a root; empty
+  // when it has none.
+  string thread_title = 16;
+  // In histories, for a message of the room with replies in its thread; unset otherwise.
+  ThreadSummary thread_summary = 17;
+}
+
+// What a room's history shows of a thread at its root.
+message ThreadSummary {
+  int32 replies = 1;
+  // Who wrote the replies, in the order of their first reply: agents by name, people outside as
+  // name@bridge.
+  repeated string repliers = 2;
+  google.protobuf.Timestamp last_at = 3;
+  // Replies unread for the agent the history was read for (HistoryRequest.agent).
+  int32 unread = 4;
+}
+
+// A titled thread of a room.
+message Thread {
+  // The root message.
+  int64 root = 1;
+  string room = 2;
+  string title = 3;
+  int32 replies = 4;
+  // The last reply, or the root or its title when newer.
+  google.protobuf.Timestamp last_at = 5;
+  // Replies unread for the agent the threads were listed for (ListThreadsRequest.agent).
+  int32 unread = 6;
 }
 
 // Someone outside Agora who wrote a message through a bridge.
@@ -192,6 +233,11 @@ message PostRequest {
   // Post a note: in a bridged room the message stays in Agora under every outbound policy and is
   // never handed to the bridge; in a room without a bridge it is an ordinary message.
   bool note = 5;
+  // Post into the thread of this message (its root, or any reply in it); 0 posts to the room.
+  // Its room must be room.
+  int64 thread = 6;
+  // With thread: the reply is also a message of the room.
+  bool also = 7;
 }
 
 message PostResponse {
@@ -202,6 +248,11 @@ message HistoryRequest {
   string room = 1;
   // How many messages; 20 when 0.
   int32 last = 2;
+  // Read the thread of this message (its root, or any reply in it) instead: the root, then its
+  // last replies.
+  int64 thread = 3;
+  // The agent reading, for the unread counts of thread summaries; none when empty.
+  string agent = 4;
 }
 
 message HistoryResponse {
@@ -247,3 +298,33 @@ message MarkRoomReadRequest {
 }
 
 message MarkRoomReadResponse {}
+
+message SetThreadTitleRequest {
+  // The acting agent.
+  string agent = 1;
+  // A message of the thread: its root, or any reply in it.
+  int64 message_id = 2;
+  // 1 to 100 characters, on one line.
+  string title = 3;
+}
+
+message SetThreadTitleResponse {}
+
+message LeaveThreadRequest {
+  string agent = 1;
+  // A message of the thread: its root, or any reply in it.
+  int64 message_id = 2;
+}
+
+message LeaveThreadResponse {}
+
+message ListThreadsRequest {
+  // The room; every room that is not archived when empty.
+  string room = 1;
+  // The agent reading, for the unread counts; none when empty.
+  string agent = 2;
+}
+
+message ListThreadsResponse {
+  repeated Thread threads = 1;
+}

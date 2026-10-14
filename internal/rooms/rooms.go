@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -113,6 +114,48 @@ type Message struct {
 	// Incoming is set for a message that came in from the outside chat through the room's
 	// bridge: from someone there, or from the operator writing there.
 	Incoming bool
+	// Thread is the root of the thread the message is a reply in, 0 for a message of the room;
+	// Also is set for a reply that is also a message of the room.
+	Thread int64
+	Also   bool
+	// ThreadTitle is the title of the message's thread: the one it is a reply in, or, for a
+	// root, its own; "" when it has none.
+	ThreadTitle string
+	// Summary is the thread of a root, set in histories; zero for a message without replies.
+	Summary ThreadSummary
+}
+
+// ThreadSummary is what a room's history shows of a thread at its root.
+type ThreadSummary struct {
+	Replies  int
+	Repliers []string // who wrote the replies (as From names them), in the order of their first reply
+	LastAt   time.Time
+	Unread   int // replies unread for the agent the history was read for
+}
+
+// Thread is a titled thread of a room.
+type Thread struct {
+	Root    int64
+	Room    string
+	Title   string
+	Replies int
+	LastAt  time.Time // the last reply, or the root or its title when newer
+	Unread  int       // replies unread for the agent the threads were listed for
+}
+
+// MaxTitle is the longest thread title, in characters.
+const MaxTitle = 100
+
+// Posting is a message to post: to the room, or with Thread into the thread of that message.
+type Posting struct {
+	Author, Room, Body string
+	ReplyTo            int64
+	// Thread names the thread the message is a reply in: its root or any reply of it; 0 posts
+	// to the room. Also makes a reply a message of the room too.
+	Thread int64
+	Also   bool
+	// Note posts a note (see PostNote); Operator posts as the operator does (see PostFromOperator).
+	Note, Operator bool
 }
 
 // External reports whether the message came from outside through a bridge.
@@ -436,27 +479,39 @@ func NoticeRoomTx(ctx context.Context, tx *sql.Tx, agent string) (string, error)
 // out under open and is refused under read. Only the board posts as Board,
 // through PostTx.
 func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
-	return r.post(ctx, author, room, body, replyTo, sendAsAgent)
+	return r.Send(ctx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo})
+}
+
+// Send posts p as Post, PostNote or PostFromOperator do, into a thread when p names one.
+func (r *Rooms) Send(ctx context.Context, p Posting) (int64, error) {
+	how := sendAsAgent
+	switch {
+	case p.Note:
+		how = keepAsNote
+	case p.Operator:
+		how = sendAsOperator
+	}
+	return r.post(ctx, p, how)
 }
 
 // PostFromOperator is Post for the operator, through the web app: in a bridged room the message
 // goes out at once, except under the policy read, where it stays here as a note.
 func (r *Rooms) PostFromOperator(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
-	return r.post(ctx, author, room, body, replyTo, sendAsOperator)
+	return r.Send(ctx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo, Operator: true})
 }
 
 // PostNote is Post for a note, from an agent or the operator: in a bridged room the message stays
 // in Agora under every policy, read included, and is marked as a note; in a room without a
 // bridge it is an ordinary message.
 func (r *Rooms) PostNote(ctx context.Context, author, room, body string, replyTo int64) (int64, error) {
-	return r.post(ctx, author, room, body, replyTo, keepAsNote)
+	return r.Send(ctx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo, Note: true})
 }
 
 // SendOutTx stores a message of author in the bridged room that goes out at once, as the
 // operator's messages do, inside the caller's transaction: the operator sends a note out with it.
 // The caller checks that the room's policy lets it go out.
 func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
-	return r.postTx(ctx, tx, author, room, body, replyTo, sendAsOperator)
+	return r.postTx(ctx, tx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo}, sendAsOperator)
 }
 
 // sending is how a new message of a bridged room may leave Agora.
@@ -468,14 +523,14 @@ const (
 	keepAsNote                    // never: a note
 )
 
-func (r *Rooms) post(ctx context.Context, author, room, body string, replyTo int64, how sending) (int64, error) {
-	if author == Board {
+func (r *Rooms) post(ctx context.Context, p Posting, how sending) (int64, error) {
+	if p.Author == Board {
 		return 0, ErrBoardOnly
 	}
 	var id int64
 	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
 		var err error
-		id, err = r.postTx(ctx, tx, author, room, body, replyTo, how)
+		id, err = r.postTx(ctx, tx, p, how)
 		return err
 	})
 	return id, err
@@ -485,12 +540,13 @@ func (r *Rooms) post(ctx context.Context, author, room, body string, replyTo int
 // transaction, so other packages can post atomically with their own changes. The board's
 // messages never go out through a bridge.
 func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
-	return r.postTx(ctx, tx, author, room, body, replyTo, sendAsAgent)
+	return r.postTx(ctx, tx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo}, sendAsAgent)
 }
 
-func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64, how sending) (int64, error) {
-	room = strings.TrimPrefix(room, "#")
-	body = strings.TrimSpace(body)
+func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) (int64, error) {
+	author, replyTo := p.Author, p.ReplyTo
+	room := strings.TrimPrefix(p.Room, "#")
+	body := strings.TrimSpace(p.Body)
 	if body == "" || utf8.RuneCountInString(body) > MaxBody {
 		return 0, fmt.Errorf("%w: a message is 1 to %d characters", store.ErrInvalid, MaxBody)
 	}
@@ -515,13 +571,59 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, author, room, body strin
 		}
 	}
 	m := Message{Room: room, Author: author, Body: body, ReplyTo: replyTo, At: r.now()}
+	var participants []string
+	if p.Thread != 0 {
+		root, err := rootTx(ctx, tx, p.Thread)
+		if err != nil {
+			return 0, err
+		}
+		var in string
+		if err := tx.QueryRowContext(ctx, `SELECT room FROM messages WHERE id = ?`, root).Scan(&in); err != nil {
+			return 0, err
+		}
+		if in != room {
+			return 0, fmt.Errorf("%w: message %d is in #%s, not #%s", store.ErrInvalid, p.Thread, in, room)
+		}
+		m.Thread, m.Also = root, p.Also
+		// posting in a thread makes the author a participant again
+		if _, err := tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE root = ? AND agent = ?`, root, author); err != nil {
+			return 0, err
+		}
+		if participants, err = participantsTx(ctx, tx, root, author); err != nil {
+			return 0, err
+		}
+	} else if p.Also {
+		return 0, fmt.Errorf("%w: also to the room needs a thread", store.ErrInvalid)
+	}
 	if author != Board {
 		var err error
 		if m.Delivery, m.Note, err = outbound(ctx, tx, room, how); err != nil {
 			return 0, err
 		}
 	}
-	return insert(ctx, tx, m, "", nil)
+	return insert(ctx, tx, m, "", participants)
+}
+
+// rootTx returns the root of the thread message id names: the root of the thread id is a reply
+// in, or id itself. A message that does not exist is refused.
+func rootTx(ctx context.Context, tx *sql.Tx, id int64) (int64, error) {
+	var root int64
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(thread, id) FROM messages WHERE id = ?`, id).Scan(&root)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, fmt.Errorf("%w: no message %d", store.ErrInvalid, id)
+	}
+	return root, err
+}
+
+// participantsTx returns the participants of the thread of root other than except: the root's
+// author, the authors of its replies and the agents mentioned in any of them (replies address
+// participants through mentions too), without those that left it.
+func participantsTx(ctx context.Context, tx *sql.Tx, root int64, except string) ([]string, error) {
+	return store.Strings(ctx, tx, `SELECT author FROM messages WHERE (id = :root OR thread = :root) AND author NOT IN ('', :board)
+		UNION SELECT mm.agent FROM mentions AS mm JOIN messages AS m ON m.id = mm.message_id WHERE m.id = :root OR m.thread = :root
+		EXCEPT SELECT agent FROM thread_leaves WHERE root = :root
+		EXCEPT SELECT :except
+		ORDER BY 1`, sql.Named("root", root), sql.Named("board", Board), sql.Named("except", except))
 }
 
 // outbound returns the delivery state a new message gets in room under its bridge's policy, ""
@@ -566,9 +668,13 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 	if m.Delivery == Scheduled {
 		scheduled = m.At.UnixMilli()
 	}
-	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note, scheduled_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet, m.Note, scheduled)
+	var thread any
+	if m.Thread != 0 {
+		thread = m.Thread
+	}
+	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note, scheduled_at, thread, also)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet, m.Note, scheduled, thread, m.Also)
 	if err != nil {
 		return 0, err
 	}
@@ -678,6 +784,11 @@ func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, 
 	default:
 		for _, q := range []string{
 			`UPDATE messages SET reply_to = :id WHERE reply_to = :echo`,
+			`UPDATE messages SET thread = :id WHERE thread = :echo`,
+			`UPDATE OR IGNORE threads SET root = :id WHERE root = :echo`,
+			`DELETE FROM threads WHERE root = :echo`,
+			`UPDATE OR IGNORE thread_leaves SET root = :id WHERE root = :echo`,
+			`DELETE FROM thread_leaves WHERE root = :echo`,
 			`DELETE FROM mentions WHERE message_id = :echo`,
 			`DELETE FROM read_marks WHERE message_id = :echo`,
 			`DELETE FROM messages WHERE id = :echo`,
@@ -716,6 +827,13 @@ func extMessageTx(ctx context.Context, tx *sql.Tx, room, extID string) (int64, e
 
 // History returns the last messages of room, oldest first; last <= 0 means DefaultHistory.
 func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, error) {
+	return r.HistoryFor(ctx, room, last, "")
+}
+
+// HistoryFor is History read for agent reader ("" for nobody): the room's messages, without the
+// replies in threads that are not also posted to the room, each root with its thread's summary,
+// whose Unread counts the replies unread for reader.
+func (r *Rooms) HistoryFor(ctx context.Context, room string, last int, reader string) ([]Message, error) {
 	room = strings.TrimPrefix(room, "#")
 	if last <= 0 {
 		last = DefaultHistory
@@ -725,17 +843,224 @@ func (r *Rooms) History(ctx context.Context, room string, last int) ([]Message, 
 		if err := requireRoom(ctx, tx, room); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at, 0, 0,
-			COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), `+outsideAvatarColumn+`, COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
-			m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0) FROM
-			(SELECT * FROM messages WHERE room = ? ORDER BY id DESC LIMIT ?) AS m ORDER BY m.id`, room, last)
+		rows, err := tx.QueryContext(ctx, `SELECT `+messageColumns+` FROM
+			(SELECT * FROM messages WHERE room = ? AND (thread IS NULL OR also) ORDER BY id DESC LIMIT ?) AS m ORDER BY m.id`, room, last)
 		if err != nil {
 			return err
 		}
-		out, err = scanMessages(rows)
-		return err
+		if out, err = scanMessages(rows); err != nil {
+			return err
+		}
+		return summarize(ctx, tx, out, reader)
 	})
 	return out, err
+}
+
+// ThreadHistory returns the thread that message id names (see Posting.Thread): its root, then
+// its last replies, oldest first; last <= 0 means DefaultHistory. The root carries the thread's
+// summary, read for reader as in HistoryFor.
+func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader string) ([]Message, error) {
+	if last <= 0 {
+		last = DefaultHistory
+	}
+	var out []Message
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		root, err := rootTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT `+messageColumns+` FROM
+			(SELECT * FROM messages WHERE id = :root
+				UNION ALL SELECT * FROM (SELECT * FROM messages WHERE thread = :root ORDER BY id DESC LIMIT :last)) AS m ORDER BY m.id`,
+			sql.Named("root", root), sql.Named("last", last))
+		if err != nil {
+			return err
+		}
+		if out, err = scanMessages(rows); err != nil {
+			return err
+		}
+		return summarize(ctx, tx, out[:1], reader)
+	})
+	return out, err
+}
+
+// summarize sets the thread summary of every message of msgs that has replies; Unread counts the
+// replies unread for reader, none when reader is "" or has not joined.
+func summarize(ctx context.Context, tx *sql.Tx, msgs []Message, reader string) error {
+	at := map[int64]int{}
+	for i, m := range msgs {
+		if m.Thread == 0 {
+			at[m.ID] = i
+		}
+	}
+	if len(at) == 0 {
+		return nil
+	}
+	var roots []string
+	for id := range at {
+		roots = append(roots, strconv.FormatInt(id, 10))
+	}
+	in := "[" + strings.Join(roots, ",") + "]" // a JSON array, read with json_each
+	rows, err := tx.QueryContext(ctx, `SELECT thread, CASE WHEN author != '' THEN author ELSE ext_author_name || '@' || room END AS who,
+		COUNT(*), MAX(at) FROM messages WHERE thread IN (SELECT value FROM json_each(?)) GROUP BY thread, who ORDER BY thread, MIN(id)`, in)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var root, last int64
+		var who string
+		var n int
+		if err := rows.Scan(&root, &who, &n, &last); err != nil {
+			return err
+		}
+		sum := &msgs[at[root]].Summary
+		sum.Replies += n
+		sum.Repliers = append(sum.Repliers, who)
+		if t := time.UnixMilli(last); t.After(sum.LastAt) {
+			sum.LastAt = t
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return countUnread(ctx, tx, msgs, reader)
+}
+
+// countUnread sets Summary.Unread of each message of msgs that is a root to the replies in its
+// thread unread for reader; none when reader is "" or has not joined.
+func countUnread(ctx context.Context, tx *sql.Tx, msgs []Message, reader string) error {
+	at := map[int64]int{}
+	var roots []string
+	for i, m := range msgs {
+		if m.Thread == 0 {
+			at[m.ID] = i
+			roots = append(roots, strconv.FormatInt(m.ID, 10))
+		}
+	}
+	if len(roots) == 0 || reader == "" {
+		return nil
+	}
+	in := "[" + strings.Join(roots, ",") + "]"
+	// a reader that has not joined has nothing unread
+	var joined bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE name = ?)`, reader).Scan(&joined); err != nil || !joined {
+		return err
+	}
+	unread, err := tx.QueryContext(ctx, `SELECT thread, COUNT(*) FROM (`+unreadQuery+`) WHERE thread IN (SELECT value FROM json_each(:roots)) GROUP BY thread`,
+		sql.Named("a", reader), sql.Named("general", General), sql.Named("roots", in))
+	if err != nil {
+		return err
+	}
+	defer unread.Close()
+	for unread.Next() {
+		var root int64
+		var n int
+		if err := unread.Scan(&root, &n); err != nil {
+			return err
+		}
+		msgs[at[root]].Summary.Unread = n
+	}
+	return unread.Err()
+}
+
+// SetThreadTitle gives the thread that message id names (see Posting.Thread) a title of 1 to
+// MaxTitle characters on one line, replacing an earlier one; agent is the joined agent that titles it.
+func (r *Rooms) SetThreadTitle(ctx context.Context, agent string, id int64, title string) error {
+	title = strings.Join(strings.Fields(title), " ")
+	if title == "" || utf8.RuneCountInString(title) > MaxTitle {
+		return fmt.Errorf("%w: a thread title is 1 to %d characters", store.ErrInvalid, MaxTitle)
+	}
+	return store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+			return err
+		}
+		root, err := rootTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err := requireUnarchivedMessage(ctx, tx, root); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO threads (root, title, titled_by, titled_at) VALUES (?, ?, ?, ?)
+			ON CONFLICT (root) DO UPDATE SET title = excluded.title, titled_by = excluded.titled_by, titled_at = excluded.titled_at`,
+			root, title, agent, r.now().UnixMilli())
+		return err
+	})
+}
+
+// LeaveThread makes agent leave the thread that message id names (see Posting.Thread): its
+// replies no longer address agent unless they mention it, until agent posts there again.
+func (r *Rooms) LeaveThread(ctx context.Context, agent string, id int64) error {
+	return store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
+			return err
+		}
+		root, err := rootTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO thread_leaves (root, agent) VALUES (?, ?) ON CONFLICT DO NOTHING`, root, agent)
+		return err
+	})
+}
+
+// Threads returns the titled threads of room, or with room "" of every room that is not archived,
+// the most recently active first; Unread counts the replies unread for reader (none for "" or an
+// agent that has not joined).
+func (r *Rooms) Threads(ctx context.Context, room, reader string) ([]Thread, error) {
+	room = strings.TrimPrefix(room, "#")
+	var out []Thread
+	err := store.InTx(ctx, r.db, func(tx *sql.Tx) error {
+		if room != "" {
+			if err := requireRoom(ctx, tx, room); err != nil {
+				return err
+			}
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT t.root, m.room, t.title, COUNT(rp.id), MAX(m.at, t.titled_at, COALESCE(MAX(rp.at), 0)) AS last
+			FROM threads AS t JOIN messages AS m ON m.id = t.root
+			LEFT JOIN messages AS rp ON rp.thread = t.root
+			WHERE CASE :room WHEN '' THEN NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL) ELSE m.room = :room END
+			GROUP BY t.root ORDER BY last DESC, t.root DESC`, sql.Named("room", room))
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var th Thread
+			var last int64
+			if err := rows.Scan(&th.Root, &th.Room, &th.Title, &th.Replies, &last); err != nil {
+				return err
+			}
+			th.LastAt = time.UnixMilli(last)
+			out = append(out, th)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		// the counts come as thread summaries do: from roots
+		roots := make([]Message, len(out))
+		for i, th := range out {
+			roots[i] = Message{ID: th.Root}
+		}
+		if err := countUnread(ctx, tx, roots, reader); err != nil {
+			return err
+		}
+		for i := range out {
+			out[i].Unread = roots[i].Summary.Unread
+		}
+		return nil
+	})
+	return out, err
+}
+
+// requireUnarchivedMessage refuses a change to a message of an archived room.
+func requireUnarchivedMessage(ctx context.Context, tx *sql.Tx, id int64) error {
+	var room string
+	if err := tx.QueryRowContext(ctx, `SELECT room FROM messages WHERE id = ?`, id).Scan(&room); err != nil {
+		return err
+	}
+	return RequireUnarchivedTx(ctx, tx, room)
 }
 
 // Unread returns up to limit of agent's unread messages that pass filter, oldest first, and how
@@ -789,7 +1114,8 @@ func (r *Rooms) Take(ctx context.Context, agent string, filter Filter, limit int
 // unreadQuery finds unread messages, never in an archived room, through the indexes: messages in rooms followed with ModeAll
 // or ModeWake after the reading position (messages_room), @all messages in rooms followed with
 // ModeMentions after the position (messages_to_all, so their chatter is never walked), and
-// messages mentioning the agent by name (mentions_agent). It takes the agent as :a and General
+// messages mentioning the agent by name (mentions_agent). Replies in threads that are not also
+// posted to the room come only through mentions: a reply mentions its thread's participants. It takes the agent as :a and General
 // as :general. wake_room says the message is in a room the agent follows with ModeWake and
 // came after the mode became ModeWake.
 const unreadQuery = `
@@ -803,12 +1129,12 @@ WITH followed(room, mode, wake_from) AS (
 	SELECT m.id, 1 AS followed FROM followed AS f
 	JOIN messages AS m ON m.room = f.room
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
-	WHERE f.mode != 'mentions'
+	WHERE f.mode != 'mentions' AND (m.thread IS NULL OR m.also)
 	UNION
 	SELECT m.id, 1 FROM followed AS f
 	JOIN messages AS m INDEXED BY messages_to_all ON m.room = f.room AND m.to_all
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
-	WHERE f.mode = 'mentions'
+	WHERE f.mode = 'mentions' AND (m.thread IS NULL OR m.also)
 	UNION
 	SELECT m.id, EXISTS (SELECT 1 FROM followed WHERE room = m.room) FROM mentions AS mm
 	JOIN messages AS m ON m.id = mm.message_id
@@ -817,9 +1143,9 @@ WITH followed(room, mode, wake_from) AS (
 )
 SELECT m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at,
 	(EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a) OR (m.to_all AND MAX(c.followed))) AS addressed,
-	(NOT m.quiet AND EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from)) AS wake_room,
+	(NOT m.quiet AND (m.thread IS NULL OR m.also) AND EXISTS (SELECT 1 FROM followed WHERE room = m.room AND mode = 'wake' AND m.id > wake_from)) AS wake_room,
 	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), ` + outsideAvatarColumn + `, COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
-	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0)
+	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0), ` + threadColumns + `
 FROM candidates AS c CROSS JOIN messages AS m ON m.id = c.id -- CROSS keeps the planner from scanning messages
 WHERE m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)
 	AND NOT EXISTS (SELECT 1 FROM rooms WHERE name = m.room AND archived_at IS NOT NULL)
@@ -889,7 +1215,10 @@ func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, e
 
 // MarkRoomRead moves agent's reading position in room up to the message through, which must
 // be in that room, and reports whether it moved; the position never moves backwards, also not
-// behind where the agent's reading started when it joined.
+// behind where the agent's reading started when it joined. Replies in threads that are not also
+// in the room stay unread: the position stops before the first unread one, and the room's later
+// messages get read marks. When through is a reply in a thread, its thread's replies up to it get
+// read marks, and only a reply also in the room moves on to the room.
 func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through int64) (bool, error) {
 	room = strings.TrimPrefix(room, "#")
 	moved := false
@@ -901,7 +1230,9 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 			return err
 		}
 		var in string
-		err := tx.QueryRowContext(ctx, `SELECT room FROM messages WHERE id = ?`, through).Scan(&in)
+		var thread int64
+		var also bool
+		err := tx.QueryRowContext(ctx, `SELECT room, COALESCE(thread, 0), also FROM messages WHERE id = ?`, through).Scan(&in, &thread, &also)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && in != room) {
 			return fmt.Errorf("%w: message %d is not in #%s", store.ErrInvalid, through, room)
 		}
@@ -916,8 +1247,41 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 		if through <= pos {
 			return nil
 		}
+		if thread != 0 {
+			// a reply in a thread reads its thread up to it; one also in the room reads the room too
+			res, err := tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id)
+				SELECT ?, id FROM messages WHERE thread = ? AND id > ? AND id <= ? ON CONFLICT DO NOTHING`, agent, thread, pos, through)
+			if err != nil {
+				return err
+			}
+			n, err := res.RowsAffected()
+			if err != nil || !also {
+				moved = n > 0
+				return err
+			}
+		}
+		// the position stops before the first unread reply in a thread, and the room's messages
+		// after it are marked one by one
+		var stop int64
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MIN(m.id), 0) FROM mentions AS mm JOIN messages AS m ON m.id = mm.message_id
+			WHERE mm.agent = :a AND m.room = :room AND m.thread IS NOT NULL AND NOT m.also AND m.id > :pos AND m.id <= :through
+				AND m.author != :a AND NOT EXISTS (SELECT 1 FROM read_marks WHERE agent = :a AND message_id = m.id)`,
+			sql.Named("a", agent), sql.Named("room", room), sql.Named("pos", pos), sql.Named("through", through)).Scan(&stop); err != nil {
+			return err
+		}
 		moved = true
-		return markRead(ctx, tx, agent, []Message{{ID: through, Room: room}})
+		if stop == 0 {
+			return markRead(ctx, tx, agent, []Message{{ID: through, Room: room}})
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id)
+			SELECT ?, id FROM messages WHERE room = ? AND (thread IS NULL OR also) AND id > ? AND id <= ? ON CONFLICT DO NOTHING`,
+			agent, room, stop, through); err != nil {
+			return err
+		}
+		if stop-1 <= pos {
+			return nil
+		}
+		return markRead(ctx, tx, agent, []Message{{ID: stop - 1, Room: room}})
 	})
 	return moved, err
 }
@@ -1078,6 +1442,15 @@ func subscriptions(ctx context.Context, tx *sql.Tx, agent string) ([]Subscriptio
 	return out, rows.Err()
 }
 
+// messageColumns selects message m as scanMessages reads it, outside unread lists.
+const messageColumns = `m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0), m.at, 0, 0,
+	COALESCE(m.ext_author_id, ''), COALESCE(m.ext_author_name, ''), ` + outsideAvatarColumn + `, COALESCE(m.delivery, ''), COALESCE(m.delivery_error, ''),
+	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0), ` + threadColumns
+
+// threadColumns selects the thread of message m: its root (0 for a message of the room), also,
+// and the thread's title, of the thread m is a reply in or of its own.
+const threadColumns = `COALESCE(m.thread, 0) AS thread, m.also, COALESCE((SELECT title FROM threads WHERE root = COALESCE(m.thread, m.id)), '')`
+
 // outsideAvatarColumn selects the avatar of the author outside of message m, or "".
 const outsideAvatarColumn = `COALESCE((SELECT oa.avatar FROM outside_avatars AS oa WHERE oa.room = m.room AND oa.author = m.ext_author_id), '')`
 
@@ -1089,7 +1462,8 @@ func scanMessages(rows *sql.Rows) ([]Message, error) {
 		var at, scheduled int64
 		var wakeRoom bool
 		if err := rows.Scan(&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
-			&m.ExtAuthorID, &m.ExtAuthorName, &m.ExtAuthorAvatar, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled); err != nil {
+			&m.ExtAuthorID, &m.ExtAuthorName, &m.ExtAuthorAvatar, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled,
+			&m.Thread, &m.Also, &m.ThreadTitle); err != nil {
 			return nil, err
 		}
 		m.At = time.UnixMilli(at)
@@ -1135,6 +1509,30 @@ func Format(m Message, limit int) string {
 	case m.Note:
 		head += " · note"
 	}
-	head += deliveryLabel(m.Delivery, m.DeliveryError)
+	head += deliveryLabel(m.Delivery, m.DeliveryError) + threadLabel(m.Thread, m.ThreadTitle, m.Summary)
 	return head + "\n  " + strings.ReplaceAll(body, "\n", "\n  ")
+}
+
+// threadLabel is how a message's thread follows its head: " · in thread 40 «title»" for a reply
+// in a thread, " · thread «title»: 3 replies (builder, tester), last 14:02, 1 unread" for a root
+// with replies or a title, else "".
+func threadLabel(thread int64, title string, sum ThreadSummary) string {
+	if title != "" {
+		title = " «" + title + "»"
+	}
+	if thread != 0 {
+		return fmt.Sprintf(" · in thread %d%s", thread, title)
+	}
+	if sum.Replies == 0 {
+		if title == "" {
+			return ""
+		}
+		return " · thread" + title
+	}
+	label := fmt.Sprintf(" · thread%s: %d repl%s (%s), last %s", title, sum.Replies, map[bool]string{true: "y", false: "ies"}[sum.Replies == 1],
+		strings.Join(sum.Repliers, ", "), sum.LastAt.Local().Format("15:04"))
+	if sum.Unread > 0 {
+		label += fmt.Sprintf(", %d unread", sum.Unread)
+	}
+	return label
 }

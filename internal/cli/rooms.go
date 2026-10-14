@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -155,8 +156,8 @@ func subscribeCmd(o *options, follow bool) *cobra.Command {
 }
 
 func postCmd(o *options) *cobra.Command {
-	var reply int64
-	var note bool
+	var reply, thread int64
+	var note, also bool
 	cmd := &cobra.Command{
 		Use:   "post <room> [text...]",
 		Short: "Post to a room (text as arguments, or '-' / nothing to read standard input); @name or @all to address",
@@ -171,7 +172,7 @@ func postCmd(o *options) *cobra.Command {
 				return err
 			}
 			resp, err := o.rooms().Post(cmd.Context(), connect.NewRequest(&agorav1.PostRequest{
-				Agent: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply, Note: note,
+				Agent: name, Room: roomArg(args[0]), Body: text, ReplyTo: reply, Note: note, Thread: thread, Also: also,
 			}))
 			if err != nil {
 				return err
@@ -182,17 +183,22 @@ func postCmd(o *options) *cobra.Command {
 	}
 	cmd.Flags().Int64Var(&reply, "reply", 0, "message id this replies to")
 	cmd.Flags().BoolVar(&note, "note", false, "in a bridged room: a note for Agora that never goes out to the chat")
+	cmd.Flags().Int64Var(&thread, "thread", 0, "post into the thread of this message (its root or any reply in it); the reply addresses the thread's participants")
+	cmd.Flags().BoolVar(&also, "also", false, "with --thread: also show the reply in the room")
 	return cmd
 }
 
 func readCmd(o *options) *cobra.Command {
 	var last int32
+	var thread int64
 	cmd := &cobra.Command{
 		Use:   "read <room>",
-		Short: "Show a room's recent messages (does not mark anything read)",
+		Short: "Show a room's recent messages, or with --thread a thread (does not mark anything read)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resp, err := o.rooms().History(cmd.Context(), connect.NewRequest(&agorav1.HistoryRequest{Room: roomArg(args[0]), Last: last}))
+			// the reader only counts unread replies in thread summaries, so an unknown name is no error
+			name, _ := o.agent(cmd.Context())
+			resp, err := o.rooms().History(cmd.Context(), connect.NewRequest(&agorav1.HistoryRequest{Room: roomArg(args[0]), Last: last, Thread: thread, Agent: name}))
 			if err != nil {
 				return err
 			}
@@ -203,6 +209,74 @@ func readCmd(o *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().Int32Var(&last, "last", 20, "how many messages")
+	cmd.Flags().Int64Var(&thread, "thread", 0, "show the thread of this message: its root, then its last replies")
+	return cmd
+}
+
+func threadCmd(o *options) *cobra.Command {
+	cmd := &cobra.Command{Use: "thread", Short: "Title, leave or list threads (post with post --thread, read with read --thread)"}
+	messageArg := func(s string) (int64, error) {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || id <= 0 {
+			return 0, fmt.Errorf("%q is not a message id", s)
+		}
+		return id, nil
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "title <message> <title...>",
+		Short: "Give the thread of a message a title (1 to 100 characters); titled threads are listed with their room",
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := messageArg(args[0])
+			if err != nil {
+				return err
+			}
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			_, err = o.rooms().SetThreadTitle(cmd.Context(), connect.NewRequest(&agorav1.SetThreadTitleRequest{Agent: name, MessageId: id, Title: strings.Join(args[1:], " ")}))
+			return err
+		},
+	}, &cobra.Command{
+		Use:   "leave <message>",
+		Short: "Leave the thread of a message: its replies no longer address you unless they mention you, until you post there",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := messageArg(args[0])
+			if err != nil {
+				return err
+			}
+			name, err := o.agent(cmd.Context())
+			if err != nil {
+				return err
+			}
+			_, err = o.rooms().LeaveThread(cmd.Context(), connect.NewRequest(&agorav1.LeaveThreadRequest{Agent: name, MessageId: id}))
+			return err
+		},
+	}, &cobra.Command{
+		Use:   "list <room>",
+		Short: "List a room's titled threads, the most recently active first",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name, _ := o.agent(cmd.Context()) // for the unread counts only
+			resp, err := o.rooms().ListThreads(cmd.Context(), connect.NewRequest(&agorav1.ListThreadsRequest{Room: roomArg(args[0]), Agent: name}))
+			if err != nil {
+				return err
+			}
+			if len(resp.Msg.GetThreads()) == 0 {
+				fmt.Fprintf(o.out, "no titled threads in #%s\n", roomArg(args[0]))
+			}
+			for _, t := range resp.Msg.GetThreads() {
+				unread := ""
+				if t.GetUnread() > 0 {
+					unread = fmt.Sprintf(" · %d unread", t.GetUnread())
+				}
+				fmt.Fprintf(o.out, "[%d] «%s» · %d repl%s · last %s%s\n", t.GetRoot(), t.GetTitle(), t.GetReplies(), map[bool]string{true: "y", false: "ies"}[t.GetReplies() == 1], dateTime(t.GetLastAt().AsTime()), unread)
+			}
+			return nil
+		},
+	})
 	return cmd
 }
 

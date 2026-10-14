@@ -1087,3 +1087,52 @@ func TestBridgeListShowsWhatThePlatformCanDo(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+func TestThreadsFromTheCommandLine(t *testing.T) {
+	socket := startHub(t)
+	ctx := context.Background()
+	for _, a := range []string{"builder", "reviewer"} {
+		if r := agora(ctx, socket, a, "join", a); r.code != 0 {
+			t.Fatalf("join %s: %+v", a, r)
+		}
+	}
+	root := strings.TrimSpace(agora(ctx, socket, "builder", "post", "general", "the export is broken").stdout)
+	if r := agora(ctx, socket, "builder", "unread"); r.code != 0 {
+		t.Fatal(r)
+	}
+	agora(ctx, socket, "reviewer", "unread")
+	reply := agora(ctx, socket, "reviewer", "post", "general", "--thread", root, "which one?")
+	if reply.code != 0 {
+		t.Fatalf("reply: %+v", reply)
+	}
+	also := agora(ctx, socket, "reviewer", "post", "general", "--thread", root, "--also", "the CSV one")
+	if also.code != 0 {
+		t.Fatalf("also: %+v", also)
+	}
+	if r := agora(ctx, socket, "builder", "thread", "title", root, "Release", "2.4"); r.code != 0 {
+		t.Fatalf("title: %+v", r)
+	}
+	r := agora(ctx, socket, "builder", "unread")
+	if !strings.Contains(r.stdout, "in thread "+root+" «Release 2.4»") || !strings.Contains(r.stdout, "which one?") {
+		t.Fatalf("unread:\n%s", r.stdout)
+	}
+	hist := agora(ctx, socket, "builder", "read", "general")
+	if strings.Contains(hist.stdout, "which one?") || !strings.Contains(hist.stdout, "the CSV one") ||
+		!strings.Contains(hist.stdout, "thread «Release 2.4»: 2 replies (reviewer)") {
+		t.Fatalf("room history:\n%s", hist.stdout)
+	}
+	th := agora(ctx, socket, "builder", "read", "general", "--thread", strings.TrimSpace(reply.stdout))
+	if !strings.Contains(th.stdout, "the export is broken") || !strings.Contains(th.stdout, "which one?") {
+		t.Fatalf("thread:\n%s", th.stdout)
+	}
+	if r := agora(ctx, socket, "builder", "thread", "list", "general"); !strings.Contains(r.stdout, root) || !strings.Contains(r.stdout, "Release 2.4") {
+		t.Fatalf("list: %+v", r)
+	}
+	if r := agora(ctx, socket, "builder", "thread", "leave", root); r.code != 0 {
+		t.Fatalf("leave: %+v", r)
+	}
+	agora(ctx, socket, "reviewer", "post", "general", "--thread", root, "anyone?")
+	if r := agora(ctx, socket, "builder", "unread"); strings.Contains(r.stdout, "anyone?") {
+		t.Fatalf("a left thread is unread:\n%s", r.stdout)
+	}
+}

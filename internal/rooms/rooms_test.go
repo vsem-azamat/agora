@@ -3,10 +3,12 @@ package rooms_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/queue"
@@ -854,5 +856,269 @@ func TestNoticesSkipArchivedRooms(t *testing.T) {
 	}
 	if h, _ := e.r.History(ctx, "bb-app", 1); len(h) != 1 || h[0].Body != "builder is now called builder-2" {
 		t.Fatalf("notice %+v", h)
+	}
+}
+
+// --- threads ----------------------------------------------------------------------
+
+// threadEnv has #example-app, followed by builder, reviewer and tester, and message 40-like
+// root, posted by builder.
+func threadEnv(t *testing.T) (env, int64) {
+	t.Helper()
+	e := newEnv(t)
+	e.join(t, "builder", "reviewer", "tester")
+	if err := e.r.Create(ctx, "example-app", "the app", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []string{"reviewer", "tester"} {
+		if _, err := e.r.Subscribe(ctx, a, []string{"example-app"}, true, rooms.ModeAll); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := e.post(t, "builder", "example-app", "the export is broken")
+	e.readAll(t, "builder", "reviewer", "tester")
+	return e, root
+}
+
+func (e env) readAll(t *testing.T, agents ...string) {
+	t.Helper()
+	for _, a := range agents {
+		if _, _, err := e.r.Take(ctx, a, rooms.Everything, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func (e env) reply(t *testing.T, author string, thread int64, body string, also bool) int64 {
+	t.Helper()
+	id, err := e.r.Send(ctx, rooms.Posting{Author: author, Room: "example-app", Body: body, Thread: thread, Also: also})
+	if err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	return id
+}
+
+func TestThreadReplyIsInTheThreadOfItsRoot(t *testing.T) {
+	e, root := threadEnv(t)
+	first := e.reply(t, "reviewer", root, "which export broke?", false)
+	second := e.reply(t, "tester", first, "the CSV one", false) // naming a reply names its thread
+	msgs, err := e.r.ThreadHistory(ctx, first, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ids(msgs), []int64{root, first, second}) {
+		t.Fatalf("thread %v", ids(msgs))
+	}
+	for _, m := range msgs[1:] {
+		if m.Thread != root {
+			t.Fatalf("message %d in thread %d", m.ID, m.Thread)
+		}
+	}
+	if err := e.r.Create(ctx, "other", "another room", "builder"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.r.Send(ctx, rooms.Posting{Author: "reviewer", Room: "other", Body: "x", Thread: root}); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("a reply in another room: %v", err)
+	}
+	if _, err := e.r.Send(ctx, rooms.Posting{Author: "reviewer", Room: "example-app", Body: "x", Thread: 999}); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("a reply in the thread of no message: %v", err)
+	}
+}
+
+func TestThreadRepliesStayOutOfTheRoom(t *testing.T) {
+	e, root := threadEnv(t)
+	if _, err := e.r.Subscribe(ctx, "tester", []string{"example-app"}, true, rooms.ModeWake); err != nil {
+		t.Fatal(err)
+	}
+	e.reply(t, "reviewer", root, "which export broke?", false)
+	if got := e.unread(t, "tester"); len(got) != 0 {
+		t.Fatalf("a thread reply is unread for a follower outside the thread: %v", ids(got))
+	}
+	waking, _, err := e.r.Unread(ctx, "tester", rooms.Waking, 0)
+	if err != nil || len(waking) != 0 {
+		t.Fatalf("waking %v, %v", ids(waking), err)
+	}
+	hist, err := e.r.History(ctx, "example-app", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ids(hist), []int64{root}) {
+		t.Fatalf("history %v", ids(hist))
+	}
+}
+
+func TestTheRootShowsItsThread(t *testing.T) {
+	e, root := threadEnv(t)
+	e.reply(t, "reviewer", root, "one", false)
+	e.reply(t, "tester", root, "two", false)
+	last := e.reply(t, "reviewer", root, "three", false)
+	hist, err := e.r.HistoryFor(ctx, "example-app", 0, "builder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	th := hist[0].Summary
+	if th.Replies != 3 || !slices.Equal(th.Repliers, []string{"reviewer", "tester"}) || th.Unread != 3 {
+		t.Fatalf("summary %+v", th)
+	}
+	msgs, _ := e.r.ThreadHistory(ctx, root, 0, "")
+	if !th.LastAt.Equal(msgs[len(msgs)-1].At) || msgs[len(msgs)-1].ID != last {
+		t.Fatalf("last reply at %v, want %v", th.LastAt, msgs[len(msgs)-1].At)
+	}
+}
+
+func TestAlsoToTheRoom(t *testing.T) {
+	e, root := threadEnv(t)
+	id := e.reply(t, "builder", root, "fixed in #57", true)
+	hist, err := e.r.History(ctx, "example-app", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ids(hist), []int64{root, id}) || hist[1].Thread != root || !hist[1].Also {
+		t.Fatalf("history %+v", hist)
+	}
+	for _, a := range []string{"reviewer", "tester"} {
+		if got := e.unread(t, a); !slices.Equal(ids(got), []int64{id}) {
+			t.Fatalf("%s unread %v", a, ids(got))
+		}
+	}
+	if !strings.Contains(rooms.Format(hist[1], 0), fmt.Sprintf("in thread %d", root)) {
+		t.Fatalf("format %q", rooms.Format(hist[1], 0))
+	}
+}
+
+func TestAReplyAddressesTheThreadsParticipants(t *testing.T) {
+	e, root := threadEnv(t)
+	if _, err := e.r.Subscribe(ctx, "builder", []string{"example-app"}, true, rooms.ModeMentions); err != nil {
+		t.Fatal(err)
+	}
+	first := e.reply(t, "reviewer", root, "@tester can you check?", false)
+	got := e.unread(t, "builder")
+	if !slices.Equal(ids(got), []int64{first}) || !got[0].Addressed || !got[0].Wakes {
+		t.Fatalf("root author: %+v", got)
+	}
+	e.readAll(t, "tester")
+	second := e.reply(t, "builder", root, "thanks", false)
+	for _, a := range []string{"reviewer", "tester"} {
+		got := e.unread(t, a)
+		if !slices.Equal(ids(got), []int64{second}) || !got[0].Addressed {
+			t.Fatalf("%s: %+v", a, got)
+		}
+	}
+	e.readAll(t, "builder")
+	e.join(t, "outsider")
+	if _, err := e.r.Subscribe(ctx, "outsider", []string{"example-app"}, true, rooms.ModeAll); err != nil {
+		t.Fatal(err)
+	}
+	third := e.reply(t, "reviewer", root, "@all please check", false)
+	if got := e.unread(t, "outsider"); len(got) != 0 {
+		t.Fatalf("@all in a thread reached a follower outside it: %v", ids(got))
+	}
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{third}) { // not its own second
+		t.Fatalf("builder %v", ids(got))
+	}
+}
+
+func TestLeavingAThread(t *testing.T) {
+	e, root := threadEnv(t)
+	if err := e.r.LeaveThread(ctx, "builder", root); err != nil {
+		t.Fatal(err)
+	}
+	e.reply(t, "reviewer", root, "one", false)
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("a left thread is unread: %v", ids(got))
+	}
+	named := e.reply(t, "reviewer", root, "@builder still there?", false)
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{named}) {
+		t.Fatalf("a mention by name after leaving: %v", ids(got))
+	}
+	e.readAll(t, "builder")
+	e.reply(t, "builder", root, "back", false)
+	again := e.reply(t, "reviewer", root, "welcome back", false)
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{again}) {
+		t.Fatalf("after coming back: %v", ids(got))
+	}
+}
+
+func TestThreadTitles(t *testing.T) {
+	e, root := threadEnv(t)
+	if err := e.r.SetThreadTitle(ctx, "builder", root, strings.Repeat("x", 101)); !errors.Is(err, store.ErrInvalid) {
+		t.Fatalf("a 101-character title: %v", err)
+	}
+	if err := e.r.SetThreadTitle(ctx, "builder", root, "Release 2.4"); err != nil {
+		t.Fatal(err)
+	}
+	other := e.post(t, "tester", "example-app", "another topic")
+	if err := e.r.SetThreadTitle(ctx, "tester", other, "Docs"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Millisecond) // the reply is the newest activity
+	e.reply(t, "reviewer", root, "newest activity", false)
+	list, err := e.r.Threads(ctx, "example-app", "builder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 || list[0].Root != root || list[0].Title != "Release 2.4" || list[0].Replies != 1 || list[0].Unread != 1 || list[1].Root != other {
+		t.Fatalf("threads %+v", list)
+	}
+	hist, _ := e.r.History(ctx, "example-app", 0)
+	if hist[0].ThreadTitle != "Release 2.4" {
+		t.Fatalf("root title %q", hist[0].ThreadTitle)
+	}
+	got := e.unread(t, "builder") // tester's new message, then the reply
+	if len(got) != 2 || !strings.Contains(rooms.Format(got[1], 0), fmt.Sprintf("in thread %d «Release 2.4»", root)) {
+		t.Fatalf("unread %+v", got)
+	}
+}
+
+func TestMarkingTheRoomReadLeavesThreadRepliesUnread(t *testing.T) {
+	e, root := threadEnv(t)
+	reply := e.reply(t, "reviewer", root, "in the thread", false)
+	later := e.post(t, "tester", "example-app", "in the room")
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", later); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{reply}) {
+		t.Fatalf("unread %v, want the reply only", ids(got))
+	}
+}
+
+func TestMarkingAThreadRead(t *testing.T) {
+	e, root := threadEnv(t)
+	first := e.reply(t, "reviewer", root, "one", false)
+	second := e.reply(t, "reviewer", root, "two", false)
+	room := e.post(t, "tester", "example-app", "in the room")
+	third := e.reply(t, "reviewer", root, "three", false)
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", second); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); !slices.Equal(ids(got), []int64{room, third}) {
+		t.Fatalf("unread %v, want %v", ids(got), []int64{room, third})
+	}
+	_ = first
+}
+
+func TestThreadsOfEveryRoom(t *testing.T) {
+	e, root := threadEnv(t)
+	general := e.post(t, "tester", "general", "elsewhere")
+	for id, title := range map[int64]string{root: "Release", general: "Docs"} {
+		if err := e.r.SetThreadTitle(ctx, "builder", id, title); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := e.r.Threads(ctx, "", "")
+	if err != nil || len(list) != 2 {
+		t.Fatalf("threads %+v, %v", list, err)
+	}
+}
+
+func TestMarkingReadUpToAReplyAlsoInTheRoomReadsItsThread(t *testing.T) {
+	e, root := threadEnv(t)
+	e.reply(t, "reviewer", root, "in the thread", false)
+	also := e.reply(t, "tester", root, "also in the room", true)
+	if _, err := e.r.MarkRoomRead(ctx, "builder", "example-app", also); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.unread(t, "builder"); len(got) != 0 {
+		t.Fatalf("unread %v, want none", ids(got))
 	}
 }

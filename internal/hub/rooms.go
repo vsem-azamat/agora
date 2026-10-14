@@ -76,14 +76,10 @@ func (s *roomService) ListSubscriptions(ctx context.Context, req *connect.Reques
 
 func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.PostRequest]) (*connect.Response[agorav1.PostResponse], error) {
 	m := req.Msg
-	post := s.h.rooms.Post
-	switch {
-	case m.GetNote():
-		post = s.h.rooms.PostNote
-	case fromOperator(ctx):
-		post = s.h.rooms.PostFromOperator
-	}
-	id, err := post(ctx, m.GetAgent(), m.GetRoom(), m.GetBody(), m.GetReplyTo())
+	id, err := s.h.rooms.Send(ctx, rooms.Posting{
+		Author: m.GetAgent(), Room: m.GetRoom(), Body: m.GetBody(), ReplyTo: m.GetReplyTo(),
+		Thread: m.GetThread(), Also: m.GetAlso(), Note: m.GetNote(), Operator: fromOperator(ctx),
+	})
 	if err != nil {
 		return nil, toConnect(err)
 	}
@@ -92,7 +88,14 @@ func (s *roomService) Post(ctx context.Context, req *connect.Request[agorav1.Pos
 }
 
 func (s *roomService) History(ctx context.Context, req *connect.Request[agorav1.HistoryRequest]) (*connect.Response[agorav1.HistoryResponse], error) {
-	msgs, err := s.h.rooms.History(ctx, req.Msg.GetRoom(), int(req.Msg.GetLast()))
+	m := req.Msg
+	var msgs []rooms.Message
+	var err error
+	if m.GetThread() != 0 {
+		msgs, err = s.h.rooms.ThreadHistory(ctx, m.GetThread(), int(m.GetLast()), m.GetAgent())
+	} else {
+		msgs, err = s.h.rooms.HistoryFor(ctx, m.GetRoom(), int(m.GetLast()), m.GetAgent())
+	}
 	if err != nil {
 		return nil, toConnect(err)
 	}
@@ -138,4 +141,34 @@ func (s *roomService) MarkRoomRead(ctx context.Context, req *connect.Request[ago
 		s.h.changes.fire()
 	}
 	return connect.NewResponse(&agorav1.MarkRoomReadResponse{}), nil
+}
+
+func (s *roomService) SetThreadTitle(ctx context.Context, req *connect.Request[agorav1.SetThreadTitleRequest]) (*connect.Response[agorav1.SetThreadTitleResponse], error) {
+	m := req.Msg
+	if err := s.h.rooms.SetThreadTitle(ctx, m.GetAgent(), m.GetMessageId(), m.GetTitle()); err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.SetThreadTitleResponse{}), nil
+}
+
+func (s *roomService) LeaveThread(ctx context.Context, req *connect.Request[agorav1.LeaveThreadRequest]) (*connect.Response[agorav1.LeaveThreadResponse], error) {
+	m := req.Msg
+	if err := s.h.rooms.LeaveThread(ctx, m.GetAgent(), m.GetMessageId()); err != nil {
+		return nil, toConnect(err)
+	}
+	s.h.changes.fire()
+	return connect.NewResponse(&agorav1.LeaveThreadResponse{}), nil
+}
+
+func (s *roomService) ListThreads(ctx context.Context, req *connect.Request[agorav1.ListThreadsRequest]) (*connect.Response[agorav1.ListThreadsResponse], error) {
+	list, err := s.h.rooms.Threads(ctx, req.Msg.GetRoom(), req.Msg.GetAgent())
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	out := &agorav1.ListThreadsResponse{}
+	for _, t := range list {
+		out.Threads = append(out.Threads, &agorav1.Thread{Root: t.Root, Room: t.Room, Title: t.Title, Replies: int32(t.Replies), LastAt: timestamppb.New(t.LastAt), Unread: int32(t.Unread)})
+	}
+	return connect.NewResponse(out), nil
 }

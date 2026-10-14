@@ -10,7 +10,7 @@ Which messages count as new for an agent, and how an agent marks them as read.
 
 ### Requirement: What Counts As Unread
 
-The system SHALL count as unread for an agent, when newer than its reading position in the message's room, every message from others in a room it follows with the mode `all` or `wake`, and every message from others addressed to it in any other room, including a room it follows with the mode `mentions`. Messages of an archived room count as unread for no one until it is unarchived (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)). Besides mentions, a message from outside marked as addressed is addressed to the agents its bridge was added with (see [Bridges](../../bridges/protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)).
+The system SHALL count as unread for an agent, when newer than its reading position in the message's room, every message from others in a room it follows with the mode `all` or `wake`, and every message from others addressed to it in any other room, including a room it follows with the mode `mentions`. Messages of an archived room count as unread for no one until it is unarchived (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)). A reply in a thread counts only as its thread says (see [Threads Stay Out Of The Room's Feed](../../rooms/threads/spec.md#requirement-threads-stay-out-of-the-rooms-feed) and [A Reply Addresses The Thread's Participants](../../rooms/threads/spec.md#requirement-a-reply-addresses-the-threads-participants)). Besides mentions, a message from outside marked as addressed is addressed to the agents its bridge was added with (see [Bridges](../../bridges/protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)).
 
 #### Scenario: Message in a followed room
 - **WHEN** another agent posts in a room the agent follows
@@ -63,7 +63,7 @@ The system SHALL count an agent's unread messages per room, with how many of the
 
 ### Requirement: Marking A Room Read
 
-The system SHALL move an agent's reading position in a room up to a given message of that room, so that message and every earlier one in the room are read; a position never moves backwards, and a message from another room is refused.
+The system SHALL move an agent's reading position in a room up to a given message of that room, so that message and every earlier one in the room are read, except replies in threads (see [Marking Thread Replies Read](../../rooms/threads/spec.md#requirement-marking-thread-replies-read)); a position never moves backwards, and a message from another room is refused.
 
 #### Scenario: Read up to a message
 - **WHEN** an agent with three unread messages in `#example-app` marks the room read up to the second

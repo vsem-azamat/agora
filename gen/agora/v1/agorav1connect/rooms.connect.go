@@ -56,6 +56,13 @@ const (
 	// RoomServiceMarkRoomReadProcedure is the fully-qualified name of the RoomService's MarkRoomRead
 	// RPC.
 	RoomServiceMarkRoomReadProcedure = "/agora.v1.RoomService/MarkRoomRead"
+	// RoomServiceSetThreadTitleProcedure is the fully-qualified name of the RoomService's
+	// SetThreadTitle RPC.
+	RoomServiceSetThreadTitleProcedure = "/agora.v1.RoomService/SetThreadTitle"
+	// RoomServiceLeaveThreadProcedure is the fully-qualified name of the RoomService's LeaveThread RPC.
+	RoomServiceLeaveThreadProcedure = "/agora.v1.RoomService/LeaveThread"
+	// RoomServiceListThreadsProcedure is the fully-qualified name of the RoomService's ListThreads RPC.
+	RoomServiceListThreadsProcedure = "/agora.v1.RoomService/ListThreads"
 )
 
 // RoomServiceClient is a client for the agora.v1.RoomService service.
@@ -87,6 +94,14 @@ type RoomServiceClient interface {
 	UnreadByRoom(context.Context, *connect.Request[v1.UnreadByRoomRequest]) (*connect.Response[v1.UnreadByRoomResponse], error)
 	// MarkRoomRead moves the agent's reading position in a room up to a message.
 	MarkRoomRead(context.Context, *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error)
+	// SetThreadTitle gives the thread of a message a title, replacing an earlier one.
+	SetThreadTitle(context.Context, *connect.Request[v1.SetThreadTitleRequest]) (*connect.Response[v1.SetThreadTitleResponse], error)
+	// LeaveThread makes the agent leave a thread: its replies no longer address the agent unless
+	// they mention it, until it posts there again.
+	LeaveThread(context.Context, *connect.Request[v1.LeaveThreadRequest]) (*connect.Response[v1.LeaveThreadResponse], error)
+	// ListThreads returns a room's titled threads, or those of every room that is not archived, the
+	// most recently active first.
+	ListThreads(context.Context, *connect.Request[v1.ListThreadsRequest]) (*connect.Response[v1.ListThreadsResponse], error)
 }
 
 // NewRoomServiceClient constructs a client for the agora.v1.RoomService service. By default, it
@@ -160,6 +175,24 @@ func NewRoomServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(roomServiceMethods.ByName("MarkRoomRead")),
 			connect.WithClientOptions(opts...),
 		),
+		setThreadTitle: connect.NewClient[v1.SetThreadTitleRequest, v1.SetThreadTitleResponse](
+			httpClient,
+			baseURL+RoomServiceSetThreadTitleProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("SetThreadTitle")),
+			connect.WithClientOptions(opts...),
+		),
+		leaveThread: connect.NewClient[v1.LeaveThreadRequest, v1.LeaveThreadResponse](
+			httpClient,
+			baseURL+RoomServiceLeaveThreadProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("LeaveThread")),
+			connect.WithClientOptions(opts...),
+		),
+		listThreads: connect.NewClient[v1.ListThreadsRequest, v1.ListThreadsResponse](
+			httpClient,
+			baseURL+RoomServiceListThreadsProcedure,
+			connect.WithSchema(roomServiceMethods.ByName("ListThreads")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -175,6 +208,9 @@ type roomServiceClient struct {
 	unread            *connect.Client[v1.UnreadRequest, v1.UnreadResponse]
 	unreadByRoom      *connect.Client[v1.UnreadByRoomRequest, v1.UnreadByRoomResponse]
 	markRoomRead      *connect.Client[v1.MarkRoomReadRequest, v1.MarkRoomReadResponse]
+	setThreadTitle    *connect.Client[v1.SetThreadTitleRequest, v1.SetThreadTitleResponse]
+	leaveThread       *connect.Client[v1.LeaveThreadRequest, v1.LeaveThreadResponse]
+	listThreads       *connect.Client[v1.ListThreadsRequest, v1.ListThreadsResponse]
 }
 
 // CreateRoom calls agora.v1.RoomService.CreateRoom.
@@ -227,6 +263,21 @@ func (c *roomServiceClient) MarkRoomRead(ctx context.Context, req *connect.Reque
 	return c.markRoomRead.CallUnary(ctx, req)
 }
 
+// SetThreadTitle calls agora.v1.RoomService.SetThreadTitle.
+func (c *roomServiceClient) SetThreadTitle(ctx context.Context, req *connect.Request[v1.SetThreadTitleRequest]) (*connect.Response[v1.SetThreadTitleResponse], error) {
+	return c.setThreadTitle.CallUnary(ctx, req)
+}
+
+// LeaveThread calls agora.v1.RoomService.LeaveThread.
+func (c *roomServiceClient) LeaveThread(ctx context.Context, req *connect.Request[v1.LeaveThreadRequest]) (*connect.Response[v1.LeaveThreadResponse], error) {
+	return c.leaveThread.CallUnary(ctx, req)
+}
+
+// ListThreads calls agora.v1.RoomService.ListThreads.
+func (c *roomServiceClient) ListThreads(ctx context.Context, req *connect.Request[v1.ListThreadsRequest]) (*connect.Response[v1.ListThreadsResponse], error) {
+	return c.listThreads.CallUnary(ctx, req)
+}
+
 // RoomServiceHandler is an implementation of the agora.v1.RoomService service.
 type RoomServiceHandler interface {
 	// CreateRoom creates a room with a purpose; its creator follows it.
@@ -256,6 +307,14 @@ type RoomServiceHandler interface {
 	UnreadByRoom(context.Context, *connect.Request[v1.UnreadByRoomRequest]) (*connect.Response[v1.UnreadByRoomResponse], error)
 	// MarkRoomRead moves the agent's reading position in a room up to a message.
 	MarkRoomRead(context.Context, *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error)
+	// SetThreadTitle gives the thread of a message a title, replacing an earlier one.
+	SetThreadTitle(context.Context, *connect.Request[v1.SetThreadTitleRequest]) (*connect.Response[v1.SetThreadTitleResponse], error)
+	// LeaveThread makes the agent leave a thread: its replies no longer address the agent unless
+	// they mention it, until it posts there again.
+	LeaveThread(context.Context, *connect.Request[v1.LeaveThreadRequest]) (*connect.Response[v1.LeaveThreadResponse], error)
+	// ListThreads returns a room's titled threads, or those of every room that is not archived, the
+	// most recently active first.
+	ListThreads(context.Context, *connect.Request[v1.ListThreadsRequest]) (*connect.Response[v1.ListThreadsResponse], error)
 }
 
 // NewRoomServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -325,6 +384,24 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(roomServiceMethods.ByName("MarkRoomRead")),
 		connect.WithHandlerOptions(opts...),
 	)
+	roomServiceSetThreadTitleHandler := connect.NewUnaryHandler(
+		RoomServiceSetThreadTitleProcedure,
+		svc.SetThreadTitle,
+		connect.WithSchema(roomServiceMethods.ByName("SetThreadTitle")),
+		connect.WithHandlerOptions(opts...),
+	)
+	roomServiceLeaveThreadHandler := connect.NewUnaryHandler(
+		RoomServiceLeaveThreadProcedure,
+		svc.LeaveThread,
+		connect.WithSchema(roomServiceMethods.ByName("LeaveThread")),
+		connect.WithHandlerOptions(opts...),
+	)
+	roomServiceListThreadsHandler := connect.NewUnaryHandler(
+		RoomServiceListThreadsProcedure,
+		svc.ListThreads,
+		connect.WithSchema(roomServiceMethods.ByName("ListThreads")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agora.v1.RoomService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RoomServiceCreateRoomProcedure:
@@ -347,6 +424,12 @@ func NewRoomServiceHandler(svc RoomServiceHandler, opts ...connect.HandlerOption
 			roomServiceUnreadByRoomHandler.ServeHTTP(w, r)
 		case RoomServiceMarkRoomReadProcedure:
 			roomServiceMarkRoomReadHandler.ServeHTTP(w, r)
+		case RoomServiceSetThreadTitleProcedure:
+			roomServiceSetThreadTitleHandler.ServeHTTP(w, r)
+		case RoomServiceLeaveThreadProcedure:
+			roomServiceLeaveThreadHandler.ServeHTTP(w, r)
+		case RoomServiceListThreadsProcedure:
+			roomServiceListThreadsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -394,4 +477,16 @@ func (UnimplementedRoomServiceHandler) UnreadByRoom(context.Context, *connect.Re
 
 func (UnimplementedRoomServiceHandler) MarkRoomRead(context.Context, *connect.Request[v1.MarkRoomReadRequest]) (*connect.Response[v1.MarkRoomReadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.MarkRoomRead is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) SetThreadTitle(context.Context, *connect.Request[v1.SetThreadTitleRequest]) (*connect.Response[v1.SetThreadTitleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.SetThreadTitle is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) LeaveThread(context.Context, *connect.Request[v1.LeaveThreadRequest]) (*connect.Response[v1.LeaveThreadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.LeaveThread is not implemented"))
+}
+
+func (UnimplementedRoomServiceHandler) ListThreads(context.Context, *connect.Request[v1.ListThreadsRequest]) (*connect.Response[v1.ListThreadsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agora.v1.RoomService.ListThreads is not implemented"))
 }
