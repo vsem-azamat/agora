@@ -1094,6 +1094,41 @@ func TestATopicRenamedOutsideRetitlesItsThread(t *testing.T) {
 	}
 }
 
+func TestARepeatedTitleFromOutsideChangesNothing(t *testing.T) {
+	e, c := newDelayEnv(t)
+	t0 := c.now()
+	lastAt := func() time.Time {
+		t.Helper()
+		th, err := e.r.Threads(ctx, "example-chat", "", false)
+		if err != nil || len(th) != 1 {
+			t.Fatalf("threads %+v %v", th, err)
+		}
+		return th[0].LastAt
+	}
+	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release"})
+	c.add(time.Hour)
+	e.receive(t, bridges.In{ID: "2", AuthorName: "Bob", Text: "when?", ThreadKey: "77", ThreadTitle: "Release 2.4", At: t0})
+	renamed := lastAt()
+	if !renamed.Equal(t0.Add(time.Hour)) {
+		t.Fatalf("a new title is activity: %v", renamed)
+	}
+	c.add(time.Hour)
+	e.receive(t, bridges.In{ID: "3", AuthorName: "Bob", Text: "five", ThreadKey: "77", ThreadTitle: "Release 2.4", At: t0})
+	if got := lastAt(); !got.Equal(renamed) {
+		t.Fatalf("the same title again moved the thread's activity: %v", got)
+	}
+}
+
+func TestAThreadWithoutATitleTakesOneFromALaterLine(t *testing.T) {
+	e := newEnv(t)
+	root := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "release today", ThreadKey: "88"})
+	e.receive(t, bridges.In{ID: "2", AuthorName: "Bob", Text: "when?", ThreadKey: "88", ThreadTitle: "Late"})
+	msgs, err := e.r.ThreadHistory(ctx, root, 0, "")
+	if err != nil || msgs[0].ThreadTitle != "Late" {
+		t.Fatalf("%+v %v", msgs, err)
+	}
+}
+
 func TestMessagesOfAThreadOutside(t *testing.T) {
 	e := newEnv(t)
 	root := e.receive(t, bridges.In{ID: "1", AuthorID: "42", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release\n2.4"})

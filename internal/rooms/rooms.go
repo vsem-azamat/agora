@@ -720,7 +720,7 @@ type Incoming struct {
 	Addressees []string // agents the message addresses besides its mentions
 	// ThreadKey names the thread outside the message belongs to, such as a forum topic; the
 	// first message with a new key becomes the root of a thread titled ThreadTitle, later ones
-	// are replies in it. "" for a message of the room.
+	// are replies in it, and a ThreadTitle on them retitles the thread as titleFromOutsideTx says. "" for a message of the room.
 	ThreadKey, ThreadTitle string
 }
 
