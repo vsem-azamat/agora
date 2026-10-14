@@ -52,6 +52,10 @@ The system SHALL hand a message of a bridged room that may go out to the bridge 
 - **WHEN** the bridge answers `failed` for the message a reply is waiting for
 - **THEN** the reply goes out without `reply_to`
 
+#### Scenario: A reply to a message sent without an identifier
+- **WHEN** the bridge answers `sent` for the message a reply is waiting for with an identifier another message of the room has
+- **THEN** the reply goes out without `reply_to`
+
 #### Scenario: A reply to another room
 - **WHEN** an agent's message going out replies to a message of another bridged room
 - **THEN** its `out` line carries no `reply_to`

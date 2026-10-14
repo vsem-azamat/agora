@@ -1202,7 +1202,7 @@ func TestAReplyInAThreadWaitsForItsRootToBeSent(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the root", func() bool { return len(f.outs()) == 1 })
-	time.Sleep(500 * time.Millisecond) // more than a sweep
+	time.Sleep(hub.SweepEvery + 500*time.Millisecond) // the writer looked again meanwhile
 	if outs := f.outs(); len(outs) != 1 || outs[0] != root {
 		t.Fatalf("the reply went out before its root was answered: %v", outs)
 	}

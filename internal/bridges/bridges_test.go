@@ -1288,6 +1288,34 @@ func TestAReplyWaitsForTheMessageItRepliesTo(t *testing.T) {
 	}
 }
 
+func TestAReplyGoesOutWhenTheMessageItRepliesToWasSentWithoutAnIdentifier(t *testing.T) {
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	first, err := e.r.Post(ctx, "secretary", "example-chat", "one", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", first, "900"); err != nil {
+		t.Fatal(err)
+	}
+	root, err := e.r.Post(ctx, "secretary", "example-chat", "two", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "at five", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the identifier is taken by the first message, so the root is sent without one
+	if _, taken, err := e.b.Sent(ctx, "example-chat", root, "900"); err != nil || !taken {
+		t.Fatalf("taken %v %v", taken, err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 1 || outs[0].ID != reply || outs[0].ReplyTo != "" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
 func TestAReplyGoesOutWhenTheMessageItRepliesToFailed(t *testing.T) {
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)

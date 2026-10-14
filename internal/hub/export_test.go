@@ -54,3 +54,6 @@ func RunsBridge(h *Hub, name string) bool {
 	defer h.bridgeRuns.mu.Unlock()
 	return h.bridgeRuns.runs[name] != nil
 }
+
+// SweepEvery is how often the hub sweeps, which bounds how soon a writer looks again without a signal.
+const SweepEvery = sweepEvery
