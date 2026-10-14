@@ -68,6 +68,10 @@ var events = map[string]agorav1.SessionEvent{
 // are not reported.
 const TransientFailures = "overloaded|server_error|unknown|max_output_tokens"
 
+// CompactTriggers are the PreCompact triggers the connector reports: a compaction the user asks
+// for with /compact, and one Claude Code starts by itself.
+const CompactTriggers = "manual|auto"
+
 // Hook handles one hook call: it reads Claude Code's input from in and writes hook output to
 // out. It returns an error only for AGORA_DEBUG; callers otherwise ignore it, so a failure
 // never disturbs the session.
@@ -78,7 +82,7 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	}
 	ev, ok := events[h.HookEventName]
 	if !ok || h.HookEventName == "StopFailure" && !slices.Contains(strings.Split(TransientFailures, "|"), h.Error) ||
-		h.HookEventName == "PreCompact" && h.Trigger != "manual" && h.Trigger != "auto" {
+		h.HookEventName == "PreCompact" && !slices.Contains(strings.Split(CompactTriggers, "|"), h.Trigger) {
 		return nil // an event the connector does not handle
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)

@@ -271,6 +271,30 @@ func TestManualCompactionMakesABusySessionIdle(t *testing.T) {
 	}
 }
 
+func TestManualCompactionOfAnUnknownOrEndedSessionIsIdle(t *testing.T) {
+	for name, prepare := range map[string]func(e env){
+		"unknown": func(env) {}, // the first event the hub hears of the session
+		"ended": func(e env) {
+			e.report(t, "session-1", sessions.Start)
+			e.report(t, "session-1", sessions.Prompt)
+			e.report(t, "session-1", sessions.End)
+		},
+	} {
+		e := newEnv(t)
+		prepare(e)
+		if err := e.precompact(t, "session-1", sessions.CompactManual); err != nil {
+			t.Fatal(err)
+		}
+		if st := e.state(t, "session-1"); st != sessions.Idle {
+			t.Fatalf("%s after /compact: %s", name, st)
+		}
+		e.compact(t, "session-1")
+		if st := e.state(t, "session-1"); st != sessions.Idle {
+			t.Fatalf("%s after the compaction's start: %s", name, st)
+		}
+	}
+}
+
 func TestAutomaticCompactionOfAnUnknownSessionIsBusy(t *testing.T) {
 	e := newEnv(t)
 	if err := e.precompact(t, "session-1", sessions.CompactAuto); err != nil { // the first event the hub hears
