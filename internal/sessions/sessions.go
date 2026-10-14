@@ -200,6 +200,9 @@ func (s *Sessions) Report(ctx context.Context, r Report) (Reply, error) {
 			if err := takeOver(ctx, tx, r, now); err != nil {
 				return err
 			}
+			if _, err := tx.ExecContext(ctx, `UPDATE sessions SET start_reported_at = ? WHERE id = ?`, now.UnixMilli(), r.SessionID); err != nil {
+				return err
+			}
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(agent, '') FROM sessions WHERE id = ?`, r.SessionID).Scan(&agent); err != nil {
 			return err

@@ -70,7 +70,11 @@ The Claude Code connector SHALL wait in an asynchronous hook that runs when a se
 
 #### Scenario: Wait before the start is reported
 - **WHEN** the hook that runs at a start opens its wait before the start is reported: before the hub has heard of the session, while the hub still lists the session from before it was resumed, or before the start has moved the agent's name to the session after a cleared conversation
-- **THEN** the wait waits up to 10 seconds for a report of the session, made no earlier than 10 seconds before the wait began, that binds it to an agent, and ends quietly when none comes
+- **THEN** the wait waits up to 10 seconds for a report of a start of the session, made no earlier than 10 seconds before the wait began, that binds it to an agent, and ends quietly when none comes; reports of other kinds (a prompt, tool use, the end of a turn, a session waiting at its prompt) do not count
+
+#### Scenario: Resumed soon after another report
+- **WHEN** a session's turn ended 5 seconds ago, its process went away without ending the session, a message addressed to its agent is unread, and the session is resumed with the hook that runs at the start opening its wait before the resume is reported
+- **THEN** the wait does not wake the session until the resume is reported
 
 #### Scenario: Hub unavailable
 - **WHEN** the hub cannot be reached while the hook waits
