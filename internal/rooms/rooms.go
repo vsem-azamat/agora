@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -337,6 +338,43 @@ func (r *Rooms) List(ctx context.Context, all bool) ([]Room, error) {
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+
+// Names returns the names of at most limit rooms that are not archived, in name order, with room
+// keep among them when it is one of them, and how many rooms that are not archived there are in all. It counts no
+// messages.
+func (r *Rooms) Names(ctx context.Context, limit int, keep string) (names []string, total int, err error) {
+	if err = r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rooms WHERE archived_at IS NULL`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	var kept bool
+	if err = r.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM rooms WHERE name = ? AND archived_at IS NULL)`, keep).Scan(&kept); err != nil {
+		return nil, 0, err
+	}
+	rest := limit
+	if kept {
+		rest--
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT name FROM rooms WHERE archived_at IS NULL AND name <> ? ORDER BY name LIMIT ?`, keep, max(rest, 0))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err = rows.Scan(&name); err != nil {
+			return nil, 0, err
+		}
+		names = append(names, name)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if kept {
+		names = append(names, keep)
+		slices.Sort(names)
+	}
+	return names, total, nil
 }
 
 // Archive archives room for agent (archive) or brings it back, and the board says so in

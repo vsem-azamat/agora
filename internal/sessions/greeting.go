@@ -14,6 +14,9 @@ import (
 // The texts in this file greet a starting session. They name only `agora` commands, so any
 // connector can add them to its agent's context.
 
+// GreetingRooms is how many rooms the invitation of a session lists at most.
+const GreetingRooms = 20
+
 // projectRE limits a project suggested from a repository name to what is safe to paste into a
 // shell command.
 var projectRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
@@ -43,27 +46,32 @@ func (s *Sessions) invitation(ctx context.Context, cwd string) string {
 	}
 	// the rooms are a help, not the point: when they cannot be listed, the invitation still goes
 	// out and points to `agora rooms`
-	var list []rooms.Room
+	var list []string
+	var total int
+	room := strings.ToLower(project)
 	if s.rooms != nil {
 		var err error
-		if list, err = s.rooms.List(ctx, false); err != nil {
+		if list, total, err = s.rooms.Names(ctx, GreetingRooms, room); err != nil {
 			list = nil
 		}
 	}
 	if len(list) == 0 {
 		lines = append(lines, "`agora rooms` lists the rooms.")
 	} else {
-		room := strings.ToLower(project)
 		names := make([]string, len(list))
 		found := false
-		for i, r := range list {
-			names[i] = "#" + r.Name
-			if r.Name == room {
+		for i, name := range list {
+			names[i] = "#" + name
+			if name == room {
 				names[i] += " (your project's room)"
 				found = true
 			}
 		}
-		lines = append(lines, "Rooms: "+strings.Join(names, ", ")+".")
+		line := "Rooms: " + strings.Join(names, ", ")
+		if more := total - len(list); more > 0 {
+			line += fmt.Sprintf(", and %d more; agora rooms lists them", more)
+		}
+		lines = append(lines, line+".")
 		if !found && rooms.ValidName(room) {
 			lines = append(lines, fmt.Sprintf("No room #%s for your project yet; create it with agora room-create %s '<purpose>'.", room, room))
 		}
