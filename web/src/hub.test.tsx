@@ -40,13 +40,20 @@ const answers: Record<string, unknown> = {
         name: 'builder',
         session: 'SESSION_STATE_BUSY',
         project: 'example-app',
+        projectRoom: 'example-app',
         task: 'fixing the login timeout',
         active: true,
         icon: 'anvil',
         pigment: 'terracotta',
         formerly: [{ name: 'fixer', renamedAt: '2026-10-09T11:00:00Z' }],
       },
-      { name: 'reviewer', session: 'SESSION_STATE_IDLE', project: 'example-app', active: true },
+      {
+        name: 'reviewer',
+        session: 'SESSION_STATE_IDLE',
+        project: 'example-app',
+        projectRoom: 'example-app',
+        active: true,
+      },
       { name: 'operator', session: 'SESSION_STATE_OFFLINE', active: true, icon: 'olive', pigment: 'umber' },
     ],
   },
@@ -550,9 +557,14 @@ describe('bridged rooms', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
         String(input).endsWith('AgentService/ListAgents')
-          ? new Response(JSON.stringify({ agents: [{ name: 'builder', project: 'example-chat', active: true }] }), {
-              headers: { 'Content-Type': 'application/json' },
-            })
+          ? new Response(
+              JSON.stringify({
+                agents: [{ name: 'builder', project: 'example-chat', projectRoom: 'example-chat', active: true }],
+              }),
+              {
+                headers: { 'Content-Type': 'application/json' },
+              },
+            )
           : hub(input, init),
       ),
     );

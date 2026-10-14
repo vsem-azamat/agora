@@ -285,6 +285,20 @@ func TestManualCompactionOfABusySessionMakesItIdle(t *testing.T) {
 	}
 }
 
+func TestProfilesCarryTheirProjectRoom(t *testing.T) {
+	r := start(t)
+	bg := context.Background()
+	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
+		t.Fatal(err)
+	}
+	for project, want := range map[string]string{"my.app": "my-app", "2048-game": "p-2048-game", "my/app": ""} {
+		resp, err := r.agents.UpdateProfile(bg, connect.NewRequest(&agorav1.UpdateProfileRequest{Agent: "builder", Project: &project}))
+		if err != nil || resp.Msg.GetProfile().GetProjectRoom() != want {
+			t.Fatalf("%s: %v %v", project, resp, err)
+		}
+	}
+}
+
 func (r *running) post(t *testing.T, author, body string) {
 	t.Helper()
 	bg := context.Background()

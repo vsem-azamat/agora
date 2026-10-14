@@ -449,6 +449,15 @@ func TestSessionEndGivesBackPlaces(t *testing.T) {
 // exampleRepo returns a directory inside a git repository named example-app.
 func exampleRepo(t *testing.T) string { return repoNamed(t, "example-app") }
 
+// cwdOf is a repository named name, or a directory outside any repository for "".
+func cwdOf(t *testing.T, name string) string {
+	t.Helper()
+	if name == "" {
+		return t.TempDir()
+	}
+	return repoNamed(t, name)
+}
+
 // repoNamed returns a directory inside a git repository named name.
 func repoNamed(t *testing.T, name string) string {
 	t.Helper()
@@ -511,12 +520,16 @@ func TestJoiningExpected(t *testing.T) {
 	if !strings.Contains(r.Context, "Rooms: #example-app, #general.") || strings.Contains(r.Context, "your project's room") {
 		t.Fatalf("invitation with an archived project room: %q", r.Context)
 	}
-	// the project's room is named in lowercase; a project that is no room name has none
+	// the project's room is derived from the project's name; a project that has no room name
+	// gets no hint to create one
 	for i, c := range []struct{ repo, want, not string }{
 		{"Example-App", "#example-app (your project's room)", "room-create"},
-		{"my.app", "Rooms: #example-app, #general.", "room-create"},
+		{"my.app", "No room #my-app for your project yet; create it with agora room-create my-app '<purpose>'.", "(your project's room)"},
+		{"2048-game", "agora room-create p-2048-game '<purpose>'", "(your project's room)"},
+		{"a", "Rooms: #example-app, #general.", "room-create"},
+		{"", "Rooms: #example-app, #general.", "room-create"}, // outside any repository
 	} {
-		r, err := e.s.Report(ctx, sessions.Report{SessionID: fmt.Sprintf("session-%d", i+3), Kind: "claude-code", Event: sessions.Start, PID: 4250 + i, PIDStart: 120, CWD: repoNamed(t, c.repo)})
+		r, err := e.s.Report(ctx, sessions.Report{SessionID: fmt.Sprintf("session-%d", i+3), Kind: "claude-code", Event: sessions.Start, PID: 4250 + i, PIDStart: 120, CWD: cwdOf(t, c.repo)})
 		if err != nil {
 			t.Fatal(err)
 		}

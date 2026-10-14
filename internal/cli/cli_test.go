@@ -492,8 +492,24 @@ func TestJoiningFollowsTheProjectRoom(t *testing.T) {
 		!strings.Contains(r.stdout, "no room #example-app for your project yet; create it with agora room-create example-app '<purpose>'") {
 		t.Fatalf("join without a project room: %+v", r)
 	}
-	if r := agora(ctx, socket, "tester", "join", "tester", "--project", "my.app"); r.code != 0 || strings.Contains(r.stdout, "room") {
-		t.Fatalf("join with a project that is no room name: %+v", r)
+	if r := agora(ctx, socket, "tester", "join", "tester", "--project", "my.app"); r.code != 0 ||
+		!strings.Contains(r.stdout, "no room #my-app for your project yet; create it with agora room-create my-app '<purpose>'") {
+		t.Fatalf("join with a project whose name is mapped to a room name: %+v", r)
+	}
+	if r := agora(ctx, socket, "numbers", "join", "numbers", "--project", "2048-game"); r.code != 0 ||
+		!strings.Contains(r.stdout, "agora room-create p-2048-game '<purpose>'") {
+		t.Fatalf("join with a project that starts with a digit: %+v", r)
+	}
+	if r := agora(ctx, socket, "slasher", "join", "slasher", "--project", "my/app"); r.code != 0 || strings.Contains(r.stdout, "room") {
+		t.Fatalf("join with a project that has no room name: %+v", r)
+	}
+	agora(ctx, socket, "tester", "room-create", "my-app", "work on my.app")
+	// the hub stores the project trimmed, and join follows the room it derives for it
+	if r := agora(ctx, socket, "padded", "join", "padded", "--project", "my.app\n"); r.code != 0 || !strings.Contains(r.stdout, "following #my-app, your project's room") {
+		t.Fatalf("join with a padded project: %+v", r)
+	}
+	if r := agora(ctx, socket, "second", "join", "second", "--project", "my.app"); r.code != 0 || !strings.Contains(r.stdout, "following #my-app, your project's room") {
+		t.Fatalf("join with a project whose room exists: %+v", r)
 	}
 	agora(ctx, socket, "builder", "room-create", "example-app", "work on example-app")
 	r := agora(ctx, socket, "reviewer", "join", "reviewer", "--project", "Example-App")

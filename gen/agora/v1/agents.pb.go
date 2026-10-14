@@ -108,7 +108,10 @@ type Profile struct {
 	Formerly []*FormerName `protobuf:"bytes,20,rep,name=formerly,proto3" json:"formerly,omitempty"`
 	// The SHA-256 of the agent's avatar, which the web listener serves at /avatars/<hash>; empty
 	// when it has none.
-	Avatar        string `protobuf:"bytes,21,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	Avatar string `protobuf:"bytes,21,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	// The room of the agent's project, as the hub derives it (rooms.ProjectRoom); empty when the
+	// project has no room name. The room itself may not exist.
+	ProjectRoom   string `protobuf:"bytes,22,opt,name=project_room,json=projectRoom,proto3" json:"project_room,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -272,6 +275,13 @@ func (x *Profile) GetFormerly() []*FormerName {
 func (x *Profile) GetAvatar() string {
 	if x != nil {
 		return x.Avatar
+	}
+	return ""
+}
+
+func (x *Profile) GetProjectRoom() string {
+	if x != nil {
+		return x.ProjectRoom
 	}
 	return ""
 }
@@ -1099,7 +1109,7 @@ var File_agora_v1_agents_proto protoreflect.FileDescriptor
 
 const file_agora_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x17agora/v1/sessions.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc5\x05\n" +
+	"\x15agora/v1/agents.proto\x12\bagora.v1\x1a\x17agora/v1/sessions.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe8\x05\n" +
 	"\aProfile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -1121,7 +1131,8 @@ const file_agora_v1_agents_proto_rawDesc = "" +
 	"\x04icon\x18\x12 \x01(\tR\x04icon\x12\x18\n" +
 	"\apigment\x18\x13 \x01(\tR\apigment\x120\n" +
 	"\bformerly\x18\x14 \x03(\v2\x14.agora.v1.FormerNameR\bformerly\x12\x16\n" +
-	"\x06avatar\x18\x15 \x01(\tR\x06avatar\x1aM\n" +
+	"\x06avatar\x18\x15 \x01(\tR\x06avatar\x12!\n" +
+	"\fproject_room\x18\x16 \x01(\tR\vprojectRoom\x1aM\n" +
 	"\fCiStateEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12'\n" +
 	"\x05value\x18\x02 \x01(\x0e2\x11.agora.v1.CiStateR\x05value:\x028\x01J\x04\b\f\x10\rJ\x04\b\x0f\x10\x10R\rsession_stateR\x02ci\"[\n" +
