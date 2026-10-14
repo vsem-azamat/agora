@@ -144,7 +144,7 @@ type FormerNameError struct {
 }
 
 func (e *FormerNameError) Error() string {
-	return fmt.Sprintf("%v: %q is now called %q; use %s", e.sentinel, e.Name, e.Current, e.Current)
+	return fmt.Sprintf("%q is now called %q; use %s", e.Name, e.Current, e.Current)
 }
 
 func (e *FormerNameError) Unwrap() error { return e.sentinel }

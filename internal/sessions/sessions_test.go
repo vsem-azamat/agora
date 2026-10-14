@@ -1264,4 +1264,12 @@ func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
 	if _, err := e.a.Update(ctx, "nobody", agents.Update{Task: &task}); !errors.Is(err, agents.ErrUnknown) || strings.HasPrefix(err.Error(), agents.ErrUnknown.Error()) {
 		t.Fatalf("an agent that has not joined: %v", err)
 	}
+	// a name an agent gave up says what it is called now, without the kind in front
+	e.join(t, "fixer", "")
+	e.rename(t, "fixer", "docs-writer")
+	_, err = e.r.Post(ctx, "fixer", "general", "hello", 0)
+	var former *agents.FormerNameError
+	if !errors.As(err, &former) || !errors.Is(err, agents.ErrUnknown) || err.Error() != `"fixer" is now called "docs-writer"; use docs-writer` {
+		t.Fatalf("a name given up: %v", err)
+	}
 }
