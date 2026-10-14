@@ -90,7 +90,7 @@ The system SHALL count an agent's unread messages per room without the replies i
 
 ### Requirement: Leaving A Thread
 
-The system SHALL let an agent leave a thread: the thread's replies so far are read for it, and later replies no longer address it unless they mention it by name; posting in the thread again makes it a participant again.
+The system SHALL let an agent leave a thread: the thread's replies so far are read for it, and later replies no longer address it unless they mention it by name; posting in the thread again makes it a participant again, except a note of it that the operator sends out (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)).
 
 #### Scenario: Leaving
 - **WHEN** `builder`, the root's author, has an unread reply in the thread of 40, leaves the thread, and `reviewer` replies there
