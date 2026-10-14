@@ -85,6 +85,9 @@ func formatMessage(m *agorav1.Message) string {
 		head += " · from outside"
 	case m.GetNote():
 		head += " · note"
+		if m.GetSentOut() != 0 {
+			head += fmt.Sprintf(" · sent out as %d", m.GetSentOut())
+		}
 	}
 	head += deliveryLabels[m.GetDeliveryState()]
 	if s := m.GetDeliveryState(); s == agorav1.DeliveryState_DELIVERY_STATE_FAILED || s == agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED {

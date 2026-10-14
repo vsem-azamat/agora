@@ -297,6 +297,9 @@ type Message struct {
 	// In histories, for a message of the room with replies in its thread, and on the root of a
 	// thread read; unset otherwise.
 	ThreadSummary *ThreadSummary `protobuf:"bytes,17,opt,name=thread_summary,json=threadSummary,proto3" json:"thread_summary,omitempty"`
+	// For a note the operator sent out, the message that went out from it, unless that message
+	// certainly did not go out (not sent, cancelled); 0 otherwise.
+	SentOut       int64 `protobuf:"varint,18,opt,name=sent_out,json=sentOut,proto3" json:"sent_out,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -448,6 +451,13 @@ func (x *Message) GetThreadSummary() *ThreadSummary {
 		return x.ThreadSummary
 	}
 	return nil
+}
+
+func (x *Message) GetSentOut() int64 {
+	if x != nil {
+		return x.SentOut
+	}
+	return 0
 }
 
 // What a room's history shows of a thread at its root.
@@ -2215,7 +2225,7 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\varchived_by\x18\b \x01(\tR\n" +
 	"archivedBy\x12;\n" +
 	"\varchived_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"archivedAt\"\xda\x04\n" +
+	"archivedAt\"\xf5\x04\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04room\x18\x02 \x01(\tR\x04room\x12\x16\n" +
@@ -2234,7 +2244,8 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x06thread\x18\x0e \x01(\x03R\x06thread\x12\x12\n" +
 	"\x04also\x18\x0f \x01(\bR\x04also\x12!\n" +
 	"\fthread_title\x18\x10 \x01(\tR\vthreadTitle\x12>\n" +
-	"\x0ethread_summary\x18\x11 \x01(\v2\x17.agora.v1.ThreadSummaryR\rthreadSummary\"\xb6\x01\n" +
+	"\x0ethread_summary\x18\x11 \x01(\v2\x17.agora.v1.ThreadSummaryR\rthreadSummary\x12\x19\n" +
+	"\bsent_out\x18\x12 \x01(\x03R\asentOut\"\xb6\x01\n" +
 	"\rThreadSummary\x12\x18\n" +
 	"\areplies\x18\x01 \x01(\x05R\areplies\x12\x1a\n" +
 	"\brepliers\x18\x02 \x03(\tR\brepliers\x123\n" +

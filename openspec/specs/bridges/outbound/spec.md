@@ -146,7 +146,7 @@ The system SHALL show what the outside chat saw of a bridged room: with every me
 
 ### Requirement: Notes Stay In Agora
 
-A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be scheduled and SHALL have no delivery state, so it can be neither sent at once nor cancelled; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. The operator MAY send a note out under `open` and `delay`: that posts a new message of the note's author with the note's text, replying to what the note replies to and, for a note in a thread, a reply in the same thread, also to the room when the note is, which goes out at once, while the note stays as it was. Sending a note out SHALL NOT make its author a participant again of a thread it left. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room.
+A message posted as a note (`agora post <room> --note`, the `note` flag of a post, or Note for agents in the web app) in a bridged room SHALL be stored as a note: a message of the room for Agora only. A note SHALL never be handed to the bridge, under every outbound policy, SHALL never be scheduled and SHALL have no delivery state, so it can be neither sent at once nor cancelled; under `read` an agent's note SHALL be stored although its other posts are refused. A message going out that replies to a note SHALL go out without `reply_to`. A note SHALL stay a note when the policy changes or the bridge is removed. The operator MAY send a note out under `open` and `delay`: that posts a new message of the note's author with the note's text, replying to what the note replies to and, for a note in a thread, a reply in the same thread, also to the room when the note is, which goes out at once, while the note stays as it was. Sending a note out SHALL NOT make its author a participant again of a thread it left. In a room without a bridge, posting a note SHALL store an ordinary message without the note mark, since nothing goes out of such a room. The note SHALL remember the message it produced, and sending it out again SHALL return that message's identifier and send nothing, even when two calls come at once; a note sent out is shown with a link to that message. The note SHALL be re-sendable only when its message certainly did not go out (not sent or cancelled): then it is shown as not sent out and sending it out again sends a new message, which the note then links. In every other state of that message, including one where it may have gone out, the note counts as sent out, so a second click never repeats text that may already be in the chat.
 
 #### Scenario: A note under every policy
 - **WHEN** `secretary` and the operator post notes in `#example-chat` under `open`, `delay` and `read`
@@ -167,6 +167,14 @@ A message posted as a note (`agora post <room> --note`, the `note` flag of a pos
 #### Scenario: A note in a thread its author left
 - **WHEN** `secretary` posted a note in the thread of message 40, left the thread, and the operator sends the note out
 - **THEN** a later reply in the thread does not address `secretary`
+
+#### Scenario: Sending a note out twice
+- **WHEN** the operator sends the same note out twice, or two calls come at once
+- **THEN** one new message reaches the bridge, both calls return its identifier, and the note shows that message as the one it was sent out as, also after the hub restarts
+
+#### Scenario: Sending out a note whose message failed
+- **WHEN** the operator sends a note out, the bridge answers `failed` for the new message, and the operator sends the note out again
+- **THEN** after the failure the note is not shown as sent out, the second call sends a new message that the note links, and a third call returns that message and sends nothing
 
 #### Scenario: A reply to a note goes out
 - **WHEN** under `open` the operator posts the note `@secretary say the release is on Friday` and `secretary` replies to it with `The release is on Friday.`

@@ -1063,7 +1063,7 @@ func (x *SendNoteOutRequest) GetMessageId() int64 {
 
 type SendNoteOutResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The message that goes out.
+	// The message that goes out, or went out when the note was sent out before.
 	Id            int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

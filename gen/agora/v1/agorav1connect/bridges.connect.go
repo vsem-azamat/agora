@@ -78,7 +78,9 @@ type BridgeServiceClient interface {
 	// the web listener serves it.
 	CancelScheduled(context.Context, *connect.Request[v1.CancelScheduledRequest]) (*connect.Response[v1.CancelScheduledResponse], error)
 	// SendNoteOut sends a note out: a new message of the note's author with its text goes out at
-	// once, and the note stays. Only the web listener serves it.
+	// once, and the note stays. A note sent out before returns that message's id and sends nothing, unless
+	// that message certainly did not go out (not sent, cancelled), when a new one goes out.
+	// Only the web listener serves it.
 	SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error)
 }
 
@@ -217,7 +219,9 @@ type BridgeServiceHandler interface {
 	// the web listener serves it.
 	CancelScheduled(context.Context, *connect.Request[v1.CancelScheduledRequest]) (*connect.Response[v1.CancelScheduledResponse], error)
 	// SendNoteOut sends a note out: a new message of the note's author with its text goes out at
-	// once, and the note stays. Only the web listener serves it.
+	// once, and the note stays. A note sent out before returns that message's id and sends nothing, unless
+	// that message certainly did not go out (not sent, cancelled), when a new one goes out.
+	// Only the web listener serves it.
 	SendNoteOut(context.Context, *connect.Request[v1.SendNoteOutRequest]) (*connect.Response[v1.SendNoteOutResponse], error)
 }
 

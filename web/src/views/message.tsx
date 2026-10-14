@@ -132,11 +132,38 @@ export function Decision({ m, onDecide, held }: { m: Message; onDecide: Decide; 
 }
 
 /**
+ * What a note's header says: that it stays in Agora, or, once it was sent out, the message it went
+ * out as, which jumps there when the view can.
+ */
+export function NoteMark({ m, onJump }: { m: Message; onJump?: (id: bigint) => void }) {
+  if (m.sentOut === 0n)
+    return (
+      <span className="nt" title={`Not sent to ${m.room}`}>
+        note · stays in Agora
+      </span>
+    );
+  const label = `sent out → #${m.sentOut}`;
+  return (
+    <span className="nt" title={`Sent to ${m.room} as #${m.sentOut}`}>
+      note ·{' '}
+      {onJump ? (
+        <button type="button" className="sentout" onClick={() => onJump(m.sentOut)}>
+          {label}
+        </button>
+      ) : (
+        label
+      )}
+    </span>
+  );
+}
+
+/**
  * Send out on a note: off while the call runs, on again when the hub refused it. Inline, it is the
  * phone's, next to its inline reply.
  */
 export function SendOutButton({ m, onSendOut, inline }: { m: Message; onSendOut: SendOut; inline?: boolean }) {
   const [busy, setBusy] = useState(false);
+  if (m.sentOut !== 0n) return null; // the note's mark says where it went
   return (
     <button
       type="button"
@@ -239,11 +266,7 @@ export const Tablet = memo(function Tablet({
               written in {m.room}
             </span>
           )}
-          {m.note && (
-            <span className="nt" title={`Not sent to ${m.room}`}>
-              note · stays in Agora
-            </span>
-          )}
+          {m.note && <NoteMark m={m} onJump={onJump} />}
           <DeliveryMark d={d} room={m.room} />
           {item.toYou && <span className="tag">TO YOU</span>}
           {m.thread !== 0n && onThread && (

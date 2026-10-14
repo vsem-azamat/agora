@@ -153,6 +153,9 @@ type Message struct {
 	// Note is set for a note: a message of a bridged room that stays in Agora and is never
 	// handed to the bridge.
 	Note bool
+	// SentOut is, for a note the operator sent out, the message it produced unless that message
+	// certainly did not go out (not sent, cancelled); 0 for any other note and message.
+	SentOut int64
 	// Incoming is set for a message that came in from the outside chat through the room's
 	// bridge: from someone there, or from the operator writing there.
 	Incoming bool
@@ -1743,8 +1746,15 @@ const messageColumns = `m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0),
 	m.note, m.ext_id IS NOT NULL AND m.delivery IS NULL, COALESCE(m.scheduled_at, 0), ` + threadColumns
 
 // threadColumns selects the thread of message m: its root (0 for a message of the room), also,
-// and the thread's title, of the thread m is a reply in or of its own.
-const threadColumns = `COALESCE(m.thread, 0) AS thread, m.also, COALESCE((SELECT title FROM threads WHERE root = COALESCE(m.thread, m.id)), '')`
+// and the thread's title, of the thread m is a reply in or of its own; then the message a note was
+// sent out as.
+const threadColumns = `COALESCE(m.thread, 0) AS thread, m.also, COALESCE((SELECT title FROM threads WHERE root = COALESCE(m.thread, m.id)), ''), ` + SentOutColumn
+
+// SentOutColumn selects the message a note m was sent out as, 0 for any other message and for a
+// note whose message certainly did not go out: only a message that failed or was cancelled lets
+// the note be sent out again. Any other state, including one where it may have gone out, counts
+// as sent out, so a second click cannot repeat text that may be in the chat.
+const SentOutColumn = `COALESCE((SELECT x.id FROM messages AS x WHERE x.id = m.sent_out AND COALESCE(x.delivery, '') NOT IN ('failed', 'cancelled')), 0)`
 
 // outsideAvatarColumn selects the avatar of the author outside of message m, or "".
 const outsideAvatarColumn = `COALESCE((SELECT oa.avatar FROM outside_avatars AS oa WHERE oa.room = m.room AND oa.author = m.ext_author_id), '')`
@@ -1763,7 +1773,7 @@ func scanCounted(rows *sql.Rows, total *int) ([]Message, error) {
 		dest := []any{
 			&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
 			&m.ExtAuthorID, &m.ExtAuthorName, &m.ExtAuthorAvatar, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled,
-			&m.Thread, &m.Also, &m.ThreadTitle,
+			&m.Thread, &m.Also, &m.ThreadTitle, &m.SentOut,
 		}
 		if total != nil {
 			dest = append(dest, total)
@@ -1815,6 +1825,9 @@ func Format(m Message, limit int) string {
 		head += " · from outside"
 	case m.Note:
 		head += " · note"
+		if m.SentOut != 0 {
+			head += fmt.Sprintf(" · sent out as %d", m.SentOut)
+		}
 	}
 	head += deliveryLabel(m.Delivery, m.DeliveryError) + threadLabel(m.Thread, m.ThreadTitle, m.Summary)
 	return head + "\n  " + strings.ReplaceAll(body, "\n", "\n  ")

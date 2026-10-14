@@ -1115,8 +1115,17 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the note going out", func() bool { return len(f.outs()) == 1 && f.outs()[0] == out.Msg.GetId() })
-	if m := b.message(t, note); !m.GetNote() || m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED {
+	if m := b.message(t, note); !m.GetNote() || m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNSPECIFIED || m.GetSentOut() != out.Msg.GetId() {
 		t.Fatalf("the note changed: %v", m)
+	}
+	// again, as a reloaded app would: the same message, and nothing more goes out
+	again, err := b.webBridges.SendNoteOut(context.Background(), connect.NewRequest(&agorav1.SendNoteOutRequest{MessageId: note}))
+	if err != nil || again.Msg.GetId() != out.Msg.GetId() {
+		t.Fatalf("sending it out again: %v %v", again, err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if outs := f.outs(); len(outs) != 1 {
+		t.Fatalf("out lines: %v", outs)
 	}
 }
 

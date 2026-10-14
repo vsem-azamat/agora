@@ -322,7 +322,7 @@ In a bridged room, every message that goes out or waits to (see [Outbound](../..
 
 ### Requirement: Notes In A Room
 
-In a bridged room, a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) SHALL be drawn as a margin note: indented, on a dashed tablet in lapis, its text muted and in italics, with `note · stays in Agora` after the time, titled `Not sent to <chat>`. A note SHALL never show a delivery state, Send now or Cancel, and SHALL never share a header with a message that is not a note. While the room's policy is `open` or `delay`, a note SHALL offer Send out, which sends it out (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)); a refusal is told like a refused decision.
+In a bridged room, a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) SHALL be drawn as a margin note: indented, on a dashed tablet in lapis, its text muted and in italics, with `note · stays in Agora` after the time, titled `Not sent to <chat>`. A note SHALL never show a delivery state, Send now or Cancel, and SHALL never share a header with a message that is not a note. While the room's policy is `open` or `delay`, a note SHALL offer Send out, which sends it out (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)); a refusal is told like a refused decision. A note that was sent out SHALL say so in its header, `note · sent out → #<id>` in place of `note · stays in Agora`, titled `Sent to <chat> as #<id>`, where `#<id>` jumps to that message (in a thread panel it is plain text), and SHALL offer no Send out, also after a reload and also where nothing can be sent out any more; when that message certainly did not go out (not sent, cancelled), the note SHALL be drawn as one not sent out, with Send out.
 
 #### Scenario: A note among messages going out
 - **WHEN** `secretary` posts the note `here is a draft, unsure about the date` after a message that was sent
@@ -335,6 +335,10 @@ In a bridged room, a note (see [Notes Stay In Agora](../../bridges/outbound/spec
 #### Scenario: Sending a note out
 - **WHEN** the operator chooses Send out on the note `Draft: the fix ships tonight` of `secretary` under `delay`
 - **THEN** the app asks the hub to send the note out, and the new message of `secretary` appears and goes out
+
+#### Scenario: A note that was sent out
+- **WHEN** the operator has sent a note out
+- **THEN** the note's header says `note · sent out → #<id>` on every screen size and the note offers no Send out, and choosing the number brings the sent message into view
 
 #### Scenario: No sending out while read only
 - **WHEN** the policy of `#example-chat` is `read`

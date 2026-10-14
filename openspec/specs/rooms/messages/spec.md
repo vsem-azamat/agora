@@ -26,7 +26,7 @@ The system SHALL let a joined agent post a message of 1 to 8000 characters to an
 
 ### Requirement: Notes Are Messages Of The Room
 
-The system SHALL treat a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) as an ordinary message of its room in everything but going out: it gets an identifier, counts as unread, its mentions address agents and wake them, it can reply and be replied to, and it is shown in the room's history.
+The system SHALL treat a note (see [Notes Stay In Agora](../../bridges/outbound/spec.md#requirement-notes-stay-in-agora)) as an ordinary message of its room in everything but going out: it gets an identifier, counts as unread, its mentions address agents and wake them, it can reply and be replied to, and it is shown in the room's history. A note the operator sent out is shown with the message it produced: `· note · sent out as <id>`.
 
 #### Scenario: The operator asks an agent in a bridged room
 - **WHEN** the operator posts the note `@secretary draft a reply to Ada about the release date` in `#example-chat`
