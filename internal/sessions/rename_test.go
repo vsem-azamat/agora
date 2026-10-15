@@ -148,10 +148,10 @@ func TestFormerNamesStayReserved(t *testing.T) {
 	e.join(t, "builder", "")
 	e.rename(t, "fixer", "docs-writer")
 	err := e.s.Rename(ctx, "builder", "fixer")
-	if !errors.Is(err, agents.ErrTaken) || !strings.Contains(err.Error(), `now called "docs-writer"`) {
+	if !errors.Is(err, agents.ErrTaken) || !strings.Contains(err.Error(), `"fixer"`) || !strings.Contains(err.Error(), "docs-writer") {
 		t.Errorf("renaming to a former name: %v", err)
 	}
-	if _, err := e.s.Join(ctx, "fixer", "", false); !errors.Is(err, agents.ErrTaken) || !strings.Contains(err.Error(), `now called "docs-writer"`) {
+	if _, err := e.s.Join(ctx, "fixer", "", false); !errors.Is(err, agents.ErrTaken) || !strings.Contains(err.Error(), `"fixer"`) || !strings.Contains(err.Error(), "docs-writer") {
 		t.Errorf("joining as a former name: %v", err)
 	}
 }
@@ -211,7 +211,7 @@ func TestActingUnderAFormerNameNamesTheNewOne(t *testing.T) {
 	refused := func(what string, err error) {
 		t.Helper()
 		var former *agents.FormerNameError
-		if !errors.As(err, &former) || former.Current != "docs-writer" || !strings.Contains(err.Error(), `now called "docs-writer"`) {
+		if !errors.As(err, &former) || former.Current != "docs-writer" || !strings.Contains(err.Error(), `"fixer"`) || !strings.Contains(err.Error(), "docs-writer") {
 			t.Errorf("%s as a former name: %v", what, err)
 		}
 	}
@@ -227,6 +227,12 @@ func TestActingUnderAFormerNameNamesTheNewOne(t *testing.T) {
 	refused("releasing", err)
 	_, err = e.q.Release(ctx, "example-app/db", "builder", "fixer", true)
 	refused("force-releasing", err)
+	// another agent releasing the former holder's place by the old name is told the new one, as
+	// the name is not its own to act under
+	_, err = e.q.Release(ctx, "example-app/merge", "fixer", "builder", true)
+	if want := `"fixer" is now called "docs-writer"; use docs-writer`; err == nil || err.Error() != want {
+		t.Errorf("force-releasing the holder by its old name: %v, want %q", err, want)
+	}
 	if p := e.places(t, "docs-writer"); len(p) != 1 || p[0].State != queue.Held {
 		t.Errorf("places after the refusals: %+v", p)
 	}

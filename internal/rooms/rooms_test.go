@@ -1591,3 +1591,19 @@ func TestMessageMustBeValidUTF8(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A refusal says only what was refused; errors.Is still finds its kind.
+func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	e := newEnv(t)
+	e.join(t, "builder")
+	err := e.r.Create(ctx, "Bad Name", "work", "builder")
+	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {
+		t.Fatalf("a bad name: %v", err)
+	}
+	if err := e.r.Create(ctx, "general", "work", "builder"); !errors.Is(err, rooms.ErrExists) || strings.HasPrefix(err.Error(), rooms.ErrExists.Error()) {
+		t.Fatalf("an existing room: %v", err)
+	}
+	if _, err := e.r.Post(ctx, "builder", "no-such-room", "hello", 0); !errors.Is(err, rooms.ErrNotFound) || strings.HasPrefix(err.Error(), rooms.ErrNotFound.Error()) {
+		t.Fatalf("a missing room: %v", err)
+	}
+}

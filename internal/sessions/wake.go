@@ -18,7 +18,7 @@ func (s *Sessions) Turn(ctx context.Context, sessionID string) (int64, error) {
 	var turn int64
 	err := s.db.QueryRowContext(ctx, `SELECT turn FROM sessions WHERE id = ?`, sessionID).Scan(&turn)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("%w: unknown session", store.ErrInvalid)
+		return 0, store.Refuse(store.ErrInvalid, "unknown session")
 	}
 	return turn, err
 }

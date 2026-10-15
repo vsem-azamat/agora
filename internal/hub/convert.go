@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
@@ -188,7 +187,7 @@ func modeName(m agorav1.SubscriptionMode) (rooms.Mode, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("%w: unknown subscription mode %d", store.ErrInvalid, m)
+	return "", store.Refuse(store.ErrInvalid, "unknown subscription mode %d", m)
 }
 
 // subscriptionsPB returns the rooms of subs and the subscriptions with their modes.

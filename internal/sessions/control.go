@@ -77,10 +77,10 @@ func missing(action string, has bool, terminal string, pid int) string {
 // CheckFocus refuses a focus that is too long or holds a line break or another control character.
 func CheckFocus(focus string) error {
 	if utf8.RuneCountInString(focus) > MaxFocus {
-		return fmt.Errorf("%w: a focus is at most %d characters", store.ErrInvalid, MaxFocus)
+		return store.Refuse(store.ErrInvalid, "a focus is at most %d characters", MaxFocus)
 	}
 	if !utf8.ValidString(focus) || strings.IndexFunc(focus, func(r rune) bool { return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp) }) >= 0 {
-		return fmt.Errorf("%w: a focus is text with no line breaks or other control characters", store.ErrInvalid)
+		return store.Refuse(store.ErrInvalid, "a focus is text with no line breaks or other control characters")
 	}
 	return nil
 }
@@ -109,7 +109,7 @@ func liveTarget(ctx context.Context, tx *sql.Tx, by, agent string) (target, erro
 	err := tx.QueryRowContext(ctx, `SELECT id, kind, terminal, state, turn, pid, pid_start FROM sessions WHERE agent = ? AND state != ?`, agent, Ended).
 		Scan(&t.ID, &t.kind, &t.Terminal, &t.State, &t.Turn, &t.PID, &t.PIDStart)
 	if errors.Is(err, sql.ErrNoRows) {
-		return target{}, fmt.Errorf("%w: %s has no live session", ErrRefused, agent)
+		return target{}, store.Refuse(ErrRefused, "%s has no live session", agent)
 	}
 	return t, err
 }
@@ -127,12 +127,12 @@ func (s *Sessions) Compact(ctx context.Context, c Commands, by, agent, focus str
 			return err
 		}
 		if CapabilitiesOf(c, t.kind, t.Terminal, t.PID).Compact == ViaNothing {
-			return fmt.Errorf("%w: %s cannot compact: %s", ErrRefused, agent, missing("compact", c.Compact, t.Terminal, t.PID))
+			return store.Refuse(ErrRefused, "%s cannot compact: %s", agent, missing("compact", c.Compact, t.Terminal, t.PID))
 		}
 		var first string
 		switch err := tx.QueryRowContext(ctx, `SELECT requested_by FROM session_controls WHERE session_id = ? AND action = 'compact' AND state IN ('queued', 'running')`, t.ID).Scan(&first); {
 		case err == nil:
-			return fmt.Errorf("%w: a compact of %s is already queued by %s", ErrRefused, agent, first)
+			return store.Refuse(ErrRefused, "a compact of %s is already queued by %s", agent, first)
 		case !errors.Is(err, sql.ErrNoRows):
 			return err
 		}
@@ -162,10 +162,10 @@ func (s *Sessions) PrepareInterrupt(ctx context.Context, c Commands, by, agent s
 			return err
 		}
 		if CapabilitiesOf(c, t.kind, t.Terminal, t.PID).Interrupt == ViaNothing {
-			return fmt.Errorf("%w: %s cannot be interrupted: %s", ErrRefused, agent, missing("interrupt", c.Interrupt, t.Terminal, t.PID))
+			return store.Refuse(ErrRefused, "%s cannot be interrupted: %s", agent, missing("interrupt", c.Interrupt, t.Terminal, t.PID))
 		}
 		if t.State != Busy {
-			return fmt.Errorf("%w: %s is idle; there is no turn to interrupt", ErrRefused, agent)
+			return store.Refuse(ErrRefused, "%s is idle; there is no turn to interrupt", agent)
 		}
 		return nil
 	})

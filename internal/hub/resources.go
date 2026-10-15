@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
@@ -76,7 +75,7 @@ func (s *resources) Release(ctx context.Context, req *connect.Request[agorav1.Re
 	case holder == "":
 		holder = m.GetAgent()
 	case m.GetAgent() == "":
-		return nil, toConnect(fmt.Errorf("%w: releasing %s needs the acting agent", store.ErrInvalid, holder))
+		return nil, toConnect(store.Refuse(store.ErrInvalid, "releasing %s needs the acting agent", holder))
 	}
 	ok, err := s.h.queue.Release(ctx, m.GetKey(), holder, m.GetAgent(), m.GetForce())
 	if err != nil {

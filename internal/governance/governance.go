@@ -101,7 +101,7 @@ func New(db *sql.DB, r *rooms.Rooms, now func() time.Time) *Governance {
 
 func checkText(what string, s string, limit int) error {
 	if strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > limit {
-		return fmt.Errorf("%w: %s must be 1 to %d characters", store.ErrInvalid, what, limit)
+		return store.Refuse(store.ErrInvalid, "%s must be 1 to %d characters", what, limit)
 	}
 	return nil
 }
@@ -109,7 +109,7 @@ func checkText(what string, s string, limit int) error {
 // checkLine refuses control characters such as newlines in one-line text.
 func checkLine(what, s string) error {
 	if strings.ContainsFunc(s, unicode.IsControl) {
-		return fmt.Errorf("%w: %s must be one line without control characters", store.ErrInvalid, what)
+		return store.Refuse(store.ErrInvalid, "%s must be one line without control characters", what)
 	}
 	return nil
 }
@@ -153,11 +153,11 @@ func (g *Governance) Propose(ctx context.Context, author, title, body string) (i
 func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, reason string) (Choice, error) {
 	c := Choice(strings.ToLower(strings.TrimSpace(choice)))
 	if c != Yes && c != No && c != Abstain {
-		return "", fmt.Errorf("%w: vote yes, no or abstain", store.ErrInvalid)
+		return "", store.Refuse(store.ErrInvalid, "vote yes, no or abstain")
 	}
 	reason = strings.TrimSpace(reason)
 	if utf8.RuneCountInString(reason) > maxReason {
-		return "", fmt.Errorf("%w: a reason is at most %d characters", store.ErrInvalid, maxReason)
+		return "", store.Refuse(store.ErrInvalid, "a reason is at most %d characters", maxReason)
 	}
 	return c, store.InTx(ctx, g.db, func(tx *sql.Tx) error {
 		if err := agents.ExistsTx(ctx, tx, agent); err != nil {
@@ -177,7 +177,7 @@ func (g *Governance) Cast(ctx context.Context, agent string, id int64, choice, r
 func (g *Governance) Close(ctx context.Context, agent string, id int64, state string) error {
 	st := State(strings.ToLower(strings.TrimSpace(state)))
 	if st != Accepted && st != Rejected && st != Withdrawn {
-		return fmt.Errorf("%w: close as accepted, rejected or withdrawn", store.ErrInvalid)
+		return store.Refuse(store.ErrInvalid, "close as accepted, rejected or withdrawn")
 	}
 	var title string
 	return store.InTx(ctx, g.db, func(tx *sql.Tx) error {
@@ -222,7 +222,7 @@ func (g *Governance) Get(ctx context.Context, id int64) (Proposal, error) {
 		return Proposal{}, err
 	}
 	if len(out) == 0 {
-		return Proposal{}, fmt.Errorf("%w: no proposal #%d", ErrNotFound, id)
+		return Proposal{}, store.Refuse(ErrNotFound, "no proposal #%d", id)
 	}
 	return out[0], nil
 }
@@ -309,20 +309,20 @@ func (g *Governance) SetCharter(ctx context.Context, agent string, proposal int6
 		var state State
 		err := tx.QueryRowContext(ctx, `SELECT state FROM proposals WHERE id = ?`, proposal).Scan(&state)
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("%w: no proposal #%d", ErrNotFound, proposal)
+			return store.Refuse(ErrNotFound, "no proposal #%d", proposal)
 		}
 		if err != nil {
 			return err
 		}
 		if state != Accepted {
-			return fmt.Errorf("%w: proposal #%d is %s; the charter changes only after an accepted proposal", store.ErrInvalid, proposal, state)
+			return store.Refuse(store.ErrInvalid, "proposal #%d is %s; the charter changes only after an accepted proposal", proposal, state)
 		}
 		var used int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM charter_changes WHERE proposal_id = ?`, proposal).Scan(&used); err != nil {
 			return err
 		}
 		if used > 0 {
-			return fmt.Errorf("%w: proposal #%d already changed the charter; a further change needs a new proposal", store.ErrInvalid, proposal)
+			return store.Refuse(store.ErrInvalid, "proposal #%d already changed the charter; a further change needs a new proposal", proposal)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO charter_changes (proposal_id, changed_by, changed_at) VALUES (?, ?, ?)`,
 			proposal, agent, now); err != nil {
@@ -353,13 +353,13 @@ func requireOpen(ctx context.Context, tx *sql.Tx, id int64) error {
 	var state State
 	err := tx.QueryRowContext(ctx, `SELECT state FROM proposals WHERE id = ?`, id).Scan(&state)
 	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%w: no proposal #%d", ErrNotFound, id)
+		return store.Refuse(ErrNotFound, "no proposal #%d", id)
 	}
 	if err != nil {
 		return err
 	}
 	if state != Open {
-		return fmt.Errorf("%w: proposal #%d is %s", ErrClosed, id, state)
+		return store.Refuse(ErrClosed, "proposal #%d is %s", id, state)
 	}
 	return nil
 }

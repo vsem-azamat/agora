@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -77,13 +76,13 @@ func New(db *sql.DB, now func() time.Time) *Agents {
 // Update applies u to the profile of name and returns the result.
 func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, error) {
 	if u.Status != nil && (strings.TrimSpace(*u.Status) == "" || len(*u.Status) > 32) {
-		return Profile{}, fmt.Errorf("%w: status must be 1-32 characters", store.ErrInvalid)
+		return Profile{}, store.Refuse(store.ErrInvalid, "status must be 1-32 characters")
 	}
 	if u.Status != nil && strings.TrimSpace(*u.Status) == Left {
-		return Profile{}, fmt.Errorf("%w: to leave, use `agora leave`, which also gives up your queue places", store.ErrInvalid)
+		return Profile{}, store.Refuse(store.ErrInvalid, "to leave, use `agora leave`, which also gives up your queue places")
 	}
 	if u.CWD != nil && !filepath.IsAbs(*u.CWD) {
-		return Profile{}, fmt.Errorf("%w: directory must be an absolute path", store.ErrInvalid)
+		return Profile{}, store.Refuse(store.ErrInvalid, "directory must be an absolute path")
 	}
 	if err := checkChoice("sigil", u.Icon, Icons); err != nil {
 		return Profile{}, err
@@ -93,7 +92,7 @@ func (a *Agents) Update(ctx context.Context, name string, u Update) (Profile, er
 	}
 	for _, n := range append(slices.Clone(u.AddPRs), u.DropPRs...) {
 		if n <= 0 {
-			return Profile{}, fmt.Errorf("%w: pull request numbers are positive", store.ErrInvalid)
+			return Profile{}, store.Refuse(store.ErrInvalid, "pull request numbers are positive")
 		}
 	}
 	now := a.now()
@@ -168,7 +167,7 @@ func ExistsTx(ctx context.Context, tx *sql.Tx, name string) error {
 }
 
 func unknown(name string) error {
-	return fmt.Errorf("%w: %q has not joined; run `agora join %s` first", ErrUnknown, name, name)
+	return store.Refuse(ErrUnknown, "%q has not joined; run `agora join %s` first", name, name)
 }
 
 // SetAvatarTx makes hash, an avatar's, the avatar of name ("" for none) and returns the one it

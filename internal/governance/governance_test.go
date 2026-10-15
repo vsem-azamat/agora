@@ -211,3 +211,15 @@ func TestChoicesIgnoreCase(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A refusal says only what was refused; errors.Is still finds its kind.
+func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	e := newEnv(t)
+	_, err := e.g.Propose(ctx, "builder", "", "a body")
+	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {
+		t.Fatalf("an empty title: %v", err)
+	}
+	if _, err := e.g.Get(ctx, 99); !errors.Is(err, governance.ErrNotFound) || strings.HasPrefix(err.Error(), governance.ErrNotFound.Error()) {
+		t.Fatalf("a missing proposal: %v", err)
+	}
+}

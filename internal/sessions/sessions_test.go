@@ -1252,3 +1252,30 @@ func TestPendingIncludesRoomsFollowedToWake(t *testing.T) {
 		t.Fatalf("key %q text %q", key, text)
 	}
 }
+
+// A refusal says only what was refused; errors.Is still finds its kind.
+func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	e := newEnv(t)
+	task := "x"
+	_, err := e.s.Join(ctx, "agora", "", false)
+	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {
+		t.Fatalf("a reserved name: %v", err)
+	}
+	if _, err := e.a.Update(ctx, "nobody", agents.Update{Task: &task}); !errors.Is(err, agents.ErrUnknown) || strings.HasPrefix(err.Error(), agents.ErrUnknown.Error()) {
+		t.Fatalf("an agent that has not joined: %v", err)
+	}
+	// a name an agent gave up says what it is called now, without the kind in front
+	e.join(t, "fixer", "")
+	e.rename(t, "fixer", "docs-writer")
+	_, err = e.r.Post(ctx, "fixer", "general", "hello", 0)
+	var former *agents.FormerNameError
+	if !errors.As(err, &former) || !errors.Is(err, agents.ErrUnknown) || err.Error() != `"fixer" is now called "docs-writer"; use docs-writer` {
+		t.Fatalf("a name given up: %v", err)
+	}
+	// taking it, or renaming to it, is refused, and the message says so
+	e.join(t, "builder", "")
+	err = e.s.Rename(ctx, "builder", "fixer")
+	if !errors.As(err, &former) || !errors.Is(err, agents.ErrTaken) || err.Error() != `"fixer" is the former name of docs-writer; pick another name, or act as docs-writer if that is you` {
+		t.Fatalf("renaming to a name given up: %v", err)
+	}
+}

@@ -122,17 +122,17 @@ var (
 // checkName reports why name cannot be an agent name, or nil.
 func checkName(name string) error {
 	if reserved[name] {
-		return fmt.Errorf("%w: %q is reserved", store.ErrInvalid, name)
+		return store.Refuse(store.ErrInvalid, "%q is reserved", name)
 	}
 	if !rooms.ValidName(name) {
-		return fmt.Errorf("%w: name %q: %s", store.ErrInvalid, name, rooms.NameRule)
+		return store.Refuse(store.ErrInvalid, "name %q: %s", name, rooms.NameRule)
 	}
 	return nil
 }
 
 func checkSession(id string) error {
 	if !sessionRE.MatchString(id) {
-		return fmt.Errorf("%w: session id: 6-80 letters, digits, '_' and '-'", store.ErrInvalid)
+		return store.Refuse(store.ErrInvalid, "session id: 6-80 letters, digits, '_' and '-'")
 	}
 	return nil
 }
@@ -195,7 +195,7 @@ func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 		return Reply{}, err
 	}
 	if r.Event == Compact && r.Reason != CompactManual && r.Reason != CompactAuto {
-		return Reply{}, fmt.Errorf("%w: compaction %q: manual or auto", store.ErrInvalid, r.Reason)
+		return Reply{}, store.Refuse(store.ErrInvalid, "compaction %q: manual or auto", r.Reason)
 	}
 	if r.Event == End && r.Reason == EndReasonClear {
 		return Reply{}, nil // the next start in the same process takes over the name and places
@@ -420,7 +420,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 		err := tx.QueryRowContext(ctx, `SELECT id FROM sessions WHERE agent = ? AND state != ? AND id != ?`, name, Ended, sessionID).Scan(&holder)
 		switch {
 		case err == nil && !force:
-			return fmt.Errorf("%w: %q belongs to a live session; pick another name, or force the claim if it is you", ErrNameTaken, name)
+			return store.Refuse(ErrNameTaken, "%q belongs to a live session; pick another name, or force the claim if it is you", name)
 		case err == nil:
 			if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL WHERE id = ?`, holder); err != nil {
 				return err
@@ -444,7 +444,7 @@ func (s *Sessions) Rename(ctx context.Context, agent, name string) error {
 		return err
 	}
 	if name == agent {
-		return fmt.Errorf("%w: you are already called %s", store.ErrInvalid, name)
+		return store.Refuse(store.ErrInvalid, "you are already called %s", name)
 	}
 	now := s.now()
 	return store.InTx(ctx, s.db, func(tx *sql.Tx) error {
