@@ -22,7 +22,7 @@ The system SHALL record each agent session a connector reports with its identifi
 
 ### Requirement: Session States
 
-The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session that starts new, resumed or after a cleared conversation SHALL be `idle`; a start that the agent tool reports as caused by compaction SHALL keep the state of a session that is live and SHALL make a session the hub did not know or had ended `idle`, and no start SHALL count as a new turn. A session SHALL become `idle` when its connector reports that it waits at its prompt after a turn that ended without the end being reported. When the connector reports that the conversation is about to be compacted, the session SHALL become `idle` when the user asked for it and `busy` when the agent tool does it by itself, whether or not the session was live before; a report of any other kind of compaction SHALL be refused.
+The system SHALL keep each session `busy`, `idle` or `ended` as reported by its connector, with the time of the last change. A session that starts new, resumed or after a cleared conversation SHALL be `idle`; a start that the agent tool reports as caused by compaction SHALL keep the state of a session that is live and SHALL make a session the hub did not know or had ended `idle`, and no start SHALL count as a new turn. A session SHALL become `idle` when its connector reports that it waits at its prompt after a turn that ended without the end being reported. When the connector reports that the conversation is about to be compacted, the session SHALL become `idle` when the user asked for it, whether or not the session was live before; when the agent tool does it by itself, a live session SHALL keep its state (the tool compacts during a turn, and also while the session waits at its prompt, with no turn or stop after it) and a session the hub did not know or had ended SHALL become `busy`; a report of any other kind of compaction SHALL be refused.
 
 #### Scenario: Turn ends
 - **WHEN** the agent ends its turn and the connector lets it
@@ -43,6 +43,10 @@ The system SHALL keep each session `busy`, `idle` or `ended` as reported by its 
 #### Scenario: Compaction asked for at the prompt
 - **WHEN** the agent's session is `busy` because its turn was interrupted without a stop, and the user compacts the conversation at the prompt, which the connector reports before the compaction and its start
 - **THEN** the session is `idle`, and stays `idle` after the compaction's start
+
+#### Scenario: Compacted automatically while idle
+- **WHEN** the agent's session is idle after its turn and the agent tool compacts the conversation by itself, which the connector reports before the compaction and its start, and no turn or stop follows
+- **THEN** the session stays `idle`, so a message addressed to the agent still wakes it
 
 #### Scenario: Compaction during a turn of an unknown session
 - **WHEN** the hub has not heard of the agent's session and the conversation is compacted automatically, which the connector reports before the compaction's start
