@@ -254,7 +254,7 @@ func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 			// /compact runs at the prompt, and runs no prompt or stop. The agent tool compacts by
 			// itself during a turn and also while the session waits at its prompt, so a live
 			// session keeps its state; one the hub did not know or had ended is most likely in
-			// a turn. The start that follows keeps the state set here.
+			// a turn. The start that follows keeps the state the session has after this report.
 			if r.Reason == CompactManual {
 				return setState(ctx, tx, r.SessionID, Idle, now)
 			}
