@@ -305,12 +305,58 @@ func TestAutomaticCompactionOfAnUnknownSessionIsBusy(t *testing.T) {
 		t.Fatalf("after an automatic compaction: %s", st)
 	}
 	e.report(t, "session-2", sessions.Start)
-	e.report(t, "session-2", sessions.Stop)
+	e.report(t, "session-2", sessions.Prompt)
+	e.report(t, "session-2", sessions.End)
 	if err := e.precompact(t, "session-2", sessions.CompactAuto); err != nil {
 		t.Fatal(err)
 	}
 	if st := e.state(t, "session-2"); st != sessions.Busy {
-		t.Fatalf("after an automatic compaction of an idle session: %s", st)
+		t.Fatalf("after an automatic compaction of an ended session: %s", st)
+	}
+}
+
+func TestAutomaticCompactionWhileIdleKeepsItIdle(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.join(t, "reviewer", "")
+	e.report(t, "session-1", sessions.Prompt)
+	e.report(t, "session-1", sessions.Stop)
+	turn, err := e.s.Turn(ctx, "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Claude Code compacts a long conversation while it waits at the prompt: PreCompact with
+	// trigger auto, then the compaction's start, and no turn or stop after them.
+	if err := e.precompact(t, "session-1", sessions.CompactAuto); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after the automatic compaction's report: %s", st)
+	}
+	e.compact(t, "session-1")
+	if st := e.state(t, "session-1"); st != sessions.Idle {
+		t.Fatalf("after the compaction's start: %s", st)
+	}
+	if _, err := e.r.Post(ctx, "reviewer", "general", "@builder can you take #57?", 0); err != nil {
+		t.Fatal(err)
+	}
+	w, done, err := e.s.CheckWake(ctx, "session-1", turn)
+	if err != nil || !done || w == nil || !strings.Contains(w.Text, "can you take #57?") {
+		t.Fatalf("wake %+v done %v err %v", w, done, err)
+	}
+}
+
+func TestAutomaticCompactionDuringATurnKeepsItBusy(t *testing.T) {
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.report(t, "session-1", sessions.Prompt)
+	if err := e.precompact(t, "session-1", sessions.CompactAuto); err != nil {
+		t.Fatal(err)
+	}
+	e.compact(t, "session-1")
+	if st := e.state(t, "session-1"); st != sessions.Busy {
+		t.Fatalf("after an automatic compaction during a turn: %s", st)
 	}
 }
 

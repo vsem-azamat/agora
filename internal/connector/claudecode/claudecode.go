@@ -60,7 +60,8 @@ var events = map[string]agorav1.SessionEvent{
 	"SessionEnd":       agorav1.SessionEvent_SESSION_EVENT_END,
 	// A turn that ends on an API error runs no Stop hook.
 	"StopFailure": agorav1.SessionEvent_SESSION_EVENT_WAITING,
-	// A compaction runs no Stop or UserPromptSubmit, so its trigger says what it does to the state.
+	// A compaction runs no Stop or UserPromptSubmit, so its trigger tells /compact at the prompt,
+	// which leaves the session idle, from one Claude Code starts by itself.
 	"PreCompact": agorav1.SessionEvent_SESSION_EVENT_COMPACT,
 }
 

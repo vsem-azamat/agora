@@ -52,7 +52,8 @@ const (
 const (
 	// CompactManual is a compaction the user asked for, at the prompt.
 	CompactManual = "manual"
-	// CompactAuto is a compaction the agent tool starts by itself, during a turn.
+	// CompactAuto is a compaction the agent tool starts by itself, during a turn or while the
+	// session waits at its prompt.
 	CompactAuto = "auto"
 )
 
@@ -239,7 +240,8 @@ func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 			// A new, resumed or cleared session starts at the prompt. A compaction starts the
 			// session again with no turn and, when it runs while idle or on /compact, no stop
 			// after it: a live session keeps its state (the connector reports the compaction's
-			// trigger first, which sets it), and a connector waiting on it keeps waiting. One
+			// trigger first: /compact makes it idle, an automatic one leaves it), and a connector
+			// waiting on it keeps waiting. One
 			// the hub did not know or had ended, and whose trigger was not reported, has no
 			// state to keep.
 			if r.Reason == StartReasonCompact && wasLive {
@@ -249,10 +251,15 @@ func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 		case Waiting:
 			return setState(ctx, tx, r.SessionID, Idle, now)
 		case Compact:
-			// /compact runs at the prompt, and runs no prompt or stop; an automatic compaction
-			// interrupts a turn. The start that follows keeps the state set here.
+			// /compact runs at the prompt, and runs no prompt or stop. The agent tool compacts by
+			// itself during a turn and also while the session waits at its prompt, so a live
+			// session keeps its state; one the hub did not know or had ended is most likely in
+			// a turn. The start that follows keeps the state the session has after this report.
 			if r.Reason == CompactManual {
 				return setState(ctx, tx, r.SessionID, Idle, now)
+			}
+			if wasLive {
+				return nil
 			}
 			return setState(ctx, tx, r.SessionID, Busy, now)
 		case End:
