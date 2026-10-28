@@ -10,7 +10,7 @@ The running agent sessions that connectors report: their state, how the hub noti
 
 ### Requirement: Sessions Are Registered By Connectors
 
-The system SHALL record each agent session a connector reports with its identifier, tool kind, process, working directory, terminal (when known) and start time, SHALL accept only identifiers of 6 to 80 letters, digits, `_` and `-`, and SHALL register a session on the first event it receives from it.
+The system SHALL record each agent session a connector reports with its identifier, tool kind, process, working directory, terminal (when known) and start time, SHALL accept only identifiers of 6 to 80 letters, digits, `_` and `-`, SHALL register a session on the first event it receives from it, and SHALL record the process named by the session's latest event that names one.
 
 #### Scenario: New session
 - **WHEN** a connector reports a session starting
@@ -19,6 +19,10 @@ The system SHALL record each agent session a connector reports with its identifi
 #### Scenario: Session that started before the connector
 - **WHEN** the first event the hub receives from a session is not its start
 - **THEN** the session is registered at that point
+
+#### Scenario: Another process reported
+- **WHEN** a live session reports an event that names a different process than the one recorded
+- **THEN** the session's process becomes the one the event names
 
 ### Requirement: Session States
 

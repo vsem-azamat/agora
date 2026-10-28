@@ -20,7 +20,7 @@ The CLI takes `--as`, else `$AGORA_NAME`, else asks the hub which name is bound 
 
 ## Liveness
 
-The connector reports the process of the agent tool: it walks up from the hook's parent process to the first `claude` process in `/proc`, and reports `0` when it finds none, so the short-lived hook shell is never taken for the session. With the pid it sends the process start time (`/proc/<pid>/stat`, field 22).
+The connector reports the process of the agent tool: it walks up from the hook's parent process to the first `claude` process in `/proc` whose environment (`/proc/<pid>/environ`) does not hold the hook's session id in `CLAUDE_CODE_SESSION_ID`, and reports `0` when it finds none, so the short-lived hook shell is never taken for the session. Claude Code gives that variable to the commands it runs and not to its own process, so a `claude` the session started is passed over, while a session started by another session, which holds the other one's id, is found with its own process. With the pid it sends the process start time (`/proc/<pid>/stat`, field 22).
 
 Each sweep (`internal/proc`) ends sessions whose process is gone: on Linux the pid must exist with the same start time, so a reused pid does not keep a session alive; without `/proc` it falls back to `kill(pid, 0)`. Sessions with an unknown process (`pid = 0`, e.g. registered only by `agora join`) end after 6 hours without events. The hub must run in the same pid namespace as the agents.
 

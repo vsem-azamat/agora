@@ -421,6 +421,19 @@ func TestFirstEventRegistersTheSession(t *testing.T) {
 	}
 }
 
+func TestTheLatestReportedProcessIsRecorded(t *testing.T) {
+	e := newEnv(t)
+	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4243, PIDStart: 112}
+	if _, err := e.s.Report(ctx, start); err != nil {
+		t.Fatal(err)
+	}
+	e.report(t, "session-1", sessions.Start)
+	list, _ := e.s.List(ctx)
+	if len(list) != 1 || list[0].PID != 4242 || list[0].PIDStart != 111 {
+		t.Fatalf("sessions %+v", list)
+	}
+}
+
 func TestInvalidSessionIDsAreRefused(t *testing.T) {
 	e := newEnv(t)
 	for _, id := range []string{"short", "has space in it", strings.Repeat("a", 81), "../../etc"} {

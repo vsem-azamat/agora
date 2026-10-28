@@ -53,6 +53,21 @@ func Command(pid int) string {
 	return strings.TrimSpace(string(b))
 }
 
+// Env returns the value of the environment variable name that pid started with, or "" when
+// pid has no such variable or its environment cannot be read.
+func Env(pid int, name string) string {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
+	if err != nil {
+		return ""
+	}
+	for kv := range strings.SplitSeq(string(b), "\x00") {
+		if v, ok := strings.CutPrefix(kv, name+"="); ok {
+			return v
+		}
+	}
+	return ""
+}
+
 // Executable returns a path that runs the program that pid runs, even after an update replaced
 // or removed its file, or "" when the platform has none.
 func Executable(pid int) string {
