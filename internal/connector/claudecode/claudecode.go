@@ -81,7 +81,7 @@ const CompactTriggers = "manual|auto"
 var InvokingVersion = lookUpVersion
 
 // executable is the program of the Claude Code process the hook runs under, or "".
-var executable = func() string { return proc.Executable(agentPID()) }
+var executable = func() string { return proc.Executable(agentPID(SessionID())) }
 
 // lookUpVersion asks the executable for its version. A process that is not found, and one that
 // prints no version (an npm install runs under node, which prints node's), count as unknown.
@@ -128,7 +128,7 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	}
 	ctx, cancel := context.WithTimeout(ctx, HubTimeout)
 	defer cancel()
-	pid := agentPID()
+	pid := agentPID(h.SessionID)
 	var start int64
 	if pid > 0 {
 		start = proc.StartTime(pid)
@@ -160,16 +160,23 @@ func Hook(ctx context.Context, client agorav1connect.SessionServiceClient, in io
 	return nil
 }
 
-// agentPID finds the Claude Code process this hook belongs to: hooks run under a shell, so it
-// walks up the process tree looking for `claude`. It returns 0 when it cannot tell, so the hub
-// never mistakes the short-lived hook shell for the session.
-func agentPID() int {
-	pid := os.Getppid()
+// agentPID finds the Claude Code process of session id that this hook belongs to: hooks run
+// under a shell, so it walks up the process tree looking for `claude`. It returns 0 when it
+// cannot tell, so the hub never mistakes the short-lived hook shell for the session.
+func agentPID(id string) int {
+	return sessionProcess(os.Getppid(), id, proc.Command, proc.Env, proc.Parent)
+}
+
+// sessionProcess walks up from pid to the first `claude` process that was not started by
+// session id: Claude Code gives the commands it runs the session in sessionEnv, which the
+// session's own process does not have, so a short-lived `claude` the session started is passed
+// over, while another session started by it, which has the other session's id, is not.
+func sessionProcess(pid int, id string, command func(int) string, env func(int, string) string, parent func(int) (int, error)) int {
 	for range maxAncestors {
-		if proc.Command(pid) == "claude" {
+		if command(pid) == "claude" && (id == "" || env(pid, sessionEnv) != id) {
 			return pid
 		}
-		next, err := proc.Parent(pid)
+		next, err := parent(pid)
 		if err != nil || next <= 1 {
 			break
 		}

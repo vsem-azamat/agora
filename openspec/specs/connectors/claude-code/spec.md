@@ -22,11 +22,19 @@ The connector SHALL exit successfully and print nothing whenever it fails, inclu
 
 ### Requirement: Hook Events Report The Session
 
-The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an API error the session can work again from (`StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens`, not under a Claude Code older than 2.1.267, which reports a failure to load credentials as `server_error` or `unknown`; the version is that of the Claude Code process the hook runs under, and counts as new enough when it cannot be determined), adding nothing to the agent's context, with the session's identifier, the Claude Code process and its start time, the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session start (its `source`) or end, and SHALL report the trigger of a compaction (`PreCompact` with trigger `manual` or `auto`) before it runs, adding nothing to the agent's context.
+The connector SHALL report session start, new prompts, tool use, the end of a turn and session end to the hub, and SHALL report the session as waiting at its prompt when a turn ends on an API error the session can work again from (`StopFailure` with error `overloaded`, `server_error`, `unknown` or `max_output_tokens`, not under a Claude Code older than 2.1.267, which reports a failure to load credentials as `server_error` or `unknown`; the version is that of the Claude Code process the hook runs under, and counts as new enough when it cannot be determined), adding nothing to the agent's context, with the session's identifier, the Claude Code process and its start time (the nearest `claude` process above the hook that was not started by the session itself, told by the session's identifier in `CLAUDE_CODE_SESSION_ID`, which Claude Code gives the commands it runs: a `claude` process the session started never stands for it, while another session that one starts is reported with its own process), the working directory, the terminal named by `AGORA_TERMINAL` when it is set, and the reason Claude Code gives for a session start (its `source`) or end, and SHALL report the trigger of a compaction (`PreCompact` with trigger `manual` or `auto`) before it runs, adding nothing to the agent's context.
 
 #### Scenario: Start and end
 - **WHEN** a Claude Code session starts and later exits
 - **THEN** the hub records the session as started and then as `ended`
+
+#### Scenario: Hook under a helper process
+- **WHEN** a hook runs under a `claude` process that the session started, and that process later exits
+- **THEN** the hub records the session's own process and the session stays live
+
+#### Scenario: Session started by another session
+- **WHEN** a session's `claude` process is started by another session, directly or through a shell
+- **THEN** the hub records each session with its own process
 
 #### Scenario: Turn ends on an API error
 - **WHEN** the agent's turn ends because the API is overloaded, so no `Stop` hook runs and `StopFailure` runs instead

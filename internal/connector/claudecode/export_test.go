@@ -20,3 +20,7 @@ func SetExecutable(exe string) (restore func()) {
 
 // LookUpVersion is the real lookup of the version of the process a hook runs under.
 var LookUpVersion = lookUpVersion
+
+// SessionProcess finds the Claude Code process of a session above pid in a process tree given
+// by command, env and parent.
+var SessionProcess = sessionProcess

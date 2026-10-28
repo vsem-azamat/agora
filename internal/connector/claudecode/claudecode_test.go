@@ -279,3 +279,62 @@ func TestUnknownEventsAreIgnored(t *testing.T) {
 		}
 	}
 }
+
+// tree is a process tree: each pid's command, the session id in its environment and parent.
+type tree map[int]struct {
+	command, session string
+	parent           int
+}
+
+func (t tree) command(pid int) string { return t[pid].command }
+
+func (t tree) env(pid int, name string) string {
+	if name != "CLAUDE_CODE_SESSION_ID" {
+		return ""
+	}
+	return t[pid].session
+}
+
+func (t tree) parent(pid int) (int, error) {
+	p, ok := t[pid]
+	if !ok {
+		return 0, errors.New("no such process")
+	}
+	return p.parent, nil
+}
+
+func TestTheHookReportsItsSessionsOwnClaudeProcess(t *testing.T) {
+	// a terminal runs a shell that runs session-a's claude (100)
+	base := tree{10: {"term", "", 1}, 50: {"zsh", "", 10}, 100: {"claude", "", 50}}
+	with := func(extra tree) tree {
+		t := tree{}
+		for pid, p := range base {
+			t[pid] = p
+		}
+		for pid, p := range extra {
+			t[pid] = p
+		}
+		return t
+	}
+	for name, c := range map[string]struct {
+		tree    tree
+		session string
+		want    int
+	}{
+		"hook under the session":      {with(tree{300: {"sh", "session-a", 100}}), "session-a", 100},
+		"hook under a helper claude":  {with(tree{200: {"claude", "session-a", 100}, 300: {"sh", "session-a", 200}}), "session-a", 100},
+		"helper started from a shell": {with(tree{150: {"zsh", "session-a", 100}, 200: {"claude", "session-a", 150}, 300: {"sh", "session-a", 200}}), "session-a", 100},
+		"session started by another":  {with(tree{200: {"claude", "session-a", 100}, 300: {"sh", "session-b", 200}}), "session-b", 200},
+		"session started in another's shell": {
+			with(tree{150: {"zsh", "session-a", 100}, 200: {"claude", "session-a", 150}, 300: {"sh", "session-b", 200}}), "session-b", 200,
+		},
+		"session id unknown":                         {with(tree{200: {"claude", "session-a", 100}, 300: {"sh", "", 200}}), "", 200},
+		"session id unknown, hook under the session": {with(tree{300: {"sh", "", 100}}), "", 100},
+		"no claude above":                            {tree{10: {"term", "", 1}, 300: {"sh", "session-a", 10}}, "session-a", 0},
+		"tree unreadable":                            {tree{}, "session-a", 0},
+	} {
+		if got := claudecode.SessionProcess(300, c.session, c.tree.command, c.tree.env, c.tree.parent); got != c.want {
+			t.Errorf("%s: got %d, want %d", name, got, c.want)
+		}
+	}
+}
