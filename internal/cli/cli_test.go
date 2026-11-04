@@ -1010,7 +1010,8 @@ func TestWebSetting(t *testing.T) {
 		{"named operator", "", []string{"--web", "127.0.0.1:0", "--web-as", "owner"}, []string{"web=127.0.0.1:", "web_as=owner"}, 0},
 		{"another interface", "", []string{"--web", "0.0.0.0:0"}, []string{"not a loopback address"}, 0},
 		{"invalid operator", "", []string{"--web", "0", "--web-as", "agora"}, []string{`"agora" is reserved`}, 1},
-		{"invalid address", "", []string{"--web", "example:port"}, []string{"--web"}, 1},
+		{"invalid address", "", []string{"--web", "example:port"}, []string{`--web "example:port": use host:port`}, 1},
+		{"invalid address from the environment", "example:port", nil, []string{`AGORA_WEB="example:port": use host:port`}, 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1059,7 +1060,9 @@ func TestBridgeSettings(t *testing.T) {
 		{"flags", "", "", []string{"--bridge-policy", "open", "--bridge-delay", "30s"}, "bridge_policy=open bridge_delay=30s", 0},
 		{"from the environment", "read", "2m", nil, "bridge_policy=read bridge_delay=2m0s", 0},
 		{"the former policy", "", "", []string{"--bridge-policy", "approve"}, `--bridge-policy: policy "approve": open, delay or read`, 1},
-		{"no delay", "", "", []string{"--bridge-delay", "0s"}, "--bridge-delay: the bridge delay must be positive", 1},
+		{"no delay", "", "", []string{"--bridge-delay", "0s"}, `--bridge-delay "0s": a positive duration such as 60s`, 1},
+		{"no delay from the environment", "", "0", nil, `AGORA_BRIDGE_DELAY="0": a positive duration such as 60s`, 1},
+		{"a policy from the environment", "approve", "", nil, `AGORA_BRIDGE_POLICY: policy "approve"`, 1},
 		{"a delay that is no duration", "", "soon", nil, `AGORA_BRIDGE_DELAY="soon"`, 1},
 	}
 	for _, c := range cases {

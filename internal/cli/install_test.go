@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
+
 	"github.com/vsem-azamat/agora/internal/cli"
 	"github.com/vsem-azamat/agora/internal/install"
 )
@@ -220,6 +222,11 @@ func TestInstallService(t *testing.T) {
 	if r := run("install", "service", "--bin", exe, "--join", "always"); r.code == 0 {
 		t.Fatalf("install --join always: %+v", r)
 	}
+	t.Setenv("AGORA_JOIN", "always")
+	if r := run("install", "service", "--bin", exe); r.code == 0 || !strings.Contains(r.stderr, "AGORA_JOIN: ") {
+		t.Fatalf("install with AGORA_JOIN=always: %+v", r)
+	}
+	t.Setenv("AGORA_JOIN", "")
 	if r := run("install", "service", "--bin", exe, "--bridge-policy", "open", "--bridge-delay", "30s"); r.code != 0 {
 		t.Fatalf("install --bridge-policy: %+v", r)
 	}
@@ -457,4 +464,106 @@ func TestSessionControlCommandsDefaultToTheEnvironment(t *testing.T) {
 	if r := run("hub", "--help"); !strings.Contains(r.stdout, `(default "send-compact")`) || !strings.Contains(r.stdout, `(default "send-esc")`) {
 		t.Fatalf("hub flags do not default to the environment: %+v", r)
 	}
+}
+
+func TestInstallServiceWatchPRs(t *testing.T) {
+	home := isolate(t)
+	defer cli.SetGOOS("linux")()
+	exe := fakeBin(t)
+	unit := filepath.Join(home, ".config", "systemd", "user", "agora-hub.service")
+	execStart := func() string {
+		b, _ := os.ReadFile(unit)
+		for line := range strings.SplitSeq(string(b), "\n") {
+			if strings.HasPrefix(line, "ExecStart=") {
+				return line
+			}
+		}
+		return ""
+	}
+
+	if r := run("install", "service", "--bin", exe, "--watch-prs=false"); r.code != 0 {
+		t.Fatalf("install --watch-prs=false: %+v", r)
+	}
+	if got, want := execStart(), "ExecStart="+exe+" hub --watch-prs=false"; got != want {
+		t.Fatalf("unit has %q, want %q", got, want)
+	}
+
+	t.Setenv("AGORA_WATCH_PRS", "false")
+	if r := run("install", "service", "--bin", exe); r.code != 0 {
+		t.Fatalf("install with AGORA_WATCH_PRS: %+v", r)
+	}
+	if got, want := execStart(), "ExecStart="+exe+" hub --watch-prs=false"; got != want {
+		t.Fatalf("unit has %q, want %q", got, want)
+	}
+	if r := run("install", "service", "--bin", exe, "--watch-prs"); r.code != 0 {
+		t.Fatalf("install --watch-prs: %+v", r)
+	}
+	if got, want := execStart(), "ExecStart="+exe+" hub --watch-prs=true"; got != want {
+		t.Fatalf("unit has %q, want %q", got, want)
+	}
+
+	// an invalid value is refused before anything is written
+	if err := os.Remove(unit); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGORA_WATCH_PRS", "off")
+	r := run("install", "service", "--bin", exe)
+	if r.code == 0 || !strings.Contains(r.stderr, `AGORA_WATCH_PRS="off": use true or false`) {
+		t.Fatalf("install with AGORA_WATCH_PRS=off: %+v", r)
+	}
+	if _, err := os.Stat(unit); !os.IsNotExist(err) {
+		t.Fatalf("unit written: %v", err)
+	}
+}
+
+// notInTheUnit lists the flags of agora hub that agora install service does not carry into the
+// unit, each with the reason. Every other hub flag must reach the unit, so a new hub flag that
+// the service forgets fails TestInstallServiceCarriesEveryHubFlag.
+var notInTheUnit = map[string]string{}
+
+func TestInstallServiceCarriesEveryHubFlag(t *testing.T) {
+	home := isolate(t)
+	defer cli.SetGOOS("linux")()
+	exe := fakeBin(t)
+	unit := filepath.Join(home, ".config", "systemd", "user", "agora-hub.service")
+	// a value for each hub flag, and the flag as the unit holds it
+	sample := map[string][2]string{
+		"db":                {"/srv/agora/a.db", "--db /srv/agora/a.db"},
+		"wake-command":      {"wake", "--wake-command wake"},
+		"compact-command":   {"compact", "--compact-command compact"},
+		"interrupt-command": {"interrupt", "--interrupt-command interrupt"},
+		"watch-prs":         {"false", "--watch-prs=false"},
+		"web":               {"8484", "--web 8484"},
+		"web-as":            {"owner", "--web-as owner"},
+		"join":              {"expect", "--join expect"},
+		"bridge-policy":     {"open", "--bridge-policy open"},
+		"bridge-delay":      {"30s", "--bridge-delay 30s"},
+	}
+	hub, _, err := cli.NewRoot().Find([]string{"hub"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if _, skip := notInTheUnit[f.Name]; skip {
+			return
+		}
+		s, ok := sample[f.Name]
+		if !ok {
+			t.Errorf("agora hub has --%s: make agora install service carry it, or list it in notInTheUnit with the reason", f.Name)
+			return
+		}
+		args := []string{"install", "service", "--bin", exe, "--web", "8484"}
+		if f.Name == "web" {
+			args = args[:len(args)-2]
+		}
+		args = append(args, "--"+f.Name+"="+s[0])
+		if r := run(args...); r.code != 0 {
+			t.Errorf("install service --%s: %+v", f.Name, r)
+			return
+		}
+		b, _ := os.ReadFile(unit)
+		if !strings.Contains(string(b), s[1]) {
+			t.Errorf("--%s did not reach the unit, which holds:\n%s", f.Name, b)
+		}
+	})
 }
