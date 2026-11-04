@@ -832,12 +832,6 @@ func (s *bridgeService) SendNoteOut(ctx context.Context, req *connect.Request[ag
 	return connect.NewResponse(&agorav1.SendNoteOutResponse{Id: id}), nil
 }
 
-// BridgePolicyOf is the policy a bridge gets when it is added, by name: open, delay or read.
-func BridgePolicyOf(name string) (bridges.Policy, error) {
-	p := bridges.Policy(name)
-	return p, bridges.ValidPolicy(p)
-}
-
 // ValidBridgeDelay reports whether d can be how long an agent's message waits under delay.
 func ValidBridgeDelay(d time.Duration) error {
 	if d <= 0 {
