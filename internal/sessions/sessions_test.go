@@ -1397,3 +1397,41 @@ func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
 		t.Fatalf("renaming to a name given up: %v", err)
 	}
 }
+
+func TestASessionBroughtBackIsBusySinceItCameBack(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.report(t, "session-1", sessions.End)
+	e.clock.add(time.Hour)
+	e.report(t, "session-1", sessions.Prompt)
+	list, err := e.s.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].State != sessions.Busy || !list[0].StateAt.Equal(e.clock.now()) {
+		t.Fatalf("sessions %+v, want busy since %v", list, e.clock.now())
+	}
+}
+
+func TestASessionBroughtBackWhoseNameWasTakenComesBackUnbound(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	e.report(t, "session-1", sessions.Start)
+	e.join(t, "builder", "session-1")
+	e.report(t, "session-1", sessions.End)
+	e.report(t, "session-2", sessions.Start)
+	e.join(t, "builder", "session-2")
+	e.report(t, "session-1", sessions.Prompt)
+	list, err := e.s.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents := map[string]string{}
+	for _, x := range list {
+		agents[x.ID] = x.Agent
+	}
+	if agents["session-1"] != "" || agents["session-2"] != "builder" {
+		t.Fatalf("agents %v", agents)
+	}
+}

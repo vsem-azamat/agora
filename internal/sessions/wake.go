@@ -95,10 +95,15 @@ func (s *Sessions) ConfirmWake(ctx context.Context, sessionID string, w *Wake) e
 			return err
 		}
 	}
-	now := s.now().UnixMilli()
-	_, err := s.db.ExecContext(ctx, `UPDATE sessions SET state = ?, state_at = ?, turn = turn + 1, woken_for = ?, woken_at = ?
-		WHERE id = ? AND turn = ? AND state = ?`, Busy, now, w.Key, now, sessionID, w.Turn, Idle)
-	return err
+	now := s.now()
+	return store.InTx(ctx, s.db, func(tx *sql.Tx) error {
+		moved, err := transition(ctx, tx, sessionID, change{to: Busy, from: []State{Idle}, atTurn: true, turn: w.Turn, newTurn: true}, now)
+		if err != nil || !moved {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE sessions SET woken_for = ?, woken_at = ? WHERE id = ?`, w.Key, now.UnixMilli(), sessionID)
+		return err
+	})
 }
 
 // Now is the clock Sessions uses.

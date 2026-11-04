@@ -13,6 +13,19 @@ How `internal/sessions` and the Claude Code connector implement [`openspec/specs
 
 A partial unique index on `sessions (agent) WHERE state != 'ended'` guarantees that a name is bound to at most one live session. A forced claim unbinds the name from the other session first; a resumed session whose name was taken meanwhile comes back unbound. Leaving unbinds the name from all its sessions (see [Agent profiles](agents.md)). `agora join` never brings back an ended session: with an ended session it only registers the name.
 
+## Session states
+
+A session row is created `busy` (the constant `created`) and changes state only through `transition` in `internal/sessions/state.go`, which writes `state` and `state_at` together. `TestOnlyTransitionWritesTheState` fails when other code under `internal/` assigns either column in an update or upsert of `sessions`, or replaces a row of it, in SQL written as string literals, names of strings (local constants and variables, `:=` included, and top-level ones of the package), or `+` chains of them; SQL built any other way, and the state an `INSERT` gives a new row, are not checked. The table `moves` lists where each state may be entered from:
+
+| To | From | When |
+| --- | --- | --- |
+| `busy` | `idle` | a prompt or a delivered wake, each of which also starts a new turn |
+| `busy` | `ended` | any report from an ended session brings it back |
+| `idle` | `busy` | a stop, a start, a failed turn (`waiting`), `/compact`, or a finished interrupt |
+| `ended` | `busy`, `idle` | an end report, a dead process, or another session taking over the process |
+
+A transition can also require the session to be at a given turn (a finished interrupt and a confirmed wake do, so a turn that began meanwhile is left alone). A session already in the target state, or in a state the transition does not leave, keeps its `state_at`.
+
 ## Resolving the agent
 
 The CLI takes `--as`, else `$AGORA_NAME`, else asks the hub which name is bound to the session in `$CLAUDE_CODE_SESSION_ID`, else `$AGORA_SESSION`. `agora join <name>` binds the name to that session, or only registers the name when the command runs outside a session.
