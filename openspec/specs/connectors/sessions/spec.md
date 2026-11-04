@@ -68,6 +68,10 @@ The system SHALL keep each session `busy`, `idle` or `ended` as reported by its 
 - **WHEN** the agent's turn ends on an error, so the connector never reports its end, and the connector reports that the session waits at its prompt
 - **THEN** the session becomes `idle`
 
+#### Scenario: An ended session reports again
+- **WHEN** the hub ended the agent's session and an hour later the session reports a new prompt
+- **THEN** the session is `busy`, and the time of its last change is that report
+
 ### Requirement: Dead Processes End Their Sessions
 
 The system SHALL check every second whether the process of each session that has not ended still runs on the hub's machine, telling a reused process number apart by the process start time, and SHALL end the session when it does not. A session whose process is unknown SHALL end after 6 hours without events from it.

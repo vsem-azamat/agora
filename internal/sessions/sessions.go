@@ -235,7 +235,7 @@ func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 			if _, err := tx.ExecContext(ctx, `UPDATE sessions SET turn = turn + 1 WHERE id = ?`, r.SessionID); err != nil {
 				return err
 			}
-			return setState(ctx, tx, r.SessionID, Busy, now)
+			return enter(ctx, tx, r.SessionID, Busy, now)
 		case Start:
 			// A new, resumed or cleared session starts at the prompt. A compaction starts the
 			// session again with no turn and, when it runs while idle or on /compact, no stop
@@ -247,21 +247,21 @@ func (s *Sessions) report(ctx context.Context, r Report) (Reply, error) {
 			if r.Reason == StartReasonCompact && wasLive {
 				return nil
 			}
-			return setState(ctx, tx, r.SessionID, Idle, now)
+			return enter(ctx, tx, r.SessionID, Idle, now)
 		case Waiting:
-			return setState(ctx, tx, r.SessionID, Idle, now)
+			return enter(ctx, tx, r.SessionID, Idle, now)
 		case Compact:
 			// /compact runs at the prompt, and runs no prompt or stop. The agent tool compacts by
 			// itself during a turn and also while the session waits at its prompt, so a live
 			// session keeps its state; one the hub did not know or had ended is most likely in
 			// a turn. The start that follows keeps the state the session has after this report.
 			if r.Reason == CompactManual {
-				return setState(ctx, tx, r.SessionID, Idle, now)
+				return enter(ctx, tx, r.SessionID, Idle, now)
 			}
 			if wasLive {
 				return nil
 			}
-			return setState(ctx, tx, r.SessionID, Busy, now)
+			return enter(ctx, tx, r.SessionID, Busy, now)
 		case End:
 			return s.endTx(ctx, tx, r.SessionID, now)
 		}
@@ -383,7 +383,7 @@ func (s *Sessions) stop(ctx context.Context, r Report, agent string, now time.Ti
 			return Reply{Block: true, BlockReason: text}, nil
 		}
 	}
-	return Reply{}, store.InTx(ctx, s.db, func(tx *sql.Tx) error { return setState(ctx, tx, r.SessionID, Idle, now) })
+	return Reply{}, store.InTx(ctx, s.db, func(tx *sql.Tx) error { return enter(ctx, tx, r.SessionID, Idle, now) })
 }
 
 // Join registers name and binds it to sessionID when that session has not ended; without
@@ -415,7 +415,7 @@ func (s *Sessions) Join(ctx context.Context, name, sessionID string, force bool)
 		case errors.Is(err, sql.ErrNoRows):
 			t := now.UnixMilli()
 			if _, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, state, state_at, started_at, seen_at) VALUES (?, ?, ?, ?, ?, ?)`,
-				sessionID, UnknownKind, Busy, t, t, t); err != nil {
+				sessionID, UnknownKind, created, t, t, t); err != nil {
 				return err
 			}
 		case err != nil:
@@ -589,7 +589,7 @@ func (s *Sessions) endTx(ctx context.Context, tx *sql.Tx, id string, now time.Ti
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(agent, '') FROM sessions WHERE id = ?`, id).Scan(&agent); err != nil {
 		return err
 	}
-	if err := setState(ctx, tx, id, Ended, now); err != nil {
+	if err := enter(ctx, tx, id, Ended, now); err != nil {
 		return err
 	}
 	if agent == "" {
@@ -618,7 +618,7 @@ func register(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 	}
 	t := now.UnixMilli()
 	_, err := tx.ExecContext(ctx, `INSERT INTO sessions (id, kind, pid, pid_start, cwd, terminal, state, state_at, started_at, seen_at)
-		VALUES (:id, :kind, :pid, :pid_start, :cwd, :terminal, :busy, :t, :t, :t)
+		VALUES (:id, :kind, :pid, :pid_start, :cwd, :terminal, :created, :t, :t, :t)
 		ON CONFLICT (id) DO UPDATE SET
 			kind = CASE WHEN excluded.kind != :unknown THEN excluded.kind ELSE kind END,
 			pid = CASE WHEN excluded.pid > 0 THEN excluded.pid ELSE pid END,
@@ -627,11 +627,14 @@ func register(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 			terminal = CASE WHEN excluded.terminal != '' THEN excluded.terminal ELSE terminal END,
 			seen_at = excluded.seen_at,
 			agent = CASE WHEN state = :ended AND EXISTS (SELECT 1 FROM sessions AS other
-				WHERE other.agent = sessions.agent AND other.state != :ended AND other.id != sessions.id) THEN NULL ELSE agent END,
-			state = CASE WHEN state = :ended THEN :busy ELSE state END`,
+				WHERE other.agent = sessions.agent AND other.state != :ended AND other.id != sessions.id) THEN NULL ELSE agent END`,
 		sql.Named("id", r.SessionID), sql.Named("kind", kind), sql.Named("pid", r.PID), sql.Named("pid_start", r.PIDStart),
 		sql.Named("cwd", r.CWD), sql.Named("terminal", r.Terminal), sql.Named("t", t),
-		sql.Named("busy", Busy), sql.Named("ended", Ended), sql.Named("unknown", UnknownKind))
+		sql.Named("created", created), sql.Named("ended", Ended), sql.Named("unknown", UnknownKind))
+	if err != nil {
+		return err
+	}
+	_, err = transition(ctx, tx, r.SessionID, change{to: Busy, from: []State{Ended}}, now)
 	return err
 }
 
@@ -676,7 +679,10 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 		return err
 	}
 	for _, o := range olds {
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL, state = ?, state_at = ? WHERE id = ?`, Ended, now.UnixMilli(), o.id); err != nil {
+		if err := enter(ctx, tx, o.id, Ended, now); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET agent = NULL WHERE id = ?`, o.id); err != nil {
 			return err
 		}
 		if o.agent == "" {
@@ -687,11 +693,6 @@ func takeOver(ctx context.Context, tx *sql.Tx, r Report, now time.Time) error {
 		}
 	}
 	return nil
-}
-
-func setState(ctx context.Context, tx *sql.Tx, id string, st State, now time.Time) error {
-	_, err := tx.ExecContext(ctx, `UPDATE sessions SET state = ?, state_at = ? WHERE id = ? AND state != ?`, st, now.UnixMilli(), id, st)
-	return err
 }
 
 // offered returns the entries whose slot is offered to the agent.

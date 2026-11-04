@@ -176,10 +176,10 @@ func (s *Sessions) PrepareInterrupt(ctx context.Context, c Commands, by, agent s
 // interrupted turn runs no end hook (unless a new turn began meanwhile), the target is to be
 // told, and the board announces it.
 func (s *Sessions) FinishInterrupt(ctx context.Context, by, agent string, t Target) error {
-	now := s.now().UnixMilli()
+	at := s.now()
+	now := at.UnixMilli()
 	return store.InTx(ctx, s.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET state = ?, state_at = ? WHERE id = ? AND state = ? AND turn = ?`,
-			Idle, now, t.ID, Busy, t.Turn); err != nil {
+		if _, err := transition(ctx, tx, t.ID, change{to: Idle, from: []State{Busy}, atTurn: true, turn: t.Turn}, at); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO session_controls (session_id, agent, action, requested_by, requested_at, state, ran_at)
