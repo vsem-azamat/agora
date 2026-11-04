@@ -129,6 +129,12 @@ func TestEveryErrorKindIsListed(t *testing.T) {
 			if star, ok := recv.(*ast.StarExpr); ok {
 				recv = star.X
 			}
+			switch x := recv.(type) { // a generic receiver: GenError[T], GenError[T, U]
+			case *ast.IndexExpr:
+				recv = x.X
+			case *ast.IndexListExpr:
+				recv = x.X
+			}
 			if id, ok := recv.(*ast.Ident); ok && id.IsExported() && pkg+"."+id.Name != "store.Refusal" { // store.Refusal is the wrapper that carries a kind, not a kind
 				found = append(found, pkg+"."+id.Name)
 			}

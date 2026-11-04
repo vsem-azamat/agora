@@ -100,14 +100,18 @@ func enumMaps(t *testing.T) []string {
 					continue
 				}
 				for i, id := range vs.Names {
-					if i >= len(vs.Values) {
-						continue
+					typ := vs.Type // var m map[K]V
+					if typ == nil && i < len(vs.Values) {
+						switch v := vs.Values[i].(type) {
+						case *ast.CompositeLit: // var m = map[K]V{…}
+							typ = v.Type
+						case *ast.CallExpr: // var m = make(map[K]V)
+							if fn, ok := v.Fun.(*ast.Ident); ok && fn.Name == "make" && len(v.Args) > 0 {
+								typ = v.Args[0]
+							}
+						}
 					}
-					lit, ok := vs.Values[i].(*ast.CompositeLit)
-					if !ok {
-						continue
-					}
-					m, ok := lit.Type.(*ast.MapType)
+					m, ok := typ.(*ast.MapType)
 					if !ok {
 						continue
 					}
