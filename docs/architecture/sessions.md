@@ -15,11 +15,11 @@ A partial unique index on `sessions (agent) WHERE state != 'ended'` guarantees t
 
 ## Session states
 
-A session row is created `busy` and changes state only through `transition` in `internal/sessions/state.go`, which writes `state` and `state_at` together; `TestOnlyTransitionWritesTheState` fails when other code assigns either column. Its table `moves` lists where each state may be entered from:
+A session row is created `busy` (the constant `created`) and changes state only through `transition` in `internal/sessions/state.go`, which writes `state` and `state_at` together. `TestOnlyTransitionWritesTheState` fails when other code under `internal/` assigns either column in an update or upsert of `sessions`, or replaces a row of it, in SQL written as string literals, the package's string constants and variables, or `+` chains of them; SQL built any other way, and the state an `INSERT` gives a new row, are not checked. The table `moves` lists where each state may be entered from:
 
 | To | From | When |
 | --- | --- | --- |
-| `busy` | `idle` | a prompt, or a delivered wake (which also starts a new turn) |
+| `busy` | `idle` | a prompt or a delivered wake, each of which also starts a new turn |
 | `busy` | `ended` | any report from an ended session brings it back |
 | `idle` | `busy` | a stop, a start, a failed turn (`waiting`), `/compact`, or a finished interrupt |
 | `ended` | `busy`, `idle` | an end report, a dead process, or another session taking over the process |
