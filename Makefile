@@ -10,6 +10,12 @@ PNPM    := pnpm --dir web
 # What `make breaking` compares proto/ against.
 BREAKING_AGAINST ?= .git\#branch=main
 
+# The race detector instruments every package but the SQLite driver and its modernc.org
+# dependencies: they are C translated to Go, and instrumented they run about 25 times slower,
+# which made them most of the tests' time. A race between two accesses in instrumented code is
+# still reported; a race on memory Agora hands the driver, such as a []byte argument, is not.
+RACE := -race -gcflags='modernc.org/...=-race=false'
+
 # Installed web dependencies; reinstalled when package.json or the lockfile changes.
 WEB_DEPS := web/node_modules/.modules.yaml
 
@@ -56,7 +62,7 @@ test: test-go test-web test-deploy
 
 ## test-go: unit and end-to-end tests with the race detector, with the web app built in
 test-go: build-web
-	go test -race ./...
+	go test $(RACE) ./...
 
 ## test-deploy: make deploy on a clone of HEAD, without a service
 test-deploy:
