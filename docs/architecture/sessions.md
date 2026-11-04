@@ -15,7 +15,7 @@ A partial unique index on `sessions (agent) WHERE state != 'ended'` guarantees t
 
 ## Session states
 
-A session row is created `busy` (the constant `created`) and changes state only through `transition` in `internal/sessions/state.go`, which writes `state` and `state_at` together. `TestOnlyTransitionWritesTheState` fails when other code under `internal/` assigns either column in an update or upsert of `sessions`, or replaces a row of it, in SQL written as string literals, the package's string constants and variables, or `+` chains of them; SQL built any other way, and the state an `INSERT` gives a new row, are not checked. The table `moves` lists where each state may be entered from:
+A session row is created `busy` (the constant `created`) and changes state only through `transition` in `internal/sessions/state.go`, which writes `state` and `state_at` together. `TestOnlyTransitionWritesTheState` fails when other code under `internal/` assigns either column in an update or upsert of `sessions`, or replaces a row of it, in SQL written as string literals, names of strings (local constants and variables, `:=` included, and top-level ones of the package), or `+` chains of them; SQL built any other way, and the state an `INSERT` gives a new row, are not checked. The table `moves` lists where each state may be entered from:
 
 | To | From | When |
 | --- | --- | --- |

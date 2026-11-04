@@ -31,9 +31,16 @@ func setsTheState(sql string) bool {
 	return replaces.MatchString(sql) || writesSessions.MatchString(sql) && setsState.MatchString(sql)
 }
 
-// sqlOf is the text of e when it is a string literal, a string constant or variable of the
-// package (strs), or a + chain of them; any other operand stands as ?.
-func sqlOf(e ast.Expr, strs map[string]string) (string, bool) {
+// sqlOf is the text of e when it is a string literal, a name of a string (a local constant or
+// variable through the declaration it resolves to, else a top-level one of the package in strs),
+// or a + chain of them; any other operand stands as ?.
+func sqlOf(e ast.Expr, strs map[string]string) (string, bool) { return sqlAt(e, strs, 0) }
+
+func sqlAt(e ast.Expr, strs map[string]string, depth int) (string, bool) {
+	if depth > 20 {
+		return "", false
+	}
+	depth++
 	switch e := e.(type) {
 	case *ast.BasicLit:
 		if e.Kind != token.STRING {
@@ -42,16 +49,19 @@ func sqlOf(e ast.Expr, strs map[string]string) (string, bool) {
 		v, err := strconv.Unquote(e.Value)
 		return v, err == nil
 	case *ast.Ident:
+		if v, ok := valueOf(e); ok {
+			return sqlAt(v, strs, depth)
+		}
 		v, ok := strs[e.Name]
 		return v, ok
 	case *ast.ParenExpr:
-		return sqlOf(e.X, strs)
+		return sqlAt(e.X, strs, depth)
 	case *ast.BinaryExpr:
 		if e.Op != token.ADD {
 			return "", false
 		}
-		x, okx := sqlOf(e.X, strs)
-		y, oky := sqlOf(e.Y, strs)
+		x, okx := sqlAt(e.X, strs, depth)
+		y, oky := sqlAt(e.Y, strs, depth)
 		if !okx && !oky {
 			return "", false
 		}
@@ -66,6 +76,29 @@ func sqlOf(e ast.Expr, strs map[string]string) (string, bool) {
 	return "", false
 }
 
+// valueOf is the expression the name id was declared with in its file, when it is declared
+// with one (const, var or :=).
+func valueOf(id *ast.Ident) (ast.Expr, bool) {
+	if id.Obj == nil {
+		return nil, false
+	}
+	switch d := id.Obj.Decl.(type) {
+	case *ast.ValueSpec:
+		for i, name := range d.Names {
+			if name.Name == id.Name && i < len(d.Values) {
+				return d.Values[i], true
+			}
+		}
+	case *ast.AssignStmt:
+		for i, l := range d.Lhs {
+			if l, ok := l.(*ast.Ident); ok && l.Name == id.Name && i < len(d.Rhs) && len(d.Lhs) == len(d.Rhs) {
+				return d.Rhs[i], true
+			}
+		}
+	}
+	return nil, false
+}
+
 // TestOnlyTransitionWritesTheState fails when code outside state.go sets a session's state or
 // state_at, so that every change of state goes through transition and its table of moves.
 func TestOnlyTransitionWritesTheState(t *testing.T) {
@@ -76,11 +109,19 @@ func TestOnlyTransitionWritesTheState(t *testing.T) {
 	}
 	found := 0
 	for dir, files := range pkgs {
-		strs := map[string]string{} // the package's string constants and variables
-		for range 3 {               // a few rounds, for ones defined from others
+		strs := map[string]string{} // the package's top-level string constants and variables
+		for range 3 {               // a few rounds, for ones defined from others in other files
 			for _, f := range files {
-				ast.Inspect(f.file, func(n ast.Node) bool {
-					if v, ok := n.(*ast.ValueSpec); ok {
+				for _, d := range f.file.Decls {
+					g, ok := d.(*ast.GenDecl)
+					if !ok {
+						continue
+					}
+					for _, spec := range g.Specs {
+						v, ok := spec.(*ast.ValueSpec)
+						if !ok {
+							continue
+						}
 						for i, name := range v.Names {
 							if i < len(v.Values) {
 								if s, ok := sqlOf(v.Values[i], strs); ok {
@@ -89,8 +130,7 @@ func TestOnlyTransitionWritesTheState(t *testing.T) {
 							}
 						}
 					}
-					return true
-				})
+				}
 			}
 		}
 		for _, f := range files {
@@ -129,7 +169,7 @@ func goFiles(root string) (map[string][]goFile, error) {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return err
 		}
-		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0) // with object resolution, for valueOf
 		if err != nil {
 			return err
 		}
