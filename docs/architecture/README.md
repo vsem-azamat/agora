@@ -49,8 +49,8 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 
 Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Three writes cross that line:
 
-- `agents.RenameTx` moves an agent's name in every column of every package's tables that holds one; `TestRenameMovesEveryNameColumn` classifies each column of the schema, so a new one cannot be missed.
-- `bridges` writes the delivery columns of `messages` (`delivery`, `delivery_error`, `scheduled_at`, `echo_of`, `sent_out`), for what goes out of a bridged room.
+- `agents.RenameTx` moves an agent's name in every column of every package's tables that holds one and drops earlier mentions of the new name; `TestRenameMovesEveryNameColumn` classifies each `TEXT` column of the schema, so a new name column of that type cannot be missed.
+- `bridges` writes columns of `messages` for what goes out of a bridged room: `delivery`, `delivery_error`, `scheduled_at`, `echo_of` and a note's `sent_out`.
 - `rooms` writes `thread_keys`, a bridges table, when a line from outside starts a keyed thread and when an echo is merged.
 
 Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, `bridges.policy` and `outside_avatars`, bridges read messages, and avatars reads which agents and people outside use a picture.
