@@ -9,5 +9,6 @@ What a reviewer checks in every change, and what the author writes to. How revie
 - **Consistency.** New code follows the naming, structure, error handling and patterns already used in the repository; one way to do one thing.
 - **Specs, docs and code agree.** A behavior change updates the spec scenarios, tests and docs in the same PR, and docs describe the current state only.
 - **Tests prove the scenario.** Each new test fails without the code it covers; no assertions that pass regardless.
+- **Tests run in parallel.** A top-level test calls `t.Parallel()` first, unless it sets the environment or working directory, or a package-level hook or variable (such as through an `export_test.go` setter); such a test stays serial and says why in a comment. A test does not depend on the hub's own timers (the sweep, restart delays) finishing within a tight window: it sets them per hub or takes its margin from them.
 - **Errors are handled.** No swallowed errors; wrap them with context; user-facing messages say what to do next.
 - **Hygiene.** Nothing private goes in (see [Public Repository Hygiene](../../AGENTS.md#public-repository-hygiene)).

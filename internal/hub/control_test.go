@@ -300,20 +300,22 @@ func TestCompactWaitsTheSettleTimeAfterTheSessionGoesIdle(t *testing.T) {
 func TestControlCommandsDoNotRunForADeadProcess(t *testing.T) {
 	t.Parallel()
 	log := filepath.Join(shortDir(t), "ran")
+	alive, kill := processes()
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
 		x.CompactCommand = `echo compact >> ` + log
 		x.InterruptCommand = `echo interrupt >> ` + log
 		x.WakeSettle = 0
 		hub.SetControlEvery(x, time.Hour)
+		hub.SetAlive(x, alive)
 		h = x
 	})
-	r.idleAgentWithPID(t, "builder", "session-1", "pane-7", 999999) // no such process
+	r.idleAgentWithPID(t, "builder", "session-1", "pane-7", int32(os.Getpid()))
 	r.post(t, "reviewer", "hello")
-	// the session reports a process that is gone; it is still listed until the sweep ends it
 	if err := r.compact("reviewer", "builder", ""); err != nil {
 		t.Fatal(err)
 	}
+	kill() // the process is gone; the session is still listed until a sweep ends it
 	if err := hub.RunCompacts(context.Background(), h); err != nil {
 		t.Fatal(err)
 	}

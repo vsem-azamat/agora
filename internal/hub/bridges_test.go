@@ -1021,7 +1021,7 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 	var h *hub.Hub
 	r := startWith(t, func(hh *hub.Hub) {
 		h = hh
-		hub.SetBridgeDelays(h, 50*time.Millisecond, 5*time.Second, 400*time.Millisecond)
+		hub.SetBridgeDelays(h, 100*time.Millisecond, 5*time.Second, 400*time.Millisecond)
 	})
 	if _, err := r.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
@@ -1034,7 +1034,7 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 	}
 	eventually(t, "the fifth start", func() bool { return f.starts() == 5 })
 	starts := f.times("starts")
-	for i, want := range []time.Duration{50, 100, 200, 400} {
+	for i, want := range []time.Duration{100, 200, 400, 800} {
 		if gap := starts[i+1].Sub(starts[i]); gap < want*time.Millisecond {
 			t.Fatalf("delay %d: %v, want at least %vms", i, gap, want)
 		}
@@ -1042,7 +1042,8 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 	time.Sleep(600 * time.Millisecond) // a steady run
 	f.set("exit", "")
 	eventually(t, "the sixth start", func() bool { return f.starts() == 6 })
-	if gap := f.times("starts")[5].Sub(f.times("exits")[0]); gap > 500*time.Millisecond {
+	// without the reset the delay would be 1600ms
+	if gap := f.times("starts")[5].Sub(f.times("exits")[0]); gap > time.Second {
 		t.Fatalf("delay after a steady run: %v; it did not go back to the first delay", gap)
 	}
 }
