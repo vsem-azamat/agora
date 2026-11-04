@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -34,7 +35,7 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				return err
 			}
 			dbPath, wakeCommand, compactCommand, interruptCommand := set.db, cfg.wakeCommand, cfg.compactCommand, cfg.interruptCommand
-			webFlag, webAs, join, policy, bridgeDelay, watchPRs := cfg.web, set.webAs, set.join, set.policy, set.bridgeDelay, set.watchPRs
+			webAs, join, policy, bridgeDelay, watchPRs := set.webAs, set.join, set.policy, set.bridgeDelay, set.watchPRs
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			log := slog.New(slog.NewTextHandler(stderr, nil))
@@ -43,12 +44,7 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 				return err
 			}
 			defer db.Close()
-			var webAddr string
-			if webFlag != "" {
-				if webAddr, err = webAddress(webFlag); err != nil {
-					return err
-				}
-			}
+			webAddr := set.webAddr
 			l, err := hub.Listen(o.socket)
 			if err != nil {
 				return err
@@ -106,10 +102,9 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-// webAddress turns a --web value, host:port or only a port, into the address to listen on;
+// webAddress turns a web setting, host:port or only a port, into the address to listen on;
 // without a host it is 127.0.0.1.
 func webAddress(s string) (string, error) {
-	in := s
 	if !strings.Contains(s, ":") {
 		s = ":" + s
 	}
@@ -118,7 +113,7 @@ func webAddress(s string) (string, error) {
 		_, err = strconv.ParseUint(port, 10, 16)
 	}
 	if err != nil {
-		return "", fmt.Errorf("--web %q: use host:port or only a port, like 127.0.0.1:8484, [::1]:8484 or 8484", in)
+		return "", errors.New("use host:port or only a port, like 127.0.0.1:8484, [::1]:8484 or 8484")
 	}
 	if host == "" {
 		host = "127.0.0.1"

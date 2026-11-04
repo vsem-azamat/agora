@@ -222,6 +222,11 @@ func TestInstallService(t *testing.T) {
 	if r := run("install", "service", "--bin", exe, "--join", "always"); r.code == 0 {
 		t.Fatalf("install --join always: %+v", r)
 	}
+	t.Setenv("AGORA_JOIN", "always")
+	if r := run("install", "service", "--bin", exe); r.code == 0 || !strings.Contains(r.stderr, "AGORA_JOIN: ") {
+		t.Fatalf("install with AGORA_JOIN=always: %+v", r)
+	}
+	t.Setenv("AGORA_JOIN", "")
 	if r := run("install", "service", "--bin", exe, "--bridge-policy", "open", "--bridge-delay", "30s"); r.code != 0 {
 		t.Fatalf("install --bridge-policy: %+v", r)
 	}

@@ -27,6 +27,7 @@ type hubConfig struct {
 // hubSettings is a hubConfig with its defaults applied and its values checked.
 type hubSettings struct {
 	db, webAs, join string
+	webAddr         string // the address to serve the web app on; empty for none
 	policy          bridges.Policy
 	bridgeDelay     time.Duration
 	watchPRs        bool
@@ -101,8 +102,9 @@ func (c *hubConfig) resolve(cmd *cobra.Command) (hubSettings, error) {
 		return s, fmt.Errorf("%s: %w", source("join", "AGORA_JOIN"), err)
 	}
 	if c.web != "" {
-		if _, err := webAddress(c.web); err != nil {
-			return s, err
+		var err error
+		if s.webAddr, err = webAddress(c.web); err != nil {
+			return s, fmt.Errorf("%s: %w", from("web", "AGORA_WEB", c.web), err)
 		}
 	}
 	if s.webAs == "" {

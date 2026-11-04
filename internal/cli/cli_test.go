@@ -1010,7 +1010,8 @@ func TestWebSetting(t *testing.T) {
 		{"named operator", "", []string{"--web", "127.0.0.1:0", "--web-as", "owner"}, []string{"web=127.0.0.1:", "web_as=owner"}, 0},
 		{"another interface", "", []string{"--web", "0.0.0.0:0"}, []string{"not a loopback address"}, 0},
 		{"invalid operator", "", []string{"--web", "0", "--web-as", "agora"}, []string{`"agora" is reserved`}, 1},
-		{"invalid address", "", []string{"--web", "example:port"}, []string{"--web"}, 1},
+		{"invalid address", "", []string{"--web", "example:port"}, []string{`--web "example:port": use host:port`}, 1},
+		{"invalid address from the environment", "example:port", nil, []string{`AGORA_WEB="example:port": use host:port`}, 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
