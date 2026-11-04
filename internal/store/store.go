@@ -67,7 +67,9 @@ func ownerOnly(path string) error {
 
 // migrate brings the database to the migrations in fsys. The schema_migrations table records
 // which ran, by name: the database is refused when it records one fsys does not carry, or
-// lacks one that fsys carries before one it records (a fork); else the missing tail runs.
+// lacks one that fsys carries before one it records (a fork), or has a schema version that is
+// not the number of names recorded (an agora that counts migrations ran one); else the missing
+// tail runs.
 func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	files, err := fs.Glob(fsys, "migrations/*.sql")
 	if err != nil {
@@ -79,7 +81,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		return fmt.Errorf("read schema version: %w", err)
 	}
 	if version > len(files) {
-		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora, or restore the database backup taken before that deploy", version, len(files))
+		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora, or restore the <database>.bak-<time> copy that make deploy kept before that newer agora was deployed, and remove the database's -wal and -shm files", version, len(files))
 	}
 	if err := ensureRecord(ctx, db, files, version); err != nil {
 		return err
@@ -89,7 +91,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		return fmt.Errorf("read applied migrations: %w", err)
 	}
 	if version != len(recorded) {
-		return fmt.Errorf("the database has schema version %d but records %d migrations: an agora that counts migrations ran one without recording it; restore the database backup taken before that deploy, or run the agora that wrote it", version, len(recorded))
+		return fmt.Errorf("the database has schema version %d but records %d migrations: an agora that counts migrations ran one without recording it; run that agora, or restore the <database>.bak-<time> copy that make deploy kept before that agora was deployed (a later copy already holds the unrecorded migration), and remove the database's -wal and -shm files", version, len(recorded))
 	}
 	applied := make(map[string]bool, len(recorded))
 	for _, n := range recorded {
@@ -101,7 +103,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	}
 	for _, n := range slices.Sorted(maps.Keys(applied)) {
 		if !carried[n] {
-			return fmt.Errorf("the database has applied migration %s, which this agora does not carry (written by a newer agora or another branch); run the agora that wrote it, or restore the database backup taken before that deploy", n)
+			return fmt.Errorf("the database has applied migration %s, which this agora does not carry (written by a newer agora or another branch); run the agora that wrote it, or restore the <database>.bak-<time> copy that make deploy kept before that agora was deployed, and remove the database's -wal and -shm files", n)
 		}
 	}
 	missing := -1
@@ -110,7 +112,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		case !applied[path.Base(f)] && missing < 0:
 			missing = i
 		case applied[path.Base(f)] && missing >= 0:
-			return fmt.Errorf("the database lacks migration %s but has the later %s (written by another branch), and it is not run out of order; run the agora that wrote it, or restore the database backup taken before that deploy", path.Base(files[missing]), path.Base(f))
+			return fmt.Errorf("the database lacks migration %s but has the later %s (written by another branch), and it is not run out of order; run the agora that wrote it, or restore the <database>.bak-<time> copy that make deploy kept before that agora was deployed, and remove the database's -wal and -shm files", path.Base(files[missing]), path.Base(f))
 		}
 	}
 	if missing < 0 {
