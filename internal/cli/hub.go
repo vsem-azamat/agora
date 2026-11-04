@@ -13,11 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/forge"
 	"github.com/vsem-azamat/agora/internal/hub"
 	"github.com/vsem-azamat/agora/internal/store"
@@ -25,34 +23,18 @@ import (
 )
 
 func hubCmd(o *options, stderr io.Writer) *cobra.Command {
-	var dbPath, wakeCommand, compactCommand, interruptCommand, webFlag, webAs, join, bridgePolicy string
-	bridgeDelay, delayErr := bridges.DefaultDelay, error(nil)
-	if env := os.Getenv("AGORA_BRIDGE_DELAY"); env != "" {
-		if bridgeDelay, delayErr = time.ParseDuration(env); delayErr != nil {
-			delayErr = fmt.Errorf("AGORA_BRIDGE_DELAY=%q: a duration such as 60s", env)
-		}
-	}
-	watchPRs, watchErr := true, error(nil)
-	if env := os.Getenv("AGORA_WATCH_PRS"); env != "" {
-		if watchPRs, watchErr = strconv.ParseBool(env); watchErr != nil {
-			watchErr = fmt.Errorf("AGORA_WATCH_PRS=%q: use true or false", env)
-		}
-	}
+	var cfg hubConfig
 	cmd := &cobra.Command{
 		Use:   "hub",
 		Short: "Run the hub",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if watchErr != nil && !cmd.Flags().Changed("watch-prs") {
-				return watchErr
-			}
-			if delayErr != nil && !cmd.Flags().Changed("bridge-delay") {
-				return delayErr
-			}
-			policy, err := hub.BridgePolicyOf(bridgePolicy)
+			set, err := cfg.resolve(cmd)
 			if err != nil {
-				return fmt.Errorf("--bridge-policy: %w", err)
+				return err
 			}
+			dbPath, wakeCommand, compactCommand, interruptCommand := set.db, cfg.wakeCommand, cfg.compactCommand, cfg.interruptCommand
+			webFlag, webAs, join, policy, bridgeDelay, watchPRs := cfg.web, set.webAs, set.join, set.policy, set.bridgeDelay, set.watchPRs
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			log := slog.New(slog.NewTextHandler(stderr, nil))
@@ -120,32 +102,8 @@ func hubCmd(o *options, stderr io.Writer) *cobra.Command {
 			return h.Serve(ctx, l)
 		},
 	}
-	cmd.Flags().StringVar(&dbPath, "db", defaultDB(), "database file (default $AGORA_DB)")
-	cmd.Flags().StringVar(&wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"),
-		"shell command that wakes an idle session without a waiting connector; gets $AGORA_TERMINAL and $AGORA_WAKE_TEXT (default $AGORA_WAKE_COMMAND)")
-	cmd.Flags().StringVar(&compactCommand, "compact-command", os.Getenv("AGORA_COMPACT_COMMAND"),
-		"shell command that compacts a session with a terminal when it is idle; gets $AGORA_TERMINAL and the text to type, /compact and a focus, in $AGORA_WAKE_TEXT (default $AGORA_COMPACT_COMMAND)")
-	cmd.Flags().StringVar(&interruptCommand, "interrupt-command", os.Getenv("AGORA_INTERRUPT_COMMAND"),
-		"shell command that interrupts the turn of a busy session with a terminal; gets $AGORA_TERMINAL (default $AGORA_INTERRUPT_COMMAND)")
-	cmd.Flags().BoolVar(&watchPRs, "watch-prs", watchPRs,
-		"follow agents' pull requests and report when CI turns green or red; GitHub needs gh; --watch-prs=false turns it off (default $AGORA_WATCH_PRS)")
-	cmd.Flags().StringVar(&webFlag, "web", os.Getenv("AGORA_WEB"),
-		"also serve the web app on host:port, or on 127.0.0.1 with only a port; off when empty (default $AGORA_WEB)")
-	cmd.Flags().StringVar(&join, "join", envOr("AGORA_JOIN", "offer"),
-		"how sessions that have not joined are invited: offer (joining is optional) or expect (every session joins before it works) (default $AGORA_JOIN, else offer)")
-	cmd.Flags().StringVar(&bridgePolicy, "bridge-policy", envOr("AGORA_BRIDGE_POLICY", string(bridges.Delay)),
-		"outbound policy a bridge gets when it is added: open, delay or read (default $AGORA_BRIDGE_POLICY, else delay)")
-	cmd.Flags().DurationVar(&bridgeDelay, "bridge-delay", bridgeDelay,
-		"how long an agent's message in a bridged room under delay waits before it goes out (default $AGORA_BRIDGE_DELAY, else 1m)")
-	cmd.Flags().StringVar(&webAs, "web-as", envOr("AGORA_WEB_AS", "operator"), "the name the web app acts under (default $AGORA_WEB_AS, else operator)")
+	cfg.register(cmd)
 	return cmd
-}
-
-func envOr(name, fallback string) string {
-	if v := os.Getenv(name); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // webAddress turns a --web value, host:port or only a port, into the address to listen on;

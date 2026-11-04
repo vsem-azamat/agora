@@ -838,14 +838,22 @@ func BridgePolicyOf(name string) (bridges.Policy, error) {
 	return p, bridges.ValidPolicy(p)
 }
 
+// ValidBridgeDelay reports whether d can be how long an agent's message waits under delay.
+func ValidBridgeDelay(d time.Duration) error {
+	if d <= 0 {
+		return fmt.Errorf("the bridge delay must be positive, not %s", d)
+	}
+	return nil
+}
+
 // SetBridgeDefaults sets the policy bridges get when they are added, and how long an agent's
 // message waits under delay before it goes out.
 func (h *Hub) SetBridgeDefaults(policy bridges.Policy, delay time.Duration) error {
 	if err := bridges.ValidPolicy(policy); err != nil {
 		return err
 	}
-	if delay <= 0 {
-		return fmt.Errorf("the bridge delay must be positive, not %s", delay)
+	if err := ValidBridgeDelay(delay); err != nil {
+		return err
 	}
 	h.bridges.Policy, h.bridges.Delay = policy, delay
 	return nil

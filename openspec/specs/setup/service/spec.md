@@ -10,7 +10,7 @@
 
 ### Requirement: Installing The Hub As A User Service
 
-`agora install service` SHALL write the systemd user unit `agora-hub.service` into `$XDG_CONFIG_HOME/systemd/user`, else `~/.config/systemd/user`. The unit SHALL run `<agora> hub`, adding `--socket` when `--socket` is given or `AGORA_SOCKET` is set, `--db` when `--db` is given or `AGORA_DB` is set, `--wake-command` when `--wake-command` is given or `AGORA_WAKE_COMMAND` is set, `--compact-command` and `--interrupt-command` when given or `AGORA_COMPACT_COMMAND` and `AGORA_INTERRUPT_COMMAND` are set, `--web` when `--web` is given or `AGORA_WEB` is set, and with it `--web-as` when `--web-as` is given or `AGORA_WEB_AS` is set, `--join` when `--join` is given or `AGORA_JOIN` is set, and `--bridge-policy` and `--bridge-delay` when given or `AGORA_BRIDGE_POLICY` and `AGORA_BRIDGE_DELAY` are set, each with the value the install command sees; it SHALL refuse a `--join` other than `offer` or `expect`, a bridge policy other than `open`, `delay` or `read` and a bridge delay that is not a positive duration, and then write nothing; it SHALL restart the hub when it fails and start it with the user's service manager. The unit's first line SHALL be `# Written by agora install service; agora uninstall service removes it.`; an `agora-hub.service` without that line is not Agora's and SHALL never be overwritten or removed.
+`agora install service` SHALL write the systemd user unit `agora-hub.service` into `$XDG_CONFIG_HOME/systemd/user`, else `~/.config/systemd/user`. The unit SHALL run `<agora> hub`, adding `--socket` when `--socket` is given or `AGORA_SOCKET` is set, `--db` when `--db` is given or `AGORA_DB` is set, `--wake-command` when `--wake-command` is given or `AGORA_WAKE_COMMAND` is set, `--compact-command` and `--interrupt-command` when given or `AGORA_COMPACT_COMMAND` and `AGORA_INTERRUPT_COMMAND` are set, `--watch-prs=<value>` when `--watch-prs` is given or `AGORA_WATCH_PRS` is set, `--web` when `--web` is given or `AGORA_WEB` is set, and with it `--web-as` when `--web-as` is given or `AGORA_WEB_AS` is set, `--join` when `--join` is given or `AGORA_JOIN` is set, and `--bridge-policy` and `--bridge-delay` when given or `AGORA_BRIDGE_POLICY` and `AGORA_BRIDGE_DELAY` are set, each with the value the install command sees; it SHALL refuse a `--join` other than `offer` or `expect`, a bridge policy other than `open`, `delay` or `read` and a bridge delay that is not a positive duration, a `--watch-prs` or `AGORA_WATCH_PRS` that is not a boolean and a `--web` that is not `host:port` or a port, and then write nothing; it SHALL restart the hub when it fails and start it with the user's service manager. The unit's first line SHALL be `# Written by agora install service; agora uninstall service removes it.`; an `agora-hub.service` without that line is not Agora's and SHALL never be overwritten or removed.
 
 #### Scenario: Plain unit
 - **WHEN** `agora install service` runs without options and without those variables
@@ -27,6 +27,14 @@
 #### Scenario: Session control commands
 - **WHEN** `agora install service --compact-command 'notify "$AGORA_WAKE_TEXT"' --interrupt-command 'notify esc'` runs
 - **THEN** the unit runs the hub with that compact command and that interrupt command
+
+#### Scenario: Pull requests not followed
+- **WHEN** `agora install service --watch-prs=false` runs, or runs with `AGORA_WATCH_PRS=false`
+- **THEN** the unit runs `<agora> hub --watch-prs=false`
+
+#### Scenario: Invalid pull request setting
+- **WHEN** `agora install service` runs with `AGORA_WATCH_PRS=off`
+- **THEN** it fails saying to use true or false, and writes no unit
 
 #### Scenario: Web app
 - **WHEN** `agora install service --web 8484 --web-as owner` runs
