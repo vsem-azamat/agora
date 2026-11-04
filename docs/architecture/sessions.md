@@ -8,7 +8,6 @@ How `internal/sessions` and the Claude Code connector implement [`openspec/specs
 
 | Table | Holds |
 | --- | --- |
-| `agents` | Every name that has joined, with the join time |
 | `session_controls` | Compacts and interrupts that agents asked for (see [Session control](session-control.md)) |
 | `sessions` | One row per session: kind, bound `agent`, `pid` and `pid_start` (the process start time), `cwd`, `terminal`, `state` (`busy`, `idle`, `ended`), `state_at`, `started_at`, `seen_at` (last event), `start_reported_at` (last start event, which a wait that runs at a start looks for), the last queue note given to the agent (`noted`) and the last tool-use check (`checked_at`) |
 

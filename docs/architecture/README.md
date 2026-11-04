@@ -44,9 +44,15 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 | `internal/webtoken` | The web app's access token |
 | `internal/web` | The web app's built files, embedded, and serving them |
 | `web/` | The web app's sources (React, Vite); not a Go package |
-
-Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, `bridges.policy` and `outside_avatars`, bridges read messages, and avatars reads which agents and people outside use a picture.
 | `proto/agora/v1` | The API contract |
 | `gen/agora/v1` | Code generated from `proto/`; never edited by hand |
+
+Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Three writes cross that line:
+
+- `agents.RenameTx` moves an agent's name in every column of every package's tables that holds one and drops earlier mentions of the new name; `TestRenameMovesEveryNameColumn` classifies each `TEXT` column of the schema, so a new name column of that type cannot be missed.
+- `bridges` writes columns of `messages` for what goes out of a bridged room: `delivery`, `delivery_error`, `scheduled_at`, `echo_of` and a note's `sent_out`.
+- `rooms` writes `thread_keys`, a bridges table, when a line from outside starts a keyed thread and when an echo is merged.
+
+Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, `bridges.policy` and `outside_avatars`, bridges read messages, and avatars reads which agents and people outside use a picture.
 
 Rules live in the domain packages (`internal/queue`); `internal/hub` and `internal/cli` translate between them and the wire.
