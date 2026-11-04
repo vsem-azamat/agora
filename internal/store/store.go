@@ -24,7 +24,7 @@ var migrations embed.FS
 
 // restoreAdvice is the way back from a database another agora wrote, in the order deploying.md
 // gives: the hub is stopped first, since its unit restarts it and it would replay the WAL.
-const restoreAdvice = "stop the hub, remove the database's -wal and -shm files and restore the <database>.bak-<time> copy that make deploy kept before that agora was deployed"
+const restoreAdvice = "stop the hub, restore the <database>.bak-<time> copy that make deploy kept before that agora was deployed and remove the database's -wal and -shm files"
 
 // Open opens (creating if needed) the database at path and migrates it to the latest schema.
 // The database file is readable and writable by its owner only; SQLite gives its WAL and
