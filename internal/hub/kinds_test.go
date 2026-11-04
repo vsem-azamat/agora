@@ -87,7 +87,7 @@ func TestEveryErrorKindIsMapped(t *testing.T) {
 }
 
 // TestEveryErrorKindIsListed reads the sources under internal/ and fails when a package exports an
-// Err* variable or an error type that kinds or typedKinds does not list, or lists one that is gone.
+// Err* variable or a type with an Error method that kinds or typedKinds does not list, or lists one that is gone.
 func TestEveryErrorKindIsListed(t *testing.T) {
 	var found []string
 	fset := token.NewFileSet()
@@ -110,21 +110,27 @@ func TestEveryErrorKindIsListed(t *testing.T) {
 				continue
 			}
 			for _, spec := range gen.Specs {
-				switch s := spec.(type) {
-				case *ast.ValueSpec:
-					if gen.Tok != token.VAR {
-						continue
-					}
-					for _, id := range s.Names {
+				if vs, ok := spec.(*ast.ValueSpec); ok && gen.Tok == token.VAR {
+					for _, id := range vs.Names {
 						if strings.HasPrefix(id.Name, "Err") && id.IsExported() {
 							found = append(found, pkg+"."+id.Name)
 						}
 					}
-				case *ast.TypeSpec:
-					if _, isStruct := s.Type.(*ast.StructType); isStruct && s.Name.IsExported() && strings.HasSuffix(s.Name.Name, "Error") {
-						found = append(found, pkg+"."+s.Name.Name)
-					}
 				}
+			}
+		}
+		// every exported type with an Error() string method, whatever its underlying type or name
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv == nil || len(fn.Recv.List) != 1 || fn.Name.Name != "Error" || fn.Type.Params.NumFields() != 0 {
+				continue
+			}
+			recv := fn.Recv.List[0].Type
+			if star, ok := recv.(*ast.StarExpr); ok {
+				recv = star.X
+			}
+			if id, ok := recv.(*ast.Ident); ok && id.IsExported() && pkg+"."+id.Name != "store.Refusal" { // store.Refusal is the wrapper that carries a kind, not a kind
+				found = append(found, pkg+"."+id.Name)
 			}
 		}
 		return nil

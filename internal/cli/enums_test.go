@@ -1,6 +1,12 @@
 package cli
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -36,17 +42,86 @@ func mapsCoverEnum[E interface {
 
 // TestEveryEnumValueHasAWord fails when an API enum gains a value that a hand-written map from the
 // enum to the words the CLI prints does not know. Every enum's *_UNSPECIFIED value is skipped: no
-// map has an entry for it.
+// map has an entry for it. The sources are scanned for package-level maps with an agorav1 key or
+// value, so a new map fails until it is covered here, and a covered map that is gone fails too.
 func TestEveryEnumValueHasAWord(t *testing.T) {
-	mapsCoverEnum(t, "bridgeStateNames", bridgeStateNames)
-	mapsCoverEnum(t, "bridgePolicyNames", bridgePolicyNames)
-	mapsCoverEnum(t, "policyHints", policyHints)
-	mapsCoverEnum(t, "proposalStateNames", proposalStateNames)
-	mapsCoverEnum(t, "voteChoiceNames", voteChoiceNames)
-	mapsCoverEnum(t, "mechanismNames", mechanismNames)
-	mapsCoverEnum(t, "sessionStateNames", sessionStateNames)
-	mapsCoverEnum(t, "deliveryStates", deliveryStates)
-	mapsCoverEnum(t, "subscriptionModes (by value)", invert(subscriptionModes))
+	covered := map[string]func(){
+		"bridgeStateNames":   func() { mapsCoverEnum(t, "bridgeStateNames", bridgeStateNames) },
+		"bridgePolicyNames":  func() { mapsCoverEnum(t, "bridgePolicyNames", bridgePolicyNames) },
+		"policyHints":        func() { mapsCoverEnum(t, "policyHints", policyHints) },
+		"proposalStateNames": func() { mapsCoverEnum(t, "proposalStateNames", proposalStateNames) },
+		"voteChoiceNames":    func() { mapsCoverEnum(t, "voteChoiceNames", voteChoiceNames) },
+		"mechanismNames":     func() { mapsCoverEnum(t, "mechanismNames", mechanismNames) },
+		"sessionStateNames":  func() { mapsCoverEnum(t, "sessionStateNames", sessionStateNames) },
+		"deliveryStates":     func() { mapsCoverEnum(t, "deliveryStates", deliveryStates) },
+		"subscriptionModes":  func() { mapsCoverEnum(t, "subscriptionModes (by value)", invert(subscriptionModes)) },
+	}
+	found := enumMaps(t)
+	for _, name := range found {
+		if _, ok := covered[name]; !ok {
+			t.Errorf("%s maps an API enum but TestEveryEnumValueHasAWord does not check it; add it", name)
+		}
+	}
+	for name, check := range covered {
+		if !slices.Contains(found, name) {
+			t.Errorf("%s is checked but no package-level map of that name uses an API enum", name)
+			continue
+		}
+		check()
+	}
+}
+
+// enumMaps returns the names of the package-level variables of this package's sources whose map
+// literal has an agorav1 type as key or value.
+func enumMaps(t *testing.T) []string {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	fset := token.NewFileSet()
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range f.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for i, id := range vs.Names {
+					if i >= len(vs.Values) {
+						continue
+					}
+					lit, ok := vs.Values[i].(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					m, ok := lit.Type.(*ast.MapType)
+					if !ok {
+						continue
+					}
+					if strings.Contains(types.ExprString(m.Key), "agorav1.") || strings.Contains(types.ExprString(m.Value), "agorav1.") {
+						names = append(names, id.Name)
+					}
+				}
+			}
+		}
+	}
+	if len(names) == 0 {
+		t.Fatal("no map of an API enum found: the scan looks at the wrong files")
+	}
+	return names
 }
 
 // invert turns the name to value map around, so the guard reaches it.
