@@ -10,6 +10,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/sessions"
+	"github.com/vsem-azamat/agora/internal/store"
 )
 
 type sessionService struct{ h *Hub }
@@ -105,7 +106,7 @@ func (s *sessionService) Interrupt(ctx context.Context, req *connect.Request[ago
 	// one interrupt per session at a time: a second Esc would reach a session that stopped
 	key, ok := h.takeSession("interrupt:" + m.GetTarget())
 	if !ok {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("an interrupt of %s is already running", m.GetTarget()))
+		return nil, toConnect(store.Refuse(sessions.ErrRefused, "an interrupt of %s is already running", m.GetTarget()))
 	}
 	defer key()
 	t, err := h.sessions.PrepareInterrupt(ctx, h.commands(), m.GetAgent(), m.GetTarget())
@@ -113,7 +114,7 @@ func (s *sessionService) Interrupt(ctx context.Context, req *connect.Request[ago
 		return nil, toConnect(err)
 	}
 	if !h.alive(t.PID, t.PIDStart) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%s cannot be interrupted: its process no longer runs", m.GetTarget()))
+		return nil, toConnect(store.Refuse(sessions.ErrRefused, "%s cannot be interrupted: its process no longer runs", m.GetTarget()))
 	}
 	// the command and its announcement go on when the caller goes away: an Esc that was sent is
 	// never left unannounced
@@ -126,7 +127,7 @@ func (s *sessionService) Interrupt(ctx context.Context, req *connect.Request[ago
 		return nil, toConnect(err)
 	}
 	if again.ID != t.ID || again.Turn != t.Turn || !h.alive(again.PID, again.PIDStart) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the turn of %s that was to be interrupted has ended", m.GetTarget()))
+		return nil, toConnect(store.Refuse(sessions.ErrRefused, "the turn of %s that was to be interrupted has ended", m.GetTarget()))
 	}
 	result, ok := runTerminalCommand(ctx, h.InterruptCommand, t.Terminal, "")
 	h.log.Info("interrupted a session", "session", t.ID, "agent", m.GetTarget(), "by", m.GetAgent(), "result", result)
