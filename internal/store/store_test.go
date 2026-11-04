@@ -250,7 +250,7 @@ func TestNewerSchemaIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Close()
-	if db, err := Open(ctx, path); err == nil || !strings.Contains(err.Error(), "newer") {
+	if db, err := Open(ctx, path); err == nil || !strings.Contains(err.Error(), "newer") || !strings.Contains(err.Error(), "bak-") || !strings.Contains(err.Error(), "stop the hub") {
 		if db != nil {
 			db.Close()
 		}
@@ -624,7 +624,7 @@ func TestAppliedMigrationThisBinaryDoesNotCarryIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := openOver(t, path, "0001_a", "0002_mine", "0003_c")
-	if err == nil || !strings.Contains(err.Error(), "0002_other.sql") {
+	if err == nil || !strings.Contains(err.Error(), "0002_other.sql") || !strings.Contains(err.Error(), "bak-") || !strings.Contains(err.Error(), "stop the hub") {
 		t.Fatalf("err = %v, want a refusal naming 0002_other.sql", err)
 	}
 }
@@ -635,7 +635,7 @@ func TestMissingEarlierMigrationIsRefusedNotRunOutOfOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	db, err := openOver(t, path, "0001_a", "0002_b", "0003_c")
-	if err == nil || !strings.Contains(err.Error(), "0002_b.sql") || !strings.Contains(err.Error(), "bak-") {
+	if err == nil || !strings.Contains(err.Error(), "0002_b.sql") || !strings.Contains(err.Error(), "bak-") || !strings.Contains(err.Error(), "stop the hub") {
 		t.Fatalf("err = %v, want a refusal naming 0002_b.sql", err)
 	}
 	if got := appliedNames(t, db); len(got) != 2 {
@@ -672,7 +672,7 @@ func TestVersionThatDisagreesWithRecordedNamesIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = openOver(t, path, "0001_a", "0002_b", "0003_c")
-	if err == nil || !strings.Contains(err.Error(), "counts migrations") || !strings.Contains(err.Error(), "bak-") {
+	if err == nil || !strings.Contains(err.Error(), "counts migrations") || !strings.Contains(err.Error(), "bak-") || !strings.Contains(err.Error(), "stop the hub") {
 		t.Fatalf("err = %v, want a refusal that says an agora that counts migrations ran one, and what to do", err)
 	}
 }
