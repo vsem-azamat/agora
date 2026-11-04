@@ -64,7 +64,6 @@ func fakeBridge(dir string) {
 	go func() {
 		for {
 			if os.Remove("exit") == nil {
-				appendLine("exits", strconv.FormatInt(time.Now().UnixNano(), 10))
 				os.Exit(3)
 			}
 			data, _ := os.ReadFile("send")
@@ -178,20 +177,6 @@ func (f fake) starts() int {
 func (f fake) pid(i int) int {
 	pid, _ := strconv.Atoi(strings.Fields(f.lines("starts")[i])[2])
 	return pid
-}
-
-// times returns the times in the fake's file name: of its starts or of its exits.
-func (f fake) times(name string) []time.Time {
-	var out []time.Time
-	for _, l := range f.lines(name) {
-		fields := strings.Fields(l)
-		if len(fields) == 0 {
-			continue
-		}
-		ns, _ := strconv.ParseInt(fields[len(fields)-1], 10, 64)
-		out = append(out, time.Unix(0, ns))
-	}
-	return out
 }
 
 func (f fake) send(lines ...string) {
