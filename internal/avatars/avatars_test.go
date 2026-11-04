@@ -60,6 +60,7 @@ func refused(t *testing.T, err error, want string) {
 }
 
 func TestAPhoto(t *testing.T) {
+	t.Parallel()
 	p, err := avatars.Prepare(jpegOf(t, gradient(600, 400)), "image/jpeg")
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +71,7 @@ func TestAPhoto(t *testing.T) {
 }
 
 func TestWebPIsAccepted(t *testing.T) {
+	t.Parallel()
 	data, _ := base64.StdEncoding.DecodeString(webp1x1)
 	p, err := avatars.Prepare(data, "image/webp")
 	if err != nil {
@@ -81,6 +83,7 @@ func TestWebPIsAccepted(t *testing.T) {
 }
 
 func TestTooLarge(t *testing.T) {
+	t.Parallel()
 	noise := image.NewNRGBA(image.Rect(0, 0, 400, 400))
 	_, _ = rand.Read(noise.Pix) // never fails
 	_, err := avatars.Prepare(pngOf(t, noise), "")
@@ -92,6 +95,7 @@ func TestTooLarge(t *testing.T) {
 }
 
 func TestNotAnImage(t *testing.T) {
+	t.Parallel()
 	for _, data := range [][]byte{[]byte("GIF89a\x01\x00\x01\x00"), []byte("hello")} {
 		_, err := avatars.Prepare(data, "")
 		refused(t, err, avatars.Accepted)
@@ -99,11 +103,13 @@ func TestNotAnImage(t *testing.T) {
 }
 
 func TestADeclaredTypeThatLies(t *testing.T) {
+	t.Parallel()
 	_, err := avatars.Prepare(jpegOf(t, gradient(10, 10)), "image/png")
 	refused(t, err, "the image is image/jpeg, not image/png")
 }
 
 func TestMetadataGoes(t *testing.T) {
+	t.Parallel()
 	plain := jpegOf(t, gradient(300, 300))
 	exif := append([]byte("Exif\x00\x00"), "secret-camera"...)
 	data := append([]byte{0xff, 0xd8, 0xff, 0xe1, 0, byte(len(exif) + 2)}, exif...)
@@ -127,6 +133,7 @@ func TestMetadataGoes(t *testing.T) {
 }
 
 func TestTransparencyStays(t *testing.T) {
+	t.Parallel()
 	img := gradient(64, 64)
 	img.Set(0, 0, color.NRGBA{})
 	p, err := avatars.Prepare(pngOf(t, img), "image/png")
@@ -146,12 +153,14 @@ func TestTransparencyStays(t *testing.T) {
 }
 
 func TestADamagedImage(t *testing.T) {
+	t.Parallel()
 	data := pngOf(t, gradient(100, 100))
 	_, err := avatars.Prepare(data[:len(data)/2], "")
 	refused(t, err, "cannot be decoded")
 }
 
 func TestACleanDrawing(t *testing.T) {
+	t.Parallel()
 	svg := `<?xml version="1.0"?>
 <!-- drawn by hand -->
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10">
@@ -180,6 +189,7 @@ func TestACleanDrawing(t *testing.T) {
 }
 
 func TestSVGRefusals(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{"script", `<script>alert(1)</script>`, "the element script is not allowed"},
 		{"handler", `<circle onload="alert(1)"/>`, "the attribute onload on circle is not allowed"},
@@ -279,6 +289,7 @@ func profileAvatar(t *testing.T, db *sql.DB, name string) string {
 }
 
 func TestTheSamePictureTwice(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, a := open(t, "builder", "reviewer")
 	face := pngOf(t, gradient(200, 200))
@@ -295,6 +306,7 @@ func TestTheSamePictureTwice(t *testing.T) {
 }
 
 func TestReplaced(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, a := open(t, "builder")
 	old, err := a.SetAgent(ctx, "builder", pngOf(t, gradient(200, 200)), "")
@@ -310,6 +322,7 @@ func TestReplaced(t *testing.T) {
 }
 
 func TestSettingAndClearing(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, a := open(t, "builder")
 	p, err := a.SetAgent(ctx, "builder", jpegOf(t, gradient(300, 300)), "")
@@ -335,6 +348,7 @@ func TestSettingAndClearing(t *testing.T) {
 }
 
 func TestARefusedImageKeepsTheAvatar(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, a := open(t, "builder")
 	p, err := a.SetAgent(ctx, "builder", jpegOf(t, gradient(30, 30)), "")
@@ -350,6 +364,7 @@ func TestARefusedImageKeepsTheAvatar(t *testing.T) {
 }
 
 func TestUnknownAgent(t *testing.T) {
+	t.Parallel()
 	_, a := open(t)
 	_, err := a.SetAgent(context.Background(), "ghost", jpegOf(t, gradient(10, 10)), "")
 	if !errors.Is(err, agents.ErrUnknown) {
@@ -358,6 +373,7 @@ func TestUnknownAgent(t *testing.T) {
 }
 
 func TestSVGWithAByteOrderMark(t *testing.T) {
+	t.Parallel()
 	p, err := avatars.Prepare([]byte("\xef\xbb\xbf<svg><rect width=\"1\"/></svg>"), "image/svg+xml")
 	if err != nil || string(p.Data) != `<svg xmlns="http://www.w3.org/2000/svg"><rect width="1"></rect></svg>` {
 		t.Fatalf("%v %s", err, p.Data)
@@ -365,6 +381,7 @@ func TestSVGWithAByteOrderMark(t *testing.T) {
 }
 
 func TestSVGValuesStayValues(t *testing.T) {
+	t.Parallel()
 	p, err := avatars.Prepare([]byte(`<svg xmlns="http://www.w3.org/2000/svg"><rect id='x" onmouseover="location=name'/></svg>`), "")
 	if err != nil {
 		t.Fatal(err)
@@ -375,6 +392,7 @@ func TestSVGValuesStayValues(t *testing.T) {
 }
 
 func TestAPictureStillUsedStays(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, a := open(t, "builder", "reviewer")
 	shared, err := a.SetAgent(ctx, "builder", pngOf(t, gradient(40, 40)), "")
@@ -405,6 +423,7 @@ func TestAPictureStillUsedStays(t *testing.T) {
 }
 
 func TestCopiesOfCopies(t *testing.T) {
+	t.Parallel()
 	var b strings.Builder
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg"><defs><g id="a0"><rect width="1" height="1"/></g>`)
 	for level := 1; level <= 6; level++ {

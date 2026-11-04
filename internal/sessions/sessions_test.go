@@ -118,6 +118,7 @@ func (e env) places(t *testing.T, agent string) []queue.Entry {
 // --- identity -----------------------------------------------------------------------
 
 func TestNamesFollowTheRule(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.s.Join(ctx, "reviewer-2", "", false); err != nil {
 		t.Fatal(err)
@@ -130,6 +131,7 @@ func TestNamesFollowTheRule(t *testing.T) {
 }
 
 func TestJoiningBindsTheNameToTheSession(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -139,6 +141,7 @@ func TestJoiningBindsTheNameToTheSession(t *testing.T) {
 }
 
 func TestSwitchingNamesWithinASession(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "alpha", "session-1")
 	e.join(t, "beta", "session-1")
@@ -149,6 +152,7 @@ func TestSwitchingNamesWithinASession(t *testing.T) {
 }
 
 func TestANameBelongsToOneLiveSession(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, err := e.s.Join(ctx, "builder", "session-2", false); !errors.Is(err, sessions.ErrNameTaken) {
@@ -166,6 +170,7 @@ func TestANameBelongsToOneLiveSession(t *testing.T) {
 }
 
 func TestNameOfAnEndedSessionIsFree(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.End)
@@ -175,6 +180,7 @@ func TestNameOfAnEndedSessionIsFree(t *testing.T) {
 // --- sessions -----------------------------------------------------------------------
 
 func TestSessionStatesFollowEvents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	if st := e.state(t, "session-1"); st != sessions.Idle {
@@ -202,6 +208,7 @@ func TestSessionStatesFollowEvents(t *testing.T) {
 }
 
 func TestCompactionWhileIdleKeepsTheWait(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -226,6 +233,7 @@ func TestCompactionWhileIdleKeepsTheWait(t *testing.T) {
 }
 
 func TestResumedSessionStartsIdle(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.report(t, "session-1", sessions.Prompt) // still busy when the hub last heard of it
@@ -241,6 +249,7 @@ func TestResumedSessionStartsIdle(t *testing.T) {
 }
 
 func TestCompactionOfASessionNotLiveStartsIdle(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.compact(t, "session-1") // the first event the hub hears of the session
 	if st := e.state(t, "session-1"); st != sessions.Idle {
@@ -256,6 +265,7 @@ func TestCompactionOfASessionNotLiveStartsIdle(t *testing.T) {
 }
 
 func TestManualCompactionMakesABusySessionIdle(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.report(t, "session-1", sessions.Prompt) // the turn was interrupted: no stop follows
@@ -272,6 +282,7 @@ func TestManualCompactionMakesABusySessionIdle(t *testing.T) {
 }
 
 func TestManualCompactionOfAnUnknownOrEndedSessionIsIdle(t *testing.T) {
+	t.Parallel()
 	for name, prepare := range map[string]func(e env){
 		"unknown": func(env) {}, // the first event the hub hears of the session
 		"ended": func(e env) {
@@ -296,6 +307,7 @@ func TestManualCompactionOfAnUnknownOrEndedSessionIsIdle(t *testing.T) {
 }
 
 func TestAutomaticCompactionOfAnUnknownSessionIsBusy(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if err := e.precompact(t, "session-1", sessions.CompactAuto); err != nil { // the first event the hub hears
 		t.Fatal(err)
@@ -316,6 +328,7 @@ func TestAutomaticCompactionOfAnUnknownSessionIsBusy(t *testing.T) {
 }
 
 func TestAutomaticCompactionWhileIdleKeepsItIdle(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -348,6 +361,7 @@ func TestAutomaticCompactionWhileIdleKeepsItIdle(t *testing.T) {
 }
 
 func TestAutomaticCompactionDuringATurnKeepsItBusy(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.report(t, "session-1", sessions.Prompt)
@@ -361,6 +375,7 @@ func TestAutomaticCompactionDuringATurnKeepsItBusy(t *testing.T) {
 }
 
 func TestCompactionOfAnotherKindIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	for _, trigger := range []string{"", "other"} {
@@ -374,6 +389,7 @@ func TestCompactionOfAnotherKindIsRefused(t *testing.T) {
 }
 
 func TestCompactionDuringATurnKeepsItBusy(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -396,6 +412,7 @@ func TestCompactionDuringATurnKeepsItBusy(t *testing.T) {
 }
 
 func TestWaitingDeliversNothing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -413,6 +430,7 @@ func TestWaitingDeliversNothing(t *testing.T) {
 }
 
 func TestFirstEventRegistersTheSession(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Tool)
 	list, _ := e.s.List(ctx)
@@ -422,6 +440,7 @@ func TestFirstEventRegistersTheSession(t *testing.T) {
 }
 
 func TestTheLatestReportedProcessIsRecorded(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4243, PIDStart: 112}
 	if _, err := e.s.Report(ctx, start); err != nil {
@@ -435,6 +454,7 @@ func TestTheLatestReportedProcessIsRecorded(t *testing.T) {
 }
 
 func TestInvalidSessionIDsAreRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	for _, id := range []string{"short", "has space in it", strings.Repeat("a", 81), "../../etc"} {
 		if _, err := e.s.Report(ctx, sessions.Report{SessionID: id, Event: sessions.Start}); !errors.Is(err, store.ErrInvalid) {
@@ -444,6 +464,7 @@ func TestInvalidSessionIDsAreRefused(t *testing.T) {
 }
 
 func TestDeadProcessEndsTheSessionAndGivesBackPlaces(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -469,6 +490,7 @@ func TestDeadProcessEndsTheSessionAndGivesBackPlaces(t *testing.T) {
 }
 
 func TestLiveProcessesAreLeftAlone(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	if ended, _ := e.s.EndDead(ctx, func(int, int64) bool { return true }); len(ended) != 0 {
@@ -477,6 +499,7 @@ func TestLiveProcessesAreLeftAlone(t *testing.T) {
 }
 
 func TestEndedSessionKeepsPlacesOfAnAgentThatMovedOn(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
@@ -492,6 +515,7 @@ func TestEndedSessionKeepsPlacesOfAnAgentThatMovedOn(t *testing.T) {
 }
 
 func TestSessionEndGivesBackPlaces(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
@@ -531,6 +555,7 @@ func repoNamed(t *testing.T, name string) string {
 }
 
 func TestJoiningExpected(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.s.JoinMode = sessions.JoinExpect
 	start := sessions.Report{SessionID: "session-1", Kind: "claude-code", Event: sessions.Start, PID: 4242, PIDStart: 111, CWD: exampleRepo(t)}
@@ -599,6 +624,7 @@ func TestJoiningExpected(t *testing.T) {
 }
 
 func TestJoiningExpectedWithManyRooms(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.s.JoinMode = sessions.JoinExpect
 	if _, err := e.s.Join(ctx, "builder", "", false); err != nil {
@@ -638,6 +664,7 @@ func TestJoiningExpectedWithManyRooms(t *testing.T) {
 }
 
 func TestJoiningExpectedWhenTheRoomsCannotBeListed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.s.JoinMode = sessions.JoinExpect
 	// without the table the rooms cannot be listed; the report still goes out
@@ -655,6 +682,7 @@ func TestJoiningExpectedWhenTheRoomsCannotBeListed(t *testing.T) {
 }
 
 func TestUnboundStartIsInvited(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo := filepath.Join(t.TempDir(), "example-app")
 	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
@@ -691,6 +719,7 @@ func TestUnboundStartIsInvited(t *testing.T) {
 }
 
 func TestUnboundStartOutsideARepositoryUsesAPlaceholder(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	r, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start, CWD: t.TempDir()})
 	if err != nil || !strings.Contains(r.Context, "--project <project>") {
@@ -699,6 +728,7 @@ func TestUnboundStartOutsideARepositoryUsesAPlaceholder(t *testing.T) {
 }
 
 func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -728,6 +758,7 @@ func TestBoundStartAfterCompactionRemindsWhoTheAgentIs(t *testing.T) {
 }
 
 func TestStartDeliversOnlyWhatDoesNotWake(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -755,6 +786,7 @@ func TestStartDeliversOnlyWhatDoesNotWake(t *testing.T) {
 }
 
 func TestStartRemindsEvenWhenAConcurrentHookWonTheCheck(t *testing.T) {
+	// Not parallel: RaceNoteCheck sets a package-wide hook.
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -773,6 +805,7 @@ func TestStartRemindsEvenWhenAConcurrentHookWonTheCheck(t *testing.T) {
 }
 
 func TestReminderCountsAddressedMessages(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -791,6 +824,7 @@ func TestReminderCountsAddressedMessages(t *testing.T) {
 }
 
 func TestUnsafeRepositoryNameIsNotSuggested(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo := filepath.Join(t.TempDir(), "example app;x")
 	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
@@ -808,6 +842,7 @@ func TestUnsafeRepositoryNameIsNotSuggested(t *testing.T) {
 // --- reminders (Claude Code connector) ------------------------------------------------
 
 func TestSessionStartRemindsOfHeldSlots(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false); err != nil {
@@ -820,6 +855,7 @@ func TestSessionStartRemindsOfHeldSlots(t *testing.T) {
 }
 
 func TestNoNoteWhenNothingChanged(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
@@ -832,6 +868,7 @@ func TestNoNoteWhenNothingChanged(t *testing.T) {
 }
 
 func TestOfferedSlotIsAnnouncedAfterToolUse(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "example-app/merge", "other", "", 0, false); err != nil {
@@ -855,6 +892,7 @@ func TestOfferedSlotIsAnnouncedAfterToolUse(t *testing.T) {
 }
 
 func TestOfferedSlotKeepsTheTurnGoingOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "example-app/merge", "other", "", 0, false); err != nil {
@@ -885,6 +923,7 @@ func TestOfferedSlotKeepsTheTurnGoingOnce(t *testing.T) {
 func alwaysAlive(int, int64) bool { return true }
 
 func TestJoiningAnEndedSessionOnlyRegistersTheName(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.report(t, "session-1", sessions.End)
@@ -898,6 +937,7 @@ func TestJoiningAnEndedSessionOnlyRegistersTheName(t *testing.T) {
 }
 
 func TestUnknownProcessEndsAfterSixHoursWithoutEvents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1") // registered by join only: no process known
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
@@ -918,6 +958,7 @@ func TestUnknownProcessEndsAfterSixHoursWithoutEvents(t *testing.T) {
 }
 
 func TestReusedPidDoesNotKeepASessionAlive(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start) // pid 4242 started at 111
 	sameProcess := func(pid int, start int64) bool { return pid == 4242 && start == 111 }
@@ -931,6 +972,7 @@ func TestReusedPidDoesNotKeepASessionAlive(t *testing.T) {
 }
 
 func TestClearKeepsTheNameAndPlaces(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.report(t, "session-1", sessions.Start)
 	e.join(t, "builder", "session-1")
@@ -956,6 +998,7 @@ func TestClearKeepsTheNameAndPlaces(t *testing.T) {
 }
 
 func TestLostPlacesAreAnnounced(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 10*time.Minute, false); err != nil {
@@ -973,6 +1016,7 @@ func TestLostPlacesAreAnnounced(t *testing.T) {
 }
 
 func TestConcurrentHooksNoteOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, _, err := e.q.Join(ctx, "db/shared", "builder", "", 0, false); err != nil {
@@ -1005,6 +1049,7 @@ func TestConcurrentHooksNoteOnce(t *testing.T) {
 // --- delivery ---------------------------------------------------------------------------
 
 func TestMessagesArriveDuringTheTurn(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1027,6 +1072,7 @@ func TestMessagesArriveDuringTheTurn(t *testing.T) {
 }
 
 func TestOnlyFiveMessagesAtOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1045,6 +1091,7 @@ func TestOnlyFiveMessagesAtOnce(t *testing.T) {
 }
 
 func TestMentionKeepsTheTurnGoingOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1067,6 +1114,7 @@ func TestMentionKeepsTheTurnGoingOnce(t *testing.T) {
 }
 
 func TestMentionAndOfferBlockTogether(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1091,6 +1139,7 @@ func TestMentionAndOfferBlockTogether(t *testing.T) {
 // --- wakeups ---------------------------------------------------------------------------
 
 func TestCheckWake(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1135,6 +1184,7 @@ func TestCheckWake(t *testing.T) {
 }
 
 func TestWaitEndsQuietlyOnANewTurn(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.Stop)
@@ -1146,6 +1196,7 @@ func TestWaitEndsQuietlyOnANewTurn(t *testing.T) {
 }
 
 func TestWaitEndsWhenTheSessionLosesItsAgent(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.Stop)
@@ -1159,6 +1210,7 @@ func TestWaitEndsWhenTheSessionLosesItsAgent(t *testing.T) {
 }
 
 func TestAnOfferWakesOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.report(t, "session-1", sessions.Stop)
@@ -1190,6 +1242,7 @@ func TestAnOfferWakesOnce(t *testing.T) {
 }
 
 func TestPendingKeyChangesWithNewMentions(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	e.join(t, "reviewer", "")
@@ -1231,6 +1284,7 @@ func (e env) follow(t *testing.T, agent, room string, mode rooms.Mode) {
 }
 
 func TestRoomFollowedToWakeWakes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1259,6 +1313,7 @@ func TestRoomFollowedToWakeWakes(t *testing.T) {
 }
 
 func TestRoomFollowedToWakeKeepsTheTurnGoing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1272,6 +1327,7 @@ func TestRoomFollowedToWakeKeepsTheTurnGoing(t *testing.T) {
 }
 
 func TestRoomFollowedForMentionsDeliversOnlyAddressedMessages(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1286,6 +1342,7 @@ func TestRoomFollowedForMentionsDeliversOnlyAddressedMessages(t *testing.T) {
 }
 
 func TestReminderListsModes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	e.join(t, "reviewer", "")
@@ -1300,6 +1357,7 @@ func TestReminderListsModes(t *testing.T) {
 }
 
 func TestPendingIncludesRoomsFollowedToWake(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	e.join(t, "reviewer", "")
@@ -1314,6 +1372,7 @@ func TestPendingIncludesRoomsFollowedToWake(t *testing.T) {
 
 // A refusal says only what was refused; errors.Is still finds its kind.
 func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	task := "x"
 	_, err := e.s.Join(ctx, "agora", "", false)

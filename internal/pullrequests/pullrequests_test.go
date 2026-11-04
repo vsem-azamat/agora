@@ -203,6 +203,7 @@ func green(n int, branch, head string) forge.PR {
 }
 
 func TestPullRequestIsFoundFromTheAgentsBranch(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "git@github.com:example-org/example-app.git")
 	wt := worktree(t, dir, "login-fix", "fix/login-timeout")
@@ -229,6 +230,7 @@ func TestPullRequestIsFoundFromTheAgentsBranch(t *testing.T) {
 }
 
 func TestOneLookupPerRepository(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "https://github.com/example-org/example-app.git")
 	e.agent(t, "alpha", worktree(t, dir, "a", "feat/a"))
@@ -248,6 +250,7 @@ func TestOneLookupPerRepository(t *testing.T) {
 }
 
 func TestTheDefaultBranchOwnsNoPullRequest(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "git@github.com:example-org/example-app.git")
 	checkout(t, dir, "dev")
@@ -264,6 +267,7 @@ func TestTheDefaultBranchOwnsNoPullRequest(t *testing.T) {
 }
 
 func TestFoundPullRequestStaysWhileOpenAndIsDroppedWhenMerged(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "git@github.com:example-org/example-app.git")
 	wt := worktree(t, dir, "work", "fix/login-timeout")
@@ -296,6 +300,7 @@ func TestFoundPullRequestStaysWhileOpenAndIsDroppedWhenMerged(t *testing.T) {
 }
 
 func TestDeclaredPullRequestIsFollowed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "git@github.com:example-org/example-app.git")
 	e.agent(t, "builder", dir, 61)
@@ -310,6 +315,7 @@ func TestDeclaredPullRequestIsFollowed(t *testing.T) {
 }
 
 func TestUnknownHostsAreSkippedQuietly(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", repo(t, "git@git.example.com:example-org/example-app.git"))
 	e.agent(t, "local", repo(t, ""))
@@ -324,6 +330,7 @@ func TestUnknownHostsAreSkippedQuietly(t *testing.T) {
 }
 
 func TestFailedLookupDoesNotStopTheRound(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	broken := "github.com/example-org/broken"
 	e.agent(t, "alpha", repo(t, "git@github.com:example-org/broken.git"), 5)
@@ -344,6 +351,7 @@ func TestFailedLookupDoesNotStopTheRound(t *testing.T) {
 }
 
 func TestCIMessages(t *testing.T) {
+	t.Parallel()
 	failed := func(names ...string) []forge.Check {
 		var out []forge.Check
 		for _, n := range names {
@@ -391,6 +399,7 @@ func TestCIMessages(t *testing.T) {
 }
 
 func TestCIIsReportedOncePerStateAndCommit(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", worktree(t, repo(t, "git@github.com:example-org/example-app.git"), "w", "fix/login-timeout"))
 	pr := green(57, "fix/login-timeout", "a1")
@@ -415,6 +424,7 @@ func TestCIIsReportedOncePerStateAndCommit(t *testing.T) {
 }
 
 func TestMessageIsAddressedInTheFirstFollowedRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
 	for _, room := range []string{"reviews", "example-app"} {
@@ -437,6 +447,7 @@ func TestMessageIsAddressedInTheFirstFollowedRoom(t *testing.T) {
 }
 
 func TestInactiveAgentsAreNotLookedUp(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
 	if _, err := e.s.Leave(ctx, "builder"); err != nil {
@@ -449,6 +460,7 @@ func TestInactiveAgentsAreNotLookedUp(t *testing.T) {
 }
 
 func TestConflictIsReportedOncePerCommit(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
 	pr := forge.PR{Number: 57, Open: true, Head: "a1", Merge: forge.Conflicting}
@@ -464,6 +476,7 @@ func TestConflictIsReportedOncePerCommit(t *testing.T) {
 }
 
 func TestFoundPullRequestIsDroppedAfterTheAgentMovedRepository(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	wt := worktree(t, repo(t, "git@github.com:example-org/example-app.git"), "w", "fix/login-timeout")
 	e.agent(t, "builder", wt)
@@ -481,6 +494,7 @@ func TestFoundPullRequestIsDroppedAfterTheAgentMovedRepository(t *testing.T) {
 }
 
 func TestPullRequestMissingFromAReplyKeepsItsState(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", worktree(t, repo(t, "git@github.com:example-org/example-app.git"), "w", "fix/login-timeout"))
 	e.fake.set(app, green(57, "fix/login-timeout", "a1"))
@@ -503,6 +517,7 @@ func TestPullRequestMissingFromAReplyKeepsItsState(t *testing.T) {
 }
 
 func TestFailingLookupsBackOffAndAreLoggedOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.agent(t, "builder", repo(t, "git@github.com:example-org/example-app.git"), 57)
 	e.fake.fail[app] = errors.New("gh: HTTP 401: Bad credentials")
@@ -526,6 +541,7 @@ func TestFailingLookupsBackOffAndAreLoggedOnce(t *testing.T) {
 }
 
 func TestDetachedHeadIsNotMatchedByBranch(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "git@github.com:example-org/example-app.git")
 	wt := worktree(t, dir, "w", "feat/export")
@@ -539,6 +555,7 @@ func TestDetachedHeadIsNotMatchedByBranch(t *testing.T) {
 }
 
 func TestLastReportedCIIsOnTheProfile(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	dir := repo(t, "git@github.com:example-org/example-app.git")
 	e.agent(t, "builder", worktree(t, dir, "login-fix", "fix/login-timeout"), 58)
@@ -565,6 +582,7 @@ func TestLastReportedCIIsOnTheProfile(t *testing.T) {
 }
 
 func TestADetachedRepositoryIsLookedUpWithoutFailing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	calls := 0
 	// GitHub rejects a query that defines a fragment it does not use.

@@ -8,6 +8,7 @@ import (
 
 // RaceNoteCheck makes the next note check lose its compare-and-set, as when a concurrent hook
 // of the same session records its check between the read and the write.
+// The hook is package-wide, so a test that calls it must not be parallel.
 func RaceNoteCheck(t *testing.T) {
 	t.Helper()
 	beforeNoteCheck = func(ctx context.Context, tx *sql.Tx, id string) error {

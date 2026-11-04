@@ -54,6 +54,7 @@ func (w *webHub) fetch(t *testing.T, token, path string) fetched {
 }
 
 func TestAPersonsAvatar(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -100,6 +101,7 @@ func TestAPersonsAvatar(t *testing.T) {
 }
 
 func TestAgentsSetAndClearTheirAvatar(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	ctx := context.Background()
 	if _, err := w.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -122,6 +124,7 @@ func TestAgentsSetAndClearTheirAvatar(t *testing.T) {
 }
 
 func TestTheOperatorSetsItsAvatarFromTheApp(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	ctx := context.Background()
 	if _, err := w.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {

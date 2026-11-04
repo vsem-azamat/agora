@@ -77,6 +77,7 @@ func ids(msgs []rooms.Message) []int64 {
 // --- mentions ---------------------------------------------------------------------
 
 func TestMentionParsing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		body string
 		want []string
@@ -103,6 +104,7 @@ func TestMentionParsing(t *testing.T) {
 // --- rooms ------------------------------------------------------------------------
 
 func TestGeneralExistsAndStaysFollowed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	list, _ := e.r.List(ctx, false)
@@ -116,6 +118,7 @@ func TestGeneralExistsAndStaysFollowed(t *testing.T) {
 }
 
 func TestCreatingRooms(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	if err := e.r.Create(ctx, "example-app", "work on example-app", "builder"); err != nil {
@@ -140,6 +143,7 @@ func TestCreatingRooms(t *testing.T) {
 }
 
 func TestSubscribingToARoomWithHistoryStartsAtItsNewestMessage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
@@ -169,6 +173,7 @@ func TestSubscribingToARoomWithHistoryStartsAtItsNewestMessage(t *testing.T) {
 // --- messages ----------------------------------------------------------------------
 
 func TestPostingAndReplying(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	first := e.post(t, "builder", "general", "PR #57 is ready for review")
@@ -195,6 +200,7 @@ func TestPostingAndReplying(t *testing.T) {
 }
 
 func TestConcurrentPostsAllLand(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	var wg sync.WaitGroup
@@ -214,6 +220,7 @@ func TestConcurrentPostsAllLand(t *testing.T) {
 }
 
 func TestPostingDoesNotMarkOthersRead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	e.post(t, "reviewer", "general", "one")
@@ -225,6 +232,7 @@ func TestPostingDoesNotMarkOthersRead(t *testing.T) {
 }
 
 func TestHistoryDoesNotChangeReadState(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	for range 7 {
@@ -242,6 +250,7 @@ func TestHistoryDoesNotChangeReadState(t *testing.T) {
 // --- unread ------------------------------------------------------------------------
 
 func TestWhatCountsAsUnread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "side", "side talk", "reviewer"); err != nil {
@@ -257,6 +266,7 @@ func TestWhatCountsAsUnread(t *testing.T) {
 }
 
 func TestNewAgentsStartFromNow(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	for range 30 {
@@ -273,6 +283,7 @@ func TestNewAgentsStartFromNow(t *testing.T) {
 }
 
 func TestMarkingReadAndPeeking(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	e.post(t, "reviewer", "general", "a")
@@ -294,6 +305,7 @@ func TestMarkingReadAndPeeking(t *testing.T) {
 }
 
 func TestAllAddressesTheRoomAudience(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "follower", "outsider")
 	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
@@ -316,6 +328,7 @@ func TestAllAddressesTheRoomAudience(t *testing.T) {
 }
 
 func TestUnreadLimitAndTotal(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	for range 8 {
@@ -329,6 +342,7 @@ func TestUnreadLimitAndTotal(t *testing.T) {
 
 // Rows past the limit are never read: one that cannot be scanned lies beyond it.
 func TestUnreadLimitIsAppliedInTheQuery(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	var last int64
@@ -351,6 +365,7 @@ func TestUnreadLimitIsAppliedInTheQuery(t *testing.T) {
 // Leaving mentions looks at the room's messages only: unreadable messages of other rooms, older
 // than the room's own, do not stand in its way, whether they are followed with mentions or all.
 func TestLeavingMentionsReadsOnlyItsRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	for _, room := range []string{"example-app", "other-app", "all-app"} {
@@ -378,6 +393,7 @@ func TestLeavingMentionsReadsOnlyItsRoom(t *testing.T) {
 
 // The total counts the rows that pass the filter, not those the limit cut.
 func TestUnreadTotalCountsTheFilteredRows(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	var want []int64
@@ -393,6 +409,7 @@ func TestUnreadTotalCountsTheFilteredRows(t *testing.T) {
 }
 
 func TestFormatShortensLongBodies(t *testing.T) {
+	t.Parallel()
 	m := rooms.Message{ID: 3, Room: "general", Author: "builder", Body: strings.Repeat("x", 800)}
 	if out := rooms.Format(m, 700); !strings.HasSuffix(out, "…") || strings.Count(out, "x") != 700 {
 		t.Fatalf("format %q", out[len(out)-10:])
@@ -400,6 +417,7 @@ func TestFormatShortensLongBodies(t *testing.T) {
 }
 
 func TestMarkingSingleMessagesKeepsEarlierOnesUnread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	e.post(t, "reviewer", "general", "chatter")
@@ -424,6 +442,7 @@ func TestMarkingSingleMessagesKeepsEarlierOnesUnread(t *testing.T) {
 }
 
 func TestSubscribingAfterADeliveredMentionStartsAtTheNewestMessage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "side", "side talk", "reviewer"); err != nil {
@@ -445,6 +464,7 @@ func TestSubscribingAfterADeliveredMentionStartsAtTheNewestMessage(t *testing.T)
 }
 
 func TestTakingMentionsKeepsOtherMessagesUnread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	e.post(t, "reviewer", "general", "one")
@@ -458,6 +478,7 @@ func TestTakingMentionsKeepsOtherMessagesUnread(t *testing.T) {
 }
 
 func TestCountingUnreadMessages(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	e.post(t, "reviewer", "general", "chatter")
@@ -474,6 +495,7 @@ func TestCountingUnreadMessages(t *testing.T) {
 // --- unread per room and marking a room read ------------------------------------------
 
 func TestUnreadCountsPerRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "the app", "builder"); err != nil {
@@ -496,6 +518,7 @@ func TestUnreadCountsPerRoom(t *testing.T) {
 }
 
 func TestMarkingARoomRead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "the app", "builder"); err != nil {
@@ -526,6 +549,7 @@ func TestMarkingARoomRead(t *testing.T) {
 }
 
 func TestMarkingARoomReadNeverReachesBehindTheJoin(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "reviewer")
 	old := e.post(t, "reviewer", "general", "before builder joined")
@@ -565,6 +589,7 @@ func (e env) modeOf(t *testing.T, agent, room string) rooms.Mode {
 }
 
 func TestSubscribingWithAMode(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	for _, room := range []string{"example-app", "ops"} {
@@ -587,6 +612,7 @@ func TestSubscribingWithAMode(t *testing.T) {
 }
 
 func TestChangingTheModeKeepsTheReadingPosition(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "builder"); err != nil {
@@ -609,6 +635,7 @@ func TestChangingTheModeKeepsTheReadingPosition(t *testing.T) {
 }
 
 func TestGeneralTakesAMode(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	e.post(t, "reviewer", "general", "before")
@@ -634,6 +661,7 @@ func TestGeneralTakesAMode(t *testing.T) {
 }
 
 func TestMentionsModeCountsOnlyAddressedMessages(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
@@ -654,6 +682,7 @@ func TestMentionsModeCountsOnlyAddressedMessages(t *testing.T) {
 }
 
 func TestWakeModeMessagesWake(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
@@ -691,6 +720,7 @@ func TestWakeModeMessagesWake(t *testing.T) {
 }
 
 func TestLeavingMentionsKeepsOldChatterRead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
@@ -717,6 +747,7 @@ func TestLeavingMentionsKeepsOldChatterRead(t *testing.T) {
 }
 
 func TestFollowingAgainStartsWithAll(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
@@ -734,6 +765,7 @@ func TestFollowingAgainStartsWithAll(t *testing.T) {
 }
 
 func TestBacklogDoesNotWakeAfterChangingToWake(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "example-app", "work", "reviewer"); err != nil {
@@ -764,6 +796,7 @@ func TestBacklogDoesNotWakeAfterChangingToWake(t *testing.T) {
 // --- archiving ---------------------------------------------------------------------
 
 func TestArchivingARoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "reviewer")
 	if err := e.r.Create(ctx, "old-app", "work", "reviewer"); err != nil {
@@ -854,6 +887,7 @@ func TestArchivingARoom(t *testing.T) {
 }
 
 func TestUnfollowingAnArchivedRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	if err := e.r.Create(ctx, "old-app", "work", "builder"); err != nil {
@@ -874,6 +908,7 @@ func TestUnfollowingAnArchivedRoom(t *testing.T) {
 }
 
 func TestArchivingIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	if err := e.r.Create(ctx, "old-app", "work", "builder"); err != nil {
@@ -911,6 +946,7 @@ func TestArchivingIsRefused(t *testing.T) {
 }
 
 func TestNoticesSkipArchivedRooms(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	for _, r := range []string{"aa-old", "bb-app"} {
@@ -971,6 +1007,7 @@ func (e env) reply(t *testing.T, author string, thread int64, body string, also 
 }
 
 func TestThreadReplyIsInTheThreadOfItsRoot(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	first := e.reply(t, "reviewer", root, "which export broke?", false)
 	second := e.reply(t, "tester", first, "the CSV one", false) // naming a reply names its thread
@@ -998,6 +1035,7 @@ func TestThreadReplyIsInTheThreadOfItsRoot(t *testing.T) {
 }
 
 func TestThreadRepliesStayOutOfTheRoom(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	if _, err := e.r.Subscribe(ctx, "tester", []string{"example-app"}, true, rooms.ModeWake); err != nil {
 		t.Fatal(err)
@@ -1020,6 +1058,7 @@ func TestThreadRepliesStayOutOfTheRoom(t *testing.T) {
 }
 
 func TestTheRootShowsItsThread(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	e.reply(t, "reviewer", root, "one", false)
 	e.reply(t, "tester", root, "two", false)
@@ -1039,6 +1078,7 @@ func TestTheRootShowsItsThread(t *testing.T) {
 }
 
 func TestAlsoToTheRoom(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	id := e.reply(t, "builder", root, "fixed in #57", true)
 	hist, err := e.r.History(ctx, "example-app", 0)
@@ -1059,6 +1099,7 @@ func TestAlsoToTheRoom(t *testing.T) {
 }
 
 func TestAReplyAddressesTheThreadsParticipants(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	if _, err := e.r.Subscribe(ctx, "builder", []string{"example-app"}, true, rooms.ModeMentions); err != nil {
 		t.Fatal(err)
@@ -1091,6 +1132,7 @@ func TestAReplyAddressesTheThreadsParticipants(t *testing.T) {
 }
 
 func TestLeavingAThread(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	if err := e.r.LeaveThread(ctx, "builder", root); err != nil {
 		t.Fatal(err)
@@ -1112,6 +1154,7 @@ func TestLeavingAThread(t *testing.T) {
 }
 
 func TestThreadTitles(t *testing.T) {
+	t.Parallel()
 	clock := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	e, root := threadEnvAt(t, func() time.Time { clock = clock.Add(time.Second); return clock })
 	if err := e.r.SetThreadTitle(ctx, "builder", root, strings.Repeat("x", 101)); !errors.Is(err, store.ErrInvalid) {
@@ -1143,6 +1186,7 @@ func TestThreadTitles(t *testing.T) {
 }
 
 func TestMarkingTheRoomReadLeavesThreadRepliesUnread(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	reply := e.reply(t, "reviewer", root, "in the thread", false)
 	later := e.post(t, "tester", "example-app", "in the room")
@@ -1155,6 +1199,7 @@ func TestMarkingTheRoomReadLeavesThreadRepliesUnread(t *testing.T) {
 }
 
 func TestMarkingAThreadRead(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	first := e.reply(t, "reviewer", root, "one", false)
 	second := e.reply(t, "reviewer", root, "two", false)
@@ -1170,6 +1215,7 @@ func TestMarkingAThreadRead(t *testing.T) {
 }
 
 func TestThreadsOfEveryRoom(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	general := e.post(t, "tester", "general", "elsewhere")
 	for id, title := range map[int64]string{root: "Release", general: "Docs"} {
@@ -1184,6 +1230,7 @@ func TestThreadsOfEveryRoom(t *testing.T) {
 }
 
 func TestMarkingReadUpToAReplyAlsoInTheRoomReadsItsThread(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	e.reply(t, "reviewer", root, "in the thread", false)
 	also := e.reply(t, "tester", root, "also in the room", true)
@@ -1196,6 +1243,7 @@ func TestMarkingReadUpToAReplyAlsoInTheRoomReadsItsThread(t *testing.T) {
 }
 
 func TestMarkingReadUpToAReplyAlsoInTheRoomReadsTheRoomToo(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	room := e.post(t, "tester", "example-app", "in the room")
 	also := e.reply(t, "reviewer", root, "also in the room", true)
@@ -1208,6 +1256,7 @@ func TestMarkingReadUpToAReplyAlsoInTheRoomReadsTheRoomToo(t *testing.T) {
 }
 
 func TestAnUnreadThreadReplyDoesNotHoldTheRoomBack(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	reply := e.reply(t, "reviewer", root, "in the thread", false)
 	var last int64
@@ -1240,6 +1289,7 @@ func TestAnUnreadThreadReplyDoesNotHoldTheRoomBack(t *testing.T) {
 }
 
 func TestReadingTheRoomPastTwoThreadReplies(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	r1 := e.reply(t, "reviewer", root, "one", false)
 	e.post(t, "tester", "example-app", "between")
@@ -1254,6 +1304,7 @@ func TestReadingTheRoomPastTwoThreadReplies(t *testing.T) {
 }
 
 func TestUnreadByRoomCountsThreadRepliesApart(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	e.reply(t, "reviewer", root, "in the thread", false)
 	e.reply(t, "reviewer", root, "@builder also here", true)
@@ -1276,6 +1327,7 @@ func TestUnreadByRoomCountsThreadRepliesApart(t *testing.T) {
 }
 
 func TestReadingAThreadNamesItsParticipants(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	e.reply(t, "reviewer", root, "@tester can you check?", false)
 	if err := e.r.LeaveThread(ctx, "builder", root); err != nil {
@@ -1291,6 +1343,7 @@ func TestReadingAThreadNamesItsParticipants(t *testing.T) {
 }
 
 func TestAllInAThreadSkipsFollowersForMentions(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	e.join(t, "quiet")
 	if _, err := e.r.Subscribe(ctx, "quiet", []string{"example-app"}, true, rooms.ModeMentions); err != nil {
@@ -1303,6 +1356,7 @@ func TestAllInAThreadSkipsFollowersForMentions(t *testing.T) {
 }
 
 func TestThreadsOfEveryRoomLeaveOutArchivedRooms(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	if err := e.r.Create(ctx, "old-app", "gone", "builder"); err != nil {
 		t.Fatal(err)
@@ -1326,6 +1380,7 @@ func TestThreadsOfEveryRoomLeaveOutArchivedRooms(t *testing.T) {
 }
 
 func TestLeavingAThreadReadsItsRepliesAlsoInTheRoom(t *testing.T) {
+	t.Parallel()
 	e, root := threadEnv(t)
 	if _, err := e.r.Subscribe(ctx, "builder", []string{"example-app"}, true, rooms.ModeMentions); err != nil {
 		t.Fatal(err)
@@ -1340,6 +1395,7 @@ func TestLeavingAThreadReadsItsRepliesAlsoInTheRoom(t *testing.T) {
 }
 
 func TestListingUnreadThreadsWithoutTitles(t *testing.T) {
+	t.Parallel()
 	clock := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	e, root := threadEnvAt(t, func() time.Time { clock = clock.Add(time.Second); return clock })
 	titled := e.post(t, "tester", "example-app", "docs")
@@ -1360,6 +1416,7 @@ func TestListingUnreadThreadsWithoutTitles(t *testing.T) {
 }
 
 func TestProjectRoomIsDerivedFromTheProjectName(t *testing.T) {
+	t.Parallel()
 	for project, want := range map[string]string{
 		"example-app":                  "example-app",
 		"Example-App":                  "example-app",
@@ -1437,6 +1494,7 @@ func (e env) followProject(t *testing.T, agent, project string) rooms.ProjectFol
 }
 
 func TestChangingTheProjectMovesTheProjectRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "owner")
 	for _, room := range []string{"alpha", "beta"} {
@@ -1473,6 +1531,7 @@ func TestChangingTheProjectMovesTheProjectRoom(t *testing.T) {
 }
 
 func TestTheAgentsOwnSubscriptionsAreNotMovedWithTheProject(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "owner")
 	for _, room := range []string{"alpha", "beta"} {
@@ -1521,6 +1580,7 @@ func TestTheAgentsOwnSubscriptionsAreNotMovedWithTheProject(t *testing.T) {
 }
 
 func TestAnArchivedProjectRoomIsNotFollowed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	if err := e.r.Create(ctx, "alpha", "work", "builder"); err != nil {
@@ -1539,6 +1599,7 @@ func TestAnArchivedProjectRoomIsNotFollowed(t *testing.T) {
 }
 
 func TestAnArchivedProjectRoomAlreadyFollowedIsNotReportedAsFollowed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	if err := e.r.Create(ctx, "alpha", "work", "builder"); err != nil {
@@ -1558,6 +1619,7 @@ func TestAnArchivedProjectRoomAlreadyFollowedIsNotReportedAsFollowed(t *testing.
 // Two updates of the profile can reach the rooms in the other order than they were stored; the
 // follow converges on the project the profile has now.
 func TestTheProjectRoomFollowsTheCurrentProjectWhateverTheOrderOfCalls(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "owner")
 	for _, room := range []string{"alpha", "beta", "gamma"} {
@@ -1577,6 +1639,7 @@ func TestTheProjectRoomFollowsTheCurrentProjectWhateverTheOrderOfCalls(t *testin
 }
 
 func TestMessageMustBeValidUTF8(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.s.Join(ctx, "builder", "", false); err != nil {
 		t.Fatal(err)
@@ -1594,6 +1657,7 @@ func TestMessageMustBeValidUTF8(t *testing.T) {
 
 // A refusal says only what was refused; errors.Is still finds its kind.
 func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder")
 	err := e.r.Create(ctx, "Bad Name", "work", "builder")

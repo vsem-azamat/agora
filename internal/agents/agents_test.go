@@ -80,6 +80,7 @@ func (e env) join(t *testing.T, name, session string) {
 }
 
 func TestProfileAfterJoining(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo, _ := checkout(t)
 	e.join(t, "builder", "")
@@ -93,6 +94,7 @@ func TestProfileAfterJoining(t *testing.T) {
 }
 
 func TestUpdatingTheTaskKeepsOtherFields(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	if _, err := e.a.Update(ctx, "builder", agents.Update{Project: str("example-app")}); err != nil {
@@ -106,6 +108,7 @@ func TestUpdatingTheTaskKeepsOtherFields(t *testing.T) {
 }
 
 func TestUnknownAgentIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.a.Update(ctx, "ghost", agents.Update{Task: str("x")}); !errors.Is(err, agents.ErrUnknown) {
 		t.Fatalf("err = %v", err)
@@ -113,6 +116,7 @@ func TestUnknownAgentIsRefused(t *testing.T) {
 }
 
 func TestBranchFollowsDirectoryAndSurvivesDetachedHead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo, wt := checkout(t)
 	e.join(t, "builder", "")
@@ -134,6 +138,7 @@ func TestBranchFollowsDirectoryAndSurvivesDetachedHead(t *testing.T) {
 }
 
 func TestDirectoryFollowsTheSessionButKeepsADeclaredWorktree(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo, wt := checkout(t)
 	e.join(t, "builder", "session-1")
@@ -156,6 +161,7 @@ func TestDirectoryFollowsTheSessionButKeepsADeclaredWorktree(t *testing.T) {
 }
 
 func TestDeclaredPullRequests(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	if _, err := e.a.Update(ctx, "builder", agents.Update{AddPRs: []int{42, 41, 57}}); err != nil {
@@ -168,6 +174,7 @@ func TestDeclaredPullRequests(t *testing.T) {
 }
 
 func TestActivity(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "live", "session-1")
 	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.Start}); err != nil {
@@ -192,6 +199,7 @@ func TestActivity(t *testing.T) {
 }
 
 func TestLeavingReleasesPlaces(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	if _, _, err := e.q.Join(ctx, "example-app/merge", "builder", "", 0, false); err != nil {
@@ -211,6 +219,7 @@ func TestLeavingReleasesPlaces(t *testing.T) {
 }
 
 func TestLeavingInALiveSessionSticks(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	report := func(ev sessions.Event) {
 		t.Helper()
@@ -239,6 +248,7 @@ func TestLeavingInALiveSessionSticks(t *testing.T) {
 }
 
 func TestSessionEndMarksTheAgentLeft(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End}); err != nil {
@@ -250,6 +260,7 @@ func TestSessionEndMarksTheAgentLeft(t *testing.T) {
 }
 
 func TestWho(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo, wt := checkout(t)
 	e.join(t, "builder", "")
@@ -284,6 +295,7 @@ func TestWho(t *testing.T) {
 }
 
 func TestResumedSessionBringsALeftAgentBack(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "session-1")
 	if _, err := e.s.Report(ctx, sessions.Report{SessionID: "session-1", Event: sessions.End}); err != nil {
@@ -299,6 +311,7 @@ func TestResumedSessionBringsALeftAgentBack(t *testing.T) {
 }
 
 func TestSettingStatusLeftIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	if _, err := e.a.Update(ctx, "builder", agents.Update{Status: str("left")}); !errors.Is(err, store.ErrInvalid) {
@@ -307,6 +320,7 @@ func TestSettingStatusLeftIsRefused(t *testing.T) {
 }
 
 func TestRelativeDirectoryIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	if _, err := e.a.Update(ctx, "builder", agents.Update{CWD: str("rel/dir")}); !errors.Is(err, store.ErrInvalid) {
@@ -315,6 +329,7 @@ func TestRelativeDirectoryIsRefused(t *testing.T) {
 }
 
 func TestDetachedCommitInAnotherRepoDoesNotKeepTheOldBranch(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	repo, _ := checkout(t)
 	other := t.TempDir()
@@ -335,6 +350,7 @@ func TestDetachedCommitInAnotherRepoDoesNotKeepTheOldBranch(t *testing.T) {
 }
 
 func TestWhoFindsAFormerName(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	if err := e.s.Rename(ctx, "fixer", "docs-writer"); err != nil {
@@ -346,6 +362,7 @@ func TestWhoFindsAFormerName(t *testing.T) {
 }
 
 func TestSigilAndPigment(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "builder", "")
 	p, err := e.a.Update(ctx, "builder", agents.Update{Icon: str("lyre"), Pigment: str("ochre")})

@@ -64,6 +64,7 @@ func (h *Hub) count(t *testing.T, query string) int {
 }
 
 func TestTheSameRevIsNotDecodedAgain(t *testing.T) {
+	t.Parallel()
 	h, log := avatarHub(t)
 	h.line(t, `{"type":"avatar","author":"42","mime":"image/jpeg","data":%q,"rev":"p1"}`, jpegBase64(t, 200))
 	rev, ok, err := h.bridges.AvatarRev(context.Background(), "example-chat", "42")
@@ -78,6 +79,7 @@ func TestTheSameRevIsNotDecodedAgain(t *testing.T) {
 }
 
 func TestTooManyAvatarsAtOnce(t *testing.T) {
+	t.Parallel()
 	h, log := avatarHub(t)
 	for i := range 40 {
 		h.line(t, `{"type":"avatar","author":"%d","data":%q,"rev":"p1"}`, i, jpegBase64(t, uint8(i)))
@@ -91,6 +93,7 @@ func TestTooManyAvatarsAtOnce(t *testing.T) {
 }
 
 func TestAvatarsOfTooManyPeople(t *testing.T) {
+	t.Parallel()
 	h, log := avatarHub(t)
 	if _, err := h.db.Exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
 		INSERT INTO outside_avatars (room, author, rev, avatar, updated_at) SELECT 'example-chat', 'p' || i, 'r', NULL, 0 FROM n`, bridges.MaxOutsideAvatars); err != nil {
@@ -111,6 +114,7 @@ func TestAvatarsOfTooManyPeople(t *testing.T) {
 }
 
 func TestAnAvatarThatIsNotAnImage(t *testing.T) {
+	t.Parallel()
 	h, log := avatarHub(t)
 	gif := base64.StdEncoding.EncodeToString([]byte("GIF89a\x01\x00\x01\x00"))
 	h.line(t, `{"type":"avatar","author":"42","mime":"image/gif","data":%q,"rev":"p1"}`, gif)
@@ -127,6 +131,7 @@ func TestAnAvatarThatIsNotAnImage(t *testing.T) {
 }
 
 func TestAPersonWithoutAnAvatar(t *testing.T) {
+	t.Parallel()
 	h, _ := avatarHub(t)
 	h.line(t, `{"type":"avatar","author":"42","data":%q,"rev":"p1"}`, jpegBase64(t, 9))
 	h.line(t, `{"type":"avatar","author":"42","data":"","rev":"none"}`)
@@ -139,6 +144,7 @@ func TestAPersonWithoutAnAvatar(t *testing.T) {
 }
 
 func TestAnInLineWithoutAvatarRevChangesNothing(t *testing.T) {
+	t.Parallel()
 	h, _ := avatarHub(t)
 	h.line(t, `{"type":"avatar","author":"42","data":%q,"rev":"p1"}`, jpegBase64(t, 5))
 	h.line(t, `{"type":"in","id":"1","author":{"id":"42","name":"Ada"},"text":"hi"}`)
@@ -154,6 +160,7 @@ func TestAnInLineWithoutAvatarRevChangesNothing(t *testing.T) {
 }
 
 func TestAvatarLinesOverTheirLimits(t *testing.T) {
+	t.Parallel()
 	h, log := avatarHub(t)
 	h.line(t, `{"type":"avatar","author":"42","data":%q,"rev":%q}`, jpegBase64(t, 5), strings.Repeat("r", bridges.MaxIdentifier+1))
 	h.line(t, `{"type":"avatar","author":"43","data":%q,"rev":"p1"}`, strings.Repeat("A", maxAvatarData+4))
@@ -168,6 +175,7 @@ func TestAvatarLinesOverTheirLimits(t *testing.T) {
 }
 
 func TestANewPictureWhileTheBridgeIsFull(t *testing.T) {
+	t.Parallel()
 	h, _ := avatarHub(t)
 	if _, err := h.db.Exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
 		INSERT INTO outside_avatars (room, author, rev, avatar, updated_at) SELECT 'example-chat', 'p' || i, 'r', NULL, 0 FROM n`, bridges.MaxOutsideAvatars-1); err != nil {

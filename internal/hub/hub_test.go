@@ -138,6 +138,7 @@ func waitFor(t *testing.T, r *running, key, agent string) <-chan error {
 }
 
 func TestWaiterWakesWhenAListingOffersItTheSlot(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	join(t, r, "r", "a", time.Minute)
 	join(t, r, "r", "b", time.Minute)
@@ -157,6 +158,7 @@ func TestWaiterWakesWhenAListingOffersItTheSlot(t *testing.T) {
 }
 
 func TestShutdownEndsWaitsAndReturns(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	join(t, r, "r", "a", time.Minute)
 	join(t, r, "r", "b", time.Minute)
@@ -178,6 +180,7 @@ func TestShutdownEndsWaitsAndReturns(t *testing.T) {
 }
 
 func TestListenNeverRemovesAFileThatIsNotASocket(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(shortDir(t), "notes.txt")
 	if err := os.WriteFile(path, []byte("keep me"), 0o600); err != nil {
 		t.Fatal(err)
@@ -191,6 +194,7 @@ func TestListenNeverRemovesAFileThatIsNotASocket(t *testing.T) {
 }
 
 func TestSecondHubOnTheSameSocketIsRefused(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(shortDir(t), "hub.sock")
 	l, err := hub.Listen(path)
 	if err != nil {
@@ -203,6 +207,7 @@ func TestSecondHubOnTheSameSocketIsRefused(t *testing.T) {
 }
 
 func TestStaleSocketIsReplaced(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(shortDir(t), "hub.sock")
 	// a hub that crashed leaves its socket file behind, with nobody listening and no lock held
 	old, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
@@ -222,6 +227,7 @@ func TestStaleSocketIsReplaced(t *testing.T) {
 }
 
 func TestLongSocketPathIsExplained(t *testing.T) {
+	t.Parallel()
 	long := filepath.Join(shortDir(t), strings.Repeat("x", hub.MaxSocketPath))
 	if _, err := hub.Listen(long); err == nil || !strings.Contains(err.Error(), "unix sockets allow at most") {
 		t.Fatalf("err = %v", err)
@@ -251,6 +257,7 @@ func (r *running) idleAgentWithPID(t *testing.T, name, session, terminal string,
 }
 
 func TestFailedTurnWaitsAtThePrompt(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	bg := context.Background()
@@ -269,6 +276,7 @@ func TestFailedTurnWaitsAtThePrompt(t *testing.T) {
 }
 
 func TestManualCompactionOfABusySessionMakesItIdle(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	bg := context.Background()
@@ -294,6 +302,7 @@ func TestManualCompactionOfABusySessionMakesItIdle(t *testing.T) {
 }
 
 func TestAFailedProjectRoomFollowLeavesTheProfileUpdatedAndSaysWhatToDo(t *testing.T) {
+	t.Parallel()
 	setup := func(t *testing.T) *running {
 		r := start(t)
 		bg := context.Background()
@@ -348,6 +357,7 @@ func TestAFailedProjectRoomFollowLeavesTheProfileUpdatedAndSaysWhatToDo(t *testi
 }
 
 func TestProfilesCarryTheirProjectRoom(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	bg := context.Background()
 	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -362,6 +372,7 @@ func TestProfilesCarryTheirProjectRoom(t *testing.T) {
 }
 
 func TestAProfileUpdateWithAProjectMovesTheProjectRoom(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	bg := context.Background()
 	if _, err := r.sessions.JoinName(bg, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -447,6 +458,7 @@ func within(t *testing.T, ch <-chan string, d time.Duration) (string, bool) {
 }
 
 func TestMentionWakesAWaitingSession(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	woke := r.wake(t, "session-1")
@@ -484,6 +496,7 @@ func (r *running) startWake(t *testing.T, session string) <-chan string {
 }
 
 func TestStartWakesForAMentionUnreadAtTheStart(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	r.post(t, "reviewer", "@builder can you take #57?")
@@ -500,6 +513,7 @@ func TestStartWakesForAMentionUnreadAtTheStart(t *testing.T) {
 }
 
 func TestStartWaitOpenedBeforeTheStartIsReported(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	woke := r.startWake(t, "session-2") // the hub has not heard of the session yet
 	if _, ended := within(t, woke, 300*time.Millisecond); ended {
@@ -514,6 +528,7 @@ func TestStartWaitOpenedBeforeTheStartIsReported(t *testing.T) {
 }
 
 func TestStartWaitWaitsForTheResumeOfAStaleSession(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	r.clock.add(11 * time.Second) // the process went away without an end; the hub still lists it
@@ -537,6 +552,7 @@ func TestStartWaitWaitsForTheResumeOfAStaleSession(t *testing.T) {
 }
 
 func TestStartWaitIgnoresTheOtherReportsOfASessionResumedSoonAfterThem(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	r.clock.add(time.Minute)
@@ -560,6 +576,7 @@ func TestStartWaitIgnoresTheOtherReportsOfASessionResumedSoonAfterThem(t *testin
 }
 
 func TestACompactionStartCountsForTheStartWait(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	r.clock.add(time.Minute)
@@ -576,6 +593,7 @@ func TestACompactionStartCountsForTheStartWait(t *testing.T) {
 }
 
 func TestStartWaitWaitsForTheResumeOfAnEndedSession(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	if _, err := r.sessions.Report(context.Background(), connect.NewRequest(&agorav1.ReportRequest{
@@ -605,6 +623,7 @@ func (r *running) resume(t *testing.T, session string) {
 }
 
 func TestStartWaitGivesUpOnASessionWithoutAgent(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	woke := r.startWake(t, "session-3")
 	if _, ended := within(t, woke, 300*time.Millisecond); ended {
@@ -621,6 +640,7 @@ func TestStartWaitGivesUpOnASessionWithoutAgent(t *testing.T) {
 }
 
 func TestNewPromptEndsTheWaitQuietly(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	woke := r.wake(t, "session-1")
@@ -633,6 +653,7 @@ func TestNewPromptEndsTheWaitQuietly(t *testing.T) {
 }
 
 func TestNewerWaitReplacesTheOlder(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	older := r.wake(t, "session-1")
@@ -648,6 +669,7 @@ func TestNewerWaitReplacesTheOlder(t *testing.T) {
 }
 
 func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "wakes")
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
@@ -685,6 +707,7 @@ func TestWakeCommandRunsOncePerMentionAndSkipsWaitingSessions(t *testing.T) {
 }
 
 func TestWakeCommandSkipsDeadProcessesAndRetriesFailures(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "wakes")
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
@@ -719,6 +742,7 @@ func TestWakeCommandSkipsDeadProcessesAndRetriesFailures(t *testing.T) {
 }
 
 func TestWakeCommandTimeoutKillsTheWholeGroup(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	start := time.Now()
@@ -766,6 +790,7 @@ func joinIn(t *testing.T, r *running) {
 }
 
 func TestHubWatchesPullRequestsAndPostsCI(t *testing.T) {
+	t.Parallel()
 	f := &greenForge{}
 	r := startWith(t, func(h *hub.Hub) {
 		h.Forges = forge.Forges{"github.com": f}
@@ -799,6 +824,7 @@ func TestHubWatchesPullRequestsAndPostsCI(t *testing.T) {
 }
 
 func TestWatchingTurnedOff(t *testing.T) {
+	t.Parallel()
 	r := startWith(t, func(h *hub.Hub) { h.WatchFirst, h.WatchEvery = 10*time.Millisecond, 10*time.Millisecond })
 	joinIn(t, r) // no forges: what --watch-prs=false gives
 	time.Sleep(200 * time.Millisecond)
@@ -827,6 +853,7 @@ func (f *slowForge) Lookup(ctx context.Context, _ forge.Repo, _ forge.Query) (fo
 }
 
 func TestShutdownWaitsForTheWatchRound(t *testing.T) {
+	t.Parallel()
 	f := &slowForge{started: make(chan struct{})}
 	r := startWith(t, func(h *hub.Hub) {
 		h.Forges = forge.Forges{"github.com": f}
@@ -848,6 +875,7 @@ func TestShutdownWaitsForTheWatchRound(t *testing.T) {
 }
 
 func TestShutdownWaitsForTheWakeCommand(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("setsid"); err != nil {
 		t.Skip("needs setsid")
 	}
@@ -883,6 +911,7 @@ func TestShutdownWaitsForTheWakeCommand(t *testing.T) {
 }
 
 func TestServeReturnsWhenTheListenerFails(t *testing.T) {
+	t.Parallel()
 	db, err := store.Open(context.Background(), filepath.Join(shortDir(t), "agora.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -906,6 +935,7 @@ func TestServeReturnsWhenTheListenerFails(t *testing.T) {
 }
 
 func TestProfilesCarryEnumStates(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "builder", "session-1", "")
 	if _, err := r.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "reviewer"})); err != nil {
@@ -924,6 +954,7 @@ func TestProfilesCarryEnumStates(t *testing.T) {
 }
 
 func TestMentionOfAFormerNameWakesTheAgent(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.idleAgent(t, "fixer", "session-1", "")
 	renamed, err := r.agents.Rename(context.Background(), connect.NewRequest(&agorav1.RenameRequest{Agent: "fixer", Name: "docs-writer"}))
@@ -942,6 +973,7 @@ func TestMentionOfAFormerNameWakesTheAgent(t *testing.T) {
 }
 
 func TestWaitFollowsRenames(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.post(t, "fixer", "hello")
 	join(t, r, "example-app/merge", "builder", time.Minute)
@@ -978,6 +1010,7 @@ func TestWaitFollowsRenames(t *testing.T) {
 }
 
 func TestActingUnderAFormerNameIsFailedPrecondition(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.post(t, "fixer", "hello")
 	bg := context.Background()
@@ -999,6 +1032,7 @@ func TestActingUnderAFormerNameIsFailedPrecondition(t *testing.T) {
 }
 
 func TestRenamingToATakenNameIsAlreadyExists(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.post(t, "fixer", "hello")
 	r.post(t, "builder", "hello")
@@ -1009,6 +1043,7 @@ func TestRenamingToATakenNameIsAlreadyExists(t *testing.T) {
 }
 
 func TestProfilesCarrySigilAndPigment(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	r.post(t, "builder", "hello")
 	icon, pigment := "trireme", "lapis"
@@ -1022,6 +1057,7 @@ func TestProfilesCarrySigilAndPigment(t *testing.T) {
 }
 
 func TestVotesAndClosingTakeEnums(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	ctx := context.Background()
 	gov := agorav1connect.NewGovernanceServiceClient(r.httpClient, "http://agora")
@@ -1074,6 +1110,7 @@ func TestVotesAndClosingTakeEnums(t *testing.T) {
 }
 
 func TestListSubscriptionsReadsTheFollowedRooms(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	ctx := context.Background()
 	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -1092,6 +1129,7 @@ func TestListSubscriptionsReadsTheFollowedRooms(t *testing.T) {
 }
 
 func TestReleaseOfAHolderNeedsTheActingAgent(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	join(t, r, "r", "a", time.Minute)
 	ctx := context.Background()
@@ -1105,6 +1143,7 @@ func TestReleaseOfAHolderNeedsTheActingAgent(t *testing.T) {
 }
 
 func TestArchivingARoomOverTheAPI(t *testing.T) {
+	t.Parallel()
 	r := start(t)
 	ctx := context.Background()
 	if _, err := r.sessions.JoinName(ctx, connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {

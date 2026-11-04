@@ -19,6 +19,7 @@ func write(t *testing.T, path, body string) {
 }
 
 func TestBranchOfACheckoutAndItsWorktree(t *testing.T) {
+	t.Parallel()
 	repo := t.TempDir()
 	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
 	if err := os.MkdirAll(filepath.Join(repo, "src", "deep"), 0o755); err != nil {
@@ -37,6 +38,7 @@ func TestBranchOfACheckoutAndItsWorktree(t *testing.T) {
 }
 
 func TestDetachedAndOutside(t *testing.T) {
+	t.Parallel()
 	repo := t.TempDir()
 	write(t, filepath.Join(repo, ".git", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
 	h := gitinfo.Read(repo)
@@ -53,6 +55,7 @@ func TestDetachedAndOutside(t *testing.T) {
 }
 
 func TestRepositoryName(t *testing.T) {
+	t.Parallel()
 	repo := filepath.Join(t.TempDir(), "example-app")
 	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
 	if err := os.MkdirAll(filepath.Join(repo, "src"), 0o755); err != nil {
@@ -75,6 +78,7 @@ func TestRepositoryName(t *testing.T) {
 }
 
 func TestRepositoryNameOfABareRepositoryWorktree(t *testing.T) {
+	t.Parallel()
 	bare := filepath.Join(t.TempDir(), "example-app.git")
 	gitdir := filepath.Join(bare, "worktrees", "main")
 	write(t, filepath.Join(gitdir, "HEAD"), "ref: refs/heads/main\n")
@@ -87,6 +91,7 @@ func TestRepositoryNameOfABareRepositoryWorktree(t *testing.T) {
 }
 
 func TestWorktreesShareTheRepositoryAndItsOrigin(t *testing.T) {
+	t.Parallel()
 	repo := t.TempDir()
 	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
 	write(t, filepath.Join(repo, ".git", "config"), `[core]

@@ -318,6 +318,7 @@ func (b *bridgeHub) state(t *testing.T) *agorav1.Bridge {
 }
 
 func TestTheHubRunsABridge(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -347,6 +348,7 @@ func TestTheHubRunsABridge(t *testing.T) {
 }
 
 func TestLinesFromABridge(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -375,6 +377,7 @@ func TestLinesFromABridge(t *testing.T) {
 }
 
 func TestAddressedFromOutsideWakesTheBridgesAgent(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -397,6 +400,7 @@ func TestAddressedFromOutsideWakesTheBridgesAgent(t *testing.T) {
 }
 
 func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -444,6 +448,7 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 }
 
 func TestCancelledMessagesNeverGoOut(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -466,6 +471,7 @@ func TestCancelledMessagesNeverGoOut(t *testing.T) {
 }
 
 func TestRoomsCountScheduledMessages(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -499,6 +505,7 @@ func TestRoomsCountScheduledMessages(t *testing.T) {
 }
 
 func TestSendingWhileReadOnlySaysWhy(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -519,6 +526,7 @@ func TestSendingWhileReadOnlySaysWhy(t *testing.T) {
 }
 
 func TestPoliciesOpenAndRead(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -562,6 +570,7 @@ func TestPoliciesOpenAndRead(t *testing.T) {
 }
 
 func TestNotesNeverReachTheBridge(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -609,6 +618,7 @@ func TestNotesNeverReachTheBridge(t *testing.T) {
 }
 
 func TestFailedMessagesTellTheAuthor(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	f.set("mode", "fail")
@@ -626,6 +636,7 @@ func TestFailedMessagesTellTheAuthor(t *testing.T) {
 }
 
 func TestABridgeIsRestartedAndResumes(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	f.set("mode", "silent")
@@ -663,6 +674,7 @@ func TestABridgeIsRestartedAndResumes(t *testing.T) {
 }
 
 func TestTheBoardSaysWhenABridgeWorksAgain(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, 300*time.Millisecond)
 	f := newFake(t)
 	b.add(t, f)
@@ -674,6 +686,7 @@ func TestTheBoardSaysWhenABridgeWorksAgain(t *testing.T) {
 }
 
 func TestRestartDelays(t *testing.T) {
+	t.Parallel()
 	var got []time.Duration
 	for d := hub.BridgeMinDelay; len(got) < 8; d = hub.NextBridgeDelay(d) {
 		got = append(got, d)
@@ -690,6 +703,7 @@ func TestRestartDelays(t *testing.T) {
 }
 
 func TestShutdownStopsBridges(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -702,6 +716,7 @@ func TestShutdownStopsBridges(t *testing.T) {
 }
 
 func TestRemovingABridge(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -732,6 +747,7 @@ func TestRemovingABridge(t *testing.T) {
 }
 
 func TestChangingABridge(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -781,6 +797,7 @@ func TestChangingABridge(t *testing.T) {
 }
 
 func TestAFixedCommandWorksAgain(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, 300*time.Millisecond)
 	if _, err := b.bridges.AddBridge(context.Background(), connect.NewRequest(&agorav1.AddBridgeRequest{
 		Agent: "builder", Name: "example-chat", Command: "exit 3",
@@ -810,6 +827,7 @@ func TestAFixedCommandWorksAgain(t *testing.T) {
 }
 
 func TestARefusedRemoveKeepsTheBoardsWordThatTheBridgeStopped(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	f.set("crashes", "1000")
@@ -839,6 +857,7 @@ func TestARefusedRemoveKeepsTheBoardsWordThatTheBridgeStopped(t *testing.T) {
 }
 
 func TestRemovingABridgeKeepsWhatItAnsweredWhileStopping(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	dir := shortDir(t)
 	// a bridge that answers sent for what it was handed only when it is told to stop
@@ -864,6 +883,7 @@ func TestRemovingABridgeKeepsWhatItAnsweredWhileStopping(t *testing.T) {
 }
 
 func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	for _, p := range []string{
 		agorav1connect.BridgeServiceSetBridgePolicyProcedure, agorav1connect.BridgeServiceSendScheduledProcedure, agorav1connect.BridgeServiceCancelScheduledProcedure,
@@ -884,6 +904,7 @@ func TestTheSocketRefusesTheOperatorsCalls(t *testing.T) {
 }
 
 func TestAMessageSentAfterANewerOneGoesOut(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	f.set("mode", "silent")
@@ -915,6 +936,7 @@ func TestAMessageSentAfterANewerOneGoesOut(t *testing.T) {
 }
 
 func TestOutputLeftOpenByAnEscapedProcess(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	dir := shortDir(t)
 	cmd := fmt.Sprintf("echo started >> '%s/starts'; setsid sleep 5 & sleep 0.2; exit 3", dir) // the pause lets setsid run before the group is killed
@@ -939,6 +961,7 @@ func TestOutputLeftOpenByAnEscapedProcess(t *testing.T) {
 }
 
 func TestConcurrentRemovesLeaveNothingRunning(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -956,6 +979,7 @@ func TestConcurrentRemovesLeaveNothingRunning(t *testing.T) {
 }
 
 func TestASupervisorWhoseBridgeIsGoneStops(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -976,6 +1000,7 @@ func TestASupervisorWhoseBridgeIsGoneStops(t *testing.T) {
 }
 
 func TestTheWebAppListsBridgesWithoutCommands(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -992,6 +1017,7 @@ func TestTheWebAppListsBridgesWithoutCommands(t *testing.T) {
 }
 
 func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
+	t.Parallel()
 	var h *hub.Hub
 	r := startWith(t, func(hh *hub.Hub) {
 		h = hh
@@ -1022,6 +1048,7 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 }
 
 func TestACrashWakesNoOne(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f) // secretary follows #example-chat with the mode wake
@@ -1039,6 +1066,7 @@ func TestACrashWakesNoOne(t *testing.T) {
 }
 
 func TestOutputWrittenJustBeforeTheExitIsRead(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	dir := shortDir(t)
 	text := strings.Repeat("x", 200)
@@ -1078,6 +1106,7 @@ i=0; while [ $i -lt 1000 ]; do i=$((i+1)); echo '{"type":"in","id":"'$i'","autho
 }
 
 func TestScheduledMessagesGoOutAfterTheDelay(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1099,6 +1128,7 @@ func TestScheduledMessagesGoOutAfterTheDelay(t *testing.T) {
 }
 
 func TestTheOperatorSendsANoteOut(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1130,6 +1160,7 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 }
 
 func TestABridgeSaysWhatItsPlatformCanDo(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1149,6 +1180,7 @@ func TestABridgeSaysWhatItsPlatformCanDo(t *testing.T) {
 }
 
 func TestABridgeReportsItsProtocolVersion(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1196,6 +1228,7 @@ func (f fake) lastOut() map[string]any {
 }
 
 func TestThreadsAcrossABridge(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1222,6 +1255,7 @@ func TestThreadsAcrossABridge(t *testing.T) {
 }
 
 func TestAThreadStartedInAgoraGoesOutAsReplies(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1243,6 +1277,7 @@ func TestAThreadStartedInAgoraGoesOutAsReplies(t *testing.T) {
 }
 
 func TestAReplyInAThreadWaitsForItsRootToBeSent(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	f.set("mode", "silent") // the bridge answers nothing by itself
@@ -1265,6 +1300,7 @@ func TestAReplyInAThreadWaitsForItsRootToBeSent(t *testing.T) {
 }
 
 func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	// the old command floods lines of topic 77 until it is stopped
 	old := `echo '{"type":"hello","caps":{"threads":"topic"}}'; i=0; while :; do i=$((i+1)); echo '{"type":"in","id":"o'$i'","author":{"name":"Ada"},"text":"old","thread":{"key":"77","title":"Old"}}'; done`
@@ -1291,6 +1327,7 @@ func TestAChangedCommandIsNotJoinedByTheOldProcessLines(t *testing.T) {
 }
 
 func TestACallThatGivesUpWhileTheOldCommandStopsStillStartsTheNewOne(t *testing.T) {
+	t.Parallel()
 	// the test proves something only when a line of the old process is handled after the change
 	// and makes key 77 again; that window depends on scheduling, so a run without it is tried
 	// again on a fresh hub, and only one that never gets it fails
@@ -1358,6 +1395,7 @@ func givenUpCallStartsTheNewOne(t *testing.T) bool {
 }
 
 func TestAThreadOfTheWrongShapeKeepsTheLine(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	b.add(t, f)
@@ -1386,6 +1424,7 @@ func (f fake) outsOf(id float64) []map[string]any {
 }
 
 func TestARestartedBridgeGetsTheThreadKeyAgain(t *testing.T) {
+	t.Parallel()
 	b := startBridgeHub(t, time.Hour)
 	f := newFake(t)
 	f.set("caps", `{"type":"hello","caps":{"threads":"topic"}}`)

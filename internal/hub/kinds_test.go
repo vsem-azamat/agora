@@ -67,6 +67,7 @@ var notRefusals = map[string]string{
 // TestEveryErrorKindIsMapped fails when a kind a domain package refuses with has no Connect code in
 // toConnect, which would answer a refusal with CodeInternal.
 func TestEveryErrorKindIsMapped(t *testing.T) {
+	t.Parallel()
 	for name, kind := range kinds {
 		if _, skip := notRefusals[name]; skip {
 			continue
@@ -89,6 +90,7 @@ func TestEveryErrorKindIsMapped(t *testing.T) {
 // TestEveryErrorKindIsListed reads the sources under internal/ and fails when a package exports an
 // Err* variable or a type with an Error method that kinds or typedKinds does not list, or lists one that is gone.
 func TestEveryErrorKindIsListed(t *testing.T) {
+	t.Parallel()
 	var found []string
 	fset := token.NewFileSet()
 	err := filepath.WalkDir("..", func(name string, d fs.DirEntry, err error) error {

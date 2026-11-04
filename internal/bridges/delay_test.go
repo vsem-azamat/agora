@@ -54,6 +54,7 @@ func newDelayEnv(t *testing.T) (env, *fakeClock) {
 }
 
 func TestTheHubsDefaultPolicy(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if l, _ := e.b.List(ctx); l[0].Policy != bridges.Delay {
 		t.Fatalf("default policy %q", l[0].Policy)
@@ -71,6 +72,7 @@ func TestTheHubsDefaultPolicy(t *testing.T) {
 }
 
 func TestScheduledMessagesGoOutOnceTheDelayPassed(t *testing.T) {
+	t.Parallel()
 	e, c := newDelayEnv(t)
 	first := e.post(t, "secretary", "example-chat", "looked, all fine")
 	c.add(20 * time.Second)
@@ -104,6 +106,7 @@ func TestScheduledMessagesGoOutOnceTheDelayPassed(t *testing.T) {
 }
 
 func TestScheduledShowsToAgents(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	e.post(t, "secretary", "example-chat", "looked, all fine")
 	cancel := e.post(t, "secretary", "example-chat", "something rude")
@@ -123,6 +126,7 @@ func TestScheduledShowsToAgents(t *testing.T) {
 }
 
 func TestTheOperatorSendsANoteOut(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	in := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})
 	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", in)
@@ -162,6 +166,7 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 }
 
 func TestANoteIsSentOutOnce(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
 	if err != nil {
@@ -207,6 +212,7 @@ func TestANoteIsSentOutOnce(t *testing.T) {
 }
 
 func TestANoteIsSentOutAgainWhenItsMessageDidNotGoOut(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
 	if err != nil {
@@ -248,6 +254,7 @@ func TestANoteIsSentOutAgainWhenItsMessageDidNotGoOut(t *testing.T) {
 }
 
 func TestANoteWhoseMessageMayHaveGoneOutCountsAsSentOut(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	note, err := e.r.PostNote(ctx, "secretary", "example-chat", "Draft: the fix ships tonight", 0)
 	if err != nil {
@@ -288,6 +295,7 @@ func TestANoteWhoseMessageMayHaveGoneOutCountsAsSentOut(t *testing.T) {
 }
 
 func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})
 	for _, also := range []bool{false, true} {
@@ -325,6 +333,7 @@ func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
 }
 
 func TestSendingANoteOutKeepsItsAuthorOutOfAThreadItLeft(t *testing.T) {
+	t.Parallel()
 	e, _ := newDelayEnv(t)
 	root := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "is it fixed?"})
 	note, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "Draft: yes", Thread: root, Note: true})
@@ -353,6 +362,7 @@ func TestSendingANoteOutKeepsItsAuthorOutOfAThreadItLeft(t *testing.T) {
 }
 
 func TestAddingABridgeAgainStartsTheDelayAgain(t *testing.T) {
+	t.Parallel()
 	e, c := newDelayEnv(t)
 	id := e.post(t, "secretary", "example-chat", "something rude")
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
@@ -372,6 +382,7 @@ func TestAddingABridgeAgainStartsTheDelayAgain(t *testing.T) {
 }
 
 func TestReadingCaps(t *testing.T) {
+	t.Parallel()
 	raw := func(s string) map[string]json.RawMessage {
 		var m map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(s), &m); err != nil {

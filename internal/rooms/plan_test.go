@@ -18,6 +18,7 @@ func scansMessages(step string) bool {
 }
 
 func TestScansMessagesKnowsBothPlanFormats(t *testing.T) {
+	t.Parallel()
 	for step, want := range map[string]bool{
 		"SCAN m": true, "SCAN messages": true, "SCAN TABLE messages AS m": true, "SCAN TABLE m": true,
 		"SEARCH m USING INTEGER PRIMARY KEY (rowid=?)": false, "SCAN subscriptions": false, "SCAN TABLE subscriptions AS f": false,
@@ -32,6 +33,7 @@ func TestScansMessagesKnowsBothPlanFormats(t *testing.T) {
 // messages table, whatever the modes of the rooms followed: the planner must start from the
 // candidates and look each message up by its id.
 func TestUnreadQueryReachesMessagesThroughIndexes(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := store.Open(ctx, ":memory:")
 	if err != nil {
@@ -79,6 +81,7 @@ func TestUnreadQueryReachesMessagesThroughIndexes(t *testing.T) {
 // TestScheduledCountUsesItsIndex keeps listing rooms from reading every message of a room to count
 // the scheduled ones: the count must come from the partial index messages_scheduled alone.
 func TestScheduledCountUsesItsIndex(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := store.Open(ctx, ":memory:")
 	if err != nil {

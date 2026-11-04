@@ -74,6 +74,7 @@ func expect(t *testing.T, q *queue.Queue, key, agent string, want queue.State, w
 // Requirement: Resources Have Slots
 
 func TestFirstUseOfAKeyHasOneSlot(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	_, res, err := q.Join(ctx, "example-app/merge", "a", "", 0, false)
 	if err != nil {
@@ -85,6 +86,7 @@ func TestFirstUseOfAKeyHasOneSlot(t *testing.T) {
 }
 
 func TestMoreSlotsLetMoreAgentsHold(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	if _, err := q.SetSlots(ctx, "heavy/typecheck", 3); err != nil {
 		t.Fatal(err)
@@ -100,6 +102,7 @@ func TestMoreSlotsLetMoreAgentsHold(t *testing.T) {
 }
 
 func TestFewerSlotsKeepCurrentHolders(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	if _, err := q.SetSlots(ctx, "heavy/build", 3); err != nil {
 		t.Fatal(err)
@@ -127,6 +130,7 @@ func TestFewerSlotsKeepCurrentHolders(t *testing.T) {
 }
 
 func TestInvalidKeysAreRefused(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	for _, key := range []string{"../etc", "Example", "", "a..b", "/root"} {
 		if _, _, err := q.Join(ctx, key, "a", "", 0, false); !errors.Is(err, store.ErrInvalid) {
@@ -138,6 +142,7 @@ func TestInvalidKeysAreRefused(t *testing.T) {
 // Requirement: Joining A Queue
 
 func TestJoiningAFreeResourceHoldsUntilLeaseEnds(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	e, _, err := q.Join(ctx, "db/shared", "a", "migrating", 10*time.Minute, false)
 	if err != nil {
@@ -149,6 +154,7 @@ func TestJoiningAFreeResourceHoldsUntilLeaseEnds(t *testing.T) {
 }
 
 func TestDefaultLeaseIsThirtyMinutes(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	e, _, _ := q.Join(ctx, "db/shared", "a", "", 0, false)
 	if !e.Expires.Equal(c.now().Add(30 * time.Minute)) {
@@ -157,6 +163,7 @@ func TestDefaultLeaseIsThirtyMinutes(t *testing.T) {
 }
 
 func TestJoiningABusyResourceWaitsInLine(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "first")
@@ -166,6 +173,7 @@ func TestJoiningABusyResourceWaitsInLine(t *testing.T) {
 }
 
 func TestJoiningTwiceKeepsPlaceAndUpdatesNote(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "first")
@@ -180,6 +188,7 @@ func TestJoiningTwiceKeepsPlaceAndUpdatesNote(t *testing.T) {
 }
 
 func TestJoiningAgainWithANewLeaseRestartsAHeldSlot(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "a") // 10-minute lease
 	c.add(5 * time.Minute)
@@ -194,6 +203,7 @@ func TestJoiningAgainWithANewLeaseRestartsAHeldSlot(t *testing.T) {
 }
 
 func TestWaitingAgentJoiningAgainWithANewLeaseHoldsForIt(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -210,6 +220,7 @@ func TestWaitingAgentJoiningAgainWithANewLeaseHoldsForIt(t *testing.T) {
 }
 
 func TestOfferedAgentJoiningAgainWithANewLeaseKeepsTheClaimDeadline(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -228,6 +239,7 @@ func TestOfferedAgentJoiningAgainWithANewLeaseKeepsTheClaimDeadline(t *testing.T
 }
 
 func TestJoiningAgainWithoutALeaseKeepsIt(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	if _, _, err := q.Join(ctx, "r", "a", "", 2*time.Hour, false); err != nil {
 		t.Fatal(err)
@@ -241,6 +253,7 @@ func TestJoiningAgainWithoutALeaseKeepsIt(t *testing.T) {
 }
 
 func TestSimultaneousJoinsGrantExactlyOne(t *testing.T) {
+	t.Parallel()
 	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "agora.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -276,6 +289,7 @@ func TestSimultaneousJoinsGrantExactlyOne(t *testing.T) {
 // Requirement: Slots Are Granted In Order
 
 func TestFreedSlotGoesToFirstWaiter(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -290,6 +304,7 @@ func TestFreedSlotGoesToFirstWaiter(t *testing.T) {
 // Requirement: An Offered Slot Must Be Claimed
 
 func TestClaimingAnOfferHoldsForTheLease(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -307,6 +322,7 @@ func TestClaimingAnOfferHoldsForTheLease(t *testing.T) {
 }
 
 func TestMissedTurnMovesToTheEnd(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -320,6 +336,7 @@ func TestMissedTurnMovesToTheEnd(t *testing.T) {
 }
 
 func TestMissingTwiceLeavesTheQueue(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -347,6 +364,7 @@ func TestMissingTwiceLeavesTheQueue(t *testing.T) {
 }
 
 func TestWaitingAgentClaimsAtOnce(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "holder")
 	join(t, q, "r", "a")
@@ -365,6 +383,7 @@ func TestWaitingAgentClaimsAtOnce(t *testing.T) {
 // Requirement: Held Slots Are Leases
 
 func TestRenewingExtendsFromNow(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "a")
 	c.add(8 * time.Minute)
@@ -378,6 +397,7 @@ func TestRenewingExtendsFromNow(t *testing.T) {
 }
 
 func TestExpiredLeaseFreesTheSlot(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
@@ -396,6 +416,7 @@ func TestExpiredLeaseFreesTheSlot(t *testing.T) {
 }
 
 func TestRenewWhileWaitingIsRefused(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
@@ -407,6 +428,7 @@ func TestRenewWhileWaitingIsRefused(t *testing.T) {
 // Requirement: Leaving A Queue
 
 func TestReleaseOffersTheNextAgent(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
@@ -418,6 +440,7 @@ func TestReleaseOffersTheNextAgent(t *testing.T) {
 }
 
 func TestReleasingSomeoneElsesSlotNeedsForce(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "a")
 	_, err := q.Release(ctx, "r", "a", "b", false)
@@ -431,6 +454,7 @@ func TestReleasingSomeoneElsesSlotNeedsForce(t *testing.T) {
 }
 
 func TestReleasingWhenNotQueued(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	ok, err := q.Release(ctx, "r", "a", "a", false)
 	if err != nil || ok {
@@ -441,6 +465,7 @@ func TestReleasingWhenNotQueued(t *testing.T) {
 // Requirement: Locks Are Queues That Do Not Wait
 
 func TestLockOnAFreeResource(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	e, _, err := q.Join(ctx, "example-app/merge", "a", "merging #57", 10*time.Minute, true)
 	if err != nil || e == nil || e.State != queue.Held || !e.Expires.Equal(c.now().Add(10*time.Minute)) {
@@ -449,6 +474,7 @@ func TestLockOnAFreeResource(t *testing.T) {
 }
 
 func TestLockOnATakenResourceDoesNotQueue(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	if _, _, err := q.Join(ctx, "example-app/merge", "a", "merging #57", 0, true); err != nil {
 		t.Fatal(err)
@@ -468,6 +494,7 @@ func TestLockOnATakenResourceDoesNotQueue(t *testing.T) {
 // Requirement: Listing Resources
 
 func TestListingShowsHoldersAndWaitersAndHidesIdleResources(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	if _, err := q.SetSlots(ctx, "heavy/typecheck", 3); err != nil {
 		t.Fatal(err)
@@ -496,6 +523,7 @@ func TestListingShowsHoldersAndWaitersAndHidesIdleResources(t *testing.T) {
 // Requirement: Queues Survive A Restart
 
 func TestQueuesSurviveARestart(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := store.Open(ctx, path)
 	if err != nil {
@@ -517,6 +545,7 @@ func TestQueuesSurviveARestart(t *testing.T) {
 }
 
 func TestLockWhileWaitingIsRefused(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	join(t, q, "r", "a")
 	join(t, q, "r", "b")
@@ -528,6 +557,7 @@ func TestLockWhileWaitingIsRefused(t *testing.T) {
 }
 
 func TestLockingAgainRenewsTheLease(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	if _, _, err := q.Join(ctx, "r", "a", "", 10*time.Minute, true); err != nil {
 		t.Fatal(err)
@@ -540,6 +570,7 @@ func TestLockingAgainRenewsTheLease(t *testing.T) {
 }
 
 func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	for _, lease := range []time.Duration{-time.Minute, time.Millisecond, time.Second - time.Millisecond, queue.MaxLease + time.Second} {
 		if _, _, err := q.Join(ctx, "r", "a", "", lease, false); !errors.Is(err, store.ErrInvalid) || !strings.Contains(err.Error(), "between 1s and") {
@@ -557,6 +588,7 @@ func TestInvalidLeasesAndSlotsAreRefused(t *testing.T) {
 }
 
 func TestListingReportsWhetherItSettledAQueue(t *testing.T) {
+	t.Parallel()
 	q, c := newQueue(t)
 	join(t, q, "example-app/merge", "builder")
 	join(t, q, "example-app/merge", "reviewer")
@@ -574,6 +606,7 @@ func TestListingReportsWhetherItSettledAQueue(t *testing.T) {
 
 // A refusal says only what was refused; errors.Is still finds its kind.
 func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	t.Parallel()
 	q, _ := newQueue(t)
 	_, _, err := q.Join(ctx, "Bad Key", "a", "", 0, false)
 	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {
