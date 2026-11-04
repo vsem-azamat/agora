@@ -11,6 +11,7 @@ import (
 // TestEveryEnumValueIsMapped fails when an API enum gains a value the hub does not map, or a
 // mapping does not lead back to the same value.
 func TestEveryEnumValueIsMapped(t *testing.T) {
+	t.Parallel()
 	for n := range agorav1.VoteChoice_name {
 		c := agorav1.VoteChoice(n)
 		if c == agorav1.VoteChoice_VOTE_CHOICE_UNSPECIFIED {
@@ -79,6 +80,7 @@ func TestEveryEnumValueIsMapped(t *testing.T) {
 }
 
 func TestProfilesAndProposalsCarryEveryState(t *testing.T) {
+	t.Parallel()
 	p := profilePB(agents.Profile{SessionState: "busy", CI: map[int]string{57: "red", 58: "conflict", 59: "green"}})
 	if p.GetSession() != agorav1.SessionState_SESSION_STATE_BUSY {
 		t.Errorf("session %v", p.GetSession())

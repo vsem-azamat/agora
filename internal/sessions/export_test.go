@@ -8,8 +8,10 @@ import (
 
 // RaceNoteCheck makes the next note check lose its compare-and-set, as when a concurrent hook
 // of the same session records its check between the read and the write.
+// The hook is package-wide, so a test that calls it must not be parallel; it panics in one.
 func RaceNoteCheck(t *testing.T) {
 	t.Helper()
+	t.Setenv("AGORA_TEST_SERIAL", "1") // panics in a parallel test, and refuses a later t.Parallel
 	beforeNoteCheck = func(ctx context.Context, tx *sql.Tx, id string) error {
 		beforeNoteCheck = nil
 		_, err := tx.ExecContext(ctx, `UPDATE sessions SET checked_at = checked_at + 1 WHERE id = ?`, id)

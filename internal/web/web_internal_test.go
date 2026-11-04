@@ -10,6 +10,7 @@ import (
 )
 
 func TestWithoutTheAppThePageSaysHowToGetIt(t *testing.T) {
+	t.Parallel()
 	h := HandlerOf(fstest.MapFS{".keep": {}})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))

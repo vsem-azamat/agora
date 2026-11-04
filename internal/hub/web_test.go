@@ -92,6 +92,7 @@ func code(err error) connect.Code {
 }
 
 func TestWebCallsNeedTheToken(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	list := func(token string) error {
 		c := agorav1connect.NewAgentServiceClient(w.client(token), w.base)
@@ -125,6 +126,7 @@ func TestWebCallsNeedTheToken(t *testing.T) {
 }
 
 func TestWebTokenIsKeptAndRotated(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	first := w.token(t, false)
 	if len(first) != 43 || strings.ContainsAny(first, "+/=") {
@@ -158,6 +160,7 @@ func TestWebTokenIsKeptAndRotated(t *testing.T) {
 }
 
 func TestWebTokenSurvivesARestart(t *testing.T) {
+	t.Parallel()
 	dir := shortDir(t)
 	run := func() (string, func()) {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -182,6 +185,7 @@ func TestWebTokenSurvivesARestart(t *testing.T) {
 }
 
 func TestRotatingEndsOpenWatches(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	stream, err := agorav1connect.NewWebServiceClient(w.client(token), w.base).Watch(context.Background(), connect.NewRequest(&agorav1.WatchRequest{}))
@@ -207,6 +211,7 @@ func TestRotatingEndsOpenWatches(t *testing.T) {
 }
 
 func TestWebServesOnlyTheAppsCalls(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	join(t, w.running, "example-app/merge", "builder", time.Hour)
@@ -237,6 +242,7 @@ func TestWebServesOnlyTheAppsCalls(t *testing.T) {
 }
 
 func TestTheAppActsAsTheOperator(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	token := w.token(t, false)
 	if _, err := w.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -275,6 +281,7 @@ func TestTheAppActsAsTheOperator(t *testing.T) {
 }
 
 func TestTheOperatorIsNotRenamed(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	_, err := w.agents.Rename(context.Background(), connect.NewRequest(&agorav1.RenameRequest{Agent: "owner", Name: "admin"}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "--web-as") {
@@ -286,6 +293,7 @@ func TestTheOperatorIsNotRenamed(t *testing.T) {
 }
 
 func TestWhoamiNamesTheOperatorTheBoardAndGeneral(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	who, err := agorav1connect.NewWebServiceClient(w.client(w.token(t, false)), w.base).Whoami(context.Background(), connect.NewRequest(&agorav1.WhoamiRequest{}))
 	if err != nil {
@@ -301,6 +309,7 @@ func TestWhoamiNamesTheOperatorTheBoardAndGeneral(t *testing.T) {
 }
 
 func TestInvalidOperatorNameIsRefused(t *testing.T) {
+	t.Parallel()
 	db, err := store.Open(context.Background(), ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -317,6 +326,7 @@ func TestInvalidOperatorNameIsRefused(t *testing.T) {
 }
 
 func TestCrossOriginRequestsAreRefused(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	call := func(origin string) page {
@@ -374,6 +384,7 @@ func requireApp(t *testing.T) {
 }
 
 func TestWithoutTheAppTheAPIStillAnswers(t *testing.T) {
+	t.Parallel()
 	w := startWebWith(t, "operator", web.HandlerOf(fstest.MapFS{".keep": {}}))
 	resp, body := get(t, w.base+"/")
 	if resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(body, "not built into this binary") {
@@ -389,6 +400,7 @@ func TestWithoutTheAppTheAPIStillAnswers(t *testing.T) {
 }
 
 func TestThePageLoadsNothingFromElsewhere(t *testing.T) {
+	t.Parallel()
 	requireApp(t)
 	w := startWeb(t, "operator")
 	resp, body := get(t, w.base+"/")
@@ -416,6 +428,7 @@ func TestThePageLoadsNothingFromElsewhere(t *testing.T) {
 }
 
 func TestManifest(t *testing.T) {
+	t.Parallel()
 	requireApp(t)
 	w := startWeb(t, "operator")
 	resp, body := get(t, w.base+"/manifest.webmanifest")
@@ -446,6 +459,7 @@ func TestManifest(t *testing.T) {
 }
 
 func TestWatchSendsChangesAndIgnoresReads(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	if _, err := w.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -514,6 +528,7 @@ func (w *webHub) post(t *testing.T, procedure, token, origin, body string) int {
 }
 
 func TestEveryOtherCallIsRefusedOverTheWeb(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	refused := []string{
@@ -544,6 +559,7 @@ func TestEveryOtherCallIsRefusedOverTheWeb(t *testing.T) {
 }
 
 func TestCrossOriginPostPerformsNothing(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	if code := w.post(t, agorav1connect.RoomServicePostProcedure, token, "https://example.com", `{"room":"general","body":"hello"}`); code != http.StatusForbidden {
@@ -559,6 +575,7 @@ func TestCrossOriginPostPerformsNothing(t *testing.T) {
 }
 
 func TestBearerSchemeIsCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	req, _ := http.NewRequest(http.MethodPost, w.base+agorav1connect.WebServiceWhoamiProcedure, strings.NewReader("{}"))
@@ -575,6 +592,7 @@ func TestBearerSchemeIsCaseInsensitive(t *testing.T) {
 }
 
 func TestNoDirectoryListings(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	for _, p := range []string{"/assets/", "/fonts/", "/icons/"} {
 		if resp, _ := get(t, w.base+p); resp.StatusCode != http.StatusNotFound {
@@ -584,6 +602,7 @@ func TestNoDirectoryListings(t *testing.T) {
 }
 
 func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	token := w.token(t, false)
 	ctx := context.Background()
@@ -656,6 +675,7 @@ func TestTheAppFollowsAndReadsAsTheOperator(t *testing.T) {
 }
 
 func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "operator")
 	token := w.token(t, false)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -732,6 +752,7 @@ func TestWatchSendsEveryKindOfChangeAtMostOnceASecond(t *testing.T) {
 }
 
 func TestTheAppArchivesAsTheOperator(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	token := w.token(t, false)
 	if _, err := w.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
@@ -754,6 +775,7 @@ func TestTheAppArchivesAsTheOperator(t *testing.T) {
 }
 
 func TestThePageIsNeverKept(t *testing.T) {
+	t.Parallel()
 	requireApp(t)
 	w := startWeb(t, "operator")
 	for path, want := range map[string]string{
@@ -768,6 +790,7 @@ func TestThePageIsNeverKept(t *testing.T) {
 }
 
 func TestTheAppTitlesListsAndReadsThreadsAsTheOperator(t *testing.T) {
+	t.Parallel()
 	w := startWeb(t, "owner")
 	token := w.token(t, false)
 	ctx := context.Background()

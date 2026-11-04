@@ -57,6 +57,7 @@ func (e env) notices(t *testing.T, room string) []string {
 }
 
 func TestCapabilitiesFollowKindTerminalAndCommands(t *testing.T) {
+	t.Parallel()
 	got := sessions.CapabilitiesOf(sessions.Commands{Wake: true, Compact: true}, "claude-code", "pane-7", 4242)
 	if want := (sessions.Capabilities{Wake: "hook", Compact: "terminal", Interrupt: "none"}); got != want {
 		t.Fatalf("claude code in a terminal: %+v", got)
@@ -82,6 +83,7 @@ func TestCapabilitiesFollowKindTerminalAndCommands(t *testing.T) {
 }
 
 func TestCompactIsRefusedWithWhatIsMissing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "")
 	_, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", "")
@@ -107,6 +109,7 @@ func TestCompactIsRefusedWithWhatIsMissing(t *testing.T) {
 }
 
 func TestCompactFocusHasNoControlCharacters(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	for _, focus := range []string{"two\nlines", "tab\there", strings.Repeat("x", sessions.MaxFocus+1)} {
@@ -120,6 +123,7 @@ func TestCompactFocusHasNoControlCharacters(t *testing.T) {
 }
 
 func TestCompactRunsOnlyWhenIdleForTheSettleTime(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Prompt) // busy
@@ -153,6 +157,7 @@ func TestCompactRunsOnlyWhenIdleForTheSettleTime(t *testing.T) {
 }
 
 func TestCompactWithoutFocusTypesOnlyTheCommand(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -164,6 +169,7 @@ func TestCompactWithoutFocusTypesOnlyTheCommand(t *testing.T) {
 }
 
 func TestSecondCompactIsRefusedUntilTheFirstIsDone(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -186,6 +192,7 @@ func TestSecondCompactIsRefusedUntilTheFirstIsDone(t *testing.T) {
 }
 
 func TestCompactIsDroppedWhenItsSessionEnds(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Prompt)
@@ -209,6 +216,7 @@ func TestCompactIsDroppedWhenItsSessionEnds(t *testing.T) {
 }
 
 func TestFailedCompactIsAnnouncedAndNotRetried(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -228,6 +236,7 @@ func TestFailedCompactIsAnnouncedAndNotRetried(t *testing.T) {
 }
 
 func TestCompactStoppedByAHubRestartIsFailed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -247,6 +256,7 @@ func TestCompactStoppedByAHubRestartIsFailed(t *testing.T) {
 }
 
 func TestInterruptNeedsABusySessionAndMakesItIdle(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Stop)
@@ -273,6 +283,7 @@ func TestInterruptNeedsABusySessionAndMakesItIdle(t *testing.T) {
 }
 
 func TestInterruptKeepsANewTurnBusy(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Prompt)
@@ -291,6 +302,7 @@ func TestInterruptKeepsANewTurnBusy(t *testing.T) {
 }
 
 func TestNoticesGoToTheProjectRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.room(t, "example-app", "reviewer")
@@ -312,6 +324,7 @@ func TestNoticesGoToTheProjectRoom(t *testing.T) {
 }
 
 func TestTargetIsToldOnceAfterACompaction(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", "keep the schema"); err != nil {
@@ -334,6 +347,7 @@ func TestTargetIsToldOnceAfterACompaction(t *testing.T) {
 }
 
 func TestTargetIsToldAfterAnInterrupt(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Prompt)
@@ -350,6 +364,7 @@ func TestTargetIsToldAfterAnInterrupt(t *testing.T) {
 }
 
 func TestWakeCommandWaitsAfterTheCompactCommand(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Stop)
@@ -368,6 +383,7 @@ func TestWakeCommandWaitsAfterTheCompactCommand(t *testing.T) {
 }
 
 func TestRenamedRequesterIsNamedByItsNewName(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -388,6 +404,7 @@ func TestRenamedRequesterIsNamedByItsNewName(t *testing.T) {
 }
 
 func TestFocusRejectsUnicodeLineSeparators(t *testing.T) {
+	t.Parallel()
 	for _, focus := range []string{"a b", "a b", "a\x00b", "a\xffb"} {
 		if err := sessions.CheckFocus(focus); !errors.Is(err, store.ErrInvalid) {
 			t.Fatalf("focus %q: %v", focus, err)
@@ -399,6 +416,7 @@ func TestFocusRejectsUnicodeLineSeparators(t *testing.T) {
 }
 
 func TestCompactIsDroppedWhenTheAgentLeftOrTheNameMoved(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -444,6 +462,7 @@ func TestCompactIsDroppedWhenTheAgentLeftOrTheNameMoved(t *testing.T) {
 }
 
 func TestCompactDoesNotRunForASessionJustWoken(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Stop)
@@ -465,6 +484,7 @@ func TestCompactDoesNotRunForASessionJustWoken(t *testing.T) {
 }
 
 func TestCompactNeedsARunningProcess(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	if _, err := e.s.Compact(ctx, allCommands, "reviewer", "builder", ""); err != nil {
@@ -479,6 +499,7 @@ func TestCompactNeedsARunningProcess(t *testing.T) {
 }
 
 func TestNotesWaitForAPromptToolUseOrStart(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Prompt)
@@ -497,6 +518,7 @@ func TestNotesWaitForAPromptToolUseOrStart(t *testing.T) {
 }
 
 func TestNoteIsNotToldToAnotherAgentOfTheSession(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Prompt)
@@ -514,6 +536,7 @@ func TestNoteIsNotToldToAnotherAgentOfTheSession(t *testing.T) {
 }
 
 func TestNoWakeWindowEndsAfterExactlyTwoMinutes(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.terminalSession(t, "pane-7")
 	e.report(t, "session-1", sessions.Stop)
@@ -532,6 +555,7 @@ func TestNoWakeWindowEndsAfterExactlyTwoMinutes(t *testing.T) {
 }
 
 func TestClaimCompactDecidesAgainWhenItClaims(t *testing.T) {
+	t.Parallel()
 	settle := 10 * time.Second
 	cases := map[string]func(e env, t *testing.T){
 		"woken in between": func(e env, t *testing.T) { _ = e.s.RecordWake(ctx, "session-1", "m1", "ok", true) },
@@ -571,6 +595,7 @@ func TestClaimCompactDecidesAgainWhenItClaims(t *testing.T) {
 }
 
 func TestWakeStillDueDecidesAgain(t *testing.T) {
+	t.Parallel()
 	settle := 10 * time.Second
 	cases := map[string]func(e env, t *testing.T){
 		"compact ran":     func(e env, t *testing.T) { compactNow(e, t) },

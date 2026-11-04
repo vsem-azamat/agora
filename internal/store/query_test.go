@@ -11,6 +11,7 @@ import (
 )
 
 func TestInTxCommitsOrRollsBack(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := Open(ctx, ":memory:")
 	if err != nil {
@@ -45,6 +46,7 @@ func TestInTxCommitsOrRollsBack(t *testing.T) {
 }
 
 func TestInTxRollsBackOnPanic(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := Open(ctx, ":memory:")
 	if err != nil {
@@ -68,6 +70,7 @@ func TestInTxRollsBackOnPanic(t *testing.T) {
 }
 
 func TestStringsFreesTheConnectionForTheNextStatement(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := Open(ctx, ":memory:")
 	if err != nil {

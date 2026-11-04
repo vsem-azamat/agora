@@ -9,6 +9,7 @@ import (
 )
 
 func TestStderrLinesAreLimited(t *testing.T) {
+	t.Parallel()
 	l := logLimit{max: 3, window: time.Minute}
 	start := time.Now()
 	let := 0
@@ -31,6 +32,7 @@ func TestStderrLinesAreLimited(t *testing.T) {
 }
 
 func TestStderrLinesAreLoggedAsInfo(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	h := &Hub{log: slog.New(slog.NewTextHandler(&out, nil))}
 	h.logStderr("example-chat", strings.NewReader("example-bridge INFO hello\n"+strings.Repeat("x", maxLogLine+1)+"\n"))

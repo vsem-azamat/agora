@@ -48,6 +48,7 @@ func (e env) general(t *testing.T) []rooms.Message {
 }
 
 func TestProposingAnnouncesToEveryone(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id, err := e.g.Propose(ctx, "builder", "Merge only under the merge lock", "Take example-app/merge before merging.")
 	if err != nil || id != 1 {
@@ -67,6 +68,7 @@ func TestProposingAnnouncesToEveryone(t *testing.T) {
 }
 
 func TestInvalidProposalsAreRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	for _, c := range [][2]string{{"", "text"}, {"title", " "}, {strings.Repeat("t", 121), "text"}} {
 		if _, err := e.g.Propose(ctx, "builder", c[0], c[1]); !errors.Is(err, store.ErrInvalid) {
@@ -79,6 +81,7 @@ func TestInvalidProposalsAreRefused(t *testing.T) {
 }
 
 func TestLatestVoteCounts(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "Text")
 	if _, err := e.g.Cast(ctx, "reviewer", id, "no", "too strict"); err != nil {
@@ -97,6 +100,7 @@ func TestLatestVoteCounts(t *testing.T) {
 }
 
 func TestClosing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "Text")
 	if _, err := e.g.Cast(ctx, "reviewer", id, "yes", ""); err != nil {
@@ -127,6 +131,7 @@ func TestClosing(t *testing.T) {
 }
 
 func TestListing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	a, _ := e.g.Propose(ctx, "builder", "A", "x")
 	if _, err := e.g.Propose(ctx, "builder", "B", "x"); err != nil {
@@ -143,6 +148,7 @@ func TestListing(t *testing.T) {
 }
 
 func TestCharter(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	c, _ := e.g.Charter(ctx)
 	if !strings.Contains(c.Body, "# Agora charter") || c.ChangedBy != "agora" {
@@ -174,6 +180,7 @@ func TestCharter(t *testing.T) {
 }
 
 func TestOneCharterChangePerProposal(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "x")
 	if err := e.g.Close(ctx, "builder", id, "Accepted"); err != nil {
@@ -188,6 +195,7 @@ func TestOneCharterChangePerProposal(t *testing.T) {
 }
 
 func TestTitlesAreOneLineAndMentionNobody(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.g.Propose(ctx, "builder", "two\nlines", "x"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("newline: %v", err)
@@ -202,6 +210,7 @@ func TestTitlesAreOneLineAndMentionNobody(t *testing.T) {
 }
 
 func TestChoicesIgnoreCase(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id, _ := e.g.Propose(ctx, "builder", "Rule", "x")
 	if _, err := e.g.Cast(ctx, "reviewer", id, "Yes", ""); err != nil {
@@ -214,6 +223,7 @@ func TestChoicesIgnoreCase(t *testing.T) {
 
 // A refusal says only what was refused; errors.Is still finds its kind.
 func TestARefusalDoesNotStartWithItsKind(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	_, err := e.g.Propose(ctx, "builder", "", "a body")
 	if !errors.Is(err, store.ErrInvalid) || strings.HasPrefix(err.Error(), store.ErrInvalid.Error()) {

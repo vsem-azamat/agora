@@ -19,6 +19,7 @@ import (
 // front of it. Wrapping another error with context stays legal. The scan reads the sources from
 // disk, so a build overlay does not reach it.
 func TestRefusalsAreNotWrappedWithErrorf(t *testing.T) {
+	t.Parallel()
 	fset := token.NewFileSet()
 	checked := 0
 	err := filepath.WalkDir("..", func(name string, d fs.DirEntry, err error) error {

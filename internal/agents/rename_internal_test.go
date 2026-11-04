@@ -45,6 +45,7 @@ var textColumns = map[string]map[string]bool{
 // the schema is classified above, and every column that holds an agent's name has a rename
 // statement.
 func TestRenameMovesEveryNameColumn(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := store.Open(ctx, ":memory:")
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 // whose sessions have all ended and one with a live session, then opens the database so the
 // profiles migration runs.
 func TestProfilesMigrationMarksDepartedAgentsLeft(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -59,6 +60,7 @@ func TestProfilesMigrationMarksDepartedAgentsLeft(t *testing.T) {
 // TestCIColumnsMigrationSplitsReported applies the migrations before it, stores a reported CI
 // state, then opens the database so the migration moves it into its own columns.
 func TestCIColumnsMigrationSplitsReported(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -116,6 +118,7 @@ func applyBefore(t *testing.T, db *sql.DB, stop string) {
 // with an agent, then opens it: the agent has no sigil or pigment, and former names can be
 // recorded for it.
 func TestNamesMigrationAddsSigilsAndFormerNames(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -149,6 +152,7 @@ func TestNamesMigrationAddsSigilsAndFormerNames(t *testing.T) {
 // database with a subscription, then opens it: the subscription follows with the mode all, and
 // an unknown mode is refused.
 func TestSubscriptionModesMigrationKeepsSubscriptions(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -182,6 +186,7 @@ func TestSubscriptionModesMigrationKeepsSubscriptions(t *testing.T) {
 }
 
 func TestDatabaseFilesAreOwnerOnly(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := Open(ctx, path)
@@ -204,6 +209,7 @@ func TestDatabaseFilesAreOwnerOnly(t *testing.T) {
 }
 
 func TestExistingDatabaseFilesBecomeOwnerOnly(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := Open(ctx, path)
@@ -239,6 +245,7 @@ func TestExistingDatabaseFilesBecomeOwnerOnly(t *testing.T) {
 }
 
 func TestNewerSchemaIsRefused(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := Open(ctx, path)
@@ -262,6 +269,7 @@ func TestNewerSchemaIsRefused(t *testing.T) {
 // database with a message that went out, then opens it: the message is no note, and a note
 // cannot have a delivery state.
 func TestNotesMigrationKeepsMessagesAndNotesNeverGoOut(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -292,6 +300,7 @@ func TestNotesMigrationKeepsMessagesAndNotesNeverGoOut(t *testing.T) {
 }
 
 func TestDelayMigrationKeepsBridgesAndSchedulesWaitingMessages(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -352,6 +361,7 @@ func TestDelayMigrationKeepsBridgesAndSchedulesWaitingMessages(t *testing.T) {
 }
 
 func TestNoLegacyMigrationRenamesDeliveryStates(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -419,6 +429,7 @@ func TestNoLegacyMigrationRenamesDeliveryStates(t *testing.T) {
 }
 
 func TestAMigrationWithForeignKeysOffMustLeaveThemValid(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := Open(ctx, ":memory:")
 	if err != nil {
@@ -453,6 +464,7 @@ func TestAMigrationWithForeignKeysOffMustLeaveThemValid(t *testing.T) {
 }
 
 func TestSettleSendingMigrationLeavesMessagesWithoutABridgeUnconfirmed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -493,6 +505,7 @@ func TestSettleSendingMigrationLeavesMessagesWithoutABridgeUnconfirmed(t *testin
 // place in name order: a migration's version is that place, so two branches that each add the
 // same number would run one of them again on a database the other had already migrated.
 func TestMigrationNumbersFollowTheirPosition(t *testing.T) {
+	t.Parallel()
 	names, err := fs.Glob(migrations, "migrations/*.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -513,6 +526,7 @@ func TestMigrationNumbersFollowTheirPosition(t *testing.T) {
 }
 
 func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "agora.db")
 	db, err := sql.Open("sqlite", path)
@@ -584,6 +598,7 @@ func appliedNames(t *testing.T, db *sql.DB) []string {
 }
 
 func TestFreshDatabaseRecordsEveryMigrationName(t *testing.T) {
+	t.Parallel()
 	db, err := openOver(t, filepath.Join(t.TempDir(), "a.db"), "0001_a", "0002_b")
 	if err != nil {
 		t.Fatal(err)
@@ -594,6 +609,7 @@ func TestFreshDatabaseRecordsEveryMigrationName(t *testing.T) {
 }
 
 func TestDatabaseWithoutNamesIsBackfilledFromItsVersion(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "a.db")
 	old, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -619,6 +635,7 @@ func TestDatabaseWithoutNamesIsBackfilledFromItsVersion(t *testing.T) {
 }
 
 func TestAppliedMigrationThisBinaryDoesNotCarryIsRefused(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "a.db")
 	if _, err := openOver(t, path, "0001_a", "0002_other"); err != nil {
 		t.Fatal(err)
@@ -630,6 +647,7 @@ func TestAppliedMigrationThisBinaryDoesNotCarryIsRefused(t *testing.T) {
 }
 
 func TestMissingEarlierMigrationIsRefusedNotRunOutOfOrder(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "a.db")
 	if _, err := openOver(t, path, "0001_a", "0003_c"); err != nil {
 		t.Fatal(err)
@@ -644,6 +662,7 @@ func TestMissingEarlierMigrationIsRefusedNotRunOutOfOrder(t *testing.T) {
 }
 
 func TestMissingTailIsAppliedAndRecorded(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "a.db")
 	if _, err := openOver(t, path, "0001_a"); err != nil {
 		t.Fatal(err)
@@ -662,6 +681,7 @@ func TestMissingTailIsAppliedAndRecorded(t *testing.T) {
 }
 
 func TestVersionThatDisagreesWithRecordedNamesIsRefused(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "a.db")
 	db, err := openOver(t, path, "0001_a", "0002_b")
 	if err != nil {
@@ -678,6 +698,7 @@ func TestVersionThatDisagreesWithRecordedNamesIsRefused(t *testing.T) {
 }
 
 func TestEmptyRecordWithAVersionIsRefused(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "a.db")
 	db, err := openOver(t, path, "0001_a")
 	if err != nil {

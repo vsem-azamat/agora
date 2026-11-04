@@ -41,6 +41,7 @@ func (e env) history(t *testing.T, room string) []rooms.Message {
 }
 
 func TestRenamingKeepsWhatIsTheAgents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	g := governance.New(e.db, e.r, e.clock.now)
 	e.report(t, "session-1", sessions.Start)
@@ -108,6 +109,7 @@ func TestRenamingKeepsWhatIsTheAgents(t *testing.T) {
 }
 
 func TestRenamingRefusesTakenNames(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	e.join(t, "builder", "")
@@ -143,6 +145,7 @@ func TestRenamingRefusesTakenNames(t *testing.T) {
 }
 
 func TestFormerNamesStayReserved(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	e.join(t, "builder", "")
@@ -157,6 +160,7 @@ func TestFormerNamesStayReserved(t *testing.T) {
 }
 
 func TestTakingBackAFormerName(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	e.join(t, "builder", "")
@@ -176,6 +180,7 @@ func TestTakingBackAFormerName(t *testing.T) {
 }
 
 func TestFormerNamesAreRecordedNewestFirst(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	first := e.clock.now()
@@ -198,6 +203,7 @@ func TestFormerNamesAreRecordedNewestFirst(t *testing.T) {
 }
 
 func TestActingUnderAFormerNameNamesTheNewOne(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	e.join(t, "builder", "")
@@ -242,6 +248,7 @@ func TestActingUnderAFormerNameNamesTheNewOne(t *testing.T) {
 }
 
 func TestRenamesAreAnnounced(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	e.join(t, "solo", "")
@@ -273,6 +280,7 @@ func TestRenamesAreAnnounced(t *testing.T) {
 }
 
 func TestMentioningAFormerName(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.join(t, "fixer", "")
 	e.join(t, "builder", "")

@@ -11,6 +11,7 @@ import (
 )
 
 func TestParseRemote(t *testing.T) {
+	t.Parallel()
 	cases := map[string]forge.Repo{
 		"git@github.com:example-org/example-app.git":          {Host: "github.com", Path: "example-org/example-app"},
 		"https://github.com/example-org/example-app":          {Host: "github.com", Path: "example-org/example-app"},
@@ -52,6 +53,7 @@ const reply = `{"data":{"repository":{"defaultBranchRef":{"name":"dev"},
 "errors":[{"type":"NOT_FOUND","path":["repository","n1"],"message":"Could not resolve to a PullRequest with the number of 9999."}]}`
 
 func TestGitHubLookup(t *testing.T) {
+	t.Parallel()
 	var args []string
 	gh := &forge.GitHub{Run: func(_ context.Context, a []string) ([]byte, error) {
 		args = a
@@ -100,6 +102,7 @@ func TestGitHubLookup(t *testing.T) {
 }
 
 func TestGitHubLookupFails(t *testing.T) {
+	t.Parallel()
 	gh := &forge.GitHub{Run: func(context.Context, []string) ([]byte, error) {
 		return []byte(`{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a Repository"}]}`), errors.New("exit status 1")
 	}}
@@ -118,6 +121,7 @@ func TestGitHubLookupFails(t *testing.T) {
 }
 
 func TestQueriesAreDeduplicated(t *testing.T) {
+	t.Parallel()
 	var args []string
 	gh := &forge.GitHub{Run: func(_ context.Context, a []string) ([]byte, error) {
 		args = a
@@ -133,6 +137,7 @@ func TestQueriesAreDeduplicated(t *testing.T) {
 }
 
 func TestThePRFragmentIsDefinedExactlyWhenUsed(t *testing.T) {
+	t.Parallel()
 	// GitHub rejects a query that defines a fragment it does not use, or uses one it does not define.
 	gh := &forge.GitHub{Run: func(_ context.Context, a []string) ([]byte, error) {
 		q := a[len(a)-1]

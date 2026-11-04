@@ -10,6 +10,7 @@ import (
 )
 
 func TestEnsureCreatesKeepsAndRotates(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, err := store.Open(ctx, ":memory:")
 	if err != nil {

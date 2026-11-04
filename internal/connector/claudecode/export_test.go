@@ -1,5 +1,7 @@
 package claudecode
 
+// This package's tests are serial: SetInvokingVersion and SetExecutable set package-level variables.
+
 import "context"
 
 // SetInvokingVersion makes the hooks take version for the version of the Claude Code process

@@ -11,6 +11,7 @@ import (
 )
 
 func TestEnvReadsTheEnvironmentAProcessStartedWith(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat("/proc/self/environ"); err != nil {
 		t.Skip("no /proc")
 	}

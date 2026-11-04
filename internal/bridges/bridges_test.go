@@ -77,6 +77,7 @@ func (e env) subscriptions(t *testing.T, agent string) []rooms.Subscription {
 }
 
 func TestAddingABridge(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	list, err := e.b.List(ctx)
 	if err != nil {
@@ -99,6 +100,7 @@ func TestAddingABridge(t *testing.T) {
 }
 
 func TestAttachingAnExistingRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if err := e.r.Create(ctx, "example-team", "the team chat", "builder"); err != nil {
 		t.Fatal(err)
@@ -131,6 +133,7 @@ func (e env) post(t *testing.T, author, room, body string) int64 {
 }
 
 func TestAddingIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	cases := []struct {
 		name, command string
@@ -159,6 +162,7 @@ func TestAddingIsRefused(t *testing.T) {
 }
 
 func TestArchivingAndBridges(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if err := e.r.Archive(ctx, "builder", "example-chat", true); !errors.Is(err, rooms.ErrBridged) || !strings.Contains(err.Error(), "agora bridge remove example-chat") {
 		t.Fatalf("archiving a bridged room: %v", err)
@@ -197,6 +201,7 @@ func TestArchivingAndBridges(t *testing.T) {
 // A message the operator posted while the bridge was down stays sending once the bridge is
 // removed; nothing can settle it, and it does not hold archiving back.
 func TestArchivingWithAMessageLeftSending(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0); err != nil {
 		t.Fatal(err)
@@ -210,6 +215,7 @@ func TestArchivingWithAMessageLeftSending(t *testing.T) {
 }
 
 func TestRemovingKeepsTheRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorID: "42", AuthorName: "Ada", Text: "hi"})
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
@@ -236,6 +242,7 @@ func TestRemovingKeepsTheRoom(t *testing.T) {
 }
 
 func TestMessagesFromOutsideAreStoredOnce(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	in := bridges.In{ID: "5513", AuthorID: "42", AuthorName: "Ada", Text: "can you look?", Cursor: "5513"}
 	first := e.receive(t, in)
@@ -260,6 +267,7 @@ func TestMessagesFromOutsideAreStoredOnce(t *testing.T) {
 }
 
 func TestRepliesTimesAndLongTextFromOutside(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	first := e.receive(t, bridges.In{ID: "5510", AuthorID: "42", AuthorName: "Ada", Text: "the contract"})
 	at := time.Date(2026, 10, 10, 18, 2, 11, 0, time.UTC)
@@ -281,6 +289,7 @@ func TestRepliesTimesAndLongTextFromOutside(t *testing.T) {
 }
 
 func TestAMentionFromOutside(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "@builder can you look?"})
 	msgs, _, err := e.r.Unread(ctx, "builder", rooms.Addressed, 0)
@@ -290,6 +299,7 @@ func TestAMentionFromOutside(t *testing.T) {
 }
 
 func TestAddressedFromOutsideReachesTheBridgesAgents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.r.Subscribe(ctx, "secretary", []string{"example-chat"}, true, rooms.ModeMentions); err != nil {
 		t.Fatal(err)
@@ -306,6 +316,7 @@ func TestAddressedFromOutsideReachesTheBridgesAgents(t *testing.T) {
 }
 
 func TestTheOperatorsOwnMessagesFromOutside(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id := e.receive(t, bridges.In{ID: "1", AuthorID: "7", AuthorName: "Owner Outside", Self: true, Text: "on it"})
 	h := e.history(t)
@@ -328,6 +339,7 @@ func setPolicy(t *testing.T, e env, p bridges.Policy) {
 }
 
 func TestOutboundPolicy(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
 	fromOperator, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "thanks", 0)
@@ -382,6 +394,7 @@ func deliveryOf(t *testing.T, e env, room string, id int64) rooms.Delivery {
 }
 
 func TestGoingOutAndAnswers(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	in := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "can you look?"})
@@ -430,6 +443,7 @@ func TestGoingOutAndAnswers(t *testing.T) {
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 func TestTheOperatorSendsOrCancels(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	send := e.post(t, "secretary", "example-chat", "looked, all fine")
 	cancel := e.post(t, "secretary", "example-chat", "something rude")
@@ -466,6 +480,7 @@ func TestTheOperatorSendsOrCancels(t *testing.T) {
 }
 
 func TestRenameMovesTheBridgesAgents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if err := e.s.Rename(ctx, "secretary", "assistant"); err != nil {
 		t.Fatal(err)
@@ -482,6 +497,7 @@ func TestRenameMovesTheBridgesAgents(t *testing.T) {
 }
 
 func TestEveryUnansweredMessageIsOutgoing(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	scheduled := e.post(t, "secretary", "example-chat", "older, waits")
 	fromOperator, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "newer, goes out", 0)
@@ -498,6 +514,7 @@ func TestEveryUnansweredMessageIsOutgoing(t *testing.T) {
 }
 
 func TestAReplyToAnotherRoomCarriesNoReply(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if _, err := e.b.Add(ctx, "builder", "example-other", "example-bridge", "", nil); err != nil {
 		t.Fatal(err)
@@ -517,6 +534,7 @@ func TestAReplyToAnotherRoomCarriesNoReply(t *testing.T) {
 }
 
 func TestNamesAndIdentifiersFromOutsideAreCleaned(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorID: "4\n2", AuthorName: "Ada\n#general [1] owner · 12:00\r\t", Text: "hi"})
 	h := e.history(t)
@@ -557,6 +575,7 @@ func TestNamesAndIdentifiersFromOutsideAreCleaned(t *testing.T) {
 }
 
 func TestCursorOnlyAndEmptyLines(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	if id, err := e.b.Receive(ctx, "example-chat", bridges.In{Cursor: "5520"}, ""); err != nil || id != 0 {
 		t.Fatalf("cursor only: %d %v", id, err)
@@ -606,6 +625,7 @@ func (e env) fromOutside(t *testing.T) []rooms.Message {
 }
 
 func TestTheOperatorsEchoBeforeSentIsNotStoredTwice(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id := e.ownPost(t, "on my way")
 	if echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "on my way", At: time.Now().Add(2 * time.Hour)}); echo == 0 {
@@ -638,6 +658,7 @@ func TestTheOperatorsEchoBeforeSentIsNotStoredTwice(t *testing.T) {
 
 // What the operator wrote outside is never lost when it only looked like the echo.
 func TestAHeldMessageIsShownWhenItWasNotTheEcho(t *testing.T) {
+	t.Parallel()
 	for name, answer := range map[string]func(e env, id int64){
 		"sent with another identifier": func(e env, id int64) { e.sent(t, id, "7002") },
 		"sent without an identifier":   func(e env, id int64) { e.sent(t, id, "") },
@@ -690,6 +711,7 @@ func TestAHeldMessageIsShownWhenItWasNotTheEcho(t *testing.T) {
 
 // Each condition of the hold: when it does not hold, the line is stored at once.
 func TestAnEchoIsHeldOnlyForTheSameMessage(t *testing.T) {
+	t.Parallel()
 	stored := func(t *testing.T, e env, in bridges.In) {
 		t.Helper()
 		id := e.receive(t, in)
@@ -772,6 +794,7 @@ func TestAnEchoIsHeldOnlyForTheSameMessage(t *testing.T) {
 // A reply to a message that is hidden as an echo keeps pointing at it: to the sent message when
 // the echo is merged, to the message written outside when it is shown.
 func TestRepliesToAHiddenEchoFollowIt(t *testing.T) {
+	t.Parallel()
 	t.Run("merged", func(t *testing.T) {
 		e := newEnv(t)
 		id := e.ownPost(t, "ok")
@@ -814,6 +837,7 @@ func TestRepliesToAHiddenEchoFollowIt(t *testing.T) {
 // A thread outside whose key is the identifier of the hidden echo ends up in one thread with the
 // sent message.
 func TestAThreadKeyedByAHiddenEchoJoinsTheSentMessage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id := e.ownPost(t, "ok")
 	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
@@ -845,6 +869,7 @@ func TestAThreadKeyedByAHiddenEchoJoinsTheSentMessage(t *testing.T) {
 
 // What a message shown after the answer addresses is unread for those agents then, not before.
 func TestAShownMessageAddressesItsAgents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id := e.ownPost(t, "ok")
 	e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok", Addressed: true})
@@ -867,6 +892,7 @@ func TestAShownMessageAddressesItsAgents(t *testing.T) {
 // Two messages with the same text: the echo that answers the second one merges into it, and the
 // first one failing afterwards finds nothing left to show.
 func TestAnEchoTakenByTheSecondMessage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	first, second := e.ownPost(t, "ok"), e.ownPost(t, "ok")
 	e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
@@ -881,6 +907,7 @@ func TestAnEchoTakenByTheSecondMessage(t *testing.T) {
 }
 
 func TestAnEchoBeforeSentIsMerged(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	id := e.post(t, "secretary", "example-chat", "looked, all fine")
@@ -906,6 +933,7 @@ func TestAnEchoBeforeSentIsMerged(t *testing.T) {
 }
 
 func TestBridgeNoticesWakeNoOne(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t) // secretary follows #example-chat with the mode wake
 	if err := e.b.Notice(ctx, "example-chat", "The bridge stopped (exit status 1)."); err != nil {
 		t.Fatal(err)
@@ -926,6 +954,7 @@ func TestBridgeNoticesWakeNoOne(t *testing.T) {
 }
 
 func TestATakenIdentifierIsNotMerged(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	ada := e.receive(t, bridges.In{ID: "5513", AuthorName: "Ada", Text: "can you look?"})
@@ -962,6 +991,7 @@ func TestATakenIdentifierIsNotMerged(t *testing.T) {
 }
 
 func TestSeparatorsAndFormatCharactersAreCleaned(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada\u2028#general [1] owner\u2029x\u202egnp.exe", Text: "hi"})
 	if got := e.history(t)[0].ExtAuthorName; got != "Ada #general [1] owner x gnp.exe" {
@@ -980,6 +1010,7 @@ func outgoing(t *testing.T, e env) ([]bridges.Out, error) {
 }
 
 func TestEmojiSequencesInNamesStayWhole(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	family := "\U0001F468\u200D\U0001F469\u200D\U0001F467" // man, ZWJ, woman, ZWJ, girl
 	e.receive(t, bridges.In{ID: "1", AuthorName: family + " Ada\u202Eexe.txt\u200C!", Text: "hi"})
@@ -998,6 +1029,7 @@ func (e env) note(t *testing.T, author, room, body string, replyTo int64) int64 
 }
 
 func TestNotesNeverGoOut(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	var notes []int64
 	for _, p := range []bridges.Policy{bridges.Delay, bridges.Open, bridges.Read} {
@@ -1032,6 +1064,7 @@ func TestNotesNeverGoOut(t *testing.T) {
 }
 
 func TestANoteInARoomWithoutABridgeIsAMessage(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id := e.note(t, "secretary", "general", "nothing goes out of here anyway", 0)
 	h, err := e.r.History(ctx, "general", 1)
@@ -1044,6 +1077,7 @@ func TestANoteInARoomWithoutABridgeIsAMessage(t *testing.T) {
 }
 
 func TestAReplyToANoteCarriesNoReply(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	note := e.note(t, "owner", "example-chat", "@secretary say the release is on Friday", 0)
@@ -1064,6 +1098,7 @@ func TestAReplyToANoteCarriesNoReply(t *testing.T) {
 }
 
 func TestNotesAreMessagesOfTheRoom(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	note := e.note(t, "owner", "example-chat", "@secretary draft a reply to Ada about the release date", 0)
 	msgs, _, err := e.r.Unread(ctx, "secretary", rooms.Waking, 0)
@@ -1083,6 +1118,7 @@ func TestNotesAreMessagesOfTheRoom(t *testing.T) {
 }
 
 func TestHistoryTellsWhatTheChatSaw(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	e.receive(t, bridges.In{ID: "5513", AuthorID: "42", AuthorName: "Ada", Text: "when is the release?"})
@@ -1110,6 +1146,7 @@ func TestHistoryTellsWhatTheChatSaw(t *testing.T) {
 }
 
 func TestAgentsPostOnlyNotesUnderRead(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Read)
 	if _, err := e.r.Post(ctx, "secretary", "example-chat", "to the chat", 0); !errors.Is(err, rooms.ErrReadOnly) || !strings.Contains(err.Error(), "--note") {
@@ -1121,6 +1158,7 @@ func TestAgentsPostOnlyNotesUnderRead(t *testing.T) {
 }
 
 func TestARepliesToAnAgentsMessageAddressesIt(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	out := e.post(t, "builder", "example-chat", "the fix ships tonight")
@@ -1140,6 +1178,7 @@ func TestARepliesToAnAgentsMessageAddressesIt(t *testing.T) {
 }
 
 func TestChangingABridgesAgents(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "hi", Cursor: "1"})
 	// secretary chose to follow the room with the mode mentions; staying an agent keeps it
@@ -1204,6 +1243,7 @@ func TestChangingABridgesAgents(t *testing.T) {
 }
 
 func TestChangingABridgesCommand(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "hi", Cursor: "1"})
 	got, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "  example-bridge --chat 43 "})
@@ -1225,6 +1265,7 @@ func TestChangingABridgesCommand(t *testing.T) {
 }
 
 func TestChangingABridgeIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	cases := []struct {
 		name, agent, bridge string
@@ -1249,6 +1290,7 @@ func TestChangingABridgeIsRefused(t *testing.T) {
 }
 
 func TestSendingAtOnceAsTheDelayPasses(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	id := e.post(t, "secretary", "example-chat", "looked, all fine")
 	if err := e.b.SendScheduled(ctx, id); err != nil {
@@ -1273,6 +1315,7 @@ func TestSendingAtOnceAsTheDelayPasses(t *testing.T) {
 }
 
 func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	sending, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0)
 	if err != nil {
@@ -1303,6 +1346,7 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 }
 
 func TestAnEchoOfAThreadReplyKeepsThreadsFlat(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root := e.post(t, "builder", "example-chat", "the export")
@@ -1339,6 +1383,7 @@ func TestAnEchoOfAThreadReplyKeepsThreadsFlat(t *testing.T) {
 }
 
 func TestMergingAnEchoKeepsUnreadRepliesUnread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root := e.post(t, "builder", "example-chat", "the export")
@@ -1372,6 +1417,7 @@ func msgIDs(msgs []rooms.Message) []int64 {
 }
 
 func TestATopicRenamedOutsideRetitlesItsThread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	title := func(root int64) string {
 		t.Helper()
@@ -1403,6 +1449,7 @@ func TestATopicRenamedOutsideRetitlesItsThread(t *testing.T) {
 }
 
 func TestARepeatedTitleFromOutsideChangesNothing(t *testing.T) {
+	t.Parallel()
 	e, c := newDelayEnv(t)
 	t0 := c.now()
 	lastAt := func() time.Time {
@@ -1428,6 +1475,7 @@ func TestARepeatedTitleFromOutsideChangesNothing(t *testing.T) {
 }
 
 func TestAThreadWithoutATitleTakesOneFromALaterLine(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	root := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "release today", ThreadKey: "88"})
 	e.receive(t, bridges.In{ID: "2", AuthorName: "Bob", Text: "when?", ThreadKey: "88", ThreadTitle: "Late"})
@@ -1438,6 +1486,7 @@ func TestAThreadWithoutATitleTakesOneFromALaterLine(t *testing.T) {
 }
 
 func TestANewBridgeStartsWithoutThreadKeys(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	old := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "in the old chat", ThreadKey: "77", ThreadTitle: "Old"})
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
@@ -1466,6 +1515,7 @@ func TestANewBridgeStartsWithoutThreadKeys(t *testing.T) {
 }
 
 func TestAChangedCommandStartsWithoutThreadKeys(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	old := e.receive(t, bridges.In{ID: "1", AuthorName: "Ada", Text: "in the old chat", ThreadKey: "77", ThreadTitle: "Old"})
 	if _, err := e.b.Set(ctx, "builder", "example-chat", bridges.Change{SetCommand: true, Command: "example-bridge --chat 43"}); err != nil {
@@ -1488,6 +1538,7 @@ func TestAChangedCommandStartsWithoutThreadKeys(t *testing.T) {
 }
 
 func TestMessagesOfAThreadOutside(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	root := e.receive(t, bridges.In{ID: "1", AuthorID: "42", AuthorName: "Ada", Text: "release today", ThreadKey: "77", ThreadTitle: "Release\n2.4"})
 	if _, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "at five", Thread: root, Note: true}); err != nil {
@@ -1516,6 +1567,7 @@ func threadIn(id, author, text string) bridges.In {
 }
 
 func TestTheBridgesAgentsTakePartInItsThreads(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t) // secretary is the bridge's agent and follows the room with the mode wake
 	root := e.receive(t, threadIn("1", "Ada", "release today"))
 	reply := e.receive(t, threadIn("2", "Bob", "which time?"))
@@ -1526,6 +1578,7 @@ func TestTheBridgesAgentsTakePartInItsThreads(t *testing.T) {
 }
 
 func TestAKeyThatNamesTheRootJoinsItsThread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	root := e.receive(t, bridges.In{ID: "100", AuthorID: "42", AuthorName: "Ada", Text: "release today"})
 	reply, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "at five", Thread: root})
@@ -1550,6 +1603,7 @@ func TestAKeyThatNamesTheRootJoinsItsThread(t *testing.T) {
 }
 
 func TestAnEchoHoldingAKeyGivesItToTheSentMessagesThread(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root := e.receive(t, bridges.In{ID: "100", AuthorID: "42", AuthorName: "Ada", Text: "release today"})
@@ -1573,6 +1627,7 @@ func TestAnEchoHoldingAKeyGivesItToTheSentMessagesThread(t *testing.T) {
 }
 
 func TestTheOperatorWritingInAThreadOutsideTakesPartAgain(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	root := e.receive(t, threadIn("1", "Ada", "release today"))
 	if _, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "noted", Thread: root, Note: true}); err != nil {
@@ -1590,6 +1645,7 @@ func TestTheOperatorWritingInAThreadOutsideTakesPartAgain(t *testing.T) {
 }
 
 func TestAReplyToANoteInAThreadGoesOutUnderTheRoot(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root := e.receive(t, bridges.In{ID: "100", AuthorID: "42", AuthorName: "Ada", Text: "release today"})
@@ -1608,6 +1664,7 @@ func TestAReplyToANoteInAThreadGoesOutUnderTheRoot(t *testing.T) {
 }
 
 func TestAReplyWaitsForTheMessageItRepliesTo(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root, err := e.r.Post(ctx, "secretary", "example-chat", "release today", 0)
@@ -1647,6 +1704,7 @@ func TestAReplyWaitsForTheMessageItRepliesTo(t *testing.T) {
 }
 
 func TestAReplyGoesOutWhenTheMessageItRepliesToWasSentWithoutAnIdentifier(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	first, err := e.r.Post(ctx, "secretary", "example-chat", "one", 0)
@@ -1679,6 +1737,7 @@ func TestAReplyGoesOutWhenTheMessageItRepliesToWasSentWithoutAnIdentifier(t *tes
 }
 
 func TestAReplyGoesOutWhenTheMessageItRepliesToFailed(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root, err := e.r.Post(ctx, "secretary", "example-chat", "release today", 0)
@@ -1715,6 +1774,7 @@ func (e env) thread(t *testing.T, id int64) []rooms.Message {
 // The operator's message is itself a reply in a thread: a thread outside keyed by its hidden echo
 // is shown under the thread's root, never nested under the reply, before and after the answer.
 func TestAThreadKeyedByTheEchoOfAThreadReplyDoesNotNest(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t)
 	root := e.ownPost(t, "plan")
 	e.sent(t, root, "")
@@ -1742,6 +1802,7 @@ func TestAThreadKeyedByTheEchoOfAThreadReplyDoesNotNest(t *testing.T) {
 // The hidden line was not the echo: the thread outside keyed by it stays on the message written
 // outside, with its reply and thread pointing at it.
 func TestAThreadKeyedByAMessageThatWasNotTheEchoStaysOnIt(t *testing.T) {
+	t.Parallel()
 	for name, answer := range map[string]func(e env, o int64){
 		"sent with another identifier": func(e env, o int64) { e.sent(t, o, "9999") },
 		"failed": func(e env, o int64) {
@@ -1773,6 +1834,7 @@ func TestAThreadKeyedByAMessageThatWasNotTheEchoStaysOnIt(t *testing.T) {
 }
 
 func TestReadingAProtocolVersion(t *testing.T) {
+	t.Parallel()
 	for raw, want := range map[string]int32{
 		`3`: 3, `1`: 1, `2000000`: 2000000, `2147483647`: 2147483647, ` 3 `: 3,
 		`0`: 0, `-2`: 0, `2.5`: 0, `3.0`: 0, `1.0000000000000001`: 0, `"3"`: 0, `null`: 0, `true`: 0, `[3]`: 0, `99999999999`: 0, `2147483648`: 0, `2e0`: 0, `-0`: 0, ``: 0,

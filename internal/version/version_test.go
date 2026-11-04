@@ -6,6 +6,7 @@ import (
 )
 
 func TestInfoFromTheBuild(t *testing.T) {
+	t.Parallel()
 	settings := func(rev, modified string) []debug.BuildSetting {
 		return []debug.BuildSetting{{Key: "vcs.revision", Value: rev}, {Key: "vcs.modified", Value: modified}}
 	}

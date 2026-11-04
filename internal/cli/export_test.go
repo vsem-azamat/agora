@@ -1,5 +1,7 @@
 package cli
 
+// This package's tests are serial: most of them set the environment the CLI reads.
+
 import (
 	"context"
 	"io"

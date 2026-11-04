@@ -11,6 +11,7 @@ import (
 // TestTheOperatorActsInEveryWebCall fails when a call the web listener serves names an acting
 // agent that the operator interceptor does not overwrite.
 func TestTheOperatorActsInEveryWebCall(t *testing.T) {
+	t.Parallel()
 	checked := 0
 	for proc := range webProcedures {
 		name := protoreflect.FullName(strings.ReplaceAll(strings.TrimPrefix(proc, "/"), "/", "."))

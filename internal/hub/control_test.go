@@ -52,6 +52,7 @@ func (r *running) boardNotices(t *testing.T) []string {
 }
 
 func TestCompactCommandRunsForAnIdleSessionWithTheTextAndTerminal(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "compacts")
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
@@ -87,6 +88,7 @@ func TestCompactCommandRunsForAnIdleSessionWithTheTextAndTerminal(t *testing.T) 
 }
 
 func TestFailedCompactCommandIsAnnouncedWithItsOutput(t *testing.T) {
+	t.Parallel()
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
 		x.CompactCommand = `echo no such pane >&2; exit 3`
@@ -111,6 +113,7 @@ func TestFailedCompactCommandIsAnnouncedWithItsOutput(t *testing.T) {
 }
 
 func TestCompactIsRefusedWithoutTheCommandOrTerminal(t *testing.T) {
+	t.Parallel()
 	r := startWith(t, func(x *hub.Hub) { x.CompactCommand = "true" })
 	r.idleAgent(t, "builder", "session-1", "")
 	r.post(t, "reviewer", "hello")
@@ -126,6 +129,7 @@ func TestCompactIsRefusedWithoutTheCommandOrTerminal(t *testing.T) {
 }
 
 func TestInterruptRunsTheCommandForABusySession(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "interrupts")
 	r := startWith(t, func(x *hub.Hub) {
 		x.InterruptCommand = `printf '%s\n' "$AGORA_TERMINAL" >> ` + log
@@ -151,6 +155,7 @@ func TestInterruptRunsTheCommandForABusySession(t *testing.T) {
 }
 
 func TestFailedInterruptChangesNothing(t *testing.T) {
+	t.Parallel()
 	r := startWith(t, func(x *hub.Hub) { x.InterruptCommand = `echo stuck >&2; exit 1` })
 	r.idleAgent(t, "builder", "session-1", "pane-7")
 	r.post(t, "reviewer", "hello")
@@ -169,6 +174,7 @@ func TestFailedInterruptChangesNothing(t *testing.T) {
 }
 
 func TestSessionListShowsWhatEachCanDo(t *testing.T) {
+	t.Parallel()
 	r := startWith(t, func(x *hub.Hub) { x.CompactCommand = "true" })
 	r.idleAgent(t, "builder", "session-1", "pane-7")
 	list, err := r.sessions.ListSessions(context.Background(), connect.NewRequest(&agorav1.ListSessionsRequest{}))
@@ -181,6 +187,7 @@ func TestSessionListShowsWhatEachCanDo(t *testing.T) {
 }
 
 func TestFailedCompactOutputIsValidUTF8(t *testing.T) {
+	t.Parallel()
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
 		// 799 bytes: the cut of the output's tail falls inside a character
@@ -208,6 +215,7 @@ func TestFailedCompactOutputIsValidUTF8(t *testing.T) {
 }
 
 func TestCompactLeftRunningByAStoppedHubIsFailedAtStart(t *testing.T) {
+	t.Parallel()
 	r := startPrepared(t, func(db *sql.DB) {
 		for _, q := range []string{
 			`INSERT INTO agents (name, joined_at) VALUES ('builder', 1), ('reviewer', 1)`,
@@ -232,6 +240,7 @@ func TestCompactLeftRunningByAStoppedHubIsFailedAtStart(t *testing.T) {
 }
 
 func TestEndedSessionsCompactIsDroppedByTheNextRound(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "compacts")
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
@@ -259,6 +268,7 @@ func TestEndedSessionsCompactIsDroppedByTheNextRound(t *testing.T) {
 }
 
 func TestCompactWaitsTheSettleTimeAfterTheSessionGoesIdle(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "compacts")
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
@@ -288,21 +298,24 @@ func TestCompactWaitsTheSettleTimeAfterTheSessionGoesIdle(t *testing.T) {
 }
 
 func TestControlCommandsDoNotRunForADeadProcess(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "ran")
+	alive, kill := processes()
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
 		x.CompactCommand = `echo compact >> ` + log
 		x.InterruptCommand = `echo interrupt >> ` + log
 		x.WakeSettle = 0
 		hub.SetControlEvery(x, time.Hour)
+		hub.SetAlive(x, alive)
 		h = x
 	})
-	r.idleAgentWithPID(t, "builder", "session-1", "pane-7", 999999) // no such process
+	r.idleAgentWithPID(t, "builder", "session-1", "pane-7", int32(os.Getpid()))
 	r.post(t, "reviewer", "hello")
-	// the session reports a process that is gone; it is still listed until the sweep ends it
 	if err := r.compact("reviewer", "builder", ""); err != nil {
 		t.Fatal(err)
 	}
+	kill() // the process is gone; the session is still listed until a sweep ends it
 	if err := hub.RunCompacts(context.Background(), h); err != nil {
 		t.Fatal(err)
 	}
@@ -316,6 +329,7 @@ func TestControlCommandsDoNotRunForADeadProcess(t *testing.T) {
 }
 
 func TestOneCommandTypesIntoATerminalAtATime(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "log")
 	slow := func(name string) string {
 		return `echo ` + name + `-start >> ` + log + `; sleep 0.4; echo ` + name + `-end >> ` + log
@@ -352,6 +366,7 @@ func TestOneCommandTypesIntoATerminalAtATime(t *testing.T) {
 }
 
 func TestTwoInterruptsSendOneEsc(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "esc")
 	r := startWith(t, func(x *hub.Hub) { x.InterruptCommand = `echo esc >> ` + log + `; sleep 0.5` })
 	r.idleAgent(t, "builder", "session-1", "pane-7")
@@ -430,6 +445,7 @@ func (r *running) twoSessions(t *testing.T, mention bool) {
 }
 
 func TestInterruptHoldsTheTerminalAndACompactBeforeAWakeSkipsIt(t *testing.T) {
+	t.Parallel()
 	dir := shortDir(t)
 	log, release := filepath.Join(dir, "log"), filepath.Join(dir, "release")
 	var h *hub.Hub
@@ -464,6 +480,7 @@ func TestInterruptHoldsTheTerminalAndACompactBeforeAWakeSkipsIt(t *testing.T) {
 // wake command runs, so recording the wake cannot finish: the terminal must stay held until it
 // does, or a compact claimed meanwhile would not see the wake.
 func TestWakeHoldsTheTerminalUntilItIsRecorded(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "log")
 	var h *hub.Hub
 	r := startWith(t, func(x *hub.Hub) {
@@ -503,6 +520,7 @@ func processes() (alive func(int, int64) bool, kill func()) {
 }
 
 func TestCommandsRecheckTheProcessUnderTheTerminalLock(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"wake", "compact", "interrupt"} {
 		t.Run(name, func(t *testing.T) {
 			dir := shortDir(t)
@@ -547,6 +565,7 @@ func TestCommandsRecheckTheProcessUnderTheTerminalLock(t *testing.T) {
 }
 
 func TestInterruptThatWaitedForTheTerminalChecksTheTurnAgain(t *testing.T) {
+	t.Parallel()
 	changes := map[string]func(r *running, t *testing.T){
 		"turn ended": func(r *running, t *testing.T) { r.report(t, "session-1", agorav1.SessionEvent_SESSION_EVENT_STOP) },
 		"new turn began": func(r *running, t *testing.T) {
@@ -601,15 +620,22 @@ func TestInterruptThatWaitedForTheTerminalChecksTheTurnAgain(t *testing.T) {
 }
 
 func TestInterruptIsAnnouncedWhenTheCallerGoesAway(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(shortDir(t), "esc")
-	r := startWith(t, func(x *hub.Hub) { x.InterruptCommand = `sleep 0.5; echo esc >> ` + log })
+	r := startWith(t, func(x *hub.Hub) { x.InterruptCommand = `echo start >> ` + log + `; sleep 0.5; echo esc >> ` + log })
 	r.idleAgent(t, "builder", "session-1", "pane-7")
 	r.post(t, "reviewer", "hello")
 	r.report(t, "session-1", agorav1.SessionEvent_SESSION_EVENT_PROMPT)
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err := r.sessions.Interrupt(ctx, connect.NewRequest(&agorav1.InterruptRequest{Agent: "reviewer", Target: "builder"}))
-	if err == nil {
+	called := make(chan error, 1)
+	go func() {
+		_, err := r.sessions.Interrupt(ctx, connect.NewRequest(&agorav1.InterruptRequest{Agent: "reviewer", Target: "builder"}))
+		called <- err
+	}()
+	logHas(t, log, "start") // the caller goes away only once the command runs
+	cancel()
+	if err := <-called; err == nil {
 		t.Fatal("the call outlived its context")
 	}
 	deadline := time.Now().Add(5 * time.Second)
@@ -628,6 +654,7 @@ func TestInterruptIsAnnouncedWhenTheCallerGoesAway(t *testing.T) {
 // time: the compact waited for the terminal behind a wake, was a candidate before the wake was
 // recorded, and must not be typed right after it.
 func TestCompactBehindAWakeIsNotClaimedBeforeTheSettleTime(t *testing.T) {
+	t.Parallel()
 	dir := shortDir(t)
 	log, release := filepath.Join(dir, "log"), filepath.Join(dir, "release")
 	var h *hub.Hub
