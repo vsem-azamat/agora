@@ -10,9 +10,10 @@ PNPM    := pnpm --dir web
 # What `make breaking` compares proto/ against.
 BREAKING_AGAINST ?= .git\#branch=main
 
-# The race detector instruments every package but the SQLite driver: modernc.org/sqlite is C
-# translated to Go, and instrumented it runs about 25 times slower, which made it most of the
-# tests' time. Races in Agora's own code are still reported.
+# The race detector instruments every package but the SQLite driver and its modernc.org
+# dependencies: they are C translated to Go, and instrumented they run about 25 times slower,
+# which made them most of the tests' time. A race between two accesses in instrumented code is
+# still reported; a race on memory Agora hands the driver, such as a []byte argument, is not.
 RACE := -race -gcflags='modernc.org/...=-race=false'
 
 # Installed web dependencies; reinstalled when package.json or the lockfile changes.

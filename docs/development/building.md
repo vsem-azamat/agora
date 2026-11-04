@@ -22,7 +22,7 @@ bin/agora queue ls
 Tests need no running hub: queue tests use an in-memory database and a controllable clock, and CLI tests start their own hub on a temporary socket.
 
 ```sh
-make test                                          # go test -race ./... (SQLite driver uninstrumented)
+make test                                          # go test -race ./..., SQLite driver uninstrumented
 ```
 
 Before pushing, run `make check`; see [Checks](checks.md).

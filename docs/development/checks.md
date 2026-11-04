@@ -14,7 +14,7 @@ CI runs these checks on every pull request and on `main`. The [`Makefile`](../..
 | `make lint-web` | `pnpm lint` (`biome check`) | Biome's recommended rules and formatting, configured in `web/biome.json` |
 | `make breaking` | `buf breaking --against "$BREAKING_AGAINST"` | Lists what `proto/` breaks against the local `main` branch (or `$BREAKING_AGAINST`), for the pull request to say. Not part of `check` or CI |
 | `make test` | `test-go`, `test-web` and `test-deploy` | All tests |
-| `make test-go` | `go test -race ./...`, with the SQLite driver `modernc.org/...` left uninstrumented | Unit and end-to-end tests, with the race detector on Agora's own code; the driver is C translated to Go and runs about 25 times slower instrumented |
+| `make test-go` | `go test -race -gcflags='modernc.org/...=-race=false' ./...` | Unit and end-to-end tests, with the race detector on every package but the SQLite driver and its `modernc.org` dependencies; a race on memory Agora hands the driver, such as a `[]byte` argument, is not reported |
 | `make test-web` | `pnpm test` | Vitest: the web app's helpers, hooks and views |
 | `make test-deploy` | `scripts/deploy-test.sh` | `make deploy` on a clone of `HEAD`, without a service (see [Deploying](deploying.md)) |
 | `make generate-check` | `buf generate`, then a clean `gen/` in git | `gen/` matches `proto/` |
