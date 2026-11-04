@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -92,3 +93,6 @@ func TerminalWaiting(h *Hub, name string) int {
 	}
 	return int(t.waiting.Load())
 }
+
+// SetLog replaces the hub's logger, for tests; call it before the hub starts.
+func SetLog(h *Hub, log *slog.Logger) { h.log = log }

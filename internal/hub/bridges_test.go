@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -1018,10 +1019,13 @@ func TestTheWebAppListsBridgesWithoutCommands(t *testing.T) {
 
 func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 	t.Parallel()
+	delays := &restartDelays{}
 	var h *hub.Hub
 	r := startWith(t, func(hh *hub.Hub) {
 		h = hh
-		hub.SetBridgeDelays(h, 100*time.Millisecond, 5*time.Second, 400*time.Millisecond)
+		hub.SetLog(h, slog.New(delays))
+		// steady is far longer than a crashing run takes even under load
+		hub.SetBridgeDelays(h, 10*time.Millisecond, 5*time.Second, 2*time.Second)
 	})
 	if _, err := r.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
@@ -1033,19 +1037,47 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the fifth start", func() bool { return f.starts() == 5 })
-	starts := f.times("starts")
-	for i, want := range []time.Duration{100, 200, 400, 800} {
-		if gap := starts[i+1].Sub(starts[i]); gap < want*time.Millisecond {
-			t.Fatalf("delay %d: %v, want at least %vms", i, gap, want)
-		}
-	}
-	time.Sleep(600 * time.Millisecond) // a steady run
+	time.Sleep(2500 * time.Millisecond) // a steady run
 	f.set("exit", "")
 	eventually(t, "the sixth start", func() bool { return f.starts() == 6 })
-	// without the reset the delay would be 1600ms
-	if gap := f.times("starts")[5].Sub(f.times("exits")[0]); gap > time.Second {
-		t.Fatalf("delay after a steady run: %v; it did not go back to the first delay", gap)
+	// without the reset the fifth delay would be 160ms
+	want := []time.Duration{10, 20, 40, 80, 10}
+	for i := range want {
+		want[i] *= time.Millisecond
 	}
+	if got := delays.all(); !slices.Equal(got, want) {
+		t.Fatalf("delays %v, want %v", got, want)
+	}
+}
+
+// restartDelays is a log handler that keeps the delay of every bridge restart the hub logs.
+type restartDelays struct {
+	mu     sync.Mutex
+	delays []time.Duration
+}
+
+func (d *restartDelays) Enabled(context.Context, slog.Level) bool { return true }
+func (d *restartDelays) WithAttrs([]slog.Attr) slog.Handler       { return d }
+func (d *restartDelays) WithGroup(string) slog.Handler            { return d }
+func (d *restartDelays) Handle(_ context.Context, r slog.Record) error {
+	if r.Message != "bridge stopped; starting it again" {
+		return nil
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == "delay" {
+			d.mu.Lock()
+			d.delays = append(d.delays, a.Value.Duration())
+			d.mu.Unlock()
+		}
+		return true
+	})
+	return nil
+}
+
+func (d *restartDelays) all() []time.Duration {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.delays)
 }
 
 func TestACrashWakesNoOne(t *testing.T) {
