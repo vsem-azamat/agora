@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -21,8 +24,8 @@ var migrations embed.FS
 
 // Open opens (creating if needed) the database at path and migrates it to the latest schema.
 // The database file is readable and writable by its owner only; SQLite gives its WAL and
-// shared-memory files the same mode. A database with a newer schema than this binary knows is
-// refused. Use ":memory:" for a private in-memory database.
+// shared-memory files the same mode. A database that records a migration this binary does not carry,
+// or lacks one before a recorded one, or has a newer schema version, is refused. Use ":memory:" for a private in-memory database.
 func Open(ctx context.Context, path string) (*sql.DB, error) {
 	if path != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -39,7 +42,7 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 	}
 	// One connection: SQLite has a single writer, and an in-memory database lives per connection.
 	db.SetMaxOpenConns(1)
-	if err := migrate(ctx, db); err != nil {
+	if err := migrate(ctx, db, migrations); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -62,36 +65,98 @@ func ownerOnly(path string) error {
 	return nil
 }
 
-func migrate(ctx context.Context, db *sql.DB) error {
-	names, err := fs.Glob(migrations, "migrations/*.sql")
+// migrate brings the database to the migrations in fsys. The schema_migrations table records
+// which ran, by name: the database is refused when it records one fsys does not carry, or
+// lacks one that fsys carries before one it records (a fork); else the missing tail runs.
+func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
+	files, err := fs.Glob(fsys, "migrations/*.sql")
 	if err != nil {
 		return err
 	}
-	sort.Strings(names)
+	sort.Strings(files)
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
 	}
-	if version > len(names) {
-		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora", version, len(names))
+	if version > len(files) {
+		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora", version, len(files))
 	}
-	for i := version; i < len(names); i++ {
-		body, err := migrations.ReadFile(names[i])
+	if err := ensureRecord(ctx, db, files, version); err != nil {
+		return err
+	}
+	recorded, err := Strings(ctx, db, `SELECT name FROM schema_migrations`)
+	if err != nil {
+		return fmt.Errorf("read applied migrations: %w", err)
+	}
+	applied := make(map[string]bool, len(recorded))
+	for _, n := range recorded {
+		applied[n] = true
+	}
+	carried := make(map[string]bool, len(files))
+	for _, f := range files {
+		carried[path.Base(f)] = true
+	}
+	for _, n := range slices.Sorted(maps.Keys(applied)) {
+		if !carried[n] {
+			return fmt.Errorf("the database has applied migration %s, which this agora does not carry (written by a newer agora or another branch); run the agora that wrote it", n)
+		}
+	}
+	missing := -1
+	for i, f := range files {
+		switch {
+		case !applied[path.Base(f)] && missing < 0:
+			missing = i
+		case applied[path.Base(f)] && missing >= 0:
+			return fmt.Errorf("the database lacks migration %s but has the later %s (written by another branch); it is not run out of order", path.Base(files[missing]), path.Base(f))
+		}
+	}
+	if missing < 0 {
+		return nil
+	}
+	for i := missing; i < len(files); i++ {
+		body, err := fs.ReadFile(fsys, files[i])
 		if err != nil {
 			return err
 		}
-		if err := apply(ctx, db, names[i], string(body), i+1); err != nil {
+		if err := apply(ctx, db, files[i], string(body), i+1); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// ensureRecord creates schema_migrations. A database that had none was migrated by the rule
+// that counted them, so the first version migrations of files are what ran.
+func ensureRecord(ctx context.Context, db *sql.DB, files []string, version int) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	var existing int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'`).Scan(&existing); err != nil {
+		_ = tx.Rollback() // report the error that failed the read
+		return fmt.Errorf("read applied migrations: %w", err)
+	}
+	if existing == 0 {
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE schema_migrations (name TEXT PRIMARY KEY)`); err != nil {
+			_ = tx.Rollback() // report the error that failed the create
+			return fmt.Errorf("create schema_migrations: %w", err)
+		}
+		for _, f := range files[:version] {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name) VALUES (?)`, path.Base(f)); err != nil {
+				_ = tx.Rollback() // report the error that failed the insert
+				return fmt.Errorf("record %s: %w", path.Base(f), err)
+			}
+		}
+	}
+	return tx.Commit()
+}
+
 // foreignKeysOff marks a migration that rebuilds a table other tables point at: it runs with
 // foreign keys off, as SQLite prescribes for that, and they are checked before it commits.
 const foreignKeysOff = "-- foreign keys: off\n"
 
-// apply runs migration name and records version, in one transaction.
+// apply runs migration name and records it and version, in one transaction.
 func apply(ctx context.Context, db *sql.DB, name, body string, version int) (err error) {
 	keysOff := strings.HasPrefix(body, foreignKeysOff)
 	if keysOff {
@@ -123,6 +188,10 @@ func apply(ctx context.Context, db *sql.DB, name, body string, version int) (err
 			_ = tx.Rollback() // report the violations
 			return fmt.Errorf("apply %s: it leaves rows pointing at missing rows (%s); the database is unchanged", name, strings.Join(tables, ", "))
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name) VALUES (?)`, path.Base(name)); err != nil {
+		_ = tx.Rollback() // report the error that failed the record
+		return fmt.Errorf("record %s: %w", name, err)
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
 		_ = tx.Rollback() // report the error that failed the migration

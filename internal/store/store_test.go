@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -553,5 +554,105 @@ func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE messages SET delivery = 'unknown' WHERE id = 3`); err == nil {
 		t.Error("the CHECK accepts a delivery state that does not exist")
+	}
+}
+
+// openOver opens a database at path and migrates it over the migrations in files, named
+// without the directory.
+func openOver(t *testing.T, path string, files ...string) (*sql.DB, error) {
+	t.Helper()
+	fsys := fstest.MapFS{}
+	for _, f := range files {
+		fsys["migrations/"+f+".sql"] = &fstest.MapFile{Data: []byte("CREATE TABLE t_" + f[5:] + " (x INTEGER);")}
+	}
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)&_txlock=immediate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	return db, migrate(context.Background(), db, fsys)
+}
+
+func appliedNames(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	names, err := Strings(context.Background(), db, `SELECT name FROM schema_migrations ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return names
+}
+
+func TestFreshDatabaseRecordsEveryMigrationName(t *testing.T) {
+	db, err := openOver(t, filepath.Join(t.TempDir(), "a.db"), "0001_a", "0002_b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := appliedNames(t, db); !slices.Equal(got, []string{"0001_a.sql", "0002_b.sql"}) {
+		t.Errorf("recorded %v", got)
+	}
+}
+
+func TestDatabaseWithoutNamesIsBackfilledFromItsVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.db")
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{`CREATE TABLE t_a (x INTEGER)`, `PRAGMA user_version = 1`} {
+		if _, err := old.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old.Close()
+	db, err := openOver(t, path, "0001_a", "0002_b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := appliedNames(t, db); !slices.Equal(got, []string{"0001_a.sql", "0002_b.sql"}) {
+		t.Errorf("recorded %v", got)
+	}
+}
+
+func TestAppliedMigrationThisBinaryDoesNotCarryIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.db")
+	if _, err := openOver(t, path, "0001_a", "0002_other"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := openOver(t, path, "0001_a", "0002_mine", "0003_c")
+	if err == nil || !strings.Contains(err.Error(), "0002_other.sql") {
+		t.Fatalf("err = %v, want a refusal naming 0002_other.sql", err)
+	}
+}
+
+func TestMissingEarlierMigrationIsRefusedNotRunOutOfOrder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.db")
+	if _, err := openOver(t, path, "0001_a", "0003_c"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := openOver(t, path, "0001_a", "0002_b", "0003_c")
+	if err == nil || !strings.Contains(err.Error(), "0002_b.sql") {
+		t.Fatalf("err = %v, want a refusal naming 0002_b.sql", err)
+	}
+	if got := appliedNames(t, db); len(got) != 2 {
+		t.Errorf("recorded %v, want the two that were there", got)
+	}
+}
+
+func TestMissingTailIsAppliedAndRecorded(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.db")
+	if _, err := openOver(t, path, "0001_a"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := openOver(t, path, "0001_a", "0002_b", "0003_c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var version int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil || version != 3 {
+		t.Errorf("version %d err %v", version, err)
+	}
+	if got := appliedNames(t, db); !slices.Equal(got, []string{"0001_a.sql", "0002_b.sql", "0003_c.sql"}) {
+		t.Errorf("recorded %v", got)
 	}
 }
