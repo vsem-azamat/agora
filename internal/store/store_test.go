@@ -612,6 +612,10 @@ func TestDatabaseWithoutNamesIsBackfilledFromItsVersion(t *testing.T) {
 	if got := appliedNames(t, db); !slices.Equal(got, []string{"0001_a.sql", "0002_b.sql"}) {
 		t.Errorf("recorded %v", got)
 	}
+	var version, second int
+	if err := db.QueryRow(`SELECT (SELECT user_version FROM pragma_user_version), (SELECT COUNT(*) FROM sqlite_master WHERE name = 't_b')`).Scan(&version, &second); err != nil || version != 2 || second != 1 {
+		t.Errorf("version %d, second migration's table %d, err %v", version, second, err)
+	}
 }
 
 func TestAppliedMigrationThisBinaryDoesNotCarryIsRefused(t *testing.T) {
@@ -631,7 +635,7 @@ func TestMissingEarlierMigrationIsRefusedNotRunOutOfOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	db, err := openOver(t, path, "0001_a", "0002_b", "0003_c")
-	if err == nil || !strings.Contains(err.Error(), "0002_b.sql") {
+	if err == nil || !strings.Contains(err.Error(), "0002_b.sql") || !strings.Contains(err.Error(), "backup") {
 		t.Fatalf("err = %v, want a refusal naming 0002_b.sql", err)
 	}
 	if got := appliedNames(t, db); len(got) != 2 {
@@ -654,5 +658,36 @@ func TestMissingTailIsAppliedAndRecorded(t *testing.T) {
 	}
 	if got := appliedNames(t, db); !slices.Equal(got, []string{"0001_a.sql", "0002_b.sql", "0003_c.sql"}) {
 		t.Errorf("recorded %v", got)
+	}
+}
+
+func TestVersionThatDisagreesWithRecordedNamesIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.db")
+	db, err := openOver(t, path, "0001_a", "0002_b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// an agora that counts migrations ran a third one and bumped the version only
+	if _, err := db.Exec(`CREATE TABLE t_c (x INTEGER); PRAGMA user_version = 3`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = openOver(t, path, "0001_a", "0002_b", "0003_c")
+	if err == nil || !strings.Contains(err.Error(), "counts migrations") || !strings.Contains(err.Error(), "backup") {
+		t.Fatalf("err = %v, want a refusal that says an agora that counts migrations ran one, and what to do", err)
+	}
+}
+
+func TestEmptyRecordWithAVersionIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.db")
+	db, err := openOver(t, path, "0001_a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DELETE FROM schema_migrations`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = openOver(t, path, "0001_a")
+	if err == nil || !strings.Contains(err.Error(), "counts migrations") {
+		t.Fatalf("err = %v, want a refusal", err)
 	}
 }

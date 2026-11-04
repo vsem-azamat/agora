@@ -79,7 +79,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		return fmt.Errorf("read schema version: %w", err)
 	}
 	if version > len(files) {
-		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora", version, len(files))
+		return fmt.Errorf("the database has schema version %d, newer than this agora knows (%d); run a newer agora, or restore the database backup taken before that deploy", version, len(files))
 	}
 	if err := ensureRecord(ctx, db, files, version); err != nil {
 		return err
@@ -87,6 +87,9 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	recorded, err := Strings(ctx, db, `SELECT name FROM schema_migrations`)
 	if err != nil {
 		return fmt.Errorf("read applied migrations: %w", err)
+	}
+	if version != len(recorded) {
+		return fmt.Errorf("the database has schema version %d but records %d migrations: an agora that counts migrations ran one without recording it; restore the database backup taken before that deploy, or run the agora that wrote it", version, len(recorded))
 	}
 	applied := make(map[string]bool, len(recorded))
 	for _, n := range recorded {
@@ -98,7 +101,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	}
 	for _, n := range slices.Sorted(maps.Keys(applied)) {
 		if !carried[n] {
-			return fmt.Errorf("the database has applied migration %s, which this agora does not carry (written by a newer agora or another branch); run the agora that wrote it", n)
+			return fmt.Errorf("the database has applied migration %s, which this agora does not carry (written by a newer agora or another branch); run the agora that wrote it, or restore the database backup taken before that deploy", n)
 		}
 	}
 	missing := -1
@@ -107,7 +110,7 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 		case !applied[path.Base(f)] && missing < 0:
 			missing = i
 		case applied[path.Base(f)] && missing >= 0:
-			return fmt.Errorf("the database lacks migration %s but has the later %s (written by another branch); it is not run out of order", path.Base(files[missing]), path.Base(f))
+			return fmt.Errorf("the database lacks migration %s but has the later %s (written by another branch), and it is not run out of order; run the agora that wrote it, or restore the database backup taken before that deploy", path.Base(files[missing]), path.Base(f))
 		}
 	}
 	if missing < 0 {
