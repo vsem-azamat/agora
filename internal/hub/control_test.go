@@ -622,14 +622,20 @@ func TestInterruptThatWaitedForTheTerminalChecksTheTurnAgain(t *testing.T) {
 func TestInterruptIsAnnouncedWhenTheCallerGoesAway(t *testing.T) {
 	t.Parallel()
 	log := filepath.Join(shortDir(t), "esc")
-	r := startWith(t, func(x *hub.Hub) { x.InterruptCommand = `sleep 0.5; echo esc >> ` + log })
+	r := startWith(t, func(x *hub.Hub) { x.InterruptCommand = `echo start >> ` + log + `; sleep 0.5; echo esc >> ` + log })
 	r.idleAgent(t, "builder", "session-1", "pane-7")
 	r.post(t, "reviewer", "hello")
 	r.report(t, "session-1", agorav1.SessionEvent_SESSION_EVENT_PROMPT)
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err := r.sessions.Interrupt(ctx, connect.NewRequest(&agorav1.InterruptRequest{Agent: "reviewer", Target: "builder"}))
-	if err == nil {
+	called := make(chan error, 1)
+	go func() {
+		_, err := r.sessions.Interrupt(ctx, connect.NewRequest(&agorav1.InterruptRequest{Agent: "reviewer", Target: "builder"}))
+		called <- err
+	}()
+	logHas(t, log, "start") // the caller goes away only once the command runs
+	cancel()
+	if err := <-called; err == nil {
 		t.Fatal("the call outlived its context")
 	}
 	deadline := time.Now().Add(5 * time.Second)

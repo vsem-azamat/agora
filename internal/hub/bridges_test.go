@@ -179,6 +179,20 @@ func (f fake) pid(i int) int {
 	return pid
 }
 
+// times returns the times in the fake's file name, the last field of each line.
+func (f fake) times(name string) []time.Time {
+	var out []time.Time
+	for _, l := range f.lines(name) {
+		fields := strings.Fields(l)
+		if len(fields) == 0 {
+			continue
+		}
+		ns, _ := strconv.ParseInt(fields[len(fields)-1], 10, 64)
+		out = append(out, time.Unix(0, ns))
+	}
+	return out
+}
+
 func (f fake) send(lines ...string) {
 	for _, l := range lines {
 		appendLine(filepath.Join(f.dir, "send"), l)
@@ -1010,7 +1024,7 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 		h = hh
 		hub.SetLog(h, slog.New(delays))
 		// steady is far longer than a crashing run takes even under load
-		hub.SetBridgeDelays(h, 10*time.Millisecond, 5*time.Second, 2*time.Second)
+		hub.SetBridgeDelays(h, 50*time.Millisecond, 5*time.Second, 2*time.Second)
 	})
 	if _, err := r.sessions.JoinName(context.Background(), connect.NewRequest(&agorav1.JoinNameRequest{Name: "builder"})); err != nil {
 		t.Fatal(err)
@@ -1025,13 +1039,19 @@ func TestTheRestartDelayResetsAfterASteadyRun(t *testing.T) {
 	time.Sleep(2500 * time.Millisecond) // a steady run
 	f.set("exit", "")
 	eventually(t, "the sixth start", func() bool { return f.starts() == 6 })
-	// without the reset the fifth delay would be 160ms
-	want := []time.Duration{10, 20, 40, 80, 10}
+	// without the reset the fifth delay would be 800ms
+	want := []time.Duration{50, 100, 200, 400, 50}
 	for i := range want {
 		want[i] *= time.Millisecond
 	}
 	if got := delays.all(); !slices.Equal(got, want) {
 		t.Fatalf("delays %v, want %v", got, want)
+	}
+	starts := f.times("starts")
+	for i, d := range want[:4] { // the hub waits each delay it logs
+		if gap := starts[i+1].Sub(starts[i]); gap < d {
+			t.Fatalf("start %d came %v after the one before, before its delay %v", i+1, gap, d)
+		}
 	}
 }
 
