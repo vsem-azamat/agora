@@ -35,7 +35,7 @@ type hubSettings struct {
 // register adds the hub's flags to cmd.
 func (c *hubConfig) register(cmd *cobra.Command) {
 	f := cmd.Flags()
-	f.StringVar(&c.db, "db", os.Getenv("AGORA_DB"), "database file (default $AGORA_DB, else the hub's default)")
+	f.StringVar(&c.db, "db", os.Getenv("AGORA_DB"), "database file (default $AGORA_DB, else $XDG_STATE_HOME/agora/agora.db, else ~/.local/state/agora/agora.db)")
 	f.StringVar(&c.wakeCommand, "wake-command", os.Getenv("AGORA_WAKE_COMMAND"),
 		"shell command that wakes an idle session without a waiting connector; gets $AGORA_TERMINAL and $AGORA_WAKE_TEXT (default $AGORA_WAKE_COMMAND)")
 	f.StringVar(&c.compactCommand, "compact-command", os.Getenv("AGORA_COMPACT_COMMAND"),
@@ -65,6 +65,13 @@ func (c *hubConfig) resolve(cmd *cobra.Command) (hubSettings, error) {
 		}
 		return fmt.Sprintf("%s=%q", env, value)
 	}
+	// source names where a value came from, without the value
+	source := func(flag, env string) string {
+		if cmd.Flags().Changed(flag) {
+			return "--" + flag
+		}
+		return env
+	}
 	s := hubSettings{db: c.db, webAs: c.webAs, join: c.join, policy: bridges.Policy(c.bridgePolicy), bridgeDelay: bridges.DefaultDelay, watchPRs: true}
 	if c.watchPRs != "" {
 		var err error
@@ -75,23 +82,23 @@ func (c *hubConfig) resolve(cmd *cobra.Command) (hubSettings, error) {
 	if c.bridgeDelay != "" {
 		var err error
 		if s.bridgeDelay, err = time.ParseDuration(c.bridgeDelay); err != nil {
-			return s, fmt.Errorf("%s: a duration such as 60s", from("bridge-delay", "AGORA_BRIDGE_DELAY", c.bridgeDelay))
+			return s, fmt.Errorf("%s: a positive duration such as 60s", from("bridge-delay", "AGORA_BRIDGE_DELAY", c.bridgeDelay))
 		}
-		if err := hub.ValidBridgeDelay(s.bridgeDelay); err != nil {
-			return s, fmt.Errorf("--bridge-delay: %w", err)
+		if hub.ValidBridgeDelay(s.bridgeDelay) != nil {
+			return s, fmt.Errorf("%s: a positive duration such as 60s", from("bridge-delay", "AGORA_BRIDGE_DELAY", c.bridgeDelay))
 		}
 	}
 	if s.policy == "" {
 		s.policy = bridges.Delay
 	}
 	if err := bridges.ValidPolicy(s.policy); err != nil {
-		return s, fmt.Errorf("--bridge-policy: %w", err)
+		return s, fmt.Errorf("%s: %w", source("bridge-policy", "AGORA_BRIDGE_POLICY"), err)
 	}
 	if s.join == "" {
 		s.join = string(sessions.JoinOffer)
 	}
 	if err := sessions.ValidJoinMode(sessions.JoinMode(s.join)); err != nil {
-		return s, fmt.Errorf("--join: %w", err)
+		return s, fmt.Errorf("%s: %w", source("join", "AGORA_JOIN"), err)
 	}
 	if c.web != "" {
 		if _, err := webAddress(c.web); err != nil {

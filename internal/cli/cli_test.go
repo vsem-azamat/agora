@@ -1059,7 +1059,9 @@ func TestBridgeSettings(t *testing.T) {
 		{"flags", "", "", []string{"--bridge-policy", "open", "--bridge-delay", "30s"}, "bridge_policy=open bridge_delay=30s", 0},
 		{"from the environment", "read", "2m", nil, "bridge_policy=read bridge_delay=2m0s", 0},
 		{"the former policy", "", "", []string{"--bridge-policy", "approve"}, `--bridge-policy: policy "approve": open, delay or read`, 1},
-		{"no delay", "", "", []string{"--bridge-delay", "0s"}, "--bridge-delay: the bridge delay must be positive", 1},
+		{"no delay", "", "", []string{"--bridge-delay", "0s"}, `--bridge-delay "0s": a positive duration such as 60s`, 1},
+		{"no delay from the environment", "", "0", nil, `AGORA_BRIDGE_DELAY="0": a positive duration such as 60s`, 1},
+		{"a policy from the environment", "approve", "", nil, `AGORA_BRIDGE_POLICY: policy "approve"`, 1},
 		{"a delay that is no duration", "", "soon", nil, `AGORA_BRIDGE_DELAY="soon"`, 1},
 	}
 	for _, c := range cases {
