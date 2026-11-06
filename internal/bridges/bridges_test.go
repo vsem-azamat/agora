@@ -815,6 +815,11 @@ func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
 	e.receive(t, bridges.In{ID: "5516", AuthorName: "Owner", Self: true, Text: "sure"})
 	one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515", ThreadTitle: "topic"})
+	// a reply in the shown thread itself, between the two
+	own, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "noted", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
 	two := e.receive(t, bridges.In{ID: "5518", AuthorName: "Ada", Text: "two", ReplyTo: "5516", ThreadKey: "5516"})
 
 	taken, _, err := e.r.Take(ctx, "secretary", rooms.Everything, 0)
@@ -839,8 +844,8 @@ func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 		t.Fatalf("the thread it names: %+v %v", thread, err)
 	}
 
-	// for the operator, who has read nothing, the thread counts both as unread, and marking the
-	// newest one read reads both
+	// for the operator, who has read nothing, the thread counts all three as unread, and marking
+	// the newest one read reads them all
 	inThread := func() []int64 {
 		t.Helper()
 		got, _, err := e.r.Unread(ctx, "owner", rooms.Everything, 0)
@@ -855,10 +860,10 @@ func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 		}
 		return ids
 	}
-	if got := inThread(); !slices.Equal(got, []int64{one, two}) {
+	if got := inThread(); !slices.Equal(got, []int64{one, own, two}) {
 		t.Fatalf("the operator's unread replies: %v", got)
 	}
-	if th, err := e.r.ThreadHistory(ctx, root, 10, "owner"); err != nil || th[0].Summary.Unread != 2 {
+	if th, err := e.r.ThreadHistory(ctx, root, 10, "owner"); err != nil || th[0].Summary.Unread != 3 {
 		t.Fatalf("the thread's summary for the operator: %+v %v", th[0].Summary, err)
 	}
 	if moved, err := e.r.MarkRoomRead(ctx, "owner", "example-chat", two); !moved || err != nil {
