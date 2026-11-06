@@ -840,6 +840,18 @@ describe('messages going out', () => {
     );
   });
 
+  it('says that a reply waits for the message it replies to', () => {
+    const { container } = chatRoom([
+      goingOut(1, 'secretary', 'looked, all fine', 6, 'scheduled'),
+      goingOut(2, 'owner', 'thanks', 5, 'held'),
+    ]);
+    const mark = tablet(container, 2).querySelector('.dl');
+    expect(mark?.textContent).toBe('held');
+    expect(mark?.getAttribute('title')).toBe('waits for the message it replies to');
+    expect(tablet(container, 2).querySelector('.decide')).toBeNull();
+    expect(tablet(container, 2).querySelector('.dlerr')).toBeNull();
+  });
+
   it('holds a scheduled message of a room without a bridge any more', () => {
     const scheduled = goingOut(1, 'secretary', 'looked, all fine', 5, 'scheduled');
     const { container, props } = chatRoom([scheduled], { bridge: undefined });

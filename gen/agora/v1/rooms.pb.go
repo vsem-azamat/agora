@@ -31,7 +31,7 @@ const (
 	// It is scheduled: it goes out once the hub's delay passed (due_at), unless the operator cancels
 	// it or sends it at once.
 	DeliveryState_DELIVERY_STATE_SCHEDULED DeliveryState = 1
-	// It is handed to the bridge, which has not answered yet.
+	// It is handed to the bridge, or about to be, and the bridge has not answered yet.
 	DeliveryState_DELIVERY_STATE_SENDING DeliveryState = 2
 	// The bridge sent it.
 	DeliveryState_DELIVERY_STATE_SENT DeliveryState = 3
@@ -42,6 +42,9 @@ const (
 	// It was handed to a bridge that was removed before it answered, so nobody knows whether it went
 	// out; delivery_error says what happened.
 	DeliveryState_DELIVERY_STATE_UNCONFIRMED DeliveryState = 6
+	// It may go out, but waits until the message it replies to (or, in a thread, the thread's root)
+	// has gone out, so it can name it there; it is not handed to the bridge yet.
+	DeliveryState_DELIVERY_STATE_HELD DeliveryState = 7
 )
 
 // Enum value maps for DeliveryState.
@@ -54,6 +57,7 @@ var (
 		4: "DELIVERY_STATE_CANCELLED",
 		5: "DELIVERY_STATE_FAILED",
 		6: "DELIVERY_STATE_UNCONFIRMED",
+		7: "DELIVERY_STATE_HELD",
 	}
 	DeliveryState_value = map[string]int32{
 		"DELIVERY_STATE_UNSPECIFIED": 0,
@@ -63,6 +67,7 @@ var (
 		"DELIVERY_STATE_CANCELLED":   4,
 		"DELIVERY_STATE_FAILED":      5,
 		"DELIVERY_STATE_UNCONFIRMED": 6,
+		"DELIVERY_STATE_HELD":        7,
 	}
 )
 
@@ -2352,7 +2357,7 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x16\n" +
 	"\x06unread\x18\x03 \x01(\bR\x06unread\"A\n" +
 	"\x13ListThreadsResponse\x12*\n" +
-	"\athreads\x18\x01 \x03(\v2\x10.agora.v1.ThreadR\athreads*\xdb\x01\n" +
+	"\athreads\x18\x01 \x03(\v2\x10.agora.v1.ThreadR\athreads*\xf4\x01\n" +
 	"\rDeliveryState\x12\x1e\n" +
 	"\x1aDELIVERY_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18DELIVERY_STATE_SCHEDULED\x10\x01\x12\x1a\n" +
@@ -2360,7 +2365,8 @@ const file_agora_v1_rooms_proto_rawDesc = "" +
 	"\x13DELIVERY_STATE_SENT\x10\x03\x12\x1c\n" +
 	"\x18DELIVERY_STATE_CANCELLED\x10\x04\x12\x19\n" +
 	"\x15DELIVERY_STATE_FAILED\x10\x05\x12\x1e\n" +
-	"\x1aDELIVERY_STATE_UNCONFIRMED\x10\x06*\x8c\x01\n" +
+	"\x1aDELIVERY_STATE_UNCONFIRMED\x10\x06\x12\x17\n" +
+	"\x13DELIVERY_STATE_HELD\x10\a*\x8c\x01\n" +
 	"\x10SubscriptionMode\x12!\n" +
 	"\x1dSUBSCRIPTION_MODE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SUBSCRIPTION_MODE_ALL\x10\x01\x12\x1e\n" +

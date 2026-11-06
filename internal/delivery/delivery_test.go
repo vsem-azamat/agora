@@ -26,11 +26,11 @@ var ctx = context.Background()
 var (
 	writesMessages = regexp.MustCompile("(?i)\\b(?:UPDATE(?:\\s+OR\\s+\\w+)?|INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO)\\s+(?:\\w+\\.)?[\"`\\[]?messages\\b")
 	replaces       = regexp.MustCompile("(?i)\\bREPLACE\\s+INTO\\s+(?:\\w+\\.)?[\"`\\[]?messages\\b")
-	setsDelivery   = regexp.MustCompile("(?i)(?:(?:\\bSET|,)\\s*[\"`\\[]?(?:delivery|delivery_error|scheduled_at)[\"`\\]]?\\s*=|\\bSET\\s*\\([^)]*\\b(?:delivery|delivery_error|scheduled_at)\\b[^)]*\\)\\s*=)")
+	setsDelivery   = regexp.MustCompile("(?i)(?:(?:\\bSET|,)\\s*[\"`\\[]?(?:delivery|delivery_error|scheduled_at|handed_at)[\"`\\]]?\\s*=|\\bSET\\s*\\([^)]*\\b(?:delivery|delivery_error|scheduled_at|handed_at)\\b[^)]*\\)\\s*=)")
 )
 
-// setsTheDelivery reports whether the statement sql assigns a message's delivery, delivery_error
-// or scheduled_at.
+// setsTheDelivery reports whether the statement sql assigns a message's delivery, delivery_error,
+// scheduled_at or handed_at.
 func setsTheDelivery(sql string) bool {
 	return replaces.MatchString(sql) || writesMessages.MatchString(sql) && setsDelivery.MatchString(sql)
 }
@@ -55,8 +55,8 @@ func TestOnlyDeliveryWritesTheDelivery(t *testing.T) {
 		}
 		t.Errorf("%s changes a message's delivery outside the delivery package: %q", s.Path, strings.Join(strings.Fields(s.SQL), " "))
 	}
-	if found < 2 {
-		t.Fatalf("found %d updates of the delivery in the delivery package, want Move's and Reschedule's: the scan is broken", found)
+	if found < 3 {
+		t.Fatalf("found %d updates of the delivery in the delivery package, want Move's, Reschedule's and MarkHanded's: the scan is broken", found)
 	}
 }
 
@@ -72,6 +72,7 @@ func TestTheScanSeesEveryWayToSetTheDelivery(t *testing.T) {
 		"UPDATE messages SET (delivery, delivery_error) = (?, ?)",
 		"INSERT INTO messages (id) VALUES (?) ON CONFLICT (id) DO UPDATE SET delivery = 'sent'",
 		"REPLACE INTO messages (id, delivery) VALUES (?, ?)",
+		"UPDATE messages SET handed_at = ? WHERE id = ?",
 	} {
 		if !setsTheDelivery(sql) {
 			t.Errorf("missed %q", sql)
@@ -142,13 +143,16 @@ func move(db *sql.DB, ids []int64, c delivery.Change) ([]delivery.Moved, error) 
 	return moved, err
 }
 
-var states = []delivery.State{delivery.Scheduled, delivery.Sending, delivery.Sent, delivery.Cancelled, delivery.Failed, delivery.Unconfirmed}
+var states = []delivery.State{delivery.Scheduled, delivery.Held, delivery.Sending, delivery.Sent, delivery.Cancelled, delivery.Failed, delivery.Unconfirmed}
 
 func TestMoveFollowsOnlyTheTable(t *testing.T) {
 	t.Parallel()
 	db, r := newBoard(t)
 	allowed := map[[2]delivery.State]bool{ // written out, so a change of the table shows here
+		{delivery.Scheduled, delivery.Held}:      true,
 		{delivery.Scheduled, delivery.Sending}:   true,
+		{delivery.Held, delivery.Sending}:        true,
+		{delivery.Held, delivery.Failed}:         true,
 		{delivery.Scheduled, delivery.Cancelled}: true,
 		{delivery.Sending, delivery.Sent}:        true,
 		{delivery.Sending, delivery.Failed}:      true,

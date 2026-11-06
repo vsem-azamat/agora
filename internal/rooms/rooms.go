@@ -664,7 +664,7 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how delivery.
 	}
 	if author != Board {
 		var err error
-		if m.Delivery, m.Note, err = delivery.Initial(ctx, tx, room, how); err != nil {
+		if m.Delivery, m.Note, err = delivery.Initial(ctx, tx, room, how, m.ReplyTo, m.Thread); err != nil {
 			return 0, err
 		}
 	}

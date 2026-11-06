@@ -571,6 +571,55 @@ func TestUnconfirmedMigrationMovesMessagesLeftByARemovedBridge(t *testing.T) {
 	}
 }
 
+func TestHeldMigrationHoldsRepliesTheHubHeldBack(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "agora.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyBefore(t, db, "0028_held.sql")
+	for _, q := range []string{
+		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
+		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('old-chat', 'chat', 'builder', 1)`,
+		// 1 is going out unanswered; 2 replies to it and 3 is in its thread: the hub held both back.
+		// 4 replies to 5, which was sent with an identifier, and 6 is scheduled; the hub did not
+		// hold 7, a reply to 6, back: it may have been handed and stays sending.
+		`INSERT INTO messages (id, room, author, body, at, delivery, ext_id) VALUES
+			(1, 'old-chat', 'builder', 'root', 1, 'sending', NULL),
+			(5, 'old-chat', 'builder', 'sent', 2, 'sent', '900'),
+			(6, 'old-chat', 'builder', 'later', 6, 'scheduled', NULL)`,
+		`INSERT INTO messages (id, room, author, body, at, delivery, reply_to, thread) VALUES
+			(2, 'old-chat', 'builder', 'reply', 3, 'sending', 1, NULL),
+			(3, 'old-chat', 'builder', 'in thread', 4, 'sending', NULL, 1),
+			(4, 'old-chat', 'builder', 'answer', 5, 'sending', 5, NULL),
+			(7, 'old-chat', 'builder', 'to the scheduled', 7, 'sending', 6, NULL)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	db, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err := Strings(ctx, db, `SELECT id || ':' || COALESCE(delivery, '') || ':' || (handed_at IS NOT NULL) FROM messages ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"1:sending:1", "2:held:0", "3:held:0", "4:sending:1", "5:sent:0", "6:scheduled:0", "7:sending:1"}
+	if !slices.Equal(got, want) {
+		t.Errorf("messages %q, want %q", got, want)
+	}
+	if idx, err := Strings(ctx, db, `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name = 'messages_held'`); err != nil || len(idx) != 1 {
+		t.Errorf("indexes %q, %v", idx, err)
+	}
+}
+
 // openOver opens a database at path and migrates it over the migrations in files, named
 // without the directory.
 func openOver(t *testing.T, path string, files ...string) (*sql.DB, error) {

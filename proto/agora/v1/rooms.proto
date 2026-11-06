@@ -151,7 +151,7 @@ enum DeliveryState {
   // It is scheduled: it goes out once the hub's delay passed (due_at), unless the operator cancels
   // it or sends it at once.
   DELIVERY_STATE_SCHEDULED = 1;
-  // It is handed to the bridge, which has not answered yet.
+  // It is handed to the bridge, or about to be, and the bridge has not answered yet.
   DELIVERY_STATE_SENDING = 2;
   // The bridge sent it.
   DELIVERY_STATE_SENT = 3;
@@ -162,6 +162,9 @@ enum DeliveryState {
   // It was handed to a bridge that was removed before it answered, so nobody knows whether it went
   // out; delivery_error says what happened.
   DELIVERY_STATE_UNCONFIRMED = 6;
+  // It may go out, but waits until the message it replies to (or, in a thread, the thread's root)
+  // has gone out, so it can name it there; it is not handed to the bridge yet.
+  DELIVERY_STATE_HELD = 7;
 }
 
 // How an agent follows a room.

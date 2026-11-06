@@ -1496,3 +1496,34 @@ func TestARestartedBridgeGetsTheThreadKeyAgain(t *testing.T) {
 		t.Fatalf("outs %v", outs)
 	}
 }
+
+// What the hub handed to a bridge removed before it answered is unconfirmed; a reply it held back
+// for it was never handed and is not sent.
+func TestRemovingABridgeTellsHandedFromHeld(t *testing.T) {
+	t.Parallel()
+	b := startBridgeHub(t, time.Hour)
+	f := newFake(t)
+	f.set("mode", "silent")
+	b.add(t, f)
+	handed, err := b.webRooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Room: "example-chat", Body: "on my way"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the message handed", func() bool { return len(f.outs()) == 1 })
+	held, err := b.webRooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Room: "example-chat", Body: "five minutes", ReplyTo: handed.Msg.GetId()}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.bridges.RemoveBridge(context.Background(), connect.NewRequest(&agorav1.RemoveBridgeRequest{Agent: "builder", Name: "example-chat"})); err != nil {
+		t.Fatal(err)
+	}
+	if m := b.message(t, handed.Msg.GetId()); m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED {
+		t.Errorf("the handed message: %v", m)
+	}
+	if m := b.message(t, held.Msg.GetId()); m.GetDeliveryState() != agorav1.DeliveryState_DELIVERY_STATE_FAILED {
+		t.Errorf("the held reply: %v", m)
+	}
+	if got := f.outs(); len(got) != 1 {
+		t.Errorf("the bridge was handed %v", got)
+	}
+}

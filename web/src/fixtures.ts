@@ -123,6 +123,7 @@ export function bridge(name: string, state: string, policy = 'delay', lastExit =
 
 const deliveries: Record<string, DeliveryState> = {
   scheduled: DeliveryState.SCHEDULED,
+  held: DeliveryState.HELD,
   sending: DeliveryState.SENDING,
   sent: DeliveryState.SENT,
   cancelled: DeliveryState.CANCELLED,

@@ -51,10 +51,11 @@ export const POLICY_LABELS: Record<Policy, string> = {
 };
 
 /** Where a message stands on its way out; undefined for one that stays here. */
-export type Delivery = 'scheduled' | 'sending' | 'sent' | 'cancelled' | 'failed' | 'unconfirmed';
+export type Delivery = 'scheduled' | 'held' | 'sending' | 'sent' | 'cancelled' | 'failed' | 'unconfirmed';
 
 const DELIVERIES: Partial<Record<DeliveryState, Delivery>> = {
   [DeliveryState.SCHEDULED]: 'scheduled',
+  [DeliveryState.HELD]: 'held',
   [DeliveryState.SENDING]: 'sending',
   [DeliveryState.SENT]: 'sent',
   [DeliveryState.CANCELLED]: 'cancelled',

@@ -164,6 +164,7 @@ func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.
 
 var deliveryStates = map[delivery.State]agorav1.DeliveryState{
 	delivery.Scheduled:   agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED,
+	delivery.Held:        agorav1.DeliveryState_DELIVERY_STATE_HELD,
 	delivery.Sending:     agorav1.DeliveryState_DELIVERY_STATE_SENDING,
 	delivery.Sent:        agorav1.DeliveryState_DELIVERY_STATE_SENT,
 	delivery.Cancelled:   agorav1.DeliveryState_DELIVERY_STATE_CANCELLED,
