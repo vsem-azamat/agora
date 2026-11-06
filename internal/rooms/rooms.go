@@ -905,6 +905,7 @@ var mergeEcho = []string{
 	`DELETE FROM thread_reads WHERE root = :echo`,
 	`DELETE FROM mentions WHERE message_id = :echo`,
 	`DELETE FROM read_marks WHERE message_id = :echo`,
+	`DELETE FROM shown_late WHERE message_id = :echo`,
 	`DELETE FROM messages WHERE id = :echo`,
 }
 
@@ -1095,14 +1096,14 @@ func ShowEchoesTx(ctx context.Context, tx *sql.Tx, room string, handedBy time.Ti
 	if !handedBy.IsZero() {
 		by = handedBy.UnixMilli()
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of IN (SELECT o.id FROM messages AS o
-		WHERE o.room = :room AND o.delivery = 'sending' AND (:by IS NULL OR o.handed_at <= :by))`,
+	ids, err := store.Int64s(ctx, tx, `SELECT o.id FROM messages AS o
+		WHERE o.room = :room AND o.delivery = 'sending' AND (:by IS NULL OR o.handed_at <= :by)
+			AND EXISTS (SELECT 1 FROM messages AS e WHERE e.echo_of = o.id)`,
 		sql.Named("room", room), sql.Named("by", by))
-	if err != nil {
+	if err != nil || len(ids) == 0 {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	return n > 0, err
+	return delivery.ShowEchoesTx(ctx, tx, ids)
 }
 
 // addHiddenReplies adds the replies in the thread of root, hidden as an echo, to the summary of
@@ -1403,7 +1404,8 @@ func (r *Rooms) Take(ctx context.Context, agent string, filter Filter, limit int
 // unreadQuery finds unread messages, never in an archived room, through the indexes: messages in rooms followed with ModeAll
 // or ModeWake after the reading position (messages_room), @all messages in rooms followed with
 // ModeMentions after the position (messages_to_all, so their chatter is never walked), and
-// messages mentioning the agent by name (mentions_agent). Replies in threads that are not also
+// messages mentioning the agent by name (mentions_agent), and those of these that showed after the
+// position had passed them (shown_late). Replies in threads that are not also
 // posted to the room come only through mentions (a reply mentions its thread's participants),
 // after the agent's reading position in their thread (thread_reads), not in the room. It takes the agent as :a, General
 // as :general and, to look at one room only, that room as :room (NULL for every room). wake_room says the message is in a room the agent follows with ModeWake and
@@ -1425,6 +1427,11 @@ WITH followed(room, mode, wake_from) AS (
 	JOIN messages AS m INDEXED BY messages_to_all ON m.room = f.room AND m.to_all
 		AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = f.room), (SELECT read_from FROM start))
 	WHERE f.mode = 'mentions' AND (m.thread IS NULL OR m.also) AND (:room IS NULL OR f.room = :room)
+	UNION
+	SELECT m.id, EXISTS (SELECT 1 FROM followed WHERE room = m.room) FROM shown_late AS l
+	JOIN messages AS m ON m.id = l.message_id
+	WHERE l.agent = :a AND (:room IS NULL OR m.room = :room) AND (EXISTS (SELECT 1 FROM followed AS f
+		WHERE f.room = m.room AND (f.mode != 'mentions' OR m.to_all)) OR EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND agent = :a))
 	UNION
 	SELECT m.id, EXISTS (SELECT 1 FROM followed WHERE room = m.room) FROM mentions AS mm
 	JOIN messages AS m ON m.id = mm.message_id
@@ -1583,12 +1590,27 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 			return err
 		}
 		if through <= pos {
-			return nil
+			// messages behind the position that showed after it passed them are read now
+			late, err := readShownLateTx(ctx, tx, agent, room, through)
+			moved = moved || late
+			return err
 		}
 		moved = true
 		return markRead(ctx, tx, agent, []Message{{ID: through, Room: room}})
 	})
 	return moved, err
+}
+
+// readShownLateTx reads agent's messages of room up to the message through that showed after its
+// reading position had passed them, and reports whether there were any.
+func readShownLateTx(ctx context.Context, tx *sql.Tx, agent, room string, through int64) (bool, error) {
+	res, err := tx.ExecContext(ctx, `DELETE FROM shown_late WHERE agent = ? AND message_id <= ?
+		AND message_id IN (SELECT id FROM messages WHERE room = ? AND (thread IS NULL OR also))`, agent, through, room)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // readThreadTx moves agent's reading position in the thread of root up to the reply through and
@@ -1614,6 +1636,9 @@ func markEach(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) err
 		if _, err := tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, agent, m.ID); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM shown_late WHERE agent = ? AND message_id = ?`, agent, m.ID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1635,6 +1660,9 @@ func markRead(ctx context.Context, tx *sql.Tx, agent string, msgs []Message) err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO read_positions (agent, room, last_id) VALUES (?, ?, ?)
 			ON CONFLICT (agent, room) DO UPDATE SET last_id = MAX(last_id, excluded.last_id)`, agent, m.Room, m.ID); err != nil {
+			return err
+		}
+		if _, err := readShownLateTx(ctx, tx, agent, m.Room, m.ID); err != nil {
 			return err
 		}
 	}

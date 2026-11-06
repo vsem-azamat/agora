@@ -2241,3 +2241,112 @@ func TestOnlyASendingMessageIsHanded(t *testing.T) {
 		t.Fatalf("handed after the removal: %v %v", ok, err)
 	}
 }
+
+// A hidden echo that shows after an agent read the room past it is still unread for the agent.
+func TestAnEchoThatShowsLateIsUnreadBehindTheReadingPosition(t *testing.T) {
+	t.Parallel()
+	unread := func(t *testing.T, e env, agent string) []int64 {
+		t.Helper()
+		msgs, _, err := e.r.Unread(ctx, agent, rooms.Everything, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []int64
+		for _, m := range msgs {
+			ids = append(ids, m.ID)
+		}
+		return ids
+	}
+	// setup: builder follows the room and reads it past the hidden echo
+	setup := func(t *testing.T) (e env, id, phone int64) {
+		t.Helper()
+		e = newEnv(t)
+		if _, err := e.r.Subscribe(ctx, "builder", []string{"example-chat"}, true, rooms.ModeAll); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.r.Subscribe(ctx, "secretary", []string{"example-chat"}, true, rooms.ModeMentions); err != nil {
+			t.Fatal(err)
+		}
+		id = e.ownPost(t, "ok")
+		phone = e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+		e.receive(t, bridges.In{ID: "7002", AuthorName: "Ada", Text: "later"})
+		if _, _, err := e.r.Take(ctx, "builder", rooms.Everything, 0); err != nil {
+			t.Fatal(err)
+		}
+		if got := unread(t, e, "builder"); len(got) != 0 {
+			t.Fatalf("unread before the echo shows: %v", got)
+		}
+		return e, id, phone
+	}
+	shows := map[string]func(t *testing.T, e env, id int64){
+		"the bridge stops": func(t *testing.T, e env, _ int64) {
+			if shown, err := e.b.ShowEchoes(ctx, "example-chat", true); !shown || err != nil {
+				t.Fatalf("show: %v %v", shown, err)
+			}
+		},
+		"another identifier": func(t *testing.T, e env, id int64) { e.sent(t, id, "7003") },
+		"failed": func(t *testing.T, e env, id int64) {
+			if ok, err := e.b.Failed(ctx, "example-chat", id, "no network"); !ok || err != nil {
+				t.Fatalf("failed: %v %v", ok, err)
+			}
+		},
+	}
+	for name, show := range shows {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			e, id, phone := setup(t)
+			show(t, e, id)
+			if got := unread(t, e, "builder"); !slices.Contains(got, phone) {
+				t.Fatalf("the shown echo is not unread for builder: %v", got)
+			}
+			if got := unread(t, e, "secretary"); slices.Contains(got, phone) {
+				t.Fatalf("unread for secretary, who follows only mentions: %v", got)
+			}
+			if _, _, err := e.r.Take(ctx, "builder", rooms.Everything, 0); err != nil {
+				t.Fatal(err)
+			}
+			if got := unread(t, e, "builder"); len(got) != 0 {
+				t.Fatalf("unread after taking it: %v", got)
+			}
+		})
+	}
+	t.Run("marking the room read", func(t *testing.T) {
+		t.Parallel()
+		e, _, phone := setup(t)
+		h := e.history(t)
+		last := h[len(h)-1].ID
+		show := shows["the bridge stops"]
+		show(t, e, 0)
+		if moved, err := e.r.MarkRoomRead(ctx, "builder", "example-chat", last); !moved || err != nil {
+			t.Fatalf("mark read: %v %v", moved, err)
+		}
+		if got := unread(t, e, "builder"); slices.Contains(got, phone) {
+			t.Fatalf("unread after marking the room read: %v", got)
+		}
+	})
+	t.Run("reading it alone", func(t *testing.T) {
+		t.Parallel()
+		e, _, phone := setup(t)
+		shows["the bridge stops"](t, e, 0)
+		if _, _, err := e.r.Take(ctx, "builder", rooms.Quiet, 0); err != nil {
+			t.Fatal(err)
+		}
+		// reading elsewhere clears read marks behind the positions: it stays read
+		e.post(t, "secretary", rooms.General, "elsewhere")
+		if _, _, err := e.r.Take(ctx, "builder", rooms.Everything, 0); err != nil {
+			t.Fatal(err)
+		}
+		if got := unread(t, e, "builder"); slices.Contains(got, phone) {
+			t.Fatalf("unread again: %v", got)
+		}
+	})
+	t.Run("merged after it showed", func(t *testing.T) {
+		t.Parallel()
+		e, id, phone := setup(t)
+		shows["the bridge stops"](t, e, 0)
+		e.sent(t, id, "7001")
+		if got := unread(t, e, "builder"); slices.Contains(got, phone) {
+			t.Fatalf("the merged echo is unread: %v", got)
+		}
+	})
+}
