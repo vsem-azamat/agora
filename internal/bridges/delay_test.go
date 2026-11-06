@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vsem-azamat/agora/internal/bridges"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -77,7 +78,7 @@ func TestScheduledMessagesGoOutOnceTheDelayPassed(t *testing.T) {
 	first := e.post(t, "secretary", "example-chat", "looked, all fine")
 	c.add(20 * time.Second)
 	second := e.post(t, "secretary", "example-chat", "and the export too")
-	if m := e.history(t)[0]; m.Delivery != rooms.Scheduled || !m.ScheduledAt.Equal(c.now().Add(-20*time.Second)) {
+	if m := e.history(t)[0]; m.Delivery != delivery.Scheduled || !m.ScheduledAt.Equal(c.now().Add(-20*time.Second)) {
 		t.Fatalf("scheduled message: %+v", m)
 	}
 	if moved, err := e.b.SendDue(ctx, "example-chat"); moved || err != nil {
@@ -87,17 +88,17 @@ func TestScheduledMessagesGoOutOnceTheDelayPassed(t *testing.T) {
 	if moved, err := e.b.SendDue(ctx, "example-chat"); !moved || err != nil {
 		t.Fatalf("after the delay of the first: %v %v", moved, err)
 	}
-	if deliveryOf(t, e, "example-chat", first) != rooms.Sending || deliveryOf(t, e, "example-chat", second) != rooms.Scheduled {
+	if deliveryOf(t, e, "example-chat", first) != delivery.Sending || deliveryOf(t, e, "example-chat", second) != delivery.Scheduled {
 		t.Fatalf("history %+v", e.history(t))
 	}
 	// under read nothing goes out, also once the delay passed; it goes when the policy opens again
 	setPolicy(t, e, bridges.Read)
 	c.add(time.Hour)
-	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", second) != rooms.Scheduled {
+	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", second) != delivery.Scheduled {
 		t.Fatal("a scheduled message went out under read")
 	}
 	setPolicy(t, e, bridges.Open)
-	if moved, _ := e.b.SendDue(ctx, "example-chat"); !moved || deliveryOf(t, e, "example-chat", second) != rooms.Sending {
+	if moved, _ := e.b.SendDue(ctx, "example-chat"); !moved || deliveryOf(t, e, "example-chat", second) != delivery.Sending {
 		t.Fatal("the scheduled message did not go out once the room opened again")
 	}
 	if line := rooms.Format(e.history(t)[0], 0); !strings.Contains(line, "· sending") {
@@ -139,7 +140,7 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 	}
 	h := e.history(t)
 	last := h[len(h)-1]
-	if last.ID != id || last.Author != "secretary" || last.Body != "Draft: the fix ships tonight" || last.ReplyTo != in || last.Note || last.Delivery != rooms.Sending {
+	if last.ID != id || last.Author != "secretary" || last.Body != "Draft: the fix ships tonight" || last.ReplyTo != in || last.Note || last.Delivery != delivery.Sending {
 		t.Fatalf("sent out: %+v", last)
 	}
 	if h[1].ID != note || !h[1].Note || h[1].Delivery != "" {
@@ -154,7 +155,7 @@ func TestTheOperatorSendsANoteOut(t *testing.T) {
 		t.Fatalf("sending out a message that is no note: %v", err)
 	}
 	setPolicy(t, e, bridges.Read)
-	if _, err := e.b.SendNoteOut(ctx, note); !errors.Is(err, rooms.ErrReadOnly) {
+	if _, err := e.b.SendNoteOut(ctx, note); !errors.Is(err, delivery.ErrReadOnly) {
 		t.Fatalf("sending a note out under read: %v", err)
 	}
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
@@ -268,13 +269,13 @@ func TestANoteWhoseMessageMayHaveGoneOutCountsAsSentOut(t *testing.T) {
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
 	}
-	var state rooms.Delivery
+	var state delivery.State
 	for _, m := range e.history(t) {
 		if m.ID == first {
 			state = m.Delivery
 		}
 	}
-	if state != rooms.Unconfirmed {
+	if state != delivery.Unconfirmed {
 		t.Fatalf("the message is %q, want unconfirmed", state)
 	}
 	if _, err := e.b.Add(ctx, "builder", "example-chat", "example-bridge --chat 42", "", []string{"secretary"}); err != nil {
@@ -323,7 +324,7 @@ func TestANoteInAThreadGoesOutInTheThread(t *testing.T) {
 				kept = &th[i]
 			}
 		}
-		if sent == nil || sent.Thread != root || sent.Also != also || sent.Note || sent.Delivery != rooms.Sending {
+		if sent == nil || sent.Thread != root || sent.Also != also || sent.Note || sent.Delivery != delivery.Sending {
 			t.Fatalf("also=%v: the copy is not in the thread: %+v", also, sent)
 		}
 		if kept == nil || kept.Thread != root || kept.Also != also || !kept.Note {
@@ -372,7 +373,7 @@ func TestAddingABridgeAgainStartsTheDelayAgain(t *testing.T) {
 	if _, err := e.b.Add(ctx, "builder", "example-chat", "example-bridge --chat 42", "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", id) != rooms.Scheduled {
+	if moved, _ := e.b.SendDue(ctx, "example-chat"); moved || deliveryOf(t, e, "example-chat", id) != delivery.Scheduled {
 		t.Fatal("a message left scheduled went out as soon as the room was bridged again")
 	}
 	c.add(time.Minute)

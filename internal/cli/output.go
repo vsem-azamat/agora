@@ -6,6 +6,7 @@ import (
 	"time"
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
@@ -55,13 +56,13 @@ func plural(n int32) string {
 }
 
 // deliveryStates maps the API's delivery state back to the hub's, for rooms.Format.
-var deliveryStates = map[agorav1.DeliveryState]rooms.Delivery{
-	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED:   rooms.Scheduled,
-	agorav1.DeliveryState_DELIVERY_STATE_SENDING:     rooms.Sending,
-	agorav1.DeliveryState_DELIVERY_STATE_SENT:        rooms.Sent,
-	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED:   rooms.Cancelled,
-	agorav1.DeliveryState_DELIVERY_STATE_FAILED:      rooms.Failed,
-	agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED: rooms.Unconfirmed,
+var deliveryStates = map[agorav1.DeliveryState]delivery.State{
+	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED:   delivery.Scheduled,
+	agorav1.DeliveryState_DELIVERY_STATE_SENDING:     delivery.Sending,
+	agorav1.DeliveryState_DELIVERY_STATE_SENT:        delivery.Sent,
+	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED:   delivery.Cancelled,
+	agorav1.DeliveryState_DELIVERY_STATE_FAILED:      delivery.Failed,
+	agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED: delivery.Unconfirmed,
 }
 
 // formatMessage renders a message as the hub does the messages it delivers into an agent's

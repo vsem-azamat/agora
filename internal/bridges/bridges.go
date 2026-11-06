@@ -4,7 +4,6 @@
 package bridges
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -17,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/store"
 )
@@ -162,8 +162,7 @@ func (b *Bridges) Add(ctx context.Context, agent, name, command, purpose string,
 		}
 		// messages left scheduled by a bridge removed before they went out start their delay
 		// again, so none goes out the moment the room is bridged again
-		if _, err := tx.ExecContext(ctx, `UPDATE messages SET scheduled_at = ? WHERE room = ? AND delivery = 'scheduled'`,
-			b.now().UnixMilli(), name); err != nil {
+		if err := delivery.Reschedule(ctx, tx, name, b.now()); err != nil {
 			return err
 		}
 		// the keys of a bridge removed earlier belong to its chat, which this one may not be
@@ -213,8 +212,8 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 			return err
 		}
 		for _, f := range failed {
-			text := fmt.Sprintf("@%s your message %d may not have gone out: the bridge was removed before it answered. Check the chat before you send it again.", f.author, f.id)
-			if _, err := b.rooms.PostTx(ctx, tx, rooms.Board, name, text, f.id); err != nil {
+			text := fmt.Sprintf("@%s your message %d may not have gone out: the bridge was removed before it answered. Check the chat before you send it again.", f.Author, f.ID)
+			if _, err := b.rooms.PostTx(ctx, tx, rooms.Board, name, text, f.ID); err != nil {
 				return err
 			}
 		}
@@ -334,38 +333,14 @@ func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Change
 	return out, nil
 }
 
-// settled is a message unconfirmSending marked unconfirmed.
-type settled struct {
-	id     int64
-	author string
-}
-
 // unconfirmSending marks the messages of room still sending as unconfirmed, since its bridge was
 // removed, and returns them in posting order.
-func unconfirmSending(ctx context.Context, tx *sql.Tx, room string) ([]settled, error) {
-	// what is hidden as the echo of one of them is a message of its own
-	if _, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE room = ? AND echo_of IS NOT NULL`, room); err != nil {
-		return nil, err
-	}
-	rows, err := tx.QueryContext(ctx, `UPDATE messages SET delivery = 'unconfirmed', delivery_error = ?
-		WHERE room = ? AND delivery = 'sending' RETURNING id, author`, removedReason, room)
+func unconfirmSending(ctx context.Context, tx *sql.Tx, room string) ([]delivery.Moved, error) {
+	ids, err := delivery.InState(ctx, tx, room, delivery.Sending)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []settled
-	for rows.Next() {
-		var m settled
-		if err := rows.Scan(&m.id, &m.author); err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	slices.SortFunc(out, func(a, b settled) int { return cmp.Compare(a.id, b.id) })
-	return out, nil
+	return delivery.Move(ctx, tx, ids, delivery.Change{To: delivery.Unconfirmed, Room: room, Reason: removedReason})
 }
 
 // removedReason is why a message left sending when its bridge was removed is unconfirmed: the bridge may have sent it and been stopped before it answered.
@@ -656,12 +631,12 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 	}
 	changed := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		_, author, ok, err := rooms.SettleTx(ctx, tx, id, name, rooms.Sending, rooms.Failed, reason)
-		if err != nil || !ok {
+		moved, err := delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Failed, Room: name, Reason: reason})
+		if err != nil || len(moved) == 0 {
 			return err
 		}
 		changed = true
-		return b.tell(ctx, tx, author, name, id, reason)
+		return b.tell(ctx, tx, moved[0].Author, name, id, reason)
 	})
 	return changed, err
 }
@@ -669,15 +644,25 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 // SendDue lets the scheduled messages of the bridge's room go out whose delay has passed, unless
 // the policy is read, and reports whether any did.
 func (b *Bridges) SendDue(ctx context.Context, name string) (bool, error) {
-	res, err := b.db.ExecContext(ctx, `UPDATE messages SET delivery = 'sending'
-		WHERE room = :room AND delivery = 'scheduled' AND scheduled_at <= :due
-			AND EXISTS (SELECT 1 FROM bridges WHERE name = :room AND policy != 'read')`,
-		sql.Named("room", name), sql.Named("due", b.now().Add(-b.delay()).UnixMilli()))
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	return n > 0, err
+	sent := false
+	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
+		var policy string
+		err := tx.QueryRowContext(ctx, `SELECT policy FROM bridges WHERE name = ?`, name).Scan(&policy)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && Policy(policy) == Read {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		ids, err := delivery.ScheduledBy(ctx, tx, name, b.now().Add(-b.delay()))
+		if err != nil {
+			return err
+		}
+		moved, err := delivery.Move(ctx, tx, ids, delivery.Change{To: delivery.Sending, Room: name})
+		sent = len(moved) > 0
+		return err
+	})
+	return sent, err
 }
 
 // SendScheduled lets the scheduled message id go out at once: its room must have a bridge whose
@@ -689,9 +674,9 @@ func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 			WHERE m.id = ? AND m.delivery = 'scheduled'`, id).Scan(&room, &policy)
 		if errors.Is(err, sql.ErrNoRows) {
 			// its delay may have let it go out a moment before: then it is going out, as asked
-			var delivery string
-			err := tx.QueryRowContext(ctx, `SELECT COALESCE(delivery, '') FROM messages WHERE id = ?`, id).Scan(&delivery)
-			if err == nil && (rooms.Delivery(delivery) == rooms.Sending || rooms.Delivery(delivery) == rooms.Sent) {
+			var state string
+			err := tx.QueryRowContext(ctx, `SELECT COALESCE(delivery, '') FROM messages WHERE id = ?`, id).Scan(&state)
+			if err == nil && (delivery.State(state) == delivery.Sending || delivery.State(state) == delivery.Sent) {
 				return nil
 			}
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -705,7 +690,7 @@ func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 		if err := mayGoOut(room, Policy(policy)); err != nil {
 			return err
 		}
-		_, _, _, err = rooms.SettleTx(ctx, tx, id, room, rooms.Scheduled, rooms.Sending, "")
+		_, err = delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Sending, Room: room})
 		return err
 	})
 }
@@ -717,7 +702,7 @@ func mayGoOut(room string, policy Policy) error {
 	case "":
 		return store.Refuse(store.ErrInvalid, "#%s has no bridge", room)
 	case Read:
-		return store.Refuse(rooms.ErrReadOnly, "#%s is read-only; nothing goes out", room)
+		return store.Refuse(delivery.ErrReadOnly, "#%s is read-only; nothing goes out", room)
 	}
 	return nil
 }
@@ -761,13 +746,14 @@ func (b *Bridges) SendNoteOut(ctx context.Context, id int64) (int64, error) {
 // author in the room.
 func (b *Bridges) CancelScheduled(ctx context.Context, id int64, operator string) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		room, author, ok, err := rooms.SettleTx(ctx, tx, id, "", rooms.Scheduled, rooms.Cancelled, "")
+		moved, err := delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Cancelled})
 		if err != nil {
 			return err
 		}
-		if !ok {
+		if len(moved) == 0 {
 			return store.Refuse(ErrNotFound, "message %d is not scheduled", id)
 		}
+		room, author := moved[0].Room, moved[0].Author
 		who := "the operator"
 		if operator != "" {
 			who = operator

@@ -13,6 +13,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/avatars"
 	"github.com/vsem-azamat/agora/internal/bridges"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/pullrequests"
 	"github.com/vsem-azamat/agora/internal/queue"
@@ -35,7 +36,7 @@ func toConnect(err error) error {
 		return connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, queue.ErrNotYourTurn):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
-	case errors.Is(err, rooms.ErrReadOnly), errors.Is(err, rooms.ErrArchived), errors.Is(err, rooms.ErrNotArchived), errors.Is(err, rooms.ErrBridged), errors.Is(err, rooms.ErrUndelivered):
+	case errors.Is(err, delivery.ErrReadOnly), errors.Is(err, rooms.ErrArchived), errors.Is(err, rooms.ErrNotArchived), errors.Is(err, rooms.ErrBridged), errors.Is(err, rooms.ErrUndelivered):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, bridges.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, err)
@@ -150,7 +151,7 @@ func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.
 				pb.ThreadSummary.LastAt = timestamppb.New(sum.LastAt)
 			}
 		}
-		if m.Delivery == rooms.Scheduled && !m.ScheduledAt.IsZero() {
+		if m.Delivery == delivery.Scheduled && !m.ScheduledAt.IsZero() {
 			pb.DueAt = timestamppb.New(due(m.ScheduledAt))
 		}
 		if m.External() {
@@ -161,13 +162,13 @@ func messagesPB(msgs []rooms.Message, due func(time.Time) time.Time) []*agorav1.
 	return out
 }
 
-var deliveryStates = map[rooms.Delivery]agorav1.DeliveryState{
-	rooms.Scheduled:   agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED,
-	rooms.Sending:     agorav1.DeliveryState_DELIVERY_STATE_SENDING,
-	rooms.Sent:        agorav1.DeliveryState_DELIVERY_STATE_SENT,
-	rooms.Cancelled:   agorav1.DeliveryState_DELIVERY_STATE_CANCELLED,
-	rooms.Failed:      agorav1.DeliveryState_DELIVERY_STATE_FAILED,
-	rooms.Unconfirmed: agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED,
+var deliveryStates = map[delivery.State]agorav1.DeliveryState{
+	delivery.Scheduled:   agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED,
+	delivery.Sending:     agorav1.DeliveryState_DELIVERY_STATE_SENDING,
+	delivery.Sent:        agorav1.DeliveryState_DELIVERY_STATE_SENT,
+	delivery.Cancelled:   agorav1.DeliveryState_DELIVERY_STATE_CANCELLED,
+	delivery.Failed:      agorav1.DeliveryState_DELIVERY_STATE_FAILED,
+	delivery.Unconfirmed: agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED,
 }
 
 var subscriptionModes = map[rooms.Mode]agorav1.SubscriptionMode{

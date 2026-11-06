@@ -17,6 +17,7 @@ import (
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/avatars"
 	"github.com/vsem-azamat/agora/internal/bridges"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/governance"
 	"github.com/vsem-azamat/agora/internal/install"
 	"github.com/vsem-azamat/agora/internal/queue"
@@ -45,7 +46,7 @@ var kinds = map[string]error{
 	"rooms.ErrExists":        rooms.ErrExists,
 	"rooms.ErrNotArchived":   rooms.ErrNotArchived,
 	"rooms.ErrNotFound":      rooms.ErrNotFound,
-	"rooms.ErrReadOnly":      rooms.ErrReadOnly,
+	"delivery.ErrReadOnly":   delivery.ErrReadOnly,
 	"rooms.ErrUndelivered":   rooms.ErrUndelivered,
 	"sessions.ErrNameTaken":  sessions.ErrNameTaken,
 	"sessions.ErrRefused":    sessions.ErrRefused,
