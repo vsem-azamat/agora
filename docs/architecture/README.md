@@ -56,6 +56,6 @@ Each package writes only its own tables; another package changes them through it
 - `bridges` writes a note's `messages.sent_out`.
 - `rooms` writes `thread_keys`, a bridges table, when a line from outside starts a keyed thread and when an echo is merged.
 
-Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, whether a room has a bridge, and `outside_avatars`, delivery reads `bridges.policy`, bridges read messages, and avatars reads which agents and people outside use a picture.
+Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, whether a room has a bridge, its `bridge_agents` (a thread's participants) and `outside_avatars`, delivery reads `bridges.policy`, bridges read messages, and avatars reads which agents and people outside use a picture.
 
 Rules live in the domain packages (`internal/queue`); `internal/hub` and `internal/cli` translate between them and the wire.
