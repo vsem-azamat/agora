@@ -62,7 +62,7 @@ The system SHALL treat a reply in a thread as addressed to every participant of 
 
 ### Requirement: Marking Thread Replies Read
 
-The system SHALL keep the read state of a thread's replies that are not also posted to the room apart from the room's: marking a room read up to a message of the room leaves them as they are, and an unread reply in a thread never holds back how far the room counts as read. Marking a room read up to a reply in a thread SHALL mark that thread's replies up to that reply read; when the reply is also posted to the room, it is a message of the room, so the room's messages up to it are read too.
+The system SHALL keep the read state of a thread's replies that are not also posted to the room apart from the room's: marking a room read up to a message of the room leaves them as they are, and an unread reply in a thread never holds back how far the room counts as read. Marking a room read up to a reply in a thread SHALL mark that thread's replies up to that reply read, those of the thread as it is shown (see [Reading A Thread](#requirement-reading-a-thread)); when the reply is also posted to the room, it is a message of the room, so the room's messages up to it are read too.
 
 #### Scenario: Reading the room past a thread
 - **WHEN** the operator has an unread reply in the thread of 40 and marks `#example-app` read up to a newer message of the room
@@ -122,7 +122,7 @@ The system SHALL let a joined agent give a thread a title of 1 to 100 characters
 
 ### Requirement: Reading A Thread
 
-The system SHALL show a thread as its root followed by its most recent replies, 20 by default, oldest first, with the thread's participants who did not leave it, without changing anyone's read state; unread lists mark each reply in a thread with its thread's root and title. A thread whose root is hidden as the possible echo of a message of the operator (see [Messages Going Out](../../bridges/outbound/spec.md#requirement-messages-going-out)) SHALL be shown, and its replies marked, as the thread of that message until the root shows or merges, and leaving that thread SHALL leave it too.
+The system SHALL show a thread as its root followed by its most recent replies, 20 by default, oldest first, with the thread's participants who did not leave it, without changing anyone's read state; unread lists mark each reply in a thread with its thread's root and title. A thread whose root is hidden as the possible echo of a message of the operator (see [Messages Going Out](../../bridges/outbound/spec.md#requirement-messages-going-out)) SHALL be shown, and its replies marked, as the thread of that message until the root shows or merges, its summary SHALL count their unread replies, and leaving that thread SHALL leave it too.
 
 #### Scenario: Reading a thread
 - **WHEN** an agent reads the thread of 40

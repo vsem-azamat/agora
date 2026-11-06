@@ -1048,6 +1048,11 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 			if err := addHiddenReplies(ctx, tx, &out[0].Summary, h); err != nil {
 				return err
 			}
+			unread := []Message{{ID: h}}
+			if err := countUnread(ctx, tx, unread, reader); err != nil {
+				return err
+			}
+			out[0].Summary.Unread += unread[0].Summary.Unread
 			more, err := participantsTx(ctx, tx, h, "")
 			if err != nil {
 				return err
@@ -1551,8 +1556,25 @@ func (r *Rooms) MarkRoomRead(ctx context.Context, agent, room string, through in
 			return err
 		}
 		if thread != 0 {
-			if moved, err = readThreadTx(ctx, tx, agent, thread, through); err != nil || !also {
+			// the thread as it is shown: with a hidden echo's thread, the one it is shown under,
+			// and the threads of the echoes hidden under that one
+			shown, err := shownRootTx(ctx, tx, thread)
+			if err != nil {
 				return err
+			}
+			hidden, err := hiddenRootsTx(ctx, tx, shown)
+			if err != nil {
+				return err
+			}
+			for _, root := range append([]int64{shown}, hidden...) {
+				read, err := readThreadTx(ctx, tx, agent, root, through)
+				if err != nil {
+					return err
+				}
+				moved = moved || read
+			}
+			if !also {
+				return nil
 			}
 		}
 		var pos int64

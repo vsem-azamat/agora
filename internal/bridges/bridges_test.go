@@ -839,6 +839,35 @@ func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 		t.Fatalf("the thread it names: %+v %v", thread, err)
 	}
 
+	// for the operator, who has read nothing, the thread counts both as unread, and marking the
+	// newest one read reads both
+	inThread := func() []int64 {
+		t.Helper()
+		got, _, err := e.r.Unread(ctx, "owner", rooms.Everything, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []int64
+		for _, m := range got {
+			if m.ShownThread == root {
+				ids = append(ids, m.ID)
+			}
+		}
+		return ids
+	}
+	if got := inThread(); !slices.Equal(got, []int64{one, two}) {
+		t.Fatalf("the operator's unread replies: %v", got)
+	}
+	if th, err := e.r.ThreadHistory(ctx, root, 10, "owner"); err != nil || th[0].Summary.Unread != 2 {
+		t.Fatalf("the thread's summary for the operator: %+v %v", th[0].Summary, err)
+	}
+	if moved, err := e.r.MarkRoomRead(ctx, "owner", "example-chat", two); !moved || err != nil {
+		t.Fatalf("marking read: %v %v", moved, err)
+	}
+	if got := inThread(); len(got) != 0 {
+		t.Fatalf("unread after marking the newest read: %v", got)
+	}
+
 	if err := e.r.LeaveThread(ctx, "secretary", root); err != nil {
 		t.Fatal(err)
 	}
