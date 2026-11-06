@@ -49,12 +49,13 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 | `proto/agora/v1` | The API contract |
 | `gen/agora/v1` | Code generated from `proto/`; never edited by hand |
 
-Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Three writes cross that line:
+Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Four writes cross that line:
 
 - `agents.RenameTx` moves an agent's name in every column of every package's tables that holds one and drops earlier mentions of the new name; `TestRenameMovesEveryNameColumn` classifies each `TEXT` column of the schema, so a new name column of that type cannot be missed.
-- `bridges` writes columns of `messages` for what goes out of a bridged room: `delivery`, `delivery_error`, `scheduled_at`, `echo_of` and a note's `sent_out`.
+- `delivery` writes the columns of `messages` that say where a message stands on its way out: `delivery`, `delivery_error` and `scheduled_at` (`rooms` stores them for a new message as `delivery.Initial` gives them), and clears `echo_of` when a message leaves `sending`.
+- `bridges` writes a note's `messages.sent_out`.
 - `rooms` writes `thread_keys`, a bridges table, when a line from outside starts a keyed thread and when an echo is merged.
 
-Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, `bridges.policy` and `outside_avatars`, bridges read messages, and avatars reads which agents and people outside use a picture.
+Reads may join other packages' tables: profiles read sessions, pull requests and messages, rooms reads `agents.read_from`, whether a room has a bridge, and `outside_avatars`, delivery reads `bridges.policy`, bridges read messages, and avatars reads which agents and people outside use a picture.
 
 Rules live in the domain packages (`internal/queue`); `internal/hub` and `internal/cli` translate between them and the wire.

@@ -43,10 +43,11 @@ func TestTheEchoMergeCoversEveryReferenceToAMessage(t *testing.T) {
 		if notMerged[table+"."+column] != "" {
 			continue
 		}
-		// an UPDATE that moves the column off the echo, or a DELETE of the rows that hold it
-		handles := regexp.MustCompile(`(?is)^\s*(?:UPDATE(?:\s+OR\s+\w+)?\s+` + table + `\s+SET\s+` + column + `\s*=.*\bWHERE\s+` + column +
-			`\s*=\s*:echo|DELETE\s+FROM\s+` + table + `\s+WHERE\s+` + column + `\s*=\s*:echo)`)
-		if !slices.ContainsFunc(mergeEcho, handles.MatchString) {
+		// a plain UPDATE moves the column off the echo; an UPDATE OR IGNORE (or REPLACE …) skips the
+		// rows that conflict, which only a DELETE of the rows still holding it takes away
+		moves := regexp.MustCompile(`(?is)^\s*UPDATE\s+` + table + `\s+SET\s+` + column + `\s*=.*\bWHERE\s+` + column + `\s*=\s*:echo`)
+		deletes := regexp.MustCompile(`(?is)^\s*DELETE\s+FROM\s+` + table + `\s+WHERE\s+` + column + `\s*=\s*:echo\s*$`)
+		if !slices.ContainsFunc(mergeEcho, moves.MatchString) && !slices.ContainsFunc(mergeEcho, deletes.MatchString) {
 			t.Errorf("merging an echo leaves %s.%s pointing at it", table, column)
 		}
 	}
