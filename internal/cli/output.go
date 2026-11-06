@@ -58,6 +58,7 @@ func plural(n int32) string {
 // deliveryStates maps the API's delivery state back to the hub's, for rooms.Format.
 var deliveryStates = map[agorav1.DeliveryState]delivery.State{
 	agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED:   delivery.Scheduled,
+	agorav1.DeliveryState_DELIVERY_STATE_HELD:        delivery.Held,
 	agorav1.DeliveryState_DELIVERY_STATE_SENDING:     delivery.Sending,
 	agorav1.DeliveryState_DELIVERY_STATE_SENT:        delivery.Sent,
 	agorav1.DeliveryState_DELIVERY_STATE_CANCELLED:   delivery.Cancelled,

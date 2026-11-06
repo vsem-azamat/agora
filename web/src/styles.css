@@ -1751,6 +1751,10 @@ button.sentout:hover {
 .dl.sending {
   font-style: italic;
 }
+.dl.held {
+  text-decoration: underline dotted;
+  cursor: help;
+}
 .dl.sent {
   align-self: center;
   display: inline-flex;

@@ -61,9 +61,15 @@ export const BoardLine = memo(function BoardLine({ m, dim, ...ctx }: Context & {
   );
 });
 
-/** Where a message that goes out stands, next to its time: sending, sent, not sent or unconfirmed. */
+/** Where a message that goes out stands, next to its time: held, sending, sent, not sent or unconfirmed. */
 export function DeliveryMark({ d, room }: { d: Delivery | undefined; room: string }) {
   switch (d) {
+    case 'held':
+      return (
+        <span className="dl held" title={WAITS_FOR_PARENT}>
+          held
+        </span>
+      );
     case 'sending':
       return <span className="dl sending">sending…</span>;
     case 'sent':
@@ -86,6 +92,9 @@ export function DeliveryMark({ d, room }: { d: Delivery | undefined; room: strin
       return null;
   }
 }
+
+/** Why a held message has not gone out yet. */
+export const WAITS_FOR_PARENT = 'waits for the message it replies to';
 
 /** What the operator should do about a message that may have gone out. */
 export const CHECK_THE_CHAT = 'check the chat before sending it again';

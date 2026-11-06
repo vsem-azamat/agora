@@ -26,7 +26,8 @@ type State string
 // Delivery states.
 const (
 	Scheduled State = "scheduled" // goes out once the delay passed, unless the operator cancels it
-	Sending   State = "sending"   // the bridge has to send it
+	Held      State = "held"      // may go out, but waits until the message it replies to has gone out
+	Sending   State = "sending"   // the bridge has to send it: handed to it, or about to be
 	Sent      State = "sent"      // the bridge sent it
 	Cancelled State = "cancelled" // the operator cancelled it
 	Failed    State = "failed"    // the bridge could not send it
@@ -35,14 +36,28 @@ const (
 )
 
 // moves lists, for each state, the states a message may enter it from. A new message starts
-// scheduled or sending (see Initial), or without a state when it never goes out.
+// scheduled, held or sending (see Initial), or without a state when it never goes out.
 var moves = map[State][]State{
-	Sending:     {Scheduled}, // its delay passed, or the operator sent it at once
-	Sent:        {Sending},   // the bridge sent it
-	Failed:      {Sending},   // the bridge could not send it
-	Unconfirmed: {Sending},   // its bridge was removed before it answered
-	Cancelled:   {Scheduled}, // the operator cancelled it
+	Held:        {Scheduled},       // it may go out, but what it replies to has not gone out yet
+	Sending:     {Scheduled, Held}, // it may go out and what it replies to has gone out (or never will)
+	Sent:        {Sending},         // the bridge sent it
+	Failed:      {Sending, Held},   // the bridge could not send it, or was removed before it was handed it
+	Unconfirmed: {Sending},         // its bridge was removed before it answered
+	Cancelled:   {Scheduled},       // the operator cancelled it
 }
+
+// settled are the states a message leaves the way out in: what was held for it is let go.
+var settled = []State{Sent, Failed, Unconfirmed, Cancelled}
+
+// waits is true for a message m (with the message it replies to joined as r, in its room, and its
+// thread's root as t) that has to wait: what it names outside has not gone out yet and has no
+// identifier there. A reply names the message it replies to, or, when that has no identifier
+// outside, its thread's root.
+const waits = `(COALESCE(r.delivery, '') IN ('scheduled', 'held', 'sending') AND r.ext_id IS NULL
+	OR r.ext_id IS NULL AND COALESCE(t.delivery, '') IN ('scheduled', 'held', 'sending') AND t.ext_id IS NULL)`
+
+// named joins to m the message it replies to (r) and its thread's root (t), for waits.
+const named = ` LEFT JOIN messages AS r ON r.id = m.reply_to AND r.room = m.room LEFT JOIN messages AS t ON t.id = m.thread `
 
 // How is how a new message of a bridged room may leave Agora.
 type How int
@@ -55,9 +70,11 @@ const (
 )
 
 // Initial returns the state a new message posted as how gets in room under its bridge's policy,
-// "" in a room without a bridge, and whether it is a note, which only a bridged room has. An
-// agent's message in a room bridged read-only is refused.
-func Initial(ctx context.Context, tx *sql.Tx, room string, how How) (State, bool, error) {
+// "" in a room without a bridge, and whether it is a note, which only a bridged room has. A
+// message that goes out at once is held while the message it replies to (replyTo, 0 for none), or
+// the root of its thread (thread, 0 for none), has to wait. An agent's message in a room bridged
+// read-only is refused.
+func Initial(ctx context.Context, tx *sql.Tx, room string, how How, replyTo, thread int64) (State, bool, error) {
 	var policy string
 	err := tx.QueryRowContext(ctx, `SELECT policy FROM bridges WHERE name = ?`, room).Scan(&policy)
 	switch {
@@ -71,9 +88,50 @@ func Initial(ctx context.Context, tx *sql.Tx, room string, how How) (State, bool
 	case policy == "read":
 		return "", false, store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out, and agents post only notes there (--note)", room)
 	case policy == "open" || how == AsOperator:
-		return Sending, false, nil
+		var held bool
+		err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM (SELECT :reply AS reply_to, :thread AS thread, :room AS room) AS m`+named+`WHERE `+waits+`)`,
+			sql.Named("reply", replyTo), sql.Named("thread", thread), sql.Named("room", room)).Scan(&held)
+		if held {
+			return Held, false, err
+		}
+		return Sending, false, err
 	}
 	return Scheduled, false, nil
+}
+
+// GoOut lets the messages ids of room that are scheduled or held go out: each one that has to wait
+// for the message it replies to is held, the others are sending. It returns those that moved.
+func GoOut(ctx context.Context, tx *sql.Tx, ids []int64, room string) ([]Moved, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	list, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
+	waiting, err := idsOf(ctx, tx, `SELECT m.id FROM messages AS m`+named+`WHERE m.id IN (SELECT value FROM json_each(?)) AND `+waits, string(list))
+	if err != nil {
+		return nil, err
+	}
+	var hold, release []int64
+	for _, id := range ids {
+		if slices.Contains(waiting, id) {
+			hold = append(hold, id)
+		} else {
+			release = append(release, id)
+		}
+	}
+	held, err := Move(ctx, tx, hold, Change{To: Held, From: []State{Scheduled}, Room: room})
+	if err != nil {
+		return nil, err
+	}
+	sending, err := Move(ctx, tx, release, Change{To: Sending, Room: room})
+	if err != nil {
+		return nil, err
+	}
+	out := append(held, sending...)
+	slices.SortFunc(out, func(a, b Moved) int { return cmp.Compare(a.ID, b.ID) })
+	return out, nil
 }
 
 // Change is one move: the messages enter To from one of From (every state moves allows into To
@@ -94,7 +152,9 @@ type Moved struct {
 
 // Move applies c to the messages ids and returns those that moved, in posting order; the others
 // are not in a state c leaves, or not in its room. A message that leaves sending releases what
-// was hidden as its echo, which is a message of its own unless the answer merges it.
+// was hidden as its echo, which is a message of its own unless the answer merges it. A message
+// that settles (sent, failed, unconfirmed or cancelled) lets go what was held in its room: each
+// held message that no longer has to wait goes out (GoOut).
 func Move(ctx context.Context, tx *sql.Tx, ids []int64, c Change) ([]Moved, error) {
 	allowed := moves[c.To]
 	from := c.From
@@ -135,18 +195,39 @@ func Move(ctx context.Context, tx *sql.Tx, ids []int64, c Change) ([]Moved, erro
 		return nil, err
 	}
 	slices.SortFunc(out, func(a, b Moved) int { return cmp.Compare(a.ID, b.ID) })
-	if len(out) == 0 || !slices.Contains(from, Sending) {
+	if len(out) == 0 {
 		return out, nil
 	}
-	moved := make([]int64, len(out))
-	for i, m := range out {
-		moved[i] = m.ID
+	if slices.Contains(from, Sending) {
+		moved := make([]int64, len(out))
+		for i, m := range out {
+			moved[i] = m.ID
+		}
+		if list, err = json.Marshal(moved); err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of IN (SELECT value FROM json_each(?))`, string(list)); err != nil {
+			return nil, err
+		}
 	}
-	if list, err = json.Marshal(moved); err != nil {
-		return nil, err
+	if slices.Contains(settled, c.To) {
+		var rooms []string
+		for _, m := range out {
+			if !slices.Contains(rooms, m.Room) {
+				rooms = append(rooms, m.Room)
+			}
+		}
+		for _, room := range rooms {
+			held, err := InState(ctx, tx, room, Held)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := GoOut(ctx, tx, held, room); err != nil {
+				return nil, err
+			}
+		}
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of IN (SELECT value FROM json_each(?))`, string(list))
-	return out, err
+	return out, nil
 }
 
 func scanMoved(rows *sql.Rows) ([]Moved, error) {
@@ -164,12 +245,25 @@ func scanMoved(rows *sql.Rows) ([]Moved, error) {
 
 // ScheduledBy returns the messages of room scheduled at or before due, in posting order.
 func ScheduledBy(ctx context.Context, tx *sql.Tx, room string, due time.Time) ([]int64, error) {
-	return ids(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'scheduled' AND scheduled_at <= ? ORDER BY id`, room, due.UnixMilli())
+	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'scheduled' AND scheduled_at <= ? ORDER BY id`, room, due.UnixMilli())
 }
 
 // InState returns the messages of room in state s, in posting order.
 func InState(ctx context.Context, tx *sql.Tx, room string, s State) ([]int64, error) {
-	return ids(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = ? ORDER BY id`, room, string(s))
+	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = ? ORDER BY id`, room, string(s))
+}
+
+// Unhanded returns the messages of room sending that the hub has never handed to a bridge, in
+// posting order.
+func Unhanded(ctx context.Context, tx *sql.Tx, room string) ([]int64, error) {
+	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'sending' AND handed_at IS NULL ORDER BY id`, room)
+}
+
+// MarkHanded records that the hub hands message id of room, sending, to its bridge at now. The hub
+// marks it before it writes the message, so a message marked may have gone out.
+func MarkHanded(ctx context.Context, tx *sql.Tx, room string, id int64, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `UPDATE messages SET handed_at = ? WHERE id = ? AND room = ? AND delivery = 'sending'`, now.UnixMilli(), id, room)
+	return err
 }
 
 // Reschedule starts the delay of the messages of room still scheduled again at now.
@@ -178,7 +272,7 @@ func Reschedule(ctx context.Context, tx *sql.Tx, room string, now time.Time) err
 	return err
 }
 
-func ids(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]int64, error) {
+func idsOf(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]int64, error) {
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

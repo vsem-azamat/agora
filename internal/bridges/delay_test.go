@@ -265,7 +265,11 @@ func TestANoteWhoseMessageMayHaveGoneOutCountsAsSentOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the bridge is removed before it answered: the message is unconfirmed, it may be in the chat
+	// the bridge is handed it and removed before it answered: the message is unconfirmed, it may be
+	// in the chat
+	if err := e.b.Handed(ctx, "example-chat", first); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
 	}

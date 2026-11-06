@@ -1322,6 +1322,9 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := e.b.Handed(ctx, "example-chat", sending); err != nil {
+		t.Fatal(err)
+	}
 	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
@@ -1351,6 +1354,10 @@ func TestAnEchoOfAThreadReplyKeepsThreadsFlat(t *testing.T) {
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root := e.post(t, "builder", "example-chat", "the export")
+	// the root went out first, so the reply in its thread is not held for it
+	if _, _, err := e.b.Sent(ctx, "example-chat", root, "5500"); err != nil {
+		t.Fatal(err)
+	}
 	sent, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "looked, all fine", Thread: root})
 	if err != nil {
 		t.Fatal(err)
@@ -1388,6 +1395,10 @@ func TestMergingAnEchoKeepsUnreadRepliesUnread(t *testing.T) {
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Open)
 	root := e.post(t, "builder", "example-chat", "the export")
+	// the root went out first, so the reply in its thread is not held for it
+	if _, _, err := e.b.Sent(ctx, "example-chat", root, "5500"); err != nil {
+		t.Fatal(err)
+	}
 	sent, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "looked, all fine", Thread: root})
 	if err != nil {
 		t.Fatal(err)
@@ -1695,8 +1706,14 @@ func TestAReplyWaitsForTheMessageItRepliesTo(t *testing.T) {
 	if got := ids(); len(got) != 1 || got[0] != root {
 		t.Fatalf("replies wait while their root is going out: %v", got)
 	}
+	if deliveryOf(t, e, "example-chat", plain) != delivery.Held || deliveryOf(t, e, "example-chat", root) != delivery.Sending {
+		t.Fatalf("the waiting reply is not held: %+v", e.history(t))
+	}
 	if _, _, err := e.b.Sent(ctx, "example-chat", root, "900"); err != nil {
 		t.Fatal(err)
+	}
+	if deliveryOf(t, e, "example-chat", plain) != delivery.Sending {
+		t.Fatalf("the reply is not released: %+v", e.history(t))
 	}
 	outs, err := outgoing(t, e)
 	if err != nil || len(outs) != 2 || outs[0].ID != inThread || outs[0].ReplyTo != "900" || outs[1].ID != plain || outs[1].ReplyTo != "900" {
@@ -1843,5 +1860,172 @@ func TestReadingAProtocolVersion(t *testing.T) {
 		if got := bridges.ReadVersion(json.RawMessage(raw)); got != want {
 			t.Errorf("ReadVersion(%q) = %d, want %d", raw, got, want)
 		}
+	}
+}
+
+// A reply the operator posts at once to a scheduled message is held until that message went out,
+// also when the operator sends it at once, and then follows it naming it (#141).
+func TestAReplyToAScheduledMessageWaitsForIt(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
+	reply, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "thanks", scheduled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs, err := outgoing(t, e); err != nil || len(outs) != 0 {
+		t.Fatalf("the reply goes out before what it replies to: %+v %v", outs, err)
+	}
+	if got := deliveryOf(t, e, "example-chat", reply); got != delivery.Held {
+		t.Fatalf("the reply is %q, want held", got)
+	}
+	if err := e.b.SendScheduled(ctx, scheduled); err != nil {
+		t.Fatal(err)
+	}
+	if outs, err := outgoing(t, e); err != nil || len(outs) != 1 || outs[0].ID != scheduled {
+		t.Fatalf("sent at once, the scheduled message goes first and alone: %+v %v", outs, err)
+	}
+	if err := e.b.SendScheduled(ctx, reply); err != nil {
+		t.Fatalf("sending a held message at once: %v", err)
+	}
+	if got := deliveryOf(t, e, "example-chat", reply); got != delivery.Held {
+		t.Fatalf("sending a held message at once changed it to %q", got)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", scheduled, "901"); err != nil {
+		t.Fatal(err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 1 || outs[0].ID != reply || outs[0].ReplyTo != "901" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
+// A reply held for a thread's root that is scheduled waits for it too.
+func TestAReplyInTheThreadOfAScheduledRootWaitsForIt(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	root := e.post(t, "secretary", "example-chat", "release today")
+	reply, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "at five", Thread: root, Operator: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := slices.IndexFunc(e.thread(t, root), func(m rooms.Message) bool { return m.ID == reply }); i < 0 || e.thread(t, root)[i].Delivery != delivery.Held {
+		t.Fatalf("the reply in the thread is not held: %+v", e.thread(t, root))
+	}
+}
+
+func TestAReplyToACancelledMessageGoesOutWithoutIt(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	scheduled := e.post(t, "secretary", "example-chat", "something rude")
+	reply, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "never mind", scheduled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.CancelScheduled(ctx, scheduled, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 1 || outs[0].ID != reply || outs[0].ReplyTo != "" {
+		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
+// Removing a bridge marks what it was never handed as not sent: a held reply, and a message the
+// bridge never took (#130); only what it was handed may have gone out.
+func TestRemovingMarksWhatWasNeverHandedNotSent(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	handed, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.Handed(ctx, "example-chat", handed); err != nil {
+		t.Fatal(err)
+	}
+	held, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "five minutes", handed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	untaken, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "parking now", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	const why = "the bridge was removed before it was handed the message"
+	h := e.history(t)
+	for _, c := range []struct {
+		id    int64
+		state delivery.State
+		told  string
+	}{
+		{handed, delivery.Unconfirmed, "may not have gone out: the bridge was removed before it answered. Check the chat before you send it again."},
+		{held, delivery.Failed, "was not sent: " + why + "."},
+		{untaken, delivery.Failed, "was not sent: " + why + "."},
+	} {
+		if got := deliveryOf(t, e, "example-chat", c.id); got != c.state {
+			t.Errorf("message %d is %q, want %q", c.id, got, c.state)
+		}
+		told := "@owner your message " + itoa(c.id) + " " + c.told
+		if !slices.ContainsFunc(h, func(m rooms.Message) bool { return m.Author == rooms.Board && m.Body == told && m.ReplyTo == c.id }) {
+			t.Errorf("the board did not say %q: %+v", told, h)
+		}
+	}
+	for _, m := range h {
+		if m.ID == held && m.DeliveryError != why {
+			t.Errorf("reason of the held reply: %q", m.DeliveryError)
+		}
+	}
+}
+
+func TestAHeldMessageShowsHeld(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
+	reply, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "thanks", scheduled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range e.history(t) {
+		if m.ID == reply && !strings.HasSuffix(strings.Split(rooms.Format(m, 0), "\n")[0], " · held") {
+			t.Fatalf("formatted: %q", rooms.Format(m, 0))
+		}
+	}
+}
+
+// A reply to a held reply waits for it in turn: each goes once the message it replies to went out.
+func TestAChainOfRepliesGoesOutInTurn(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	setPolicy(t, e, bridges.Open)
+	root := e.post(t, "secretary", "example-chat", "release today")
+	first, err := e.r.Post(ctx, "builder", "example-chat", "at five", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := e.r.Post(ctx, "secretary", "example-chat", "five works", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	states := func() []delivery.State {
+		return []delivery.State{deliveryOf(t, e, "example-chat", root), deliveryOf(t, e, "example-chat", first), deliveryOf(t, e, "example-chat", second)}
+	}
+	if got := states(); !slices.Equal(got, []delivery.State{delivery.Sending, delivery.Held, delivery.Held}) {
+		t.Fatalf("before any answer: %v", got)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", root, "900"); err != nil {
+		t.Fatal(err)
+	}
+	if got := states(); !slices.Equal(got, []delivery.State{delivery.Sent, delivery.Sending, delivery.Held}) {
+		t.Fatalf("after the root: %v", got)
+	}
+	if _, _, err := e.b.Sent(ctx, "example-chat", first, "901"); err != nil {
+		t.Fatal(err)
+	}
+	outs, err := outgoing(t, e)
+	if err != nil || len(outs) != 1 || outs[0].ID != second || outs[0].ReplyTo != "901" {
+		t.Fatalf("outs %+v %v", outs, err)
 	}
 }

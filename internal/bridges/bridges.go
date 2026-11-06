@@ -206,7 +206,17 @@ func (b *Bridges) Remove(ctx context.Context, agent, name string) error {
 		if _, err := b.rooms.PostTx(ctx, tx, rooms.Board, name, agent+" removed the bridge of this room; the room stays, no longer bridged.", 0); err != nil {
 			return err
 		}
-		// no bridge answers for the messages left sending any more
+		// what was never handed to the bridge certainly did not go out
+		notSent, err := failUnhanded(ctx, tx, name)
+		if err != nil {
+			return err
+		}
+		for _, f := range notSent {
+			if err := b.tell(ctx, tx, f.Author, name, f.ID, unhandedReason); err != nil {
+				return err
+			}
+		}
+		// no bridge answers for the messages it was handed any more
 		failed, err := unconfirmSending(ctx, tx, name)
 		if err != nil {
 			return err
@@ -332,6 +342,24 @@ func (b *Bridges) Set(ctx context.Context, agent, name string, c Change) (Change
 	}
 	return out, nil
 }
+
+// failUnhanded marks the messages of room that were to go out but were never handed to its bridge,
+// now removed, as not sent: those held and those sending the hub never handed. It returns them in
+// posting order.
+func failUnhanded(ctx context.Context, tx *sql.Tx, room string) ([]delivery.Moved, error) {
+	held, err := delivery.InState(ctx, tx, room, delivery.Held)
+	if err != nil {
+		return nil, err
+	}
+	unhanded, err := delivery.Unhanded(ctx, tx, room)
+	if err != nil {
+		return nil, err
+	}
+	return delivery.Move(ctx, tx, append(held, unhanded...), delivery.Change{To: delivery.Failed, Room: room, Reason: unhandedReason})
+}
+
+// unhandedReason is why a message that was never handed to a bridge removed meanwhile was not sent.
+const unhandedReason = "the bridge was removed before it was handed the message"
 
 // unconfirmSending marks the messages of room still sending as unconfirmed, since its bridge was
 // removed, and returns them in posting order.
@@ -566,10 +594,8 @@ func (b *Bridges) Unanswered(ctx context.Context, name string) ([]int64, error) 
 }
 
 // Outgoing returns the messages ids of the bridge's room that the bridge has to send, in
-// posting order; ids no longer to send are left out. A message waits, and is left out too, while
-// the message it replies to, or for a reply that falls back on it the root of its thread, is
-// still going out without an identifier outside: it goes once that message was answered, so it
-// can name it.
+// posting order; ids no longer to send are left out. A message that has to wait for the message it
+// replies to is held, not sending (see delivery.GoOut), so it is not among them.
 func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -586,8 +612,6 @@ func (b *Bridges) Outgoing(ctx context.Context, name string, ids []int64) ([]Out
 		LEFT JOIN messages AS t ON t.id = m.thread
 		LEFT JOIN thread_keys AS k ON k.room = m.room AND k.root = m.thread
 		WHERE m.id IN (SELECT value FROM json_each(?)) AND m.room = ? AND m.delivery = 'sending'
-			AND NOT (COALESCE(r.delivery, '') = 'sending' AND r.ext_id IS NULL
-				OR r.ext_id IS NULL AND COALESCE(t.delivery, '') = 'sending' AND t.ext_id IS NULL)
 		ORDER BY m.id`, string(list), name)
 	if err != nil {
 		return nil, err
@@ -631,7 +655,7 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 	}
 	changed := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
-		moved, err := delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Failed, Room: name, Reason: reason})
+		moved, err := delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Failed, From: []delivery.State{delivery.Sending}, Room: name, Reason: reason})
 		if err != nil || len(moved) == 0 {
 			return err
 		}
@@ -642,7 +666,8 @@ func (b *Bridges) Failed(ctx context.Context, name string, id int64, reason stri
 }
 
 // SendDue lets the scheduled messages of the bridge's room go out whose delay has passed, unless
-// the policy is read, and reports whether any did.
+// the policy is read (held while what they reply to has not gone out), and reports whether any
+// changed.
 func (b *Bridges) SendDue(ctx context.Context, name string) (bool, error) {
 	sent := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
@@ -658,15 +683,16 @@ func (b *Bridges) SendDue(ctx context.Context, name string) (bool, error) {
 		if err != nil {
 			return err
 		}
-		moved, err := delivery.Move(ctx, tx, ids, delivery.Change{To: delivery.Sending, Room: name})
+		moved, err := delivery.GoOut(ctx, tx, ids, name)
 		sent = len(moved) > 0
 		return err
 	})
 	return sent, err
 }
 
-// SendScheduled lets the scheduled message id go out at once: its room must have a bridge whose
-// policy is not read.
+// SendScheduled lets the scheduled message id go out at once, held while what it replies to has
+// not gone out: its room must have a bridge whose policy is not read. A message already held,
+// sending or sent changes nothing.
 func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error {
 		var room, policy string
@@ -676,7 +702,7 @@ func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 			// its delay may have let it go out a moment before: then it is going out, as asked
 			var state string
 			err := tx.QueryRowContext(ctx, `SELECT COALESCE(delivery, '') FROM messages WHERE id = ?`, id).Scan(&state)
-			if err == nil && (delivery.State(state) == delivery.Sending || delivery.State(state) == delivery.Sent) {
+			if err == nil && slices.Contains([]delivery.State{delivery.Held, delivery.Sending, delivery.Sent}, delivery.State(state)) {
 				return nil
 			}
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -690,7 +716,7 @@ func (b *Bridges) SendScheduled(ctx context.Context, id int64) error {
 		if err := mayGoOut(room, Policy(policy)); err != nil {
 			return err
 		}
-		_, err = delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Sending, Room: room})
+		_, err = delivery.GoOut(ctx, tx, []int64{id}, room)
 		return err
 	})
 }
@@ -771,4 +797,11 @@ func (b *Bridges) tell(ctx context.Context, tx *sql.Tx, author, room string, id 
 // Notice has the board post text in the bridge's room, waking no one.
 func (b *Bridges) Notice(ctx context.Context, name, text string) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error { return b.rooms.NoticeTx(ctx, tx, name, text) })
+}
+
+// Handed records that the hub hands message id of the bridge's room to the bridge now. The hub
+// calls it before writing the message, so that a bridge removed before it answered leaves the
+// message unconfirmed and one never handed it leaves it not sent.
+func (b *Bridges) Handed(ctx context.Context, name string, id int64) error {
+	return store.InTx(ctx, b.db, func(tx *sql.Tx) error { return delivery.MarkHanded(ctx, tx, name, id, b.now()) })
 }
