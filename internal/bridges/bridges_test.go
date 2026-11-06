@@ -2269,8 +2269,12 @@ func TestAnEchoThatShowsLateIsUnreadBehindTheReadingPosition(t *testing.T) {
 		}
 		id = e.ownPost(t, "ok")
 		phone = e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
-		e.receive(t, bridges.In{ID: "7002", AuthorName: "Ada", Text: "later"})
+		later := e.receive(t, bridges.In{ID: "7002", AuthorName: "Ada", Text: "later"})
 		if _, _, err := e.r.Take(ctx, "builder", rooms.Everything, 0); err != nil {
+			t.Fatal(err)
+		}
+		// secretary, following only mentions, has read past it too
+		if _, err := e.r.MarkRoomRead(ctx, "secretary", "example-chat", later); err != nil {
 			t.Fatal(err)
 		}
 		if got := unread(t, e, "builder"); len(got) != 0 {
@@ -2312,11 +2316,18 @@ func TestAnEchoThatShowsLateIsUnreadBehindTheReadingPosition(t *testing.T) {
 	}
 	t.Run("marking the room read", func(t *testing.T) {
 		t.Parallel()
-		e, _, phone := setup(t)
+		e, id, phone := setup(t)
 		h := e.history(t)
 		last := h[len(h)-1].ID
 		show := shows["the bridge stops"]
 		show(t, e, 0)
+		// up to an earlier message it stays unread
+		if moved, err := e.r.MarkRoomRead(ctx, "builder", "example-chat", id); moved || err != nil {
+			t.Fatalf("mark read up to an earlier message: %v %v", moved, err)
+		}
+		if got := unread(t, e, "builder"); !slices.Contains(got, phone) {
+			t.Fatalf("read by marking an earlier message: %v", got)
+		}
 		if moved, err := e.r.MarkRoomRead(ctx, "builder", "example-chat", last); !moved || err != nil {
 			t.Fatalf("mark read: %v %v", moved, err)
 		}
@@ -2347,6 +2358,34 @@ func TestAnEchoThatShowsLateIsUnreadBehindTheReadingPosition(t *testing.T) {
 		e.sent(t, id, "7001")
 		if got := unread(t, e, "builder"); slices.Contains(got, phone) {
 			t.Fatalf("the merged echo is unread: %v", got)
+		}
+	})
+	t.Run("leaving mentions for all", func(t *testing.T) {
+		t.Parallel()
+		e, _, phone := setup(t)
+		shows["the bridge stops"](t, e, 0)
+		if _, err := e.r.Subscribe(ctx, "secretary", []string{"example-chat"}, true, rooms.ModeAll); err != nil {
+			t.Fatal(err)
+		}
+		if got := unread(t, e, "secretary"); slices.Contains(got, phone) {
+			t.Fatalf("chatter from the mentions time is unread: %v", got)
+		}
+	})
+	t.Run("addressed to an agent following mentions", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		if _, err := e.r.Subscribe(ctx, "secretary", []string{"example-chat"}, true, rooms.ModeMentions); err != nil {
+			t.Fatal(err)
+		}
+		id := e.ownPost(t, "@secretary ok")
+		phone := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "@secretary ok"})
+		later := e.receive(t, bridges.In{ID: "7002", AuthorName: "Ada", Text: "later"})
+		if _, err := e.r.MarkRoomRead(ctx, "secretary", "example-chat", later); err != nil {
+			t.Fatal(err)
+		}
+		e.sent(t, id, "7003")
+		if got := unread(t, e, "secretary"); !slices.Contains(got, phone) {
+			t.Fatalf("the shown echo addressed to secretary is not unread: %v", got)
 		}
 	})
 }

@@ -1537,7 +1537,8 @@ func (r *Rooms) UnreadByRoom(ctx context.Context, agent string) ([]RoomUnread, e
 }
 
 // MarkRoomRead moves agent's reading position in room up to the message through, which must
-// be in that room, and reports whether it moved; the position never moves backwards, also not
+// be in that room, and reports whether it read anything: whether a position moved or a message
+// up to through that showed after the position had passed it (shown_late) is read now; the position never moves backwards, also not
 // behind where the agent's reading started when it joined. Replies in threads that are not also
 // in the room are read apart, in their thread, so the room's position leaves them unread. When
 // through is a reply in a thread, the agent's position in that thread moves up to it, which
@@ -1744,8 +1745,12 @@ func subscribe(ctx context.Context, tx *sql.Tx, agent, room string, mode Mode) e
 }
 
 // moveForward moves agent's reading position in room up to the message id through, only if
-// that is beyond where it reads now.
+// that is beyond where it reads now; messages up to through that showed after the position had
+// passed them are read either way.
 func moveForward(ctx context.Context, tx *sql.Tx, agent, room string, through int64) error {
+	if _, err := readShownLateTx(ctx, tx, agent, room, through); err != nil {
+		return err
+	}
 	var pos int64
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT last_id FROM read_positions WHERE agent = ? AND room = ?),
 		(SELECT read_from FROM agents WHERE name = ?))`, agent, room, agent).Scan(&pos); err != nil {
