@@ -203,10 +203,7 @@ func Move(ctx context.Context, tx *sql.Tx, ids []int64, c Change) ([]Moved, erro
 		for i, m := range out {
 			moved[i] = m.ID
 		}
-		if list, err = json.Marshal(moved); err != nil {
-			return nil, err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of IN (SELECT value FROM json_each(?))`, string(list)); err != nil {
+		if _, err := ShowEchoesTx(ctx, tx, moved); err != nil {
 			return nil, err
 		}
 	}
@@ -275,4 +272,27 @@ func MarkHanded(ctx context.Context, tx *sql.Tx, room string, id int64, now time
 func Reschedule(ctx context.Context, tx *sql.Tx, room string, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `UPDATE messages SET scheduled_at = ? WHERE room = ? AND delivery = 'scheduled'`, now.UnixMilli(), room)
 	return err
+}
+
+// ShowEchoesTx shows the messages hidden as the possible echo of the messages ids and reports
+// whether any showed. Each keeps its identifier, so an agent whose reading position in the room
+// passed it while it was hidden gets it as shown late: unread until the agent reads it.
+func ShowEchoesTx(ctx context.Context, tx *sql.Tx, ids []int64) (bool, error) {
+	list, err := json.Marshal(ids)
+	if err != nil {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO shown_late (agent, message_id) SELECT a.name, e.id
+		FROM messages AS e JOIN agents AS a ON a.name != e.author
+		WHERE e.echo_of IN (SELECT value FROM json_each(:ids))
+			AND COALESCE((SELECT last_id FROM read_positions WHERE agent = a.name AND room = e.room), a.read_from) >= e.id
+		ON CONFLICT DO NOTHING`, sql.Named("ids", string(list))); err != nil {
+		return false, err
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of IN (SELECT value FROM json_each(?))`, string(list))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }

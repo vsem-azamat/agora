@@ -59,6 +59,7 @@ var renames = []string{
 	"UPDATE subscriptions SET agent = :new WHERE agent = :old",
 	"UPDATE read_positions SET agent = :new WHERE agent = :old",
 	"UPDATE read_marks SET agent = :new WHERE agent = :old",
+	"UPDATE shown_late SET agent = :new WHERE agent = :old",
 	"UPDATE proposals SET author = :new WHERE author = :old",
 	"UPDATE proposals SET closed_by = :new WHERE closed_by = :old",
 	"UPDATE votes SET agent = :new WHERE agent = :old",
