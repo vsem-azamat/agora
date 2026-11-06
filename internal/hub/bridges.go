@@ -239,6 +239,11 @@ func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 	for {
 		started := time.Now()
 		exit := h.runBridge(ctx, r)
+		// what was hidden as a possible echo waits for no answer from the run that stopped, however
+		// it stopped: a new run hands the message again
+		if _, err := h.bridges.ShowEchoes(context.WithoutCancel(ctx), r.name, true); err != nil {
+			h.log.Error("bridge: hidden echoes", "bridge", r.name, "err", err)
+		}
 		if ctx.Err() != nil || gone() {
 			return
 		}
@@ -533,6 +538,14 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 				h.log.Error("bridge: scheduled messages", "bridge", b.Name, "err", err)
 			}
 		} else if due {
+			h.changes.fire()
+		}
+		// a line that may be the echo of a message the bridge has not answered shows after a while
+		if shown, err := h.bridges.ShowEchoes(ctx, b.Name, false); err != nil {
+			if ctx.Err() == nil {
+				h.log.Error("bridge: hidden echoes", "bridge", b.Name, "err", err)
+			}
+		} else if shown {
 			h.changes.fire()
 		}
 		// a bridge answers hello with what it can do; until it has, or bridgeCapsWait passed,

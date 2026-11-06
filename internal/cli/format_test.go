@@ -62,8 +62,8 @@ func TestTheHubAndTheCLIFormatEveryMarkAlike(t *testing.T) {
 		{"cancelled", with(func(m *rooms.Message) { m.Delivery = delivery.Cancelled }), " · cancelled"},
 		{"failed", with(func(m *rooms.Message) { m.Delivery, m.DeliveryError = delivery.Failed, "chat not found" }), " · not sent: chat not found"},
 		{"unconfirmed", with(func(m *rooms.Message) { m.Delivery, m.DeliveryError = delivery.Unconfirmed, "the bridge was removed" }), " · unconfirmed: the bridge was removed"},
-		{"a reply in a thread", with(func(m *rooms.Message) { m.Thread = 40 }), " · in thread 40"},
-		{"a reply in a titled thread", with(func(m *rooms.Message) { m.Thread, m.ThreadTitle = 40, "Release 2.4" }), " · in thread 40 «Release 2.4»"},
+		{"a reply in a thread", with(func(m *rooms.Message) { m.Thread, m.ShownThread = 40, 40 }), " · in thread 40"},
+		{"a reply in a titled thread", with(func(m *rooms.Message) { m.Thread, m.ShownThread, m.ThreadTitle = 40, 40, "Release 2.4" }), " · in thread 40 «Release 2.4»"},
 		{"a titled root", with(func(m *rooms.Message) { m.ThreadTitle = "Release 2.4" }), " · thread «Release 2.4»"},
 		{"a root with a reply", with(func(m *rooms.Message) {
 			m.Summary = rooms.ThreadSummary{Replies: 1, Repliers: []string{"builder"}, LastAt: at}
@@ -74,7 +74,7 @@ func TestTheHubAndTheCLIFormatEveryMarkAlike(t *testing.T) {
 		}), " · thread «Release 2.4»: 3 replies (builder, tester), last 14:02, 1 unread"},
 		{"everything at once", with(func(m *rooms.Message) {
 			m.ReplyTo, m.Addressed, m.Note, m.SentOut, m.Delivery, m.DeliveryError = 40, true, true, 42, delivery.Failed, "x"
-			m.Thread, m.ThreadTitle = 40, "T"
+			m.Thread, m.ShownThread, m.ThreadTitle = 40, 40, "T"
 		}), " · re 40 · to you · note · sent out as 42 · not sent: x · in thread 40 «T»"},
 	}
 	for _, c := range cases {

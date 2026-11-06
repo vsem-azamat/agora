@@ -603,6 +603,10 @@ func (e env) ownPost(t *testing.T, text string) int64 {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the hub hands it to the bridge, which is when the bridge may send it and its echo come back
+	if ok, err := e.b.Handed(ctx, "example-chat", id); !ok || err != nil {
+		t.Fatalf("handed %d: %v %v", id, ok, err)
+	}
 	return id
 }
 
@@ -707,6 +711,178 @@ func TestAHeldMessageIsShownWhenItWasNotTheEcho(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A bridge that does not answer does not keep what the operator wrote outside hidden for long.
+func TestAHiddenEchoShowsWhenTheBridgeDoesNotAnswer(t *testing.T) {
+	t.Parallel()
+	shown := func(t *testing.T, e env, id int64) bool {
+		t.Helper()
+		return slices.ContainsFunc(e.fromOutside(t), func(m rooms.Message) bool { return m.ID == id })
+	}
+	show := func(t *testing.T, e env, stopped bool) bool {
+		t.Helper()
+		changed, err := e.b.ShowEchoes(ctx, "example-chat", stopped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return changed
+	}
+	t.Run("two minutes after it was handed", func(t *testing.T) {
+		e, clock := newDelayEnv(t)
+		id := e.ownPost(t, "ok")
+		clock.add(time.Minute)
+		phone := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+		clock.add(time.Minute - time.Second)
+		if show(t, e, false) || shown(t, e, phone) {
+			t.Fatal("shown before two minutes passed")
+		}
+		clock.add(time.Second)
+		if !show(t, e, false) || !shown(t, e, phone) {
+			t.Fatal("still hidden two minutes after the message was handed")
+		}
+		if show(t, e, false) {
+			t.Fatal("shown twice")
+		}
+		// a late answer with its identifier still merges it: the room has the message once
+		e.sent(t, id, "7001")
+		if got := e.fromOutside(t); len(got) != 0 {
+			t.Fatalf("after the late answer: %+v", got)
+		}
+		if h := e.history(t); len(h) != 1 || h[0].ID != id {
+			t.Fatalf("history after the late answer: %+v", h)
+		}
+	})
+	t.Run("the bridge stopped", func(t *testing.T) {
+		e := newEnv(t)
+		e.ownPost(t, "ok")
+		other := e.ownPost(t, "later")
+		phone := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+		if !show(t, e, true) || !shown(t, e, phone) {
+			t.Fatal("still hidden after the bridge stopped")
+		}
+		if deliveryOf(t, e, "example-chat", other) != delivery.Sending {
+			t.Fatal("showing the echo changed what is sending")
+		}
+	})
+	t.Run("only its room", func(t *testing.T) {
+		e := newEnv(t)
+		e.ownPost(t, "ok")
+		phone := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+		if _, err := e.b.Add(ctx, "builder", "example-other", "example-bridge", "", nil); err != nil {
+			t.Fatal(err)
+		}
+		if changed, err := e.b.ShowEchoes(ctx, "example-other", true); changed || err != nil || shown(t, e, phone) {
+			t.Fatalf("another bridge stopping showed it: %v %v", changed, err)
+		}
+	})
+}
+
+// A line that comes in before the hub handed the operator's message cannot be its echo.
+func TestALineBeforeTheMessageIsHandedIsNotHidden(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	if _, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "ok", 0); err != nil {
+		t.Fatal(err)
+	}
+	phone := e.receive(t, bridges.In{ID: "7001", AuthorName: "Owner", Self: true, Text: "ok"})
+	if got := e.fromOutside(t); len(got) != 1 || got[0].ID != phone {
+		t.Fatalf("hidden before the message was handed: %+v", got)
+	}
+}
+
+// Before the answer, a reply in the thread of a hidden echo names the thread it is shown in: here
+// the thread of the operator's two replies, each with its echo hidden and a thread outside keyed by
+// it. That thread shows both, taking them reads them, and leaving it leaves both.
+func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	root := e.ownPost(t, "plan")
+	e.sent(t, root, "5500")
+	if err := e.r.SetThreadTitle(ctx, "builder", root, "Plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"ok", "sure"} {
+		o, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: text, Thread: root, Operator: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := e.b.Handed(ctx, "example-chat", o); !ok || err != nil {
+			t.Fatalf("handed: %v %v", ok, err)
+		}
+	}
+	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+	e.receive(t, bridges.In{ID: "5516", AuthorName: "Owner", Self: true, Text: "sure"})
+	one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515", ThreadTitle: "topic"})
+	// a reply in the shown thread itself, between the two
+	own, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "noted", Thread: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	two := e.receive(t, bridges.In{ID: "5518", AuthorName: "Ada", Text: "two", ReplyTo: "5516", ThreadKey: "5516"})
+
+	taken, _, err := e.r.Take(ctx, "secretary", rooms.Everything, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{one, two} {
+		i := slices.IndexFunc(taken, func(m rooms.Message) bool { return m.ID == id })
+		if i < 0 || taken[i].ShownThread != root || taken[i].ThreadTitle != "Plan" {
+			t.Fatalf("reply %d as taken: %+v (want thread %d «Plan»)", id, taken, root)
+		}
+	}
+	if again, _, err := e.r.Take(ctx, "secretary", rooms.Everything, 0); err != nil || slices.ContainsFunc(again, func(m rooms.Message) bool {
+		return m.ID == one || m.ID == two
+	}) {
+		t.Fatalf("taken again: %+v %v", again, err)
+	}
+
+	thread, err := e.r.ThreadHistory(ctx, root, 10, "")
+	if err != nil || thread[0].ID != root || !slices.ContainsFunc(thread, func(m rooms.Message) bool { return m.ID == one }) ||
+		!slices.ContainsFunc(thread, func(m rooms.Message) bool { return m.ID == two }) {
+		t.Fatalf("the thread it names: %+v %v", thread, err)
+	}
+
+	// for the operator, who has read nothing, the thread counts all three as unread, and marking
+	// the newest one read reads them all
+	inThread := func() []int64 {
+		t.Helper()
+		got, _, err := e.r.Unread(ctx, "owner", rooms.Everything, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []int64
+		for _, m := range got {
+			if m.ShownThread == root {
+				ids = append(ids, m.ID)
+			}
+		}
+		return ids
+	}
+	if got := inThread(); !slices.Equal(got, []int64{one, own, two}) {
+		t.Fatalf("the operator's unread replies: %v", got)
+	}
+	if th, err := e.r.ThreadHistory(ctx, root, 10, "owner"); err != nil || th[0].Summary.Unread != 3 {
+		t.Fatalf("the thread's summary for the operator: %+v %v", th[0].Summary, err)
+	}
+	if moved, err := e.r.MarkRoomRead(ctx, "owner", "example-chat", two); !moved || err != nil {
+		t.Fatalf("marking read: %v %v", moved, err)
+	}
+	if got := inThread(); len(got) != 0 {
+		t.Fatalf("unread after marking the newest read: %v", got)
+	}
+
+	if err := e.r.LeaveThread(ctx, "secretary", root); err != nil {
+		t.Fatal(err)
+	}
+	later := []int64{
+		e.receive(t, bridges.In{ID: "5519", AuthorName: "Ada", Text: "three", ReplyTo: "5517", ThreadKey: "5515"}),
+		e.receive(t, bridges.In{ID: "5520", AuthorName: "Ada", Text: "four", ReplyTo: "5518", ThreadKey: "5516"}),
+	}
+	unread, _, err := e.r.Unread(ctx, "secretary", rooms.Everything, 0)
+	if err != nil || slices.ContainsFunc(unread, func(m rooms.Message) bool { return slices.Contains(later, m.ID) }) {
+		t.Fatalf("after leaving the thread: %+v %v", unread, err)
 	}
 }
 
@@ -1799,6 +1975,9 @@ func TestAThreadKeyedByTheEchoOfAThreadReplyDoesNotNest(t *testing.T) {
 	o, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "ok", Thread: root, Operator: true})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if ok, err := e.b.Handed(ctx, "example-chat", o); !ok || err != nil {
+		t.Fatalf("handed: %v %v", ok, err)
 	}
 	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
 	ada := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})

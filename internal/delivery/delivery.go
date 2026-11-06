@@ -109,7 +109,7 @@ func GoOut(ctx context.Context, tx *sql.Tx, ids []int64, room string) ([]Moved, 
 	if err != nil {
 		return nil, err
 	}
-	waiting, err := idsOf(ctx, tx, `SELECT m.id FROM messages AS m`+named+`WHERE m.id IN (SELECT value FROM json_each(?)) AND `+waits, string(list))
+	waiting, err := store.Int64s(ctx, tx, `SELECT m.id FROM messages AS m`+named+`WHERE m.id IN (SELECT value FROM json_each(?)) AND `+waits, string(list))
 	if err != nil {
 		return nil, err
 	}
@@ -245,18 +245,18 @@ func scanMoved(rows *sql.Rows) ([]Moved, error) {
 
 // ScheduledBy returns the messages of room scheduled at or before due, in posting order.
 func ScheduledBy(ctx context.Context, tx *sql.Tx, room string, due time.Time) ([]int64, error) {
-	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'scheduled' AND scheduled_at <= ? ORDER BY id`, room, due.UnixMilli())
+	return store.Int64s(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'scheduled' AND scheduled_at <= ? ORDER BY id`, room, due.UnixMilli())
 }
 
 // InState returns the messages of room in state s, in posting order.
 func InState(ctx context.Context, tx *sql.Tx, room string, s State) ([]int64, error) {
-	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = ? ORDER BY id`, room, string(s))
+	return store.Int64s(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = ? ORDER BY id`, room, string(s))
 }
 
 // Unhanded returns the messages of room sending that the hub has never handed to a bridge, in
 // posting order.
 func Unhanded(ctx context.Context, tx *sql.Tx, room string) ([]int64, error) {
-	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'sending' AND handed_at IS NULL ORDER BY id`, room)
+	return store.Int64s(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'sending' AND handed_at IS NULL ORDER BY id`, room)
 }
 
 // MarkHanded records that the hub hands message id of room, sending, to its bridge at now, and
@@ -275,21 +275,4 @@ func MarkHanded(ctx context.Context, tx *sql.Tx, room string, id int64, now time
 func Reschedule(ctx context.Context, tx *sql.Tx, room string, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `UPDATE messages SET scheduled_at = ? WHERE room = ? AND delivery = 'scheduled'`, now.UnixMilli(), room)
 	return err
-}
-
-func idsOf(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]int64, error) {
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
 }

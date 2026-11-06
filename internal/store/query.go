@@ -50,14 +50,23 @@ type Querier interface {
 // Strings runs a query that selects one text column and returns its values. The rows are
 // closed before it returns, so the single database connection is free for the next statement.
 func Strings(ctx context.Context, q Querier, query string, args ...any) ([]string, error) {
+	return column[string](ctx, q, query, args...)
+}
+
+// Int64s runs a query that selects one integer column and returns its values, as Strings does.
+func Int64s(ctx context.Context, q Querier, query string, args ...any) ([]int64, error) {
+	return column[int64](ctx, q, query, args...)
+}
+
+func column[T any](ctx context.Context, q Querier, query string, args ...any) ([]T, error) {
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	var out []T
 	for rows.Next() {
-		var v string
+		var v T
 		if err := rows.Scan(&v); err != nil {
 			return nil, err
 		}
