@@ -13,6 +13,7 @@ import (
 
 	"github.com/vsem-azamat/agora/internal/agents"
 	"github.com/vsem-azamat/agora/internal/bridges"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/queue"
 	"github.com/vsem-azamat/agora/internal/rooms"
 	"github.com/vsem-azamat/agora/internal/sessions"
@@ -349,7 +350,7 @@ func TestOutboundPolicy(t *testing.T) {
 	setPolicy(t, e, bridges.Open)
 	open := e.post(t, "secretary", "example-chat", "open now")
 	setPolicy(t, e, bridges.Read)
-	if _, err := e.r.Post(ctx, "secretary", "example-chat", "read only", 0); !errors.Is(err, rooms.ErrReadOnly) {
+	if _, err := e.r.Post(ctx, "secretary", "example-chat", "read only", 0); !errors.Is(err, delivery.ErrReadOnly) {
 		t.Fatalf("post under read: %v", err)
 	}
 	stays, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "a note for the agents", 0)
@@ -359,7 +360,7 @@ func TestOutboundPolicy(t *testing.T) {
 	if err := e.b.SetPolicy(ctx, "example-chat", "loud"); !errors.Is(err, store.ErrInvalid) {
 		t.Fatalf("unknown policy: %v", err)
 	}
-	want := map[int64]rooms.Delivery{scheduled: rooms.Scheduled, fromOperator: rooms.Sending, open: rooms.Sending, stays: ""}
+	want := map[int64]delivery.State{scheduled: delivery.Scheduled, fromOperator: delivery.Sending, open: delivery.Sending, stays: ""}
 	for _, m := range e.history(t) {
 		if d, ok := want[m.ID]; ok && m.Delivery != d {
 			t.Errorf("message %d %q: %q, want %q", m.ID, m.Body, m.Delivery, d)
@@ -378,7 +379,7 @@ func TestOutboundPolicy(t *testing.T) {
 	}
 }
 
-func deliveryOf(t *testing.T, e env, room string, id int64) rooms.Delivery {
+func deliveryOf(t *testing.T, e env, room string, id int64) delivery.State {
 	t.Helper()
 	msgs, err := e.r.History(ctx, room, 100)
 	if err != nil {
@@ -430,7 +431,7 @@ func TestGoingOutAndAnswers(t *testing.T) {
 	if last.Author != rooms.Board || last.Body != "@builder your message "+itoa(second)+" was not sent: chat not found." {
 		t.Fatalf("board after failed: %+v", last)
 	}
-	if deliveryOf(t, e, "example-chat", first) != rooms.Sent || deliveryOf(t, e, "example-chat", second) != rooms.Failed {
+	if deliveryOf(t, e, "example-chat", first) != delivery.Sent || deliveryOf(t, e, "example-chat", second) != delivery.Failed {
 		t.Fatalf("delivery: %+v", h)
 	}
 	for _, m := range h {
@@ -469,12 +470,12 @@ func TestTheOperatorSendsOrCancels(t *testing.T) {
 	if len(msgs) != 1 || msgs[0].Body != "@secretary your message "+itoa(cancel)+" was not sent: owner cancelled it." {
 		t.Fatalf("secretary is told: %+v", msgs)
 	}
-	if deliveryOf(t, e, "example-chat", cancel) != rooms.Cancelled {
+	if deliveryOf(t, e, "example-chat", cancel) != delivery.Cancelled {
 		t.Fatal("not cancelled")
 	}
 	later := e.post(t, "secretary", "example-chat", "later")
 	setPolicy(t, e, bridges.Read)
-	if err := e.b.SendScheduled(ctx, later); !errors.Is(err, rooms.ErrReadOnly) {
+	if err := e.b.SendScheduled(ctx, later); !errors.Is(err, delivery.ErrReadOnly) {
 		t.Fatalf("sending under read: %v", err)
 	}
 }
@@ -644,7 +645,7 @@ func TestTheOperatorsEchoBeforeSentIsNotStoredTwice(t *testing.T) {
 		t.Fatalf("the repeated line was stored as %d", again)
 	}
 	e.sent(t, id, "5515")
-	if h := e.history(t); len(h) != 1 || deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+	if h := e.history(t); len(h) != 1 || deliveryOf(t, e, "example-chat", id) != delivery.Sent {
 		t.Fatalf("the room after the answer: %+v", h)
 	}
 	if again := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "on my way"}); again != 0 || len(e.history(t)) != 1 {
@@ -927,7 +928,7 @@ func TestAnEchoBeforeSentIsMerged(t *testing.T) {
 	if again := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Text: "looked, all fine"}); again != 0 {
 		t.Fatal("the sent message's identifier was not kept")
 	}
-	if deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+	if deliveryOf(t, e, "example-chat", id) != delivery.Sent {
 		t.Fatal("not sent")
 	}
 }
@@ -981,7 +982,7 @@ func TestATakenIdentifierIsNotMerged(t *testing.T) {
 		t.Fatalf("fourth with the third's id: %v %v %v", ok, taken, err)
 	}
 	for _, id := range []int64{first, second, third, fourth} {
-		if deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+		if deliveryOf(t, e, "example-chat", id) != delivery.Sent {
 			t.Fatalf("message %d is not sent", id)
 		}
 	}
@@ -1149,7 +1150,7 @@ func TestAgentsPostOnlyNotesUnderRead(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
 	setPolicy(t, e, bridges.Read)
-	if _, err := e.r.Post(ctx, "secretary", "example-chat", "to the chat", 0); !errors.Is(err, rooms.ErrReadOnly) || !strings.Contains(err.Error(), "--note") {
+	if _, err := e.r.Post(ctx, "secretary", "example-chat", "to the chat", 0); !errors.Is(err, delivery.ErrReadOnly) || !strings.Contains(err.Error(), "--note") {
 		t.Fatalf("post under read: %v", err)
 	}
 	if id := e.note(t, "secretary", "example-chat", "for Agora only", 0); deliveryOf(t, e, "example-chat", id) != "" {
@@ -1306,7 +1307,7 @@ func TestSendingAtOnceAsTheDelayPasses(t *testing.T) {
 	if err := e.b.SendScheduled(ctx, id); err != nil {
 		t.Fatalf("sending a sent message: %v", err)
 	}
-	if deliveryOf(t, e, "example-chat", id) != rooms.Sent {
+	if deliveryOf(t, e, "example-chat", id) != delivery.Sent {
 		t.Fatal("not sent")
 	}
 	if err := e.b.SendScheduled(ctx, id+100); !errors.Is(err, bridges.ErrNotFound) {
@@ -1325,7 +1326,7 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
 	}
-	if deliveryOf(t, e, "example-chat", sending) != rooms.Unconfirmed || deliveryOf(t, e, "example-chat", scheduled) != rooms.Scheduled {
+	if deliveryOf(t, e, "example-chat", sending) != delivery.Unconfirmed || deliveryOf(t, e, "example-chat", scheduled) != delivery.Scheduled {
 		t.Fatalf("history: %+v", e.history(t))
 	}
 	h := e.history(t)

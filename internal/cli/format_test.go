@@ -9,6 +9,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/internal/cli"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/rooms"
 )
 
@@ -17,10 +18,10 @@ import (
 // thread, and when a scheduled message is due, which no layout shows, and gives a thread summary
 // also to a root that has participants but no replies.
 func pb(m rooms.Message) *agorav1.Message {
-	states := map[rooms.Delivery]agorav1.DeliveryState{
-		rooms.Scheduled: agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED, rooms.Sending: agorav1.DeliveryState_DELIVERY_STATE_SENDING,
-		rooms.Sent: agorav1.DeliveryState_DELIVERY_STATE_SENT, rooms.Cancelled: agorav1.DeliveryState_DELIVERY_STATE_CANCELLED,
-		rooms.Failed: agorav1.DeliveryState_DELIVERY_STATE_FAILED, rooms.Unconfirmed: agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED,
+	states := map[delivery.State]agorav1.DeliveryState{
+		delivery.Scheduled: agorav1.DeliveryState_DELIVERY_STATE_SCHEDULED, delivery.Sending: agorav1.DeliveryState_DELIVERY_STATE_SENDING,
+		delivery.Sent: agorav1.DeliveryState_DELIVERY_STATE_SENT, delivery.Cancelled: agorav1.DeliveryState_DELIVERY_STATE_CANCELLED,
+		delivery.Failed: agorav1.DeliveryState_DELIVERY_STATE_FAILED, delivery.Unconfirmed: agorav1.DeliveryState_DELIVERY_STATE_UNCONFIRMED,
 	}
 	out := &agorav1.Message{
 		Id: m.ID, Room: m.Room, Author: m.Author, Body: m.Body, ReplyTo: m.ReplyTo, At: timestamppb.New(m.At), Addressed: m.Addressed,
@@ -55,12 +56,12 @@ func TestTheHubAndTheCLIFormatEveryMarkAlike(t *testing.T) {
 		{"the operator writing outside", with(func(m *rooms.Message) { m.Author, m.Incoming = "owner", true }), " · from outside"},
 		{"a note", with(func(m *rooms.Message) { m.Note = true }), " · note"},
 		{"a note sent out", with(func(m *rooms.Message) { m.Note, m.SentOut = true, 42 }), " · note · sent out as 42"},
-		{"scheduled", with(func(m *rooms.Message) { m.Delivery = rooms.Scheduled }), " · scheduled"},
-		{"sending", with(func(m *rooms.Message) { m.Delivery = rooms.Sending }), " · sending"},
-		{"sent", with(func(m *rooms.Message) { m.Delivery = rooms.Sent }), " · sent"},
-		{"cancelled", with(func(m *rooms.Message) { m.Delivery = rooms.Cancelled }), " · cancelled"},
-		{"failed", with(func(m *rooms.Message) { m.Delivery, m.DeliveryError = rooms.Failed, "chat not found" }), " · not sent: chat not found"},
-		{"unconfirmed", with(func(m *rooms.Message) { m.Delivery, m.DeliveryError = rooms.Unconfirmed, "the bridge was removed" }), " · unconfirmed: the bridge was removed"},
+		{"scheduled", with(func(m *rooms.Message) { m.Delivery = delivery.Scheduled }), " · scheduled"},
+		{"sending", with(func(m *rooms.Message) { m.Delivery = delivery.Sending }), " · sending"},
+		{"sent", with(func(m *rooms.Message) { m.Delivery = delivery.Sent }), " · sent"},
+		{"cancelled", with(func(m *rooms.Message) { m.Delivery = delivery.Cancelled }), " · cancelled"},
+		{"failed", with(func(m *rooms.Message) { m.Delivery, m.DeliveryError = delivery.Failed, "chat not found" }), " · not sent: chat not found"},
+		{"unconfirmed", with(func(m *rooms.Message) { m.Delivery, m.DeliveryError = delivery.Unconfirmed, "the bridge was removed" }), " · unconfirmed: the bridge was removed"},
 		{"a reply in a thread", with(func(m *rooms.Message) { m.Thread = 40 }), " · in thread 40"},
 		{"a reply in a titled thread", with(func(m *rooms.Message) { m.Thread, m.ThreadTitle = 40, "Release 2.4" }), " · in thread 40 «Release 2.4»"},
 		{"a titled root", with(func(m *rooms.Message) { m.ThreadTitle = "Release 2.4" }), " · thread «Release 2.4»"},
@@ -72,7 +73,7 @@ func TestTheHubAndTheCLIFormatEveryMarkAlike(t *testing.T) {
 			m.Summary = rooms.ThreadSummary{Replies: 3, Repliers: []string{"builder", "tester"}, LastAt: at, Unread: 1}
 		}), " · thread «Release 2.4»: 3 replies (builder, tester), last 14:02, 1 unread"},
 		{"everything at once", with(func(m *rooms.Message) {
-			m.ReplyTo, m.Addressed, m.Note, m.SentOut, m.Delivery, m.DeliveryError = 40, true, true, 42, rooms.Failed, "x"
+			m.ReplyTo, m.Addressed, m.Note, m.SentOut, m.Delivery, m.DeliveryError = 40, true, true, 42, delivery.Failed, "x"
 			m.Thread, m.ThreadTitle = 40, "T"
 		}), " · re 40 · to you · note · sent out as 42 · not sent: x · in thread 40 «T»"},
 	}

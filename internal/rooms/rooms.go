@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/vsem-azamat/agora/internal/agents"
+	"github.com/vsem-azamat/agora/internal/delivery"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -92,8 +93,6 @@ var (
 	ErrExists = errors.New("room exists")
 	// ErrBoardOnly refuses a post that claims to come from the board.
 	ErrBoardOnly = errors.New("only the board itself posts as agora")
-	// ErrReadOnly refuses an agent's post in a bridged room whose outbound policy is read.
-	ErrReadOnly = errors.New("read-only bridge")
 	// ErrArchived refuses what an archived room does not take: messages, followers, a bridge,
 	// archiving it again.
 	ErrArchived = errors.New("archived room")
@@ -143,7 +142,7 @@ type Message struct {
 	ExtAuthorAvatar string
 	// Delivery is where a message of a bridged room stands on its way out ("" when it stays
 	// here), and DeliveryError why it failed.
-	Delivery      Delivery
+	Delivery      delivery.State
 	DeliveryError string
 	// ScheduledAt is when a message was scheduled to go out (zero for one that is not); it goes
 	// out once the bridge's delay has passed since then.
@@ -220,20 +219,6 @@ func (m Message) From() string {
 	}
 	return m.Author
 }
-
-// Delivery is where a message of a bridged room stands on its way out.
-type Delivery string
-
-// Delivery states.
-const (
-	Scheduled Delivery = "scheduled" // goes out once the delay passed, unless the operator cancels it
-	Sending   Delivery = "sending"   // the bridge has to send it
-	Sent      Delivery = "sent"      // the bridge sent it
-	Cancelled Delivery = "cancelled" // the operator cancelled it
-	Failed    Delivery = "failed"    // the bridge could not send it
-	// Unconfirmed is a message handed to a bridge that was removed before it answered: it may have gone out.
-	Unconfirmed Delivery = "unconfirmed"
-)
 
 // Mode is how an agent follows a room.
 type Mode string
@@ -568,12 +553,12 @@ func (r *Rooms) Post(ctx context.Context, author, room, body string, replyTo int
 
 // Send posts p as Post, PostNote or PostFromOperator do, into a thread when p names one.
 func (r *Rooms) Send(ctx context.Context, p Posting) (int64, error) {
-	how := sendAsAgent
+	how := delivery.AsAgent
 	switch {
 	case p.Note:
-		how = keepAsNote
+		how = delivery.AsNote
 	case p.Operator:
-		how = sendAsOperator
+		how = delivery.AsOperator
 	}
 	return r.post(ctx, p, how)
 }
@@ -597,19 +582,10 @@ func (r *Rooms) PostNote(ctx context.Context, author, room, body string, replyTo
 // checks that the room's policy lets it go out.
 func (r *Rooms) SendOutTx(ctx context.Context, tx *sql.Tx, p Posting) (int64, error) {
 	p.keepLeft = true
-	return r.postTx(ctx, tx, p, sendAsOperator)
+	return r.postTx(ctx, tx, p, delivery.AsOperator)
 }
 
-// sending is how a new message of a bridged room may leave Agora.
-type sending int
-
-const (
-	sendAsAgent    sending = iota // under the outbound policy
-	sendAsOperator                // at once, except under read, where it is a note
-	keepAsNote                    // never: a note
-)
-
-func (r *Rooms) post(ctx context.Context, p Posting, how sending) (int64, error) {
+func (r *Rooms) post(ctx context.Context, p Posting, how delivery.How) (int64, error) {
 	if p.Author == Board {
 		return 0, ErrBoardOnly
 	}
@@ -626,10 +602,10 @@ func (r *Rooms) post(ctx context.Context, p Posting, how sending) (int64, error)
 // transaction, so other packages can post atomically with their own changes. The board's
 // messages never go out through a bridge.
 func (r *Rooms) PostTx(ctx context.Context, tx *sql.Tx, author, room, body string, replyTo int64) (int64, error) {
-	return r.postTx(ctx, tx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo}, sendAsAgent)
+	return r.postTx(ctx, tx, Posting{Author: author, Room: room, Body: body, ReplyTo: replyTo}, delivery.AsAgent)
 }
 
-func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) (int64, error) {
+func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how delivery.How) (int64, error) {
 	author, replyTo := p.Author, p.ReplyTo
 	room := strings.TrimPrefix(p.Room, "#")
 	body := strings.TrimSpace(p.Body)
@@ -688,7 +664,7 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how sending) 
 	}
 	if author != Board {
 		var err error
-		if m.Delivery, m.Note, err = outbound(ctx, tx, room, how); err != nil {
+		if m.Delivery, m.Note, err = delivery.Initial(ctx, tx, room, how); err != nil {
 			return 0, err
 		}
 	}
@@ -719,31 +695,10 @@ func participantsTx(ctx context.Context, tx *sql.Tx, root int64, except string) 
 		ORDER BY 1`, sql.Named("root", root), sql.Named("board", Board), sql.Named("except", except))
 }
 
-// outbound returns the delivery state a new message gets in room under its bridge's policy, ""
-// in a room without a bridge, and whether it is a note, which only a bridged room has.
-func outbound(ctx context.Context, tx *sql.Tx, room string, how sending) (Delivery, bool, error) {
-	var policy string
-	err := tx.QueryRowContext(ctx, `SELECT policy FROM bridges WHERE name = ?`, room).Scan(&policy)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return "", false, nil
-	case err != nil:
-		return "", false, err
-	case how == keepAsNote, policy == "read" && how == sendAsOperator:
-		// what the operator writes in a read-only room stays in Agora: a note
-		return "", true, nil
-	case policy == "read":
-		return "", false, store.Refuse(ErrReadOnly, "#%s is bridged read-only: nothing goes out, and agents post only notes there (--note)", room)
-	case policy == "open" || how == sendAsOperator:
-		return Sending, false, nil
-	}
-	return Scheduled, false, nil
-}
-
 // insert stores m with the identifier outside extID ("" for none) and its mentions; addressees
 // are mentioned besides the names in the body.
 func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees []string) (int64, error) {
-	var reply, ext, extAuthor, extName, delivery any
+	var reply, ext, extAuthor, extName, state any
 	if m.ReplyTo != 0 {
 		reply = m.ReplyTo
 	}
@@ -754,11 +709,11 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 		extAuthor, extName = m.ExtAuthorID, m.ExtAuthorName
 	}
 	if m.Delivery != "" {
-		delivery = string(m.Delivery)
+		state = string(m.Delivery)
 	}
 	names, all := Mentions(m.Body)
 	var scheduled any
-	if m.Delivery == Scheduled {
+	if m.Delivery == delivery.Scheduled {
 		scheduled = m.At.UnixMilli()
 	}
 	var thread any
@@ -767,7 +722,7 @@ func insert(ctx context.Context, tx *sql.Tx, m Message, extID string, addressees
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO messages (room, author, body, reply_to, at, to_all, ext_id, ext_author_id, ext_author_name, delivery, quiet, note, scheduled_at, thread, also)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, delivery, m.Quiet, m.Note, scheduled, thread, m.Also)
+		m.Room, m.Author, m.Body, reply, m.At.UnixMilli(), all, ext, extAuthor, extName, state, m.Quiet, m.Note, scheduled, thread, m.Also)
 	if err != nil {
 		return 0, err
 	}
@@ -814,8 +769,8 @@ type Incoming struct {
 // a message with its identifier outside is already stored in the room. A message of the operator
 // (Author set) outside a thread with the text of the oldest message of that author in the room
 // that is still sending, and no echo hidden for it yet, is stored hidden (echo_of): it may be that
-// message's echo. SentTx merges it when the identifier is the same and shows it otherwise, as do
-// SettleTx for a message that is not sent and the removal of the bridge.
+// message's echo. SentTx merges it when the identifier is the same; otherwise it shows once that
+// message leaves sending (delivery.Move), sent or not.
 func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (int64, error) {
 	body := strings.TrimSpace(in.Body)
 	if in.ExtID == "" || body == "" || utf8.RuneCountInString(body) > MaxBody {
@@ -924,27 +879,26 @@ func titleFromOutsideTx(ctx context.Context, tx *sql.Tx, root int64, title strin
 	return err
 }
 
-// SettleTx moves message id, in room (any room when ""), from the delivery state from to to,
-// inside the caller's transaction; a failed message keeps reason. It returns the message's room
-// and author, and whether it was in the state from.
-func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to Delivery, reason string) (string, string, bool, error) {
-	var why any
-	if reason != "" {
-		why = reason
-	}
-	var author string
-	err := tx.QueryRowContext(ctx, `UPDATE messages SET delivery = :to, delivery_error = :why
-		WHERE id = :id AND delivery = :from AND (:room = '' OR room = :room) RETURNING room, author`,
-		sql.Named("to", string(to)), sql.Named("why", why), sql.Named("id", id),
-		sql.Named("from", string(from)), sql.Named("room", room)).Scan(&room, &author)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", false, nil
-	}
-	if err == nil && from == Sending && to != Sent {
-		// a message hidden as the echo of this one is a message of its own
-		_, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of = ?`, id)
-	}
-	return room, author, err == nil, err
+// mergeEcho merges the echo :echo into the sent message :id, whose thread's root is :root: every
+// reference to the echo moves to it, or goes with the echo when it cannot move. A test holds it
+// to every foreign key on messages.
+var mergeEcho = []string{
+	`UPDATE messages SET reply_to = :id WHERE reply_to = :echo`,
+	// what agents read in the echo's thread stays read, reply by reply: the thread it
+	// moves to keeps its own reading positions
+	`INSERT INTO read_marks (agent, message_id) SELECT tr.agent, m.id FROM thread_reads AS tr
+		JOIN messages AS m ON m.thread = :echo AND m.id <= tr.last_id WHERE tr.root = :echo ON CONFLICT DO NOTHING`,
+	`UPDATE messages SET thread = :root WHERE thread = :echo`,
+	`UPDATE OR IGNORE threads SET root = :root WHERE root = :echo`,
+	`DELETE FROM threads WHERE root = :echo`,
+	`UPDATE OR IGNORE thread_leaves SET root = :root WHERE root = :echo`,
+	`UPDATE OR IGNORE thread_keys SET root = :root WHERE root = :echo`,
+	`DELETE FROM thread_keys WHERE root = :echo`,
+	`DELETE FROM thread_leaves WHERE root = :echo`,
+	`DELETE FROM thread_reads WHERE root = :echo`,
+	`DELETE FROM mentions WHERE message_id = :echo`,
+	`DELETE FROM read_marks WHERE message_id = :echo`,
+	`DELETE FROM messages WHERE id = :echo`,
 }
 
 // SentTx marks message id of room, handed to its bridge, as sent with the identifier outside
@@ -955,13 +909,11 @@ func SettleTx(ctx context.Context, tx *sql.Tx, id int64, room string, from, to D
 // or the one it is a reply in), and the echo is deleted. When another message of the room has extID, the
 // message is marked sent without it, nothing else changes, and taken is true.
 func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, taken bool, err error) {
-	if _, _, ok, err = SettleTx(ctx, tx, id, room, Sending, Sent, ""); !ok || err != nil {
-		return ok, false, err
-	}
-	// what was hidden as the echo of this one shows: below it is merged when it has the identifier,
-	// and is a message of its own otherwise
-	if _, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of = ?`, id); err != nil || extID == "" {
-		return true, false, err
+	// what was hidden as the echo of this one shows as it leaves sending: below it is merged when
+	// it has the identifier, and is a message of its own otherwise
+	moved, err := delivery.Move(ctx, tx, []int64{id}, delivery.Change{To: delivery.Sent, Room: room})
+	if len(moved) == 0 || err != nil || extID == "" {
+		return len(moved) > 0, false, err
 	}
 	var holder int64
 	var echo bool
@@ -978,24 +930,7 @@ func SentTx(ctx context.Context, tx *sql.Tx, id int64, room, extID string) (ok, 
 		if err != nil {
 			return false, false, err
 		}
-		for _, q := range []string{
-			`UPDATE messages SET reply_to = :id WHERE reply_to = :echo`,
-			// what agents read in the echo's thread stays read, reply by reply: the thread it
-			// moves to keeps its own reading positions
-			`INSERT INTO read_marks (agent, message_id) SELECT tr.agent, m.id FROM thread_reads AS tr
-				JOIN messages AS m ON m.thread = :echo AND m.id <= tr.last_id WHERE tr.root = :echo ON CONFLICT DO NOTHING`,
-			`UPDATE messages SET thread = :root WHERE thread = :echo`,
-			`UPDATE OR IGNORE threads SET root = :root WHERE root = :echo`,
-			`DELETE FROM threads WHERE root = :echo`,
-			`UPDATE OR IGNORE thread_leaves SET root = :root WHERE root = :echo`,
-			`UPDATE OR IGNORE thread_keys SET root = :root WHERE root = :echo`,
-			`DELETE FROM thread_keys WHERE root = :echo`,
-			`DELETE FROM thread_leaves WHERE root = :echo`,
-			`DELETE FROM thread_reads WHERE root = :echo`,
-			`DELETE FROM mentions WHERE message_id = :echo`,
-			`DELETE FROM read_marks WHERE message_id = :echo`,
-			`DELETE FROM messages WHERE id = :echo`,
-		} {
+		for _, q := range mergeEcho {
 			if _, err := tx.ExecContext(ctx, q, sql.Named("id", id), sql.Named("root", root), sql.Named("echo", holder)); err != nil {
 				return false, false, err
 			}
@@ -1805,13 +1740,13 @@ func scanCounted(rows *sql.Rows, total *int) ([]Message, error) {
 
 // deliveryLabel is how a delivery state follows a message's head: "" for a message that stays
 // here, else " · scheduled", " · sending", " · sent", " · cancelled", " · not sent: <reason>" or " · unconfirmed: <reason>".
-func deliveryLabel(d Delivery, reason string) string {
+func deliveryLabel(d delivery.State, reason string) string {
 	switch d {
 	case "":
 		return ""
-	case Failed:
+	case delivery.Failed:
 		return " · not sent: " + reason
-	case Unconfirmed:
+	case delivery.Unconfirmed:
 		return " · unconfirmed: " + reason
 	}
 	return " · " + string(d)

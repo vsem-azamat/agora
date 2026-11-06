@@ -3,17 +3,13 @@ package sessions
 import (
 	"context"
 	"database/sql"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"io/fs"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/vsem-azamat/agora/internal/sqlscan"
 	"github.com/vsem-azamat/agora/internal/store"
 )
 
@@ -31,152 +27,28 @@ func setsTheState(sql string) bool {
 	return replaces.MatchString(sql) || writesSessions.MatchString(sql) && setsState.MatchString(sql)
 }
 
-// sqlOf is the text of e when it is a string literal, a name of a string (a local constant or
-// variable through the declaration it resolves to, else a top-level one of the package in strs),
-// or a + chain of them; any other operand stands as ?.
-func sqlOf(e ast.Expr, strs map[string]string) (string, bool) { return sqlAt(e, strs, 0) }
-
-func sqlAt(e ast.Expr, strs map[string]string, depth int) (string, bool) {
-	if depth > 20 {
-		return "", false
-	}
-	depth++
-	switch e := e.(type) {
-	case *ast.BasicLit:
-		if e.Kind != token.STRING {
-			return "", false
-		}
-		v, err := strconv.Unquote(e.Value)
-		return v, err == nil
-	case *ast.Ident:
-		if v, ok := valueOf(e); ok {
-			return sqlAt(v, strs, depth)
-		}
-		v, ok := strs[e.Name]
-		return v, ok
-	case *ast.ParenExpr:
-		return sqlAt(e.X, strs, depth)
-	case *ast.BinaryExpr:
-		if e.Op != token.ADD {
-			return "", false
-		}
-		x, okx := sqlAt(e.X, strs, depth)
-		y, oky := sqlAt(e.Y, strs, depth)
-		if !okx && !oky {
-			return "", false
-		}
-		if !okx {
-			x = "?"
-		}
-		if !oky {
-			y = "?"
-		}
-		return x + y, true
-	}
-	return "", false
-}
-
-// valueOf is the expression the name id was declared with in its file, when it is declared
-// with one (const, var or :=).
-func valueOf(id *ast.Ident) (ast.Expr, bool) {
-	if id.Obj == nil {
-		return nil, false
-	}
-	switch d := id.Obj.Decl.(type) {
-	case *ast.ValueSpec:
-		for i, name := range d.Names {
-			if name.Name == id.Name && i < len(d.Values) {
-				return d.Values[i], true
-			}
-		}
-	case *ast.AssignStmt:
-		for i, l := range d.Lhs {
-			if l, ok := l.(*ast.Ident); ok && l.Name == id.Name && i < len(d.Rhs) && len(d.Lhs) == len(d.Rhs) {
-				return d.Rhs[i], true
-			}
-		}
-	}
-	return nil, false
-}
-
 // TestOnlyTransitionWritesTheState fails when code outside state.go sets a session's state or
 // state_at, so that every change of state goes through transition and its table of moves.
 func TestOnlyTransitionWritesTheState(t *testing.T) {
 	t.Parallel()
-	pkgs, err := goFiles(filepath.Join(".."))
+	stmts, err := sqlscan.Statements(filepath.Join(".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	found := 0
-	for dir, files := range pkgs {
-		strs := map[string]string{} // the package's top-level string constants and variables
-		for range 3 {               // a few rounds, for ones defined from others in other files
-			for _, f := range files {
-				for _, d := range f.file.Decls {
-					g, ok := d.(*ast.GenDecl)
-					if !ok {
-						continue
-					}
-					for _, spec := range g.Specs {
-						v, ok := spec.(*ast.ValueSpec)
-						if !ok {
-							continue
-						}
-						for i, name := range v.Names {
-							if i < len(v.Values) {
-								if s, ok := sqlOf(v.Values[i], strs); ok {
-									strs[name.Name] = s
-								}
-							}
-						}
-					}
-				}
-			}
+	for _, s := range stmts {
+		if !setsTheState(s.SQL) {
+			continue
 		}
-		for _, f := range files {
-			ast.Inspect(f.file, func(n ast.Node) bool {
-				e, ok := n.(ast.Expr)
-				if _, name := n.(*ast.Ident); !ok || name {
-					return true // a name is checked where its value is written
-				}
-				sql, ok := sqlOf(e, strs)
-				if !ok || !setsTheState(sql) {
-					return true
-				}
-				if filepath.Base(f.path) == "state.go" && filepath.Base(dir) == "sessions" {
-					found++
-					return false
-				}
-				t.Errorf("%s sets a session's state outside transition: %q", f.path, strings.Join(strings.Fields(sql), " "))
-				return false // once per statement, not again for its parts
-			})
+		if filepath.Base(s.Path) == "state.go" && filepath.Base(filepath.Dir(s.Path)) == "sessions" {
+			found++
+			continue
 		}
+		t.Errorf("%s sets a session's state outside transition: %q", s.Path, strings.Join(strings.Fields(s.SQL), " "))
 	}
 	if found == 0 {
 		t.Fatal("found no update of the state in state.go: the scan is broken")
 	}
-}
-
-type goFile struct {
-	path string
-	file *ast.File
-}
-
-// goFiles parses the non-test Go files under root, by directory.
-func goFiles(root string) (map[string][]goFile, error) {
-	out := map[string][]goFile{}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return err
-		}
-		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0) // with object resolution, for valueOf
-		if err != nil {
-			return err
-		}
-		out[filepath.Dir(path)] = append(out[filepath.Dir(path)], goFile{path, f})
-		return nil
-	})
-	return out, err
 }
 
 func TestTheScanSeesEveryWayToSetTheState(t *testing.T) {
