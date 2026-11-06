@@ -799,9 +799,17 @@ func (b *Bridges) Notice(ctx context.Context, name, text string) error {
 	return store.InTx(ctx, b.db, func(tx *sql.Tx) error { return b.rooms.NoticeTx(ctx, tx, name, text) })
 }
 
-// Handed records that the hub hands message id of the bridge's room to the bridge now. The hub
-// calls it before writing the message, so that a bridge removed before it answered leaves the
-// message unconfirmed and one never handed it leaves it not sent.
-func (b *Bridges) Handed(ctx context.Context, name string, id int64) error {
-	return store.InTx(ctx, b.db, func(tx *sql.Tx) error { return delivery.MarkHanded(ctx, tx, name, id, b.now()) })
+// Handed records that the hub hands message id of the bridge's room to the bridge now, and reports
+// whether the message is still sending: one that is not (its bridge was removed meanwhile, which
+// marked it not sent) must not be written. The hub calls it before writing the message, so that a
+// bridge removed before it answered leaves the message unconfirmed and one never handed it leaves
+// it not sent.
+func (b *Bridges) Handed(ctx context.Context, name string, id int64) (bool, error) {
+	var ok bool
+	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {
+		var err error
+		ok, err = delivery.MarkHanded(ctx, tx, name, id, b.now())
+		return err
+	})
+	return ok, err
 }

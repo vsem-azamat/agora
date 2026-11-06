@@ -259,11 +259,16 @@ func Unhanded(ctx context.Context, tx *sql.Tx, room string) ([]int64, error) {
 	return idsOf(ctx, tx, `SELECT id FROM messages WHERE room = ? AND delivery = 'sending' AND handed_at IS NULL ORDER BY id`, room)
 }
 
-// MarkHanded records that the hub hands message id of room, sending, to its bridge at now. The hub
-// marks it before it writes the message, so a message marked may have gone out.
-func MarkHanded(ctx context.Context, tx *sql.Tx, room string, id int64, now time.Time) error {
-	_, err := tx.ExecContext(ctx, `UPDATE messages SET handed_at = ? WHERE id = ? AND room = ? AND delivery = 'sending'`, now.UnixMilli(), id, room)
-	return err
+// MarkHanded records that the hub hands message id of room, sending, to its bridge at now, and
+// reports whether it was still sending; one that is not must not be handed. The hub marks it
+// before it writes the message, so a message marked may have gone out.
+func MarkHanded(ctx context.Context, tx *sql.Tx, room string, id int64, now time.Time) (bool, error) {
+	res, err := tx.ExecContext(ctx, `UPDATE messages SET handed_at = ? WHERE id = ? AND room = ? AND delivery = 'sending'`, now.UnixMilli(), id, room)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // Reschedule starts the delay of the messages of room still scheduled again at now.

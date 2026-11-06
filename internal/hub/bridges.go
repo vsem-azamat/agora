@@ -603,8 +603,9 @@ func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, hande
 		if h.declaresThreads(name) {
 			line.Thread = o.Thread
 		}
-		// marked first: once written, the message may go out whatever happens next
-		if err := h.bridges.Handed(ctx, name, o.ID); err != nil {
+		// marked first: once written, the message may go out whatever happens next; one that is no
+		// longer sending (its bridge was removed meanwhile) is not written
+		if ok, err := h.bridges.Handed(ctx, name, o.ID); err != nil || !ok {
 			return err
 		}
 		if err := enc.Encode(line); err != nil {

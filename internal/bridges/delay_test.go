@@ -267,8 +267,8 @@ func TestANoteWhoseMessageMayHaveGoneOutCountsAsSentOut(t *testing.T) {
 	}
 	// the bridge is handed it and removed before it answered: the message is unconfirmed, it may be
 	// in the chat
-	if err := e.b.Handed(ctx, "example-chat", first); err != nil {
-		t.Fatal(err)
+	if ok, err := e.b.Handed(ctx, "example-chat", first); !ok || err != nil {
+		t.Fatalf("handed: %v %v", ok, err)
 	}
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
 		t.Fatal(err)
@@ -408,6 +408,40 @@ func TestReadingCaps(t *testing.T) {
 	} {
 		if got := bridges.ReadCaps(raw(c.in)); got != c.want {
 			t.Errorf("%s: got %+v, want %+v", c.in, got, c.want)
+		}
+	}
+}
+
+// A scheduled reply to a message that has not gone out is held when its delay passes, and when
+// the operator sends it at once, instead of reaching the bridge before what it replies to (#141).
+func TestAScheduledReplyIsHeldWhenItMayGoOut(t *testing.T) {
+	t.Parallel()
+	for _, how := range []string{"delay", "send now"} {
+		e, c := newDelayEnv(t)
+		parent, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reply, err := e.r.Post(ctx, "secretary", "example-chat", "see you", parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := deliveryOf(t, e, "example-chat", reply); got != delivery.Scheduled {
+			t.Fatalf("%s: the reply is %q, want scheduled", how, got)
+		}
+		if how == "delay" {
+			c.add(2 * time.Minute)
+			if _, err := e.b.SendDue(ctx, "example-chat"); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := e.b.SendScheduled(ctx, reply); err != nil {
+			t.Fatal(err)
+		}
+		if got := deliveryOf(t, e, "example-chat", reply); got != delivery.Held {
+			t.Fatalf("%s: the reply is %q, want held", how, got)
+		}
+		if outs, err := outgoing(t, e); err != nil || len(outs) != 1 || outs[0].ID != parent {
+			t.Fatalf("%s: outs %+v %v", how, outs, err)
 		}
 	}
 }

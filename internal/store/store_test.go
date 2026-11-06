@@ -584,7 +584,8 @@ func TestHeldMigrationHoldsRepliesTheHubHeldBack(t *testing.T) {
 		`INSERT INTO agents (name, joined_at) VALUES ('builder', 1)`,
 		`INSERT INTO rooms (name, purpose, created_by, created_at) VALUES ('old-chat', 'chat', 'builder', 1)`,
 		// 1 is going out unanswered; 2 replies to it and 3 is in its thread: the hub held both back.
-		// 4 replies to 5, which was sent with an identifier, and 6 is scheduled.
+		// 4 replies to 5, which was sent with an identifier, and 6 is scheduled; the hub did not
+		// hold 7, a reply to 6, back: it may have been handed and stays sending.
 		`INSERT INTO messages (id, room, author, body, at, delivery, ext_id) VALUES
 			(1, 'old-chat', 'builder', 'root', 1, 'sending', NULL),
 			(5, 'old-chat', 'builder', 'sent', 2, 'sent', '900'),
@@ -592,7 +593,8 @@ func TestHeldMigrationHoldsRepliesTheHubHeldBack(t *testing.T) {
 		`INSERT INTO messages (id, room, author, body, at, delivery, reply_to, thread) VALUES
 			(2, 'old-chat', 'builder', 'reply', 3, 'sending', 1, NULL),
 			(3, 'old-chat', 'builder', 'in thread', 4, 'sending', NULL, 1),
-			(4, 'old-chat', 'builder', 'answer', 5, 'sending', 5, NULL)`,
+			(4, 'old-chat', 'builder', 'answer', 5, 'sending', 5, NULL),
+			(7, 'old-chat', 'builder', 'to the scheduled', 7, 'sending', 6, NULL)`,
 	} {
 		if _, err := db.ExecContext(ctx, q); err != nil {
 			t.Fatal(err)
@@ -609,7 +611,7 @@ func TestHeldMigrationHoldsRepliesTheHubHeldBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"1:sending:1", "2:held:0", "3:held:0", "4:sending:1", "5:sent:0", "6:scheduled:0"}
+	want := []string{"1:sending:1", "2:held:0", "3:held:0", "4:sending:1", "5:sent:0", "6:scheduled:0", "7:sending:1"}
 	if !slices.Equal(got, want) {
 		t.Errorf("messages %q, want %q", got, want)
 	}

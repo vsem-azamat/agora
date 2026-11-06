@@ -1322,8 +1322,8 @@ func TestRemovingSettlesMessagesLeftSending(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.b.Handed(ctx, "example-chat", sending); err != nil {
-		t.Fatal(err)
+	if ok, err := e.b.Handed(ctx, "example-chat", sending); !ok || err != nil {
+		t.Fatalf("handed: %v %v", ok, err)
 	}
 	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
 	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
@@ -1940,8 +1940,8 @@ func TestRemovingMarksWhatWasNeverHandedNotSent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.b.Handed(ctx, "example-chat", handed); err != nil {
-		t.Fatal(err)
+	if ok, err := e.b.Handed(ctx, "example-chat", handed); !ok || err != nil {
+		t.Fatalf("handed: %v %v", ok, err)
 	}
 	held, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "five minutes", handed)
 	if err != nil {
@@ -2027,5 +2027,39 @@ func TestAChainOfRepliesGoesOutInTurn(t *testing.T) {
 	outs, err := outgoing(t, e)
 	if err != nil || len(outs) != 1 || outs[0].ID != second || outs[0].ReplyTo != "901" {
 		t.Fatalf("outs %+v %v", outs, err)
+	}
+}
+
+// A failed answer for a message the bridge was never handed changes nothing.
+func TestAFailedAnswerForAHeldMessageIsIgnored(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	scheduled := e.post(t, "secretary", "example-chat", "looked, all fine")
+	reply, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "thanks", scheduled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := e.b.Failed(ctx, "example-chat", reply, "chat not found"); changed || err != nil {
+		t.Fatalf("failed: %v %v", changed, err)
+	}
+	if got := deliveryOf(t, e, "example-chat", reply); got != delivery.Held {
+		t.Fatalf("the reply is %q, want held", got)
+	}
+}
+
+// A message no longer sending, as one its removed bridge marked not sent, is not marked handed,
+// and the hub then does not write it.
+func TestOnlyASendingMessageIsHanded(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	id, err := e.r.PostFromOperator(ctx, "owner", "example-chat", "on my way", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.b.Remove(ctx, "builder", "example-chat"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := e.b.Handed(ctx, "example-chat", id); ok || err != nil {
+		t.Fatalf("handed after the removal: %v %v", ok, err)
 	}
 }

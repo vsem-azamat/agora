@@ -5,8 +5,10 @@
 -- change a CHECK, so messages is built again with foreign keys off, as 0024 did.
 --
 -- A message sending whose reply_to, or for a reply whose replied-to message has no identifier
--- outside the thread's root, is still sending without one was never handed (the hub held it back):
--- it becomes held. Every other message sending may have been handed: it is marked handed now.
+-- outside the thread's root, is still sending without one is held back by the hub now: it becomes
+-- held, and is handed once that message is answered. (One the hub handed before its parent went
+-- from scheduled to sending is held too: it is handed again then, as a restart did.) Every other
+-- message sending may have been handed: it is marked handed now.
 
 CREATE TABLE messages_new (
     id              INTEGER PRIMARY KEY AUTOINCREMENT, -- increases with posting order across rooms
