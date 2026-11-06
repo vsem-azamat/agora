@@ -605,8 +605,12 @@ func (h *Hub) handOut(ctx context.Context, enc *json.Encoder, name string, hande
 		}
 		// marked first: once written, the message may go out whatever happens next; one that is no
 		// longer sending (its bridge was removed meanwhile) is not written
-		if ok, err := h.bridges.Handed(ctx, name, o.ID); err != nil || !ok {
+		ok, err := h.bridges.Handed(ctx, name, o.ID)
+		if err != nil {
 			return err
+		}
+		if !ok {
+			continue
 		}
 		if err := enc.Encode(line); err != nil {
 			return &outWriteError{err}

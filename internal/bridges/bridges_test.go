@@ -2047,8 +2047,7 @@ func TestAFailedAnswerForAHeldMessageIsIgnored(t *testing.T) {
 	}
 }
 
-// A message no longer sending, as one its removed bridge marked not sent, is not marked handed,
-// and the hub then does not write it.
+// A message no longer sending, as one its removed bridge marked not sent, is not marked handed.
 func TestOnlyASendingMessageIsHanded(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
