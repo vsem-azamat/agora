@@ -256,6 +256,10 @@ func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 		if first {
 			h.bridgeNotice(ctx, r.name, fmt.Sprintf("The bridge stopped (%s). The hub starts it again and says here when it works again.", exit))
 		}
+		// what was hidden as a possible echo waits for no answer from the run that stopped
+		if _, err := h.bridges.ShowEchoes(ctx, r.name, true); err != nil {
+			h.log.Error("bridge: hidden echoes", "bridge", r.name, "err", err)
+		}
 		h.changes.fire()
 		select {
 		case <-ctx.Done():
@@ -533,6 +537,14 @@ func (h *Hub) feedBridge(ctx context.Context, exited <-chan struct{}, w io.Write
 				h.log.Error("bridge: scheduled messages", "bridge", b.Name, "err", err)
 			}
 		} else if due {
+			h.changes.fire()
+		}
+		// a line that may be the echo of a message the bridge has not answered shows after a while
+		if shown, err := h.bridges.ShowEchoes(ctx, b.Name, false); err != nil {
+			if ctx.Err() == nil {
+				h.log.Error("bridge: hidden echoes", "bridge", b.Name, "err", err)
+			}
+		} else if shown {
 			h.changes.fire()
 		}
 		// a bridge answers hello with what it can do; until it has, or bridgeCapsWait passed,

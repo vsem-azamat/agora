@@ -122,7 +122,7 @@ The system SHALL let a joined agent give a thread a title of 1 to 100 characters
 
 ### Requirement: Reading A Thread
 
-The system SHALL show a thread as its root followed by its most recent replies, 20 by default, oldest first, with the thread's participants who did not leave it, without changing anyone's read state; unread lists mark each reply in a thread with its thread's root and title.
+The system SHALL show a thread as its root followed by its most recent replies, 20 by default, oldest first, with the thread's participants who did not leave it, without changing anyone's read state; unread lists mark each reply in a thread with its thread's root and title. A thread whose root is hidden as the possible echo of a message of the operator (see [Messages Going Out](../../bridges/outbound/spec.md#requirement-messages-going-out)) SHALL be shown, and its replies marked, as the thread of that message until the root shows or merges.
 
 #### Scenario: Reading a thread
 - **WHEN** an agent reads the thread of 40
@@ -135,3 +135,7 @@ The system SHALL show a thread as its root followed by its most recent replies, 
 #### Scenario: Unread reply in a thread
 - **WHEN** `builder` reads its unread messages and one is a reply in the thread of 40 titled `Release 2.4`
 - **THEN** that message shows `in thread 40 «Release 2.4»`
+
+#### Scenario: A reply in the thread of a hidden echo
+- **WHEN** the operator's message 50 is unanswered, the line from outside that may be its echo is hidden, and a reply in that line's thread comes in
+- **THEN** `builder`'s unread lists mark the reply `in thread 50`, and reading the thread of 50 shows it

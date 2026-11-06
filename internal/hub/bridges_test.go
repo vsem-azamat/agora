@@ -26,6 +26,7 @@ import (
 
 	agorav1 "github.com/vsem-azamat/agora/gen/agora/v1"
 	"github.com/vsem-azamat/agora/gen/agora/v1/agorav1connect"
+	"github.com/vsem-azamat/agora/internal/bridges"
 	"github.com/vsem-azamat/agora/internal/hub"
 )
 
@@ -444,6 +445,38 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	if len(b.history(t)) != n {
 		t.Fatal("the echo of a sent message was stored")
+	}
+}
+
+// What the operator wrote outside, hidden as the possible echo of a message the bridge does not
+// answer, shows after the wait, or when the bridge stops.
+func TestAHiddenEchoShowsWhenTheBridgeDoesNotAnswer(t *testing.T) {
+	t.Parallel()
+	for _, stops := range []bool{false, true} {
+		t.Run(fmt.Sprintf("the bridge stops %v", stops), func(t *testing.T) {
+			t.Parallel()
+			b := startBridgeHub(t, time.Hour)
+			f := newFake(t)
+			f.set("mode", "silent")
+			b.add(t, f)
+			if _, err := b.webRooms.Post(context.Background(), connect.NewRequest(&agorav1.PostRequest{Room: "example-chat", Body: "on my way"})); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "the out line", func() bool { return len(f.outs()) == 1 })
+			f.send(`{"type":"in","id":"7001","author":{"id":"7","name":"Owner","self":true},"text":"on my way"}`)
+			time.Sleep(300 * time.Millisecond)
+			if h := b.history(t); len(h) != 1 {
+				t.Fatalf("shown at once: %v", h)
+			}
+			if stops {
+				f.set("exit", "")
+			} else {
+				b.clock.add(bridges.DefaultEchoWait)
+			}
+			eventually(t, "the message written outside", func() bool {
+				return slices.ContainsFunc(b.history(t), func(m *agorav1.Message) bool { return m.GetBody() == "on my way" && m.GetIncoming() })
+			})
+		})
 	}
 }
 

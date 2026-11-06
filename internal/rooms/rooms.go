@@ -5,6 +5,7 @@ package rooms
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -768,9 +769,10 @@ type Incoming struct {
 // PostIncomingTx stores in inside the caller's transaction and returns its identifier, or 0 when
 // a message with its identifier outside is already stored in the room. A message of the operator
 // (Author set) outside a thread with the text of the oldest message of that author in the room
-// that is still sending, and no echo hidden for it yet, is stored hidden (echo_of): it may be that
-// message's echo. SentTx merges it when the identifier is the same; otherwise it shows once that
-// message leaves sending (delivery.Move), sent or not.
+// that is still sending and was handed to the bridge, and no echo hidden for it yet, is stored
+// hidden (echo_of): it may be that message's echo. SentTx merges it when the identifier is the
+// same, also after it showed; otherwise it shows once that message leaves sending
+// (delivery.Move), sent or not, or when ShowEchoesTx shows it.
 func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (int64, error) {
 	body := strings.TrimSpace(in.Body)
 	if in.ExtID == "" || body == "" || utf8.RuneCountInString(body) > MaxBody {
@@ -801,10 +803,11 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 		if err != nil {
 			return id, err
 		}
-		// it may be the echo of a message its author posted here that the bridge has not answered
-		// (the oldest one with the same text that no other echo is hidden for): hidden until it does
+		// it may be the echo of a message its author posted here that the bridge was handed and has
+		// not answered (the oldest one with the same text that no other echo is hidden for): hidden
+		// until it does
 		_, err = tx.ExecContext(ctx, `UPDATE messages SET echo_of = (SELECT o.id FROM messages AS o WHERE o.room = :room AND o.author = :author
-				AND o.delivery = 'sending' AND o.body = :body AND NOT EXISTS (SELECT 1 FROM messages AS e WHERE e.echo_of = o.id)
+				AND o.delivery = 'sending' AND o.handed_at IS NOT NULL AND o.body = :body AND NOT EXISTS (SELECT 1 FROM messages AS e WHERE e.echo_of = o.id)
 				ORDER BY o.id LIMIT 1) WHERE id = :id`,
 			sql.Named("room", in.Room), sql.Named("author", in.Author), sql.Named("body", body), sql.Named("id", id))
 		return id, err
@@ -1007,15 +1010,25 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 		if err != nil {
 			return err
 		}
-		// a root hidden as an echo is shown as the thread of the message it may be the echo of
+		// a root hidden as an echo is shown as the thread of the message it may be the echo of,
+		// and that thread shows the threads of every echo hidden under it
 		shown, err := shownRootTx(ctx, tx, root)
+		if err != nil {
+			return err
+		}
+		hidden, err := store.Int64s(ctx, tx, `SELECT e.id FROM messages AS e JOIN messages AS o ON o.id = e.echo_of
+			WHERE e.echo_of IS NOT NULL AND COALESCE(o.thread, o.id) = ? ORDER BY e.id`, shown)
+		if err != nil {
+			return err
+		}
+		roots, err := json.Marshal(append([]int64{shown}, hidden...))
 		if err != nil {
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, `SELECT `+messageColumns+` FROM
 			(SELECT * FROM messages WHERE id = :shown
-				UNION ALL SELECT * FROM (SELECT * FROM messages WHERE thread IN (:root, :shown) ORDER BY id DESC LIMIT :last)) AS m ORDER BY m.id`,
-			sql.Named("shown", shown), sql.Named("root", root), sql.Named("last", last))
+				UNION ALL SELECT * FROM (SELECT * FROM messages WHERE thread IN (SELECT value FROM json_each(:roots)) ORDER BY id DESC LIMIT :last)) AS m ORDER BY m.id`,
+			sql.Named("shown", shown), sql.Named("roots", string(roots)), sql.Named("last", last))
 		if err != nil {
 			return err
 		}
@@ -1025,16 +1038,21 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 		if err := summarize(ctx, tx, out[:1], reader); err != nil {
 			return err
 		}
-		if out[0].Summary.Participants, err = participantsTx(ctx, tx, shown, ""); err != nil || shown == root {
+		if out[0].Summary.Participants, err = participantsTx(ctx, tx, shown, ""); err != nil {
 			return err
 		}
-		if err := addHiddenReplies(ctx, tx, &out[0].Summary, root); err != nil {
-			return err
-		}
-		more, err := participantsTx(ctx, tx, root, "")
-		for _, p := range more {
-			if !slices.Contains(out[0].Summary.Participants, p) {
-				out[0].Summary.Participants = append(out[0].Summary.Participants, p)
+		for _, h := range hidden {
+			if err := addHiddenReplies(ctx, tx, &out[0].Summary, h); err != nil {
+				return err
+			}
+			more, err := participantsTx(ctx, tx, h, "")
+			if err != nil {
+				return err
+			}
+			for _, p := range more {
+				if !slices.Contains(out[0].Summary.Participants, p) {
+					out[0].Summary.Participants = append(out[0].Summary.Participants, p)
+				}
 			}
 		}
 		return err
@@ -1042,16 +1060,34 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 	return out, err
 }
 
-// shownRootTx returns the root a thread rooted at root is shown under: root itself, or, for a
-// root hidden as the possible echo of a message of the operator, the root of the thread of that
-// message, so nothing hidden shows before the bridge answers.
+// shownRoot selects the root the thread of message m is shown under: for a thread whose root is
+// hidden as the possible echo of a message of the operator, the root of the thread of that
+// message, so nothing hidden shows before the bridge answers; NULL for any other thread.
+const shownRoot = `(SELECT COALESCE(o.thread, o.id) FROM messages AS e JOIN messages AS o ON o.id = e.echo_of WHERE e.id = m.thread)`
+
+// shownRootTx returns the root a thread rooted at root is shown under (see shownRoot).
 func shownRootTx(ctx context.Context, tx *sql.Tx, root int64) (int64, error) {
 	var shown int64
-	err := tx.QueryRowContext(ctx, `SELECT COALESCE(o.thread, o.id) FROM messages AS r JOIN messages AS o ON o.id = r.echo_of WHERE r.id = ?`, root).Scan(&shown)
-	if errors.Is(err, sql.ErrNoRows) {
-		return root, nil
-	}
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(`+shownRoot+`, m.thread) FROM (SELECT ? AS thread) AS m`, root).Scan(&shown)
 	return shown, err
+}
+
+// ShowEchoesTx shows the messages of room hidden as the possible echo of a message handed to its
+// bridge at or before handedBy (every one when handedBy is zero), and reports whether any showed.
+// An answer sent later with the identifier of one still merges it (SentTx).
+func ShowEchoesTx(ctx context.Context, tx *sql.Tx, room string, handedBy time.Time) (bool, error) {
+	var by any
+	if !handedBy.IsZero() {
+		by = handedBy.UnixMilli()
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE messages SET echo_of = NULL WHERE echo_of IN (SELECT o.id FROM messages AS o
+		WHERE o.room = :room AND o.delivery = 'sending' AND (:by IS NULL OR o.handed_at <= :by))`,
+		sql.Named("room", room), sql.Named("by", by))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // addHiddenReplies adds the replies in the thread of root, hidden as an echo, to the summary of
@@ -1695,7 +1731,8 @@ const messageColumns = `m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0),
 // threadColumns selects the thread of message m: its root (0 for a message of the room), also,
 // and the thread's title, of the thread m is a reply in or of its own; then the message a note was
 // sent out as.
-const threadColumns = `COALESCE(m.thread, 0) AS thread, m.also, COALESCE((SELECT title FROM threads WHERE root = COALESCE(m.thread, m.id)), ''), ` + SentOutColumn
+const threadColumns = `COALESCE(` + shownRoot + `, m.thread, 0) AS thread, m.also,
+	COALESCE((SELECT title FROM threads WHERE root = COALESCE(` + shownRoot + `, m.thread, m.id)), ''), ` + SentOutColumn
 
 // SentOutColumn selects the message a note m was sent out as, 0 for any other message and for a
 // note whose message certainly did not go out: only a message that failed or was cancelled lets
