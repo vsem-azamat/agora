@@ -239,6 +239,11 @@ func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 	for {
 		started := time.Now()
 		exit := h.runBridge(ctx, r)
+		// what was hidden as a possible echo waits for no answer from the run that stopped, however
+		// it stopped: a new run hands the message again
+		if _, err := h.bridges.ShowEchoes(context.WithoutCancel(ctx), r.name, true); err != nil {
+			h.log.Error("bridge: hidden echoes", "bridge", r.name, "err", err)
+		}
 		if ctx.Err() != nil || gone() {
 			return
 		}
@@ -255,10 +260,6 @@ func (h *Hub) superviseBridge(ctx context.Context, r *bridgeRun) {
 		r.mu.Unlock()
 		if first {
 			h.bridgeNotice(ctx, r.name, fmt.Sprintf("The bridge stopped (%s). The hub starts it again and says here when it works again.", exit))
-		}
-		// what was hidden as a possible echo waits for no answer from the run that stopped
-		if _, err := h.bridges.ShowEchoes(ctx, r.name, true); err != nil {
-			h.log.Error("bridge: hidden echoes", "bridge", r.name, "err", err)
 		}
 		h.changes.fire()
 		select {

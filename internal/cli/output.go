@@ -75,7 +75,7 @@ func formatMessage(m *agorav1.Message) string {
 		ID: m.GetId(), Room: m.GetRoom(), Author: m.GetAuthor(), Body: m.GetBody(), ReplyTo: m.GetReplyTo(),
 		At: m.GetAt().AsTime(), Addressed: m.GetAddressed(), Delivery: deliveryStates[m.GetDeliveryState()],
 		DeliveryError: m.GetDeliveryError(), Note: m.GetNote(), Incoming: m.GetIncoming(), SentOut: m.GetSentOut(),
-		Thread: m.GetThread(), ThreadTitle: m.GetThreadTitle(),
+		Thread: m.GetThread(), ShownThread: m.GetThread(), ThreadTitle: m.GetThreadTitle(),
 	}
 	if ext := m.GetExternalAuthor(); ext != nil {
 		msg.ExtAuthorID, msg.ExtAuthorName = ext.GetId(), ext.GetName()

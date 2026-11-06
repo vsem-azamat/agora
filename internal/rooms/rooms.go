@@ -163,8 +163,12 @@ type Message struct {
 	// Also is set for a reply that is also a message of the room.
 	Thread int64
 	Also   bool
-	// ThreadTitle is the title of the message's thread: the one it is a reply in, or, for a
-	// root, its own; "" when it has none.
+	// ShownThread is the root of the thread the message is shown in: Thread, or, for a reply in
+	// the thread of a message hidden as a possible echo, the root of the thread that echo is
+	// shown under (see shownRoot), which is the one an agent can open. What agents are given.
+	ShownThread int64
+	// ThreadTitle is the title of the thread the message is shown in: the one it is a reply in,
+	// or, for a root, its own; "" when it has none.
 	ThreadTitle string
 	// Summary is the thread of a root, set in histories; zero for a message without replies.
 	Summary ThreadSummary
@@ -1016,8 +1020,7 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 		if err != nil {
 			return err
 		}
-		hidden, err := store.Int64s(ctx, tx, `SELECT e.id FROM messages AS e JOIN messages AS o ON o.id = e.echo_of
-			WHERE e.echo_of IS NOT NULL AND COALESCE(o.thread, o.id) = ? ORDER BY e.id`, shown)
+		hidden, err := hiddenRootsTx(ctx, tx, shown)
 		if err != nil {
 			return err
 		}
@@ -1064,6 +1067,13 @@ func (r *Rooms) ThreadHistory(ctx context.Context, id int64, last int, reader st
 // hidden as the possible echo of a message of the operator, the root of the thread of that
 // message, so nothing hidden shows before the bridge answers; NULL for any other thread.
 const shownRoot = `(SELECT COALESCE(o.thread, o.id) FROM messages AS e JOIN messages AS o ON o.id = e.echo_of WHERE e.id = m.thread)`
+
+// hiddenRootsTx returns the messages hidden as a possible echo whose threads are shown under
+// the thread rooted at shown (see shownRoot), in posting order.
+func hiddenRootsTx(ctx context.Context, tx *sql.Tx, shown int64) ([]int64, error) {
+	return store.Int64s(ctx, tx, `SELECT e.id FROM messages AS e JOIN messages AS o ON o.id = e.echo_of
+		WHERE e.echo_of IS NOT NULL AND COALESCE(o.thread, o.id) = ? ORDER BY e.id`, shown)
+}
 
 // shownRootTx returns the root a thread rooted at root is shown under (see shownRoot).
 func shownRootTx(ctx context.Context, tx *sql.Tx, root int64) (int64, error) {
@@ -1234,22 +1244,37 @@ func (r *Rooms) LeaveThread(ctx context.Context, agent string, id int64) error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO thread_leaves (root, agent) VALUES (?, ?) ON CONFLICT DO NOTHING`, root, agent); err != nil {
+		// leaving a thread leaves the threads of the echoes hidden under it, whose ids agents never see
+		hidden, err := hiddenRootsTx(ctx, tx, root)
+		if err != nil {
 			return err
 		}
-		var newest int64
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(id), 0) FROM messages WHERE thread = ?`, root).Scan(&newest); err != nil || newest == 0 {
-			return err
+		for _, root := range append([]int64{root}, hidden...) {
+			if err := leaveTx(ctx, tx, agent, root); err != nil {
+				return err
+			}
 		}
-		if _, err := readThreadTx(ctx, tx, agent, root, newest); err != nil {
-			return err
-		}
-		// replies also in the room are read by the room's position, so they get read marks
-		_, err = tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id) SELECT :a, id FROM messages AS m
-			WHERE m.thread = :root AND m.also AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room), 0)
-			ON CONFLICT DO NOTHING`, sql.Named("a", agent), sql.Named("root", root))
-		return err
+		return nil
 	})
+}
+
+// leaveTx makes agent leave the thread rooted at root (see LeaveThread).
+func leaveTx(ctx context.Context, tx *sql.Tx, agent string, root int64) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO thread_leaves (root, agent) VALUES (?, ?) ON CONFLICT DO NOTHING`, root, agent); err != nil {
+		return err
+	}
+	var newest int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(id), 0) FROM messages WHERE thread = ?`, root).Scan(&newest); err != nil || newest == 0 {
+		return err
+	}
+	if _, err := readThreadTx(ctx, tx, agent, root, newest); err != nil {
+		return err
+	}
+	// replies also in the room are read by the room's position, so they get read marks
+	_, err := tx.ExecContext(ctx, `INSERT INTO read_marks (agent, message_id) SELECT :a, id FROM messages AS m
+		WHERE m.thread = :root AND m.also AND m.id > COALESCE((SELECT last_id FROM read_positions WHERE agent = :a AND room = m.room), 0)
+		ON CONFLICT DO NOTHING`, sql.Named("a", agent), sql.Named("root", root))
+	return err
 }
 
 // Threads returns the titled threads of room, or with room "" of every room that is not archived,
@@ -1731,8 +1756,9 @@ const messageColumns = `m.id, m.room, m.author, m.body, COALESCE(m.reply_to, 0),
 // threadColumns selects the thread of message m: its root (0 for a message of the room), also,
 // and the thread's title, of the thread m is a reply in or of its own; then the message a note was
 // sent out as.
-const threadColumns = `COALESCE(` + shownRoot + `, m.thread, 0) AS thread, m.also,
-	COALESCE((SELECT title FROM threads WHERE root = COALESCE(` + shownRoot + `, m.thread, m.id)), ''), ` + SentOutColumn
+const threadColumns = `COALESCE(m.thread, 0) AS thread, m.also,
+	COALESCE((SELECT title FROM threads WHERE root = COALESCE(` + shownRoot + `, m.thread, m.id)), ''), ` + SentOutColumn + `,
+	COALESCE(` + shownRoot + `, m.thread, 0)`
 
 // SentOutColumn selects the message a note m was sent out as, 0 for any other message and for a
 // note whose message certainly did not go out: only a message that failed or was cancelled lets
@@ -1757,7 +1783,7 @@ func scanCounted(rows *sql.Rows, total *int) ([]Message, error) {
 		dest := []any{
 			&m.ID, &m.Room, &m.Author, &m.Body, &m.ReplyTo, &at, &m.Addressed, &wakeRoom,
 			&m.ExtAuthorID, &m.ExtAuthorName, &m.ExtAuthorAvatar, &m.Delivery, &m.DeliveryError, &m.Note, &m.Incoming, &scheduled,
-			&m.Thread, &m.Also, &m.ThreadTitle, &m.SentOut,
+			&m.Thread, &m.Also, &m.ThreadTitle, &m.SentOut, &m.ShownThread,
 		}
 		if total != nil {
 			dest = append(dest, total)
@@ -1813,7 +1839,7 @@ func Format(m Message, limit int) string {
 			head += fmt.Sprintf(" · sent out as %d", m.SentOut)
 		}
 	}
-	head += deliveryLabel(m.Delivery, m.DeliveryError) + threadLabel(m.Thread, m.ThreadTitle, m.Summary)
+	head += deliveryLabel(m.Delivery, m.DeliveryError) + threadLabel(m.ShownThread, m.ThreadTitle, m.Summary)
 	return head + "\n  " + strings.ReplaceAll(body, "\n", "\n  ")
 }
 

@@ -34,8 +34,9 @@ const (
 // DefaultDelay is how long an agent's message waits under Delay when the hub sets no delay.
 const DefaultDelay = time.Minute
 
-// DefaultEchoWait is how long a possible echo stays hidden when the hub sets no wait.
-const DefaultEchoWait = 2 * time.Minute
+// EchoWait is how long a line from outside that may be the echo of a message the bridge was
+// handed and has not answered stays hidden.
+const EchoWait = 2 * time.Minute
 
 const (
 	// Truncated ends a message from outside that was shortened to rooms.MaxBody characters.
@@ -80,17 +81,6 @@ type Bridges struct {
 	Policy Policy
 	// Delay is how long an agent's message waits under Delay; DefaultDelay when 0.
 	Delay time.Duration
-	// EchoWait is how long a line from outside that may be the echo of a message the bridge was
-	// handed and has not answered stays hidden; DefaultEchoWait when 0.
-	EchoWait time.Duration
-}
-
-// echoWait is how long a possible echo stays hidden after its message was handed.
-func (b *Bridges) echoWait() time.Duration {
-	if b.EchoWait <= 0 {
-		return DefaultEchoWait
-	}
-	return b.EchoWait
 }
 
 // delay is how long an agent's message waits under Delay.
@@ -834,7 +824,7 @@ func (b *Bridges) Handed(ctx context.Context, name string, id int64) (bool, erro
 func (b *Bridges) ShowEchoes(ctx context.Context, name string, stopped bool) (bool, error) {
 	by := time.Time{}
 	if !stopped {
-		by = b.now().Add(-b.echoWait())
+		by = b.now().Add(-EchoWait)
 	}
 	shown := false
 	err := store.InTx(ctx, b.db, func(tx *sql.Tx) error {

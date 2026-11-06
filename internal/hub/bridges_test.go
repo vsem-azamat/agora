@@ -449,11 +449,11 @@ func TestMessagesSentAtOnceGoOutAndEchoesAreIgnored(t *testing.T) {
 }
 
 // What the operator wrote outside, hidden as the possible echo of a message the bridge does not
-// answer, shows after the wait, or when the bridge stops.
+// answer, shows after the wait, or when the bridge stops, on its own or for a new command.
 func TestAHiddenEchoShowsWhenTheBridgeDoesNotAnswer(t *testing.T) {
 	t.Parallel()
-	for _, stops := range []bool{false, true} {
-		t.Run(fmt.Sprintf("the bridge stops %v", stops), func(t *testing.T) {
+	for _, how := range []string{"wait", "exit", "new command"} {
+		t.Run(how, func(t *testing.T) {
 			t.Parallel()
 			b := startBridgeHub(t, time.Hour)
 			f := newFake(t)
@@ -468,10 +468,17 @@ func TestAHiddenEchoShowsWhenTheBridgeDoesNotAnswer(t *testing.T) {
 			if h := b.history(t); len(h) != 1 {
 				t.Fatalf("shown at once: %v", h)
 			}
-			if stops {
+			switch how {
+			case "wait":
+				b.clock.add(bridges.EchoWait)
+			case "exit":
 				f.set("exit", "")
-			} else {
-				b.clock.add(bridges.DefaultEchoWait)
+			default:
+				if _, err := b.bridges.SetBridge(context.Background(), connect.NewRequest(&agorav1.SetBridgeRequest{
+					Agent: "builder", Name: "example-chat", Command: proto.String("true; " + f.command()),
+				})); err != nil {
+					t.Fatal(err)
+				}
 			}
 			eventually(t, "the message written outside", func() bool {
 				return slices.ContainsFunc(b.history(t), func(m *agorav1.Message) bool { return m.GetBody() == "on my way" && m.GetIncoming() })

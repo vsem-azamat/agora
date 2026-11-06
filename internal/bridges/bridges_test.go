@@ -792,25 +792,63 @@ func TestALineBeforeTheMessageIsHandedIsNotHidden(t *testing.T) {
 	}
 }
 
-// Before the answer, a reply in the thread of a hidden echo names the thread it is shown in: the
-// operator's message's.
+// Before the answer, a reply in the thread of a hidden echo names the thread it is shown in: here
+// the thread of the operator's two replies, each with its echo hidden and a thread outside keyed by
+// it. That thread shows both, taking them reads them, and leaving it leaves both.
 func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
-	id := e.ownPost(t, "ok")
+	root := e.ownPost(t, "plan")
+	e.sent(t, root, "5500")
+	if err := e.r.SetThreadTitle(ctx, "builder", root, "Plan"); err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"ok", "sure"} {
+		o, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: text, Thread: root, Operator: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := e.b.Handed(ctx, "example-chat", o); !ok || err != nil {
+			t.Fatalf("handed: %v %v", ok, err)
+		}
+	}
 	e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
-	reply := e.receive(t, bridges.In{ID: "5516", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515", ThreadTitle: "topic"})
-	unread, _, err := e.r.Unread(ctx, "secretary", rooms.Everything, 0)
+	e.receive(t, bridges.In{ID: "5516", AuthorName: "Owner", Self: true, Text: "sure"})
+	one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515", ThreadTitle: "topic"})
+	two := e.receive(t, bridges.In{ID: "5518", AuthorName: "Ada", Text: "two", ReplyTo: "5516", ThreadKey: "5516"})
+
+	taken, _, err := e.r.Take(ctx, "secretary", rooms.Everything, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	i := slices.IndexFunc(unread, func(m rooms.Message) bool { return m.ID == reply })
-	if i < 0 || unread[i].Thread != id {
-		t.Fatalf("the reply in unread: %+v (want thread %d)", unread, id)
+	for _, id := range []int64{one, two} {
+		i := slices.IndexFunc(taken, func(m rooms.Message) bool { return m.ID == id })
+		if i < 0 || taken[i].ShownThread != root || taken[i].ThreadTitle != "Plan" {
+			t.Fatalf("reply %d as taken: %+v (want thread %d «Plan»)", id, taken, root)
+		}
 	}
-	thread, err := e.r.ThreadHistory(ctx, unread[i].Thread, 10, "")
-	if err != nil || len(thread) != 2 || thread[0].ID != id || thread[1].ID != reply {
+	if again, _, err := e.r.Take(ctx, "secretary", rooms.Everything, 0); err != nil || slices.ContainsFunc(again, func(m rooms.Message) bool {
+		return m.ID == one || m.ID == two
+	}) {
+		t.Fatalf("taken again: %+v %v", again, err)
+	}
+
+	thread, err := e.r.ThreadHistory(ctx, root, 10, "")
+	if err != nil || thread[0].ID != root || !slices.ContainsFunc(thread, func(m rooms.Message) bool { return m.ID == one }) ||
+		!slices.ContainsFunc(thread, func(m rooms.Message) bool { return m.ID == two }) {
 		t.Fatalf("the thread it names: %+v %v", thread, err)
+	}
+
+	if err := e.r.LeaveThread(ctx, "secretary", root); err != nil {
+		t.Fatal(err)
+	}
+	later := []int64{
+		e.receive(t, bridges.In{ID: "5519", AuthorName: "Ada", Text: "three", ReplyTo: "5517", ThreadKey: "5515"}),
+		e.receive(t, bridges.In{ID: "5520", AuthorName: "Ada", Text: "four", ReplyTo: "5518", ThreadKey: "5516"}),
+	}
+	unread, _, err := e.r.Unread(ctx, "secretary", rooms.Everything, 0)
+	if err != nil || slices.ContainsFunc(unread, func(m rooms.Message) bool { return slices.Contains(later, m.ID) }) {
+		t.Fatalf("after leaving the thread: %+v %v", unread, err)
 	}
 }
 
