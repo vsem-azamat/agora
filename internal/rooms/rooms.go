@@ -654,8 +654,11 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how delivery.
 		if in != room {
 			return 0, store.Refuse(store.ErrInvalid, "message %d is in #%s, not #%s", p.Thread, in, room)
 		}
-		if root, err = postingRootTx(ctx, tx, root, replyTo); err != nil {
-			return 0, err
+		// a note's copy the operator sends out stays in the thread the note was routed to
+		if !p.keepLeft {
+			if root, err = postingRootTx(ctx, tx, root, replyTo); err != nil {
+				return 0, err
+			}
 		}
 		m.Thread, m.Also = root, p.Also
 		// posting in a thread makes the author a participant again
@@ -664,7 +667,7 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how delivery.
 				return 0, err
 			}
 		}
-		if participants, err = participantsTx(ctx, tx, root, author); err != nil {
+		if participants, err = shownParticipantsTx(ctx, tx, root, author); err != nil {
 			return 0, err
 		}
 	} else if p.Also {
@@ -701,6 +704,25 @@ func participantsTx(ctx context.Context, tx *sql.Tx, root int64, except string) 
 		EXCEPT SELECT agent FROM thread_leaves WHERE root = :root
 		EXCEPT SELECT :except
 		ORDER BY 1`, sql.Named("root", root), sql.Named("board", Board), sql.Named("except", except))
+}
+
+// shownParticipantsTx returns the participants other than except of the thread rooted at root as
+// it is shown: of every thread shown with it (see shownRootsTx), as a reply there addresses them.
+func shownParticipantsTx(ctx context.Context, tx *sql.Tx, root int64, except string) ([]string, error) {
+	roots, err := shownRootsTx(ctx, tx, root)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, r := range roots {
+		more, err := participantsTx(ctx, tx, r, except)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, more...)
+	}
+	slices.Sort(out)
+	return slices.Compact(out), nil
 }
 
 // insert stores m with the identifier outside extID ("" for none) and its mentions; addressees
@@ -876,7 +898,7 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 			return 0, err
 		}
 	}
-	participants, err := participantsTx(ctx, tx, root, in.Author)
+	participants, err := shownParticipantsTx(ctx, tx, root, in.Author)
 	if err != nil {
 		return 0, err
 	}
@@ -1104,24 +1126,28 @@ func shownRootsTx(ctx context.Context, tx *sql.Tx, root int64) ([]int64, error) 
 }
 
 // postingRootTx returns the root of the thread a post into the thread rooted at root goes in.
-// When root is shown with the threads of echoes hidden under it, the post follows the
-// conversation: it goes in the thread of the message it replies to when that is shown there,
-// otherwise in the thread of the newest message shown there, so it goes out where that one did
-// and merges with the echo's thread if the echo merges.
+// When that thread is shown with the threads of echoes hidden under it (see shownRootsTx), the
+// post follows the conversation: it goes in the thread of the message it replies to when that is
+// one of them (a hidden root included, whose id a reply to it carries), otherwise in the thread
+// of the newest message shown there, so it goes out where that one did and moves with the echo's
+// thread if the echo merges.
 func postingRootTx(ctx context.Context, tx *sql.Tx, root, replyTo int64) (int64, error) {
-	hidden, err := hiddenRootsTx(ctx, tx, root)
-	if err != nil || len(hidden) == 0 {
-		return root, err
+	roots, err := shownRootsTx(ctx, tx, root)
+	if err != nil {
+		return 0, err
 	}
-	roots, err := json.Marshal(append([]int64{root}, hidden...))
+	if len(roots) == 1 {
+		return roots[0], nil
+	}
+	ids, err := json.Marshal(roots)
 	if err != nil {
 		return 0, err
 	}
 	var to int64
 	err = tx.QueryRowContext(ctx, `SELECT COALESCE(thread, id) FROM messages
-		WHERE echo_of IS NULL AND (id = :root OR thread IN (SELECT value FROM json_each(:roots)))
-		ORDER BY id = :reply DESC, id DESC LIMIT 1`,
-		sql.Named("root", root), sql.Named("roots", string(roots)), sql.Named("reply", replyTo)).Scan(&to)
+		WHERE id IN (SELECT value FROM json_each(:roots)) OR thread IN (SELECT value FROM json_each(:roots))
+		ORDER BY id = :reply DESC, echo_of IS NULL DESC, id DESC LIMIT 1`,
+		sql.Named("roots", string(ids)), sql.Named("reply", replyTo)).Scan(&to)
 	return to, err
 }
 
