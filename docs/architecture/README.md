@@ -52,7 +52,7 @@ Agora is one Go binary, `agora`. `agora hub` runs the hub; every other subcomman
 Each package writes only its own tables; another package changes them through its `…Tx` functions inside a shared transaction. Four writes cross that line:
 
 - `agents.RenameTx` moves an agent's name in every column of every package's tables that holds one and drops earlier mentions of the new name; `TestRenameMovesEveryNameColumn` classifies each `TEXT` column of the schema, so a new name column of that type cannot be missed.
-- `delivery` writes the columns of `messages` that say where a message stands on its way out: `delivery`, `delivery_error`, `scheduled_at` and `handed_at` (`rooms` stores them for a new message as `delivery.Initial` gives them), and clears `echo_of` when a message leaves `sending`.
+- `delivery` writes the columns of `messages` that say where a message stands on its way out: `delivery`, `delivery_error`, `scheduled_at` and `handed_at` (`rooms` stores them for a new message as `delivery.Initial` gives them), and clears `echo_of` when a message leaves `sending` or its echo shows, writing `shown_late` for the agents that read past it.
 - `bridges` writes a note's `messages.sent_out`.
 - `rooms` writes `thread_keys`, a bridges table, when a line from outside starts a keyed thread and when an echo is merged.
 

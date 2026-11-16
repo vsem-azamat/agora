@@ -22,6 +22,7 @@ var textColumns = map[string]map[string]bool{
 	"subscriptions":     {"agent": true, "room": false, "mode": false},
 	"read_positions":    {"agent": true, "room": false},
 	"read_marks":        {"agent": true},
+	"shown_late":        {"agent": true},
 	"proposals":         {"title": false, "body": false, "author": true, "state": false, "closed_by": true},
 	"votes":             {"agent": true, "choice": false, "reason": false},
 	"charter_changes":   {"changed_by": true},

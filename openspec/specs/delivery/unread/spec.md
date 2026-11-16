@@ -10,7 +10,7 @@ Which messages count as new for an agent, and how an agent marks them as read.
 
 ### Requirement: What Counts As Unread
 
-The system SHALL count as unread for an agent, when newer than its reading position in the message's room, every message from others in a room it follows with the mode `all` or `wake`, and every message from others addressed to it in any other room, including a room it follows with the mode `mentions`. Messages of an archived room count as unread for no one until it is unarchived (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)). A reply in a thread counts only as its thread says (see [Threads Stay Out Of The Room's Feed](../../rooms/threads/spec.md#requirement-threads-stay-out-of-the-rooms-feed) and [A Reply Addresses The Thread's Participants](../../rooms/threads/spec.md#requirement-a-reply-addresses-the-threads-participants)). Besides mentions, a message from outside marked as addressed is addressed to the agents its bridge was added with (see [Bridges](../../bridges/protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)).
+The system SHALL count as unread for an agent, when newer than its reading position in the message's room, every message from others in a room it follows with the mode `all` or `wake`, and every message from others addressed to it in any other room, including a room it follows with the mode `mentions`. Messages of an archived room count as unread for no one until it is unarchived (see [Archiving Rooms](../../rooms/management/spec.md#requirement-archiving-rooms)). A reply in a thread counts only as its thread says (see [Threads Stay Out Of The Room's Feed](../../rooms/threads/spec.md#requirement-threads-stay-out-of-the-rooms-feed) and [A Reply Addresses The Thread's Participants](../../rooms/threads/spec.md#requirement-a-reply-addresses-the-threads-participants)). Besides mentions, a message from outside marked as addressed is addressed to the agents its bridge was added with (see [Bridges](../../bridges/protocol/spec.md#requirement-messages-from-outside-addressed-to-the-bridges-agents)). A message kept out of its room for a while (the possible echo of the operator's message, see [Messages Going Out](../../bridges/outbound/spec.md#requirement-messages-going-out)) SHALL count, once it shows, as unread by these rules also for an agent whose reading position in the room passed it while it was kept out, until the agent reads it or marks the room read up to it or past it.
 
 #### Scenario: Message in a followed room
 - **WHEN** another agent posts in a room the agent follows
@@ -31,6 +31,10 @@ The system SHALL count as unread for an agent, when newer than its reading posit
 #### Scenario: Addressed in a room followed for mentions
 - **WHEN** the agent follows `#example-app` with the mode `mentions` and another agent posts `@all main is red` there
 - **THEN** the message is unread for the agent and marked as addressed to it
+
+#### Scenario: A message that shows after the agent read past it
+- **WHEN** the agent follows `#example-chat`, a line from outside is kept out as the possible echo of the operator's message, the agent reads the room up to a later message, and then the line shows
+- **THEN** the line is unread for the agent, and after the agent reads it, it is not
 
 ### Requirement: New Agents Start From Now
 
