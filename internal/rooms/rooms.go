@@ -654,10 +654,13 @@ func (r *Rooms) postTx(ctx context.Context, tx *sql.Tx, p Posting, how delivery.
 		if in != room {
 			return 0, store.Refuse(store.ErrInvalid, "message %d is in #%s, not #%s", p.Thread, in, room)
 		}
+		if root, err = postingRootTx(ctx, tx, root, replyTo); err != nil {
+			return 0, err
+		}
 		m.Thread, m.Also = root, p.Also
 		// posting in a thread makes the author a participant again
 		if !p.keepLeft {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE root = ? AND agent = ?`, root, author); err != nil {
+			if err := comeBackTx(ctx, tx, author, root); err != nil {
 				return 0, err
 			}
 		}
@@ -814,6 +817,14 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 				AND o.delivery = 'sending' AND o.handed_at IS NOT NULL AND o.body = :body AND NOT EXISTS (SELECT 1 FROM messages AS e WHERE e.echo_of = o.id)
 				ORDER BY o.id LIMIT 1) WHERE id = :id`,
 			sql.Named("room", in.Room), sql.Named("author", in.Author), sql.Named("body", body), sql.Named("id", id))
+		if err != nil {
+			return 0, err
+		}
+		// its thread is shown under the thread of that message: whoever left that thread is out of
+		// its thread too, also after it shows
+		_, err = tx.ExecContext(ctx, `INSERT INTO thread_leaves (root, agent) SELECT e.id, l.agent FROM messages AS e
+				JOIN messages AS o ON o.id = e.echo_of JOIN thread_leaves AS l ON l.root = COALESCE(o.thread, o.id)
+				WHERE e.id = ? ON CONFLICT DO NOTHING`, id)
 		return id, err
 	}
 	var root int64
@@ -861,7 +872,7 @@ func (r *Rooms) PostIncomingTx(ctx context.Context, tx *sql.Tx, in Incoming) (in
 	m.Thread = root
 	if in.Author != "" {
 		// the operator writing in the thread outside takes part in it again, as posting here does
-		if _, err := tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE root = ? AND agent = ?`, root, in.Author); err != nil {
+		if err := comeBackTx(ctx, tx, in.Author, root); err != nil {
 			return 0, err
 		}
 	}
@@ -1081,6 +1092,39 @@ func hiddenRootsTx(ctx context.Context, tx *sql.Tx, shown int64) ([]int64, error
 		WHERE e.echo_of IS NOT NULL AND COALESCE(o.thread, o.id) = ? ORDER BY e.id`, shown)
 }
 
+// shownRootsTx returns the roots of the threads shown as one with the thread rooted at root: the
+// root it is shown under (see shownRoot), then the messages hidden as a possible echo under it.
+func shownRootsTx(ctx context.Context, tx *sql.Tx, root int64) ([]int64, error) {
+	shown, err := shownRootTx(ctx, tx, root)
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := hiddenRootsTx(ctx, tx, shown)
+	return append([]int64{shown}, hidden...), err
+}
+
+// postingRootTx returns the root of the thread a post into the thread rooted at root goes in.
+// When root is shown with the threads of echoes hidden under it, the post follows the
+// conversation: it goes in the thread of the message it replies to when that is shown there,
+// otherwise in the thread of the newest message shown there, so it goes out where that one did
+// and merges with the echo's thread if the echo merges.
+func postingRootTx(ctx context.Context, tx *sql.Tx, root, replyTo int64) (int64, error) {
+	hidden, err := hiddenRootsTx(ctx, tx, root)
+	if err != nil || len(hidden) == 0 {
+		return root, err
+	}
+	roots, err := json.Marshal(append([]int64{root}, hidden...))
+	if err != nil {
+		return 0, err
+	}
+	var to int64
+	err = tx.QueryRowContext(ctx, `SELECT COALESCE(thread, id) FROM messages
+		WHERE echo_of IS NULL AND (id = :root OR thread IN (SELECT value FROM json_each(:roots)))
+		ORDER BY id = :reply DESC, id DESC LIMIT 1`,
+		sql.Named("root", root), sql.Named("roots", string(roots)), sql.Named("reply", replyTo)).Scan(&to)
+	return to, err
+}
+
 // shownRootTx returns the root a thread rooted at root is shown under (see shownRoot).
 func shownRootTx(ctx context.Context, tx *sql.Tx, root int64) (int64, error) {
 	var shown int64
@@ -1250,18 +1294,34 @@ func (r *Rooms) LeaveThread(ctx context.Context, agent string, id int64) error {
 		if err != nil {
 			return err
 		}
-		// leaving a thread leaves the threads of the echoes hidden under it, whose ids agents never see
-		hidden, err := hiddenRootsTx(ctx, tx, root)
+		// leaving a thread leaves the thread it is shown in, with the threads of the echoes hidden
+		// under it, whose ids agents never see
+		roots, err := shownRootsTx(ctx, tx, root)
 		if err != nil {
 			return err
 		}
-		for _, root := range append([]int64{root}, hidden...) {
+		for _, root := range roots {
 			if err := leaveTx(ctx, tx, agent, root); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+// comeBackTx makes agent a participant again of the thread rooted at root, as it is shown: of
+// every thread shown with it (see LeaveThread).
+func comeBackTx(ctx context.Context, tx *sql.Tx, agent string, root int64) error {
+	roots, err := shownRootsTx(ctx, tx, root)
+	if err != nil {
+		return err
+	}
+	ids, err := json.Marshal(roots)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `DELETE FROM thread_leaves WHERE agent = ? AND root IN (SELECT value FROM json_each(?))`, agent, string(ids))
+	return err
 }
 
 // leaveTx makes agent leave the thread rooted at root (see LeaveThread).
