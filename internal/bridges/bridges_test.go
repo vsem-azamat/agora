@@ -816,7 +816,7 @@ func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 	e.receive(t, bridges.In{ID: "5516", AuthorName: "Owner", Self: true, Text: "sure"})
 	one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515", ThreadTitle: "topic"})
 	// a reply in the shown thread itself, between the two
-	own, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "noted", Thread: root})
+	own, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "noted", Thread: root, ReplyTo: root})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -884,6 +884,255 @@ func TestAReplyInTheThreadOfAHiddenEchoNamesTheShownRoot(t *testing.T) {
 	if err != nil || slices.ContainsFunc(unread, func(m rooms.Message) bool { return slices.Contains(later, m.ID) }) {
 		t.Fatalf("after leaving the thread: %+v %v", unread, err)
 	}
+}
+
+// A thread shown with the thread of a hidden echo is left and joined again as a whole (#182).
+func TestLeavingAThreadCoversAnEchoHiddenUnderItLater(t *testing.T) {
+	t.Parallel()
+	addressed := func(t *testing.T, e env, agent string, id int64) bool {
+		t.Helper()
+		unread, _, err := e.r.Unread(ctx, agent, rooms.Everything, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(unread, func(m rooms.Message) bool { return m.ID == id })
+	}
+	t.Run("hidden after leaving", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		o := e.ownPost(t, "ok")
+		// builder takes part in the thread of o, then leaves it
+		if _, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "on it", Thread: o}); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.r.LeaveThread(ctx, "builder", o); err != nil {
+			t.Fatal(err)
+		}
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})
+		if addressed(t, e, "builder", one) {
+			t.Fatal("a reply in the thread of an echo hidden after leaving addresses the agent that left")
+		}
+		// coming back in the thread of o itself joins the echo's thread too
+		if _, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "back", Thread: o, ReplyTo: o}); err != nil {
+			t.Fatal(err)
+		}
+		two := e.receive(t, bridges.In{ID: "5518", AuthorName: "Ada", Text: "two", ReplyTo: "5515", ThreadKey: "5515"})
+		if !addressed(t, e, "builder", two) {
+			t.Fatal("posting in the shown thread does not join the echo's thread again")
+		}
+		// and a reply landing in either part addresses whoever takes part in the other
+		if _, err := e.s.Join(ctx, "reviewer", "", false); err != nil {
+			t.Fatal(err)
+		}
+		late, err := e.r.Send(ctx, rooms.Posting{Author: "reviewer", Room: "example-chat", Body: "late", Thread: o, ReplyTo: two})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !addressed(t, e, "builder", late) {
+			t.Fatal("a reply in the echo's thread does not address a participant of the thread of o")
+		}
+	})
+	t.Run("a reply in one part addresses the other's participants", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		o := e.ownPost(t, "ok")
+		echo := e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		// builder takes part only in o's own thread
+		if _, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "on it", Thread: o}); err != nil {
+			t.Fatal(err)
+		}
+		// a reply to the hidden line goes in its thread
+		id, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "at five", Thread: o, ReplyTo: echo})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !addressed(t, e, "builder", id) {
+			t.Fatal("a reply in the echo's thread does not address a participant of the thread it is shown in")
+		}
+	})
+	t.Run("an operator message in a thread", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		root := e.ownPost(t, "plan")
+		e.sent(t, root, "5500")
+		if err := e.r.LeaveThread(ctx, "secretary", root); err != nil {
+			t.Fatal(err)
+		}
+		o, err := e.r.Send(ctx, rooms.Posting{Author: "owner", Room: "example-chat", Body: "ok", Thread: root, Operator: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := e.b.Handed(ctx, "example-chat", o); !ok || err != nil {
+			t.Fatalf("handed: %v %v", ok, err)
+		}
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})
+		if addressed(t, e, "secretary", one) {
+			t.Fatal("an echo hidden under the thread o is a reply in does not take the leave of that thread")
+		}
+	})
+	t.Run("stays left after it shows", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		o := e.ownPost(t, "ok")
+		if err := e.r.LeaveThread(ctx, "secretary", o); err != nil {
+			t.Fatal(err)
+		}
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		e.sent(t, o, "6000")
+		one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})
+		if addressed(t, e, "secretary", one) {
+			t.Fatal("the thread of a shown echo addresses an agent that left it while it was hidden")
+		}
+	})
+	t.Run("left by a reply of the echo's thread", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		o := e.ownPost(t, "ok")
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		one := e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "one", ReplyTo: "5515", ThreadKey: "5515"})
+		// agents are given one's id, in the thread of o
+		if err := e.r.LeaveThread(ctx, "secretary", one); err != nil {
+			t.Fatal(err)
+		}
+		mine, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "noted", Thread: o, ReplyTo: o})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if addressed(t, e, "secretary", mine) {
+			t.Fatal("leaving by a reply of the echo's thread does not leave the thread it is shown in")
+		}
+	})
+	t.Run("the operator writing outside", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		o := e.ownPost(t, "ok")
+		if err := e.r.LeaveThread(ctx, "owner", o); err != nil {
+			t.Fatal(err)
+		}
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		e.receive(t, bridges.In{ID: "5517", AuthorName: "Owner", Self: true, Text: "more", ReplyTo: "5515", ThreadKey: "5515"})
+		mine, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "noted", Thread: o, ReplyTo: o})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !addressed(t, e, "owner", mine) {
+			t.Fatal("the operator writing in the echo's thread outside does not join the shown thread again")
+		}
+	})
+}
+
+// A post into a thread shown with the thread of a hidden echo follows the conversation (#183).
+func TestAPostIntoTheThreadOfAHiddenEchoFollowsTheConversation(t *testing.T) {
+	t.Parallel()
+	threadOf := func(t *testing.T, e env, id int64) int64 {
+		t.Helper()
+		msgs, err := e.r.ThreadHistory(ctx, id, 0, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return msgs[0].ID
+	}
+	setup := func(t *testing.T) (e env, o, first, ada, second, toO int64) {
+		t.Helper()
+		e = newEnv(t)
+		setPolicy(t, e, bridges.Open)
+		o = e.ownPost(t, "ok")
+		e.receive(t, bridges.In{ID: "5515", AuthorName: "Owner", Self: true, Text: "ok"})
+		post := func(p rooms.Posting) int64 {
+			t.Helper()
+			p.Author, p.Room = "builder", "example-chat"
+			id, err := e.r.Send(ctx, p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return id
+		}
+		// nothing of the echo's thread shows yet: the thread of o itself
+		first = post(rooms.Posting{Body: "first", Thread: o})
+		ada = e.receive(t, bridges.In{ID: "5517", AuthorName: "Ada", Text: "which time?", ReplyTo: "5515", ThreadKey: "5515"})
+		// the newest message shown is in the echo's thread
+		second = post(rooms.Posting{Body: "at five", Thread: o})
+		// a reply to a message of o's own thread stays there
+		toO = post(rooms.Posting{Body: "as I said", Thread: o, ReplyTo: first})
+		outs, err := e.b.Outgoing(ctx, "example-chat", []int64{second})
+		if err != nil || len(outs) != 1 || outs[0].Thread != "5515" {
+			t.Fatalf("the post after the echo's reply goes out as %+v %v", outs, err)
+		}
+		return e, o, first, ada, second, toO
+	}
+	t.Run("merged", func(t *testing.T) {
+		t.Parallel()
+		e, o, first, ada, second, toO := setup(t)
+		e.sent(t, o, "5515")
+		for _, id := range []int64{first, ada, second, toO} {
+			if got := threadOf(t, e, id); got != o {
+				t.Fatalf("message %d in the thread of %d after the merge, want %d", id, got, o)
+			}
+		}
+	})
+	t.Run("a reply to the hidden line", func(t *testing.T) {
+		t.Parallel()
+		e, o, _, ada, _, _ := setup(t)
+		// agents see the echo's id as the message Ada's line replies to
+		msgs, err := e.r.ThreadHistory(ctx, o, 0, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.IndexFunc(msgs, func(m rooms.Message) bool { return m.ID == ada })
+		hidden := msgs[i].ReplyTo
+		id, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "five", Thread: o, ReplyTo: hidden})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.sent(t, o, "6000")
+		if got := threadOf(t, e, id); got != hidden {
+			t.Fatalf("a reply to the hidden line is in the thread of %d, want %d (o is %d)", got, hidden, o)
+		}
+	})
+	t.Run("naming a reply of the echo's thread", func(t *testing.T) {
+		t.Parallel()
+		e, o, first, ada, _, _ := setup(t)
+		id, err := e.r.Send(ctx, rooms.Posting{Author: "secretary", Room: "example-chat", Body: "agreed", Thread: ada, ReplyTo: first})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.sent(t, o, "6000")
+		if got := threadOf(t, e, id); got != o {
+			t.Fatalf("naming Ada's line, a reply to o's own thread is in the thread of %d, want %d", got, o)
+		}
+	})
+	t.Run("a note's copy", func(t *testing.T) {
+		t.Parallel()
+		e, o, _, _, _, _ := setup(t)
+		// the newest message shown is toO, in o's own thread, so the note goes there; after Ada's
+		// next line the copy would follow her, but it stays with the note
+		note, err := e.r.Send(ctx, rooms.Posting{Author: "builder", Room: "example-chat", Body: "draft", Thread: o, Note: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.receive(t, bridges.In{ID: "5519", AuthorName: "Ada", Text: "and?", ReplyTo: "5515", ThreadKey: "5515"})
+		copied, err := e.b.SendNoteOut(ctx, note)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.sent(t, o, "6000")
+		if got, want := threadOf(t, e, copied), threadOf(t, e, note); got != want {
+			t.Fatalf("the copy is in the thread of %d, the note in %d", got, want)
+		}
+	})
+	t.Run("shown", func(t *testing.T) {
+		t.Parallel()
+		e, o, first, ada, second, toO := setup(t)
+		e.sent(t, o, "6000")
+		if threadOf(t, e, first) != o || threadOf(t, e, toO) != o {
+			t.Fatalf("the posts that follow o's own thread left it")
+		}
+		if got := threadOf(t, e, second); got != threadOf(t, e, ada) || got == o {
+			t.Fatalf("the reply after Ada's is in the thread of %d, Ada's in %d", got, threadOf(t, e, ada))
+		}
+	})
 }
 
 // Each condition of the hold: when it does not hold, the line is stored at once.
