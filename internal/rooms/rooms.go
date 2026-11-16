@@ -1321,7 +1321,7 @@ func (r *Rooms) LeaveThread(ctx context.Context, agent string, id int64) error {
 			return err
 		}
 		// leaving a thread leaves the thread it is shown in, with the threads of the echoes hidden
-		// under it, whose ids agents never see
+		// under it, which agents are never given as a thread's root
 		roots, err := shownRootsTx(ctx, tx, root)
 		if err != nil {
 			return err
